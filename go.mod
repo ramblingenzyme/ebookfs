@@ -2,18 +2,11 @@ module github.com/ramblingenzyme/ebookfs
 
 go 1.26.1
 
-require github.com/hugelgupf/p9 v0.3.0
+require github.com/knusbaum/go9p v1.18.0
 
 require (
-	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/google/uuid v1.6.0 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/ncruces/go-strftime v1.0.0 // indirect
-	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	github.com/u-root/uio v0.0.0-20230305220412-3e8cd9d6bf63 // indirect
-	golang.org/x/sys v0.42.0 // indirect
-	modernc.org/libc v1.72.0 // indirect
-	modernc.org/mathutil v1.7.1 // indirect
-	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.50.0 // indirect
+	9fans.net/go v0.0.2 // indirect
+	github.com/Plan9-Archive/libauth v0.0.0-20180917063427-d1ca9e94969d // indirect
+	github.com/emersion/go-sasl v0.0.0-20200509203442-7bfe0ed36a21 // indirect
+	github.com/fhs/mux9p v0.3.1 // indirect
 )

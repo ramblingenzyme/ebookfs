@@ -57,7 +57,7 @@ func parsePackage(f *zip.File) (*opfPackage, error) {
 	return &pkg, err
 }
 
-func ParseEbook(bpath string) (*Book, error) {
+func Parse(bpath string) (*Book, error) {
 	// TODO: check if file exists & is a zip file
 	r, err := zip.OpenReader(bpath)
 
