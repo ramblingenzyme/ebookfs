@@ -76,6 +76,16 @@ func defaults() *Config {
 	}
 }
 
+func (c *Config) validateAuth() error {
+	if c.Server.Auth == "shared-secret" && c.Server.SharedSecretFile == "" {
+		return fmt.Errorf("server.shared_secret_file is required when auth = shared-secret")
+	} else if c.Server.Auth != "none" {
+		return fmt.Errorf(`server.auth must be "none" or "shared-secret", got %q`, c.Server.Auth)
+	}
+
+	return nil
+}
+
 func (c *Config) validate() error {
 	if c.Library.Root == "" {
 		return fmt.Errorf("library.root is required")
@@ -98,13 +108,8 @@ func (c *Config) validate() error {
 		return fmt.Errorf("epub.ebook_meta %q: not executable", c.Epub.EbookMeta)
 	}
 
-	switch c.Server.Auth {
-	case "none", "shared-secret":
-	default:
-		return fmt.Errorf(`server.auth must be "none" or "shared-secret", got %q`, c.Server.Auth)
-	}
-	if c.Server.Auth == "shared-secret" && c.Server.SharedSecretFile == "" {
-		return fmt.Errorf("server.shared_secret_file is required when auth = shared-secret")
+	if err := c.validateAuth(); err != nil {
+		return err
 	}
 
 	switch c.Log.Level {
@@ -112,6 +117,7 @@ func (c *Config) validate() error {
 	default:
 		return fmt.Errorf("log.level must be one of debug/info/warn/error, got %q", c.Log.Level)
 	}
+
 	switch c.Log.Format {
 	case "text", "json":
 	default:
