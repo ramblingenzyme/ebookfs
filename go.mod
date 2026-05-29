@@ -2,7 +2,10 @@ module github.com/ramblingenzyme/ebookfs
 
 go 1.26.1
 
-require github.com/knusbaum/go9p v1.18.0
+require (
+	github.com/BurntSushi/toml v1.6.0
+	github.com/knusbaum/go9p v1.18.0
+)
 
 require (
 	9fans.net/go v0.0.2 // indirect

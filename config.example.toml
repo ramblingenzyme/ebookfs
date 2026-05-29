@@ -1,0 +1,19 @@
+[library]
+root = "/var/lib/ebookfs/library"
+inbox_temp = "/var/lib/ebookfs/library/.inbox-tmp"  # must be on same filesystem as root
+
+[index]
+path = "/var/lib/ebookfs/library/.index.db"
+
+[epub]
+ebook_meta = "/usr/bin/ebook-meta"
+
+[server]
+listen = "tcp!0.0.0.0!5640"
+auth = "none"
+# auth = "shared-secret"
+# shared_secret_file = "/etc/ebookfs/secret"
+
+[log]
+level = "info"   # debug | info | warn | error
+format = "text"  # text | json

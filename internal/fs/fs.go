@@ -26,5 +26,6 @@ func getFS() (*fs.FS, *fs.StaticDir) {
 		ebookfs, root = fs.NewFS("glenda", "glenda", 0555, fs.WithCreateFile(createFile))
 	}
 
+
 	return ebookfs, root
 }

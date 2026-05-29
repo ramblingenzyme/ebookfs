@@ -3,15 +3,19 @@ package main
 import (
 	"flag"
 	"log"
-	"net"
+
+	"github.com/ramblingenzyme/ebookfs/internal/config"
+	"github.com/ramblingenzyme/ebookfs/internal/fs"
 )
 
 func main() {
-	addr := flag.String("addr", "localhost:9999", "listen address")
+	configPath := flag.String("config", "/etc/ebookfs/config.toml", "path to config file")
 	flag.Parse()
-	_, err := net.Listen("tcp", *addr)
+
+	cfg, err := config.Load(*configPath)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("loading config: %v", err)
 	}
-	log.Printf("serving 9P on %s", *addr)
+
+	fs.StartServer(cfg)
 }
