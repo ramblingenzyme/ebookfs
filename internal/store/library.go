@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"syscall"
 
 	"github.com/ramblingenzyme/ebookfs/internal/epub"
@@ -14,10 +15,17 @@ import (
 type Library struct {
 	root      string // absolute path to the library root
 	inboxTemp string // absolute path to the inbox temp directory; must be on the same filesystem as root
+	nextID    atomic.Int64
 }
 
 func New(root, inboxTemp string) *Library {
 	return &Library{root: root, inboxTemp: inboxTemp}
+}
+
+// AllocateID returns a unique book ID.
+// TODO: replace with index-backed ID allocation once the SQLite index exists.
+func (l *Library) AllocateID() int64 {
+	return l.nextID.Add(1)
 }
 
 func (l *Library) absPath(b *StoredBook, filename string) string {
