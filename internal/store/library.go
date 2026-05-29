@@ -26,18 +26,8 @@ func (l *Library) absPath(b *StoredBook, filename string) string {
 
 // Move renames the book directory to match newAuthor/newTitle.
 func (l *Library) Move(b *StoredBook, newAuthor epub.Author, newTitle string) (*StoredBook, error) {
-	sortName := newAuthor.SortAs
-	if sortName == "" {
-		sortName = newAuthor.Name
-	}
-	cpath, err := canonicalPathFromStrings(sortName, newTitle, b.ID)
-	if err != nil {
-		return nil, err
-	}
-	filename, err := epubFilenameFromStrings(newTitle, newAuthor.Name)
-	if err != nil {
-		return nil, err
-	}
+	cpath := canonicalPath([]epub.Author{newAuthor}, newTitle, b.ID)
+	filename := epubFilename([]epub.Author{newAuthor}, newTitle)
 
 	apath := filepath.Join(l.root, cpath)
 	if _, err := os.Stat(apath); err == nil {

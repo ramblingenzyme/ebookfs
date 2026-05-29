@@ -7,6 +7,29 @@ import (
 	"strings"
 )
 
+// Sanitize makes s safe for use as a filesystem path component.
+// It replaces '/' with '-', strips NUL and control characters (< 0x20),
+// and trims leading/trailing dots, spaces, and tabs.
+// Returns an error if the result is empty.
+func Sanitize(s string) (string, error) {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r == '/':
+			b.WriteRune('-')
+		case r < 0x20:
+			// strip NUL and control characters
+		default:
+			b.WriteRune(r)
+		}
+	}
+	out := strings.Trim(b.String(), ". \t")
+	if out == "" {
+		return "", errors.New("sanitized string is empty")
+	}
+	return out, nil
+}
+
 func translate(pkg *opfPackage) (*Book, error) {
 	if pkg == nil {
 		return nil, errors.New("nil package")
@@ -48,8 +71,9 @@ func translateTitle(meta *opfMetadata, b *Book) error {
 
 	title := meta.Titles[0]
 
-	b.Title = strings.TrimSpace(title.Value)
-	if b.Title == "" {
+	var err error
+	b.Title, err = Sanitize(title.Value)
+	if err != nil {
 		return errors.New("empty title")
 	}
 
@@ -74,8 +98,8 @@ func translateAuthor(meta *opfMetadata, b *Book) error {
 			continue
 		}
 
-		name := strings.TrimSpace(c.Name)
-		if name == "" {
+		name, err := Sanitize(c.Name)
+		if err != nil {
 			continue
 		}
 
@@ -83,9 +107,10 @@ func translateAuthor(meta *opfMetadata, b *Book) error {
 		if sortAs == "" {
 			sortAs = findRefine(meta.Metas, c.ID, "file-as")
 		}
+		if sortAs != "" {
+			sortAs, _ = Sanitize(sortAs)
+		}
 
-		// sortAs can be ""
-		// TODO: decide if to create file-as fallback value
 		b.Authors = append(b.Authors, Author{Name: name, SortAs: sortAs})
 	}
 	if len(b.Authors) == 0 {

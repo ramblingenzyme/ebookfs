@@ -9,17 +9,11 @@ import (
 )
 
 func (l *Library) Ingest(id int64, book *epub.Book, tmpPath string) (*StoredBook, error) {
-	cpath, err := canonicalPath(book, id)
-	if err != nil {
-		return nil, err
-	}
+	cpath := canonicalPath(book.Authors, book.Title, id)
 	rpath := filepath.Join(l.root, cpath)
-	filename, err := epubFilename(book)
-	if err != nil {
-		return nil, err
-	}
+	filename := epubFilename(book.Authors, book.Title)
 
-	err = os.MkdirAll(rpath, 0755)
+	err := os.MkdirAll(rpath, 0755)
 	if err != nil {
 		return nil, err
 	}
