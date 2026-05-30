@@ -6,6 +6,8 @@ import (
 
 	"github.com/knusbaum/go9p"
 	"github.com/ramblingenzyme/ebookfs/internal/config"
+	"github.com/ramblingenzyme/ebookfs/internal/index"
+	"github.com/ramblingenzyme/ebookfs/internal/library"
 	"github.com/ramblingenzyme/ebookfs/internal/store"
 )
 
@@ -14,7 +16,12 @@ func StartServer(cfg *config.Config) {
 		log.Fatalf("creating inbox temp dir: %v", err)
 	}
 
-	lib := store.New(cfg.Library.Root, cfg.Library.InboxTemp)
+	idx, err := index.Open(cfg.Index.Path)
+	if err != nil {
+		log.Fatalf("opening index: %v", err)
+	}
+
+	lib := library.New(store.New(cfg.Library.Root, cfg.Library.InboxTemp), idx)
 
 	ebookfs, root := newFS(lib, cfg.Library.InboxTemp)
 	root.AddChild(newInboxDir(ebookfs))

@@ -3,43 +3,28 @@ package store
 import (
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/ramblingenzyme/ebookfs/internal/epub"
+	"github.com/ramblingenzyme/ebookfs/internal/model"
 )
 
-func (l *Library) Ingest(id int64, book *epub.Book, tmpPath string) (*StoredBook, error) {
-	cpath := canonicalPath(book.Authors, book.Title, id)
-	rpath := filepath.Join(l.root, cpath)
-	filename := epubFilename(book.Authors, book.Title)
+func (s *Store) Ingest(id int64, book *epub.Book, tmpPath string, meta *model.Meta) (libraryPath, epubFilename string, err error) {
+	libraryPath = CanonicalPath(book.Authors, book.Title, id)
+	epubFilename = EpubFilename(book.Authors, book.Title)
+	rpath := filepath.Join(s.root, libraryPath)
 
-	err := os.MkdirAll(rpath, 0755)
-	if err != nil {
-		return nil, err
+	if err = os.MkdirAll(rpath, 0755); err != nil {
+		return "", "", err
 	}
 
-	if err = os.Rename(tmpPath, filepath.Join(rpath, filename)); err != nil {
-		// TODO: any cleanup to do?
-		return nil, err
+	if err = os.Rename(tmpPath, filepath.Join(rpath, epubFilename)); err != nil {
+		return "", "", err
 	}
 
-	now := time.Now()
-	meta := &Meta{
-		ID:           id,
-		DateAdded:    now,
-		DateModified: now,
-		Status:       "unread",
-		Rating:       0,
-		CustomTags:   []string{},
-	}
-
-	if err := writeMeta(filepath.Join(rpath, "meta.toml"), meta); err != nil {
+	if err = writeMeta(filepath.Join(rpath, "meta.toml"), meta); err != nil {
 		_ = os.RemoveAll(rpath)
-		return nil, err
+		return "", "", err
 	}
-	return &StoredBook{
-		ID:           id,
-		LibraryPath:  cpath,
-		EpubFilename: filename,
-	}, nil
+
+	return libraryPath, epubFilename, nil
 }

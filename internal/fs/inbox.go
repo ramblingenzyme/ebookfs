@@ -8,7 +8,7 @@ import (
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/epub"
-	"github.com/ramblingenzyme/ebookfs/internal/store"
+	"github.com/ramblingenzyme/ebookfs/internal/library"
 )
 
 type inboxDir struct {
@@ -26,10 +26,10 @@ type inboxFile struct {
 	path string
 	fid  uint64
 	f    *os.File
-	lib  *store.Library
+	lib  *library.Library
 }
 
-func newInboxFile(lib *store.Library, inboxTemp, name string) *inboxFile {
+func newInboxFile(lib *library.Library, inboxTemp, name string) *inboxFile {
 	return &inboxFile{
 		lib:  lib,
 		path: filepath.Join(inboxTemp, name),
@@ -71,10 +71,6 @@ func (i *inboxFile) Close(fid uint64) error {
 		return err
 	}
 
-	id := i.lib.AllocateID()
-
-	// TODO: wrap in a SQLite transaction once the index exists — insert the
-	// StoredBook into the index in the same transaction as Ingest.
-	_, err = i.lib.Ingest(id, book, i.path)
+	_, err = i.lib.Ingest(book, i.path)
 	return err
 }

@@ -7,14 +7,14 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/epub"
 )
 
-func epubFilename(authors []epub.Author, title string) string {
+func EpubFilename(authors []epub.Author, title string) string {
 	if len(authors) == 0 {
 		return fmt.Sprintf("%s.epub", title)
 	}
 	return fmt.Sprintf("%s - %s.epub", title, authors[0].Name)
 }
 
-func canonicalPath(authors []epub.Author, title string, id int64) string {
+func CanonicalPath(authors []epub.Author, title string, id int64) string {
 	name := "Unknown"
 	if len(authors) > 0 {
 		name = authors[0].SortAs

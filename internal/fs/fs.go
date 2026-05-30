@@ -4,10 +4,10 @@ import (
 	"errors"
 
 	"github.com/knusbaum/go9p/fs"
-	"github.com/ramblingenzyme/ebookfs/internal/store"
+	"github.com/ramblingenzyme/ebookfs/internal/library"
 )
 
-func newFS(lib *store.Library, inboxTemp string) (*fs.FS, *fs.StaticDir) {
+func newFS(lib *library.Library, inboxTemp string) (*fs.FS, *fs.StaticDir) {
 	createFile := func(f *fs.FS, parent fs.Dir, user, name string, perm uint32, mode uint8) (fs.File, error) {
 		if fs.FullPath(parent) != "/inbox" {
 			return nil, errors.New("not under inbox")

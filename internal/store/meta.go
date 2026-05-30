@@ -3,51 +3,34 @@ package store
 import (
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/ramblingenzyme/ebookfs/internal/model"
 )
 
-// Meta mirrors the meta.toml sidecar schema.
-type Meta struct {
-	ID           int64     `toml:"id"`
-	DateAdded    time.Time `toml:"date_added"`
-	DateModified time.Time `toml:"date_modified"`
-	// TODO: make this an enum with a string representation?
-	Status     string   `toml:"status"` // unread | reading | read | abandoned
-	Rating     int      `toml:"rating"` // 0-5, 0 = unrated
-	CustomTags []string `toml:"custom_tags"`
+// ReadMeta reads the meta.toml sidecar for the book at libraryPath.
+func (s *Store) ReadMeta(libraryPath string) (*model.Meta, error) {
+	return readMeta(filepath.Join(s.root, libraryPath, "meta.toml"))
 }
 
-// ReadMeta reads the meta.toml sidecar for b.
-func (l *Library) ReadMeta(b *StoredBook) (*Meta, error) {
-	return readMeta(l.absPath(b, "meta.toml"))
+// WriteMeta atomically replaces the meta.toml sidecar for the book at libraryPath.
+func (s *Store) WriteMeta(libraryPath string, meta *model.Meta) error {
+	return writeMeta(filepath.Join(s.root, libraryPath, "meta.toml"), meta)
 }
 
-// WriteMeta atomically replaces the meta.toml sidecar for b.
-func (l *Library) WriteMeta(b *StoredBook, meta *Meta) error {
-	return writeMeta(l.absPath(b, "meta.toml"), meta)
-}
-
-// readMeta opens path and decodes its contents into a Meta struct.
-func readMeta(path string) (*Meta, error) {
+func readMeta(path string) (*model.Meta, error) {
 	buf, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-
-	meta := &Meta{}
-	err = toml.Unmarshal(buf, meta)
-	if err != nil {
+	meta := &model.Meta{}
+	if err = toml.Unmarshal(buf, meta); err != nil {
 		return nil, err
 	}
-
 	return meta, nil
 }
 
-// writeMeta atomically writes meta as TOML to path.
-func writeMeta(path string, meta *Meta) error {
-	// 1. Encode meta to a bytes.Buffer using BurntSushi/toml encoder.
+func writeMeta(path string, meta *model.Meta) error {
 	buf, err := toml.Marshal(meta)
 	if err != nil {
 		return err
@@ -60,15 +43,11 @@ func writeMeta(path string, meta *Meta) error {
 	defer tmp.Close()
 	defer os.Remove(tmp.Name())
 
-	_, err = tmp.Write(buf)
-	if err != nil {
+	if _, err = tmp.Write(buf); err != nil {
 		return err
 	}
-
-	err = tmp.Sync()
-	if err != nil {
+	if err = tmp.Sync(); err != nil {
 		return err
 	}
-
 	return os.Rename(tmp.Name(), path)
 }
