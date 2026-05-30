@@ -32,7 +32,7 @@ type inboxFile struct {
 func newInboxFile(lib *library.Library, inboxTemp, name string) *inboxFile {
 	return &inboxFile{
 		lib:  lib,
-		path: filepath.Join(inboxTemp, name),
+		path: filepath.Join(inboxTemp, filepath.Base(name)),
 	}
 }
 
@@ -64,6 +64,8 @@ func (i *inboxFile) Write(fid uint64, offset uint64, data []byte) (uint32, error
 
 func (i *inboxFile) Close(fid uint64) error {
 	i.f.Close()
+	i.f = nil
+	i.fid = 0
 
 	book, err := epub.Parse(i.path)
 	if err != nil {
@@ -72,5 +74,8 @@ func (i *inboxFile) Close(fid uint64) error {
 	}
 
 	_, err = i.lib.Ingest(book, i.path)
+	if err != nil {
+		os.Remove(i.path)
+	}
 	return err
 }

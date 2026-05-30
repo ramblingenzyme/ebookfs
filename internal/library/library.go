@@ -69,6 +69,8 @@ func (l *Library) ReadMeta(b *model.Book) (*model.Meta, error) {
 }
 
 func (l *Library) WriteMeta(b *model.Book) error {
+	// Sidecar is written first because it is the source of truth. If the index
+	// update fails, the sidecar still holds the correct state and reindex recovers.
 	if err := l.store.WriteMeta(b.LibraryPath, &b.Meta); err != nil {
 		return err
 	}
@@ -132,6 +134,9 @@ func (l *Library) Delete(b *model.Book) error {
 		return err
 	}
 
+	// If Commit fails after store.Delete succeeded, the directory is gone but the
+	// transaction rolls back, leaving a ghost index row. Reindex recovers: it walks
+	// the filesystem and the missing directory causes the stale row to be removed.
 	return tx.Commit()
 }
 

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"log"
 	"os"
 	"path/filepath"
 
@@ -22,7 +23,9 @@ func (s *Store) Ingest(id int64, book *epub.Book, tmpPath string, meta *model.Me
 	}
 
 	if err = writeMeta(filepath.Join(rpath, "meta.toml"), meta); err != nil {
-		_ = os.RemoveAll(rpath)
+		if rmErr := os.RemoveAll(rpath); rmErr != nil {
+			log.Printf("store: Ingest cleanup failed for %s: %v", rpath, rmErr)
+		}
 		return "", "", err
 	}
 

@@ -77,12 +77,16 @@ func defaults() *Config {
 }
 
 func (c *Config) validateAuth() error {
-	if c.Server.Auth == "shared-secret" && c.Server.SharedSecretFile == "" {
-		return fmt.Errorf("server.shared_secret_file is required when auth = shared-secret")
-	} else if c.Server.Auth != "none" {
+	switch c.Server.Auth {
+	case "none":
+		// OK
+	case "shared-secret":
+		if c.Server.SharedSecretFile == "" {
+			return fmt.Errorf("server.shared_secret_file is required when auth = shared-secret")
+		}
+	default:
 		return fmt.Errorf(`server.auth must be "none" or "shared-secret", got %q`, c.Server.Auth)
 	}
-
 	return nil
 }
 

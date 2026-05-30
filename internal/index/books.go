@@ -12,8 +12,12 @@ func upsertAuthors(tx *sql.Tx, bookID int64, authors []model.Author) error {
 		return err
 	}
 	for i, a := range authors {
+		// Insert or update: only overwrite sort_name when we have a real value and the
+		// stored one is empty (fills in missing file-as data without stomping corrections).
 		if _, err := tx.Exec(
-			`INSERT OR IGNORE INTO authors (name, sort_name) VALUES (?, ?)`,
+			`INSERT INTO authors (name, sort_name) VALUES (?, ?)
+			 ON CONFLICT(name) DO UPDATE SET sort_name=excluded.sort_name
+			 WHERE excluded.sort_name != '' AND authors.sort_name = ''`,
 			a.Name, a.SortName,
 		); err != nil {
 			return err
@@ -29,7 +33,9 @@ func upsertAuthors(tx *sql.Tx, bookID int64, authors []model.Author) error {
 			return err
 		}
 	}
-	return nil
+	// Remove authors no longer referenced by any book.
+	_, err := tx.Exec(`DELETE FROM authors WHERE id NOT IN (SELECT author_id FROM book_authors)`)
+	return err
 }
 
 func upsertTags(tx *sql.Tx, bookID int64, tags []string) error {
@@ -48,7 +54,9 @@ func upsertTags(tx *sql.Tx, bookID int64, tags []string) error {
 			return err
 		}
 	}
-	return nil
+	// Remove tags no longer referenced by any book.
+	_, err := tx.Exec(`DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM book_tags)`)
+	return err
 }
 
 func ftsDelete(tx *sql.Tx, id int64, title, desc string) error {
