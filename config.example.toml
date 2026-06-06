@@ -9,7 +9,7 @@ path = "/var/lib/ebookfs/library/.index.db"
 ebook_meta = "/usr/bin/ebook-meta"
 
 [server]
-listen = "tcp!0.0.0.0!5640"
+listen = "0.0.0.0:5640"
 auth = "none"
 # auth = "shared-secret"
 # shared_secret_file = "/etc/ebookfs/secret"

@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/BurntSushi/toml"
 )
@@ -66,7 +65,7 @@ func defaults() *Config {
 			EbookMeta: "/usr/bin/ebook-meta",
 		},
 		Server: ServerConfig{
-			Listen: "tcp!0.0.0.0!5640",
+			Listen: "0.0.0.0:5640",
 			Auth:   "none",
 		},
 		Log: LogConfig{
@@ -100,17 +99,17 @@ func (c *Config) validate() error {
 	if c.Index.Path == "" {
 		return fmt.Errorf("index.path is required")
 	}
-	if c.Epub.EbookMeta == "" {
-		return fmt.Errorf("epub.ebook_meta is required")
-	}
-
-	info, err := os.Stat(c.Epub.EbookMeta)
-	if err != nil {
-		return fmt.Errorf("epub.ebook_meta %q: %w", c.Epub.EbookMeta, err)
-	}
-	if info.Mode()&0111 == 0 {
-		return fmt.Errorf("epub.ebook_meta %q: not executable", c.Epub.EbookMeta)
-	}
+	// ebook-meta is not yet used; skip validation until it is.
+	// if c.Epub.EbookMeta == "" {
+	// 	return fmt.Errorf("epub.ebook_meta is required")
+	// }
+	// info, err := os.Stat(c.Epub.EbookMeta)
+	// if err != nil {
+	// 	return fmt.Errorf("epub.ebook_meta %q: %w", c.Epub.EbookMeta, err)
+	// }
+	// if info.Mode()&0111 == 0 {
+	// 	return fmt.Errorf("epub.ebook_meta %q: not executable", c.Epub.EbookMeta)
+	// }
 
 	if err := c.validateAuth(); err != nil {
 		return err

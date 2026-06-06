@@ -8,10 +8,14 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/config"
 	"github.com/ramblingenzyme/ebookfs/internal/index"
 	"github.com/ramblingenzyme/ebookfs/internal/library"
+	"github.com/ramblingenzyme/ebookfs/internal/model"
 	"github.com/ramblingenzyme/ebookfs/internal/store"
 )
 
 func StartServer(cfg *config.Config) {
+	if err := os.MkdirAll(cfg.Library.Root, 0755); err != nil {
+		log.Fatalf("creating library root: %v", err)
+	}
 	if err := os.MkdirAll(cfg.Library.InboxTemp, 0700); err != nil {
 		log.Fatalf("creating inbox temp dir: %v", err)
 	}
@@ -23,8 +27,24 @@ func StartServer(cfg *config.Config) {
 
 	lib := library.New(store.New(cfg.Library.Root, cfg.Library.InboxTemp), idx)
 
-	ebookfs, root := newFS(lib, cfg.Library.InboxTemp)
+	// allBooks is set below after newFS returns, but createFile only fires once
+	// a client writes to /inbox — well after startup completes.
+	var allBooks *allBooksDir
+
+	ebookfs, root := newFS(inboxCreateFile(lib, cfg.Library.InboxTemp, func(b *model.Book) {
+		allBooks.add(b)
+	}))
+
+	registry := newBookRegistry(ebookfs, lib)
+
+	books, err := lib.ListAll()
+	if err != nil {
+		log.Fatalf("loading books: %v", err)
+	}
+	allBooks = newAllBooksDir(ebookfs, registry, books)
+
 	root.AddChild(newInboxDir(ebookfs))
+	root.AddChild(allBooks)
 
 	log.Printf("serving 9P on %s", cfg.Server.Listen)
 	go9p.Serve(cfg.Server.Listen, ebookfs.Server())

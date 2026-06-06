@@ -1,19 +1,12 @@
 package fs
 
 import (
-	"errors"
-
 	"github.com/knusbaum/go9p/fs"
-	"github.com/ramblingenzyme/ebookfs/internal/library"
 )
 
-func newFS(lib *library.Library, inboxTemp string) (*fs.FS, *fs.StaticDir) {
-	createFile := func(f *fs.FS, parent fs.Dir, user, name string, perm uint32, mode uint8) (fs.File, error) {
-		if fs.FullPath(parent) != "/inbox" {
-			return nil, errors.New("not under inbox")
-		}
-		return newInboxFile(lib, inboxTemp, name), nil
-	}
+type createFileFunc func(*fs.FS, fs.Dir, string, string, uint32, uint8) (fs.File, error)
 
-	return fs.NewFS("glenda", "glenda", 0555, fs.WithCreateFile(createFile))
+func newFS(createFile createFileFunc) (*fs.FS, *fs.StaticDir) {
+	f, root := fs.NewFS("glenda", "glenda", 0555, fs.IgnorePermissions(), fs.WithCreateFile(createFile))
+	return f, root
 }

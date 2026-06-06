@@ -5,7 +5,10 @@ go 1.26.1
 require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/knusbaum/go9p v1.18.0
+	modernc.org/sqlite v1.51.0
 )
+
+replace github.com/knusbaum/go9p => github.com/ramblingenzyme/go9p v0.0.0-20240521151752-cea669df5050
 
 require (
 	9fans.net/go v0.0.2 // indirect
@@ -21,5 +24,4 @@ require (
 	modernc.org/libc v1.72.3 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.51.0 // indirect
 )

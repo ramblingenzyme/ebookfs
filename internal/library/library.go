@@ -64,6 +64,10 @@ func (l *Library) Ingest(book *epub.Book, tmpPath string) (*model.Book, error) {
 	return b, nil
 }
 
+func (l *Library) ListAll() ([]*model.Book, error) {
+	return l.index.ListAll()
+}
+
 func (l *Library) ReadMeta(b *model.Book) (*model.Meta, error) {
 	return l.store.ReadMeta(b.LibraryPath)
 }

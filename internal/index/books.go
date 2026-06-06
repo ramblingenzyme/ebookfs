@@ -7,6 +7,131 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/model"
 )
 
+// ListAll returns all books ordered by sort_title.
+func (idx *Index) ListAll() ([]*model.Book, error) {
+	rows, err := idx.db.Query(`
+		SELECT b.id, b.title, b.sort_title, COALESCE(b.pubdate, ''), b.description, b.language,
+		       b.library_path, b.epub_filename, b.has_cover,
+		       b.status, b.rating, b.date_added, b.date_modified,
+		       s.id, s.name, b.series_index
+		FROM books b
+		LEFT JOIN series s ON s.id = b.series_id
+		ORDER BY b.sort_title
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var books []*model.Book
+	byID := make(map[int64]*model.Book)
+	for rows.Next() {
+		b := &model.Book{Identifiers: make(map[string]string)}
+		var hasCover int
+		var dateAdded, dateModified string
+		var seriesID sql.NullInt64
+		var seriesName sql.NullString
+		var seriesIndex sql.NullFloat64
+		if err := rows.Scan(
+			&b.Meta.ID, &b.Title, &b.SortTitle, &b.Pubdate, &b.Description, &b.Language,
+			&b.LibraryPath, &b.EpubFilename, &hasCover,
+			&b.Meta.Status, &b.Meta.Rating, &dateAdded, &dateModified,
+			&seriesID, &seriesName, &seriesIndex,
+		); err != nil {
+			return nil, err
+		}
+		b.HasCover = hasCover != 0
+		b.Meta.DateAdded, _ = time.Parse(time.RFC3339, dateAdded)
+		b.Meta.DateModified, _ = time.Parse(time.RFC3339, dateModified)
+		if seriesName.Valid {
+			b.Series = &model.SeriesRef{ID: seriesID.Int64, Name: seriesName.String, Index: seriesIndex.Float64}
+		}
+		books = append(books, b)
+		byID[b.Meta.ID] = b
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if err := idx.loadAuthors(byID); err != nil {
+		return nil, err
+	}
+	if err := idx.loadTags(byID); err != nil {
+		return nil, err
+	}
+	if err := idx.loadIdentifiers(byID); err != nil {
+		return nil, err
+	}
+	return books, nil
+}
+
+func (idx *Index) loadAuthors(byID map[int64]*model.Book) error {
+	rows, err := idx.db.Query(`
+		SELECT ba.book_id, a.id, a.name, a.sort_name
+		FROM book_authors ba
+		JOIN authors a ON a.id = ba.author_id
+		ORDER BY ba.book_id, ba.position
+	`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var bookID int64
+		var a model.Author
+		if err := rows.Scan(&bookID, &a.ID, &a.Name, &a.SortName); err != nil {
+			return err
+		}
+		if b, ok := byID[bookID]; ok {
+			b.Authors = append(b.Authors, a)
+		}
+	}
+	return rows.Err()
+}
+
+func (idx *Index) loadTags(byID map[int64]*model.Book) error {
+	rows, err := idx.db.Query(`
+		SELECT bt.book_id, t.name
+		FROM book_tags bt
+		JOIN tags t ON t.id = bt.tag_id
+		ORDER BY bt.book_id, t.name
+	`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var bookID int64
+		var tag string
+		if err := rows.Scan(&bookID, &tag); err != nil {
+			return err
+		}
+		if b, ok := byID[bookID]; ok {
+			b.Meta.Tags = append(b.Meta.Tags, tag)
+		}
+	}
+	return rows.Err()
+}
+
+func (idx *Index) loadIdentifiers(byID map[int64]*model.Book) error {
+	rows, err := idx.db.Query(`SELECT book_id, scheme, value FROM identifiers`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var bookID int64
+		var scheme, value string
+		if err := rows.Scan(&bookID, &scheme, &value); err != nil {
+			return err
+		}
+		if b, ok := byID[bookID]; ok {
+			b.Identifiers[scheme] = value
+		}
+	}
+	return rows.Err()
+}
+
 func upsertAuthors(tx *sql.Tx, bookID int64, authors []model.Author) error {
 	if _, err := tx.Exec(`DELETE FROM book_authors WHERE book_id=?`, bookID); err != nil {
 		return err
