@@ -65,20 +65,25 @@ func (idx *Index) Close() error {
 	return idx.db.Close()
 }
 
-// Begin starts a new transaction. The caller is responsible for Commit or Rollback.
-func (idx *Index) Begin() (*sql.Tx, error) {
-	return idx.db.Begin()
+// NextID reserves and returns a new unique book ID. Must be called before
+// InsertBook so the id is available for canonical path construction.
+func (idx *Index) NextID() (int64, error) {
+	var id int64
+	err := idx.db.QueryRow("INSERT INTO book_id_seq DEFAULT VALUES RETURNING id").Scan(&id)
+	return id, err
 }
 
-// AllocateID reserves and returns a new unique book ID within tx.
-// Must be called before InsertBook so the id is available for canonical path construction.
-func (idx *Index) AllocateID(tx *sql.Tx) (int64, error) {
-	if _, err := tx.Exec("INSERT INTO book_id_seq DEFAULT VALUES"); err != nil {
-		return 0, err
+// withTx runs fn inside a transaction, committing on success and rolling back
+// on error. Each public mutator wraps its work in withTx so that the index owns
+// its own transactions and callers never handle *sql.Tx.
+func (idx *Index) withTx(fn func(*sql.Tx) error) error {
+	tx, err := idx.db.Begin()
+	if err != nil {
+		return err
 	}
-	var id int64
-	if err := tx.QueryRow("SELECT last_insert_rowid()").Scan(&id); err != nil {
-		return 0, err
+	if err := fn(tx); err != nil {
+		tx.Rollback()
+		return err
 	}
-	return id, nil
+	return tx.Commit()
 }

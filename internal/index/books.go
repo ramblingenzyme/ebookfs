@@ -200,8 +200,12 @@ func ftsInsert(tx *sql.Tx, id int64, title, desc string) error {
 	return err
 }
 
-// InsertBook inserts b into the index within tx.
-func (idx *Index) InsertBook(tx *sql.Tx, b *model.Book) error {
+// InsertBook inserts b into the index.
+func (idx *Index) InsertBook(b *model.Book) error {
+	return idx.withTx(func(tx *sql.Tx) error { return insertBook(tx, b) })
+}
+
+func insertBook(tx *sql.Tx, b *model.Book) error {
 	if _, err := tx.Exec(
 		`INSERT INTO books
 		    (id, title, sort_title, pubdate, description, language,
@@ -252,15 +256,19 @@ func (idx *Index) InsertBook(tx *sql.Tx, b *model.Book) error {
 	return ftsInsert(tx, b.Meta.ID, b.Title, b.Description)
 }
 
-// UpdateBook replaces all index data for b.ID within tx. Used when the epub's
-// internal OPF is rewritten and bibliographic fields change.
-func (idx *Index) UpdateBook(tx *sql.Tx, b *model.Book) error {
+// UpdateBook replaces all index data for b.ID. Used when the epub's internal OPF
+// is rewritten and bibliographic fields change.
+func (idx *Index) UpdateBook(b *model.Book) error {
 	panic("not yet implemented")
 }
 
-// MoveBook updates the path and author/title fields for b.ID within tx.
+// MoveBook updates the path and author/title fields for b.ID.
 // b should reflect the post-move state.
-func (idx *Index) MoveBook(tx *sql.Tx, b *model.Book) error {
+func (idx *Index) MoveBook(b *model.Book) error {
+	return idx.withTx(func(tx *sql.Tx) error { return moveBook(tx, b) })
+}
+
+func moveBook(tx *sql.Tx, b *model.Book) error {
 	// Read old values before modifying — needed to issue the FTS 'delete' command.
 	var oldTitle, oldDesc string
 	if err := tx.QueryRow(`SELECT title, description FROM books WHERE id=?`, b.Meta.ID).Scan(&oldTitle, &oldDesc); err != nil {
@@ -287,8 +295,12 @@ func (idx *Index) MoveBook(tx *sql.Tx, b *model.Book) error {
 }
 
 // UpdateMeta updates the sidecar fields (status, rating, tags, date_modified)
-// for b.ID within tx.
-func (idx *Index) UpdateMeta(tx *sql.Tx, b *model.Book) error {
+// for b.ID.
+func (idx *Index) UpdateMeta(b *model.Book) error {
+	return idx.withTx(func(tx *sql.Tx) error { return updateMeta(tx, b) })
+}
+
+func updateMeta(tx *sql.Tx, b *model.Book) error {
 	if _, err := tx.Exec(
 		`UPDATE books SET status=?, rating=?, date_modified=? WHERE id=?`,
 		b.Meta.Status, b.Meta.Rating, b.Meta.DateModified.UTC().Format(time.RFC3339), b.Meta.ID,
@@ -299,8 +311,12 @@ func (idx *Index) UpdateMeta(tx *sql.Tx, b *model.Book) error {
 	return upsertTags(tx, b.Meta.ID, b.Meta.Tags)
 }
 
-// DeleteBook removes all index rows for id within tx.
-func (idx *Index) DeleteBook(tx *sql.Tx, id int64) error {
+// DeleteBook removes all index rows for id.
+func (idx *Index) DeleteBook(id int64) error {
+	return idx.withTx(func(tx *sql.Tx) error { return deleteBook(tx, id) })
+}
+
+func deleteBook(tx *sql.Tx, id int64) error {
 	var title, desc string
 	if err := tx.QueryRow(`SELECT title, description FROM books WHERE id=?`, id).Scan(&title, &desc); err != nil {
 		return err

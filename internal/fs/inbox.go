@@ -7,7 +7,6 @@ import (
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
-	"github.com/ramblingenzyme/ebookfs/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/internal/library"
 	"github.com/ramblingenzyme/ebookfs/internal/model"
 )
@@ -105,14 +104,7 @@ func (i *inboxFile) Close(fid uint64) error {
 		md.DeleteChild(i.Stat().Name)
 	}
 
-	book, err := epub.Parse(path)
-	if err != nil {
-		log.Printf("inbox: parse %q: %v", i.Stat().Name, err)
-		os.Remove(path)
-		return err
-	}
-
-	b, err := i.lib.Ingest(book, path)
+	b, err := i.lib.Ingest(path)
 	if err != nil {
 		log.Printf("inbox: ingest %q: %v", i.Stat().Name, err)
 		os.Remove(path)

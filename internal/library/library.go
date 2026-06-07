@@ -20,15 +20,17 @@ func New(s *store.Store, idx *index.Index) *Library {
 	return &Library{store: s, index: idx}
 }
 
-func (l *Library) Ingest(book *epub.Book, tmpPath string) (*model.Book, error) {
-	tx, err := l.index.Begin()
+// Ingest parses the staged epub at tmpPath, lays it down in the store under its
+// canonical path, and records it in the index. epub stays an implementation
+// detail of this method; nothing above the library sees epub types.
+func (l *Library) Ingest(tmpPath string) (*model.Book, error) {
+	book, err := epub.Parse(tmpPath)
 	if err != nil {
 		return nil, err
 	}
 
-	id, err := l.index.AllocateID(tx)
+	id, err := l.index.NextID()
 	if err != nil {
-		tx.Rollback()
 		return nil, err
 	}
 
@@ -42,22 +44,17 @@ func (l *Library) Ingest(book *epub.Book, tmpPath string) (*model.Book, error) {
 		Tags:         []string{},
 	}
 
-	libraryPath, epubFilename, err := l.store.Ingest(id, book, tmpPath, meta)
-	if err != nil {
-		tx.Rollback()
+	b := bookFromParts(book, meta)
+	b.LibraryPath = store.CanonicalPath(b.Authors, b.Title, id)
+	b.EpubFilename = store.EpubFilename(b.Authors, b.Title)
+
+	if err := l.store.Ingest(b, tmpPath); err != nil {
 		return nil, err
 	}
 
-	b := bookFromParts(book, libraryPath, epubFilename, meta)
-
-	if err = l.index.InsertBook(tx, b); err != nil {
-		tx.Rollback()
-		_ = l.store.Delete(b)
-		return nil, err
-	}
-
-	if err = tx.Commit(); err != nil {
-		tx.Rollback()
+	if err := l.index.InsertBook(b); err != nil {
+		// Store wrote successfully but the index did not; roll the store back so a
+		// retry starts clean. The store is authoritative, so reindex would also recover.
 		_ = l.store.Delete(b)
 		return nil, err
 	}
@@ -84,20 +81,10 @@ func (l *Library) WriteMeta(b *model.Book) error {
 		return err
 	}
 
-	tx, err := l.index.Begin()
-	if err != nil {
-		return err
-	}
-
-	if err = l.index.UpdateMeta(tx, b); err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	return tx.Commit()
+	return l.index.UpdateMeta(b)
 }
 
-func (l *Library) Move(b *model.Book, newAuthor epub.Author, newTitle string) (*model.Book, error) {
+func (l *Library) Move(b *model.Book, newAuthor model.Author, newTitle string) (*model.Book, error) {
 	newLibraryPath, newEpubFilename, err := l.store.Move(b, newAuthor, newTitle)
 	if err != nil {
 		return nil, err
@@ -105,23 +92,13 @@ func (l *Library) Move(b *model.Book, newAuthor epub.Author, newTitle string) (*
 
 	updated := *b
 	updated.Title = newTitle
-	updated.Authors = []model.Author{{Name: newAuthor.Name, SortName: newAuthor.SortAs}}
+	updated.Authors = []model.Author{newAuthor}
 	updated.LibraryPath = newLibraryPath
 	updated.EpubFilename = newEpubFilename
 	updated.Meta.DateModified = time.Now()
 
-	tx, err := l.index.Begin()
-	if err != nil {
-		return nil, err
-	}
-
-	if err = l.index.MoveBook(tx, &updated); err != nil {
-		tx.Rollback()
-		// file is already moved; index is stale until reindex
-		return nil, err
-	}
-
-	if err = tx.Commit(); err != nil {
+	if err := l.index.MoveBook(&updated); err != nil {
+		// File is already moved; the index is stale until reindex recovers it.
 		return nil, err
 	}
 
@@ -129,29 +106,20 @@ func (l *Library) Move(b *model.Book, newAuthor epub.Author, newTitle string) (*
 }
 
 func (l *Library) Delete(b *model.Book) error {
-	tx, err := l.index.Begin()
-	if err != nil {
+	// Store is authoritative, so remove it first. If the index delete then fails,
+	// the directory is gone but a ghost row remains; reindex walks the filesystem
+	// and drops the stale row.
+	if err := l.store.Delete(b); err != nil {
 		return err
 	}
 
-	if err = l.index.DeleteBook(tx, b.Meta.ID); err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	if err = l.store.Delete(b); err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	// If Commit fails after store.Delete succeeded, the directory is gone but the
-	// transaction rolls back, leaving a ghost index row. Reindex recovers: it walks
-	// the filesystem and the missing directory causes the stale row to be removed.
-	return tx.Commit()
+	return l.index.DeleteBook(b.Meta.ID)
 }
 
-// bookFromParts assembles a model.Book from the parts available at ingest time.
-func bookFromParts(src *epub.Book, libraryPath, epubFilename string, meta *model.Meta) *model.Book {
+// bookFromParts assembles a model.Book from the bibliographic data parsed out of
+// the epub plus its fresh sidecar. The caller fills in LibraryPath/EpubFilename
+// once the canonical path has been computed.
+func bookFromParts(src *epub.Book, meta *model.Meta) *model.Book {
 	authors := make([]model.Author, len(src.Authors))
 	for i, a := range src.Authors {
 		authors[i] = model.Author{Name: a.Name, SortName: a.SortAs}
@@ -181,8 +149,6 @@ func bookFromParts(src *epub.Book, libraryPath, epubFilename string, meta *model
 		Description:  src.Description,
 		Pubdate:      pubdate,
 		Identifiers:  identifiers,
-		LibraryPath:  libraryPath,
-		EpubFilename: epubFilename,
 		HasCover:     src.CoverPath != "",
 	}
 }

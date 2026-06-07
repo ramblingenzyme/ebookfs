@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/ramblingenzyme/ebookfs/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/internal/model"
 )
 
@@ -27,9 +26,9 @@ func (s *Store) AbsPath(libraryPath, filename string) string {
 
 // Move renames the book directory to match newAuthor/newTitle, returning the
 // new libraryPath and epubFilename.
-func (s *Store) Move(b *model.Book, newAuthor epub.Author, newTitle string) (string, string, error) {
-	newPath := CanonicalPath([]epub.Author{newAuthor}, newTitle, b.Meta.ID)
-	newFilename := EpubFilename([]epub.Author{newAuthor}, newTitle)
+func (s *Store) Move(b *model.Book, newAuthor model.Author, newTitle string) (string, string, error) {
+	newPath := CanonicalPath([]model.Author{newAuthor}, newTitle, b.Meta.ID)
+	newFilename := EpubFilename([]model.Author{newAuthor}, newTitle)
 
 	apath := filepath.Join(s.root, newPath)
 	if _, err := os.Stat(apath); err == nil {
