@@ -5,30 +5,9 @@ import (
 	"path"
 	"strconv"
 	"strings"
-)
 
-// Sanitize makes s safe for use as a filesystem path component.
-// It replaces '/' with '-', strips NUL and control characters (< 0x20),
-// and trims leading/trailing dots, spaces, and tabs.
-// Returns an error if the result is empty.
-func Sanitize(s string) (string, error) {
-	var b strings.Builder
-	for _, r := range s {
-		switch {
-		case r == '/':
-			b.WriteRune('-')
-		case r < 0x20:
-			// strip NUL and control characters
-		default:
-			b.WriteRune(r)
-		}
-	}
-	out := strings.Trim(b.String(), ". \t")
-	if out == "" {
-		return "", errors.New("sanitized string is empty")
-	}
-	return out, nil
-}
+	"github.com/ramblingenzyme/ebookfs/internal/naming"
+)
 
 func translate(pkg *opfPackage) (*Book, error) {
 	if pkg == nil {
@@ -72,7 +51,7 @@ func translateTitle(meta *opfMetadata, b *Book) error {
 	title := meta.Titles[0]
 
 	var err error
-	b.Title, err = Sanitize(title.Value)
+	b.Title, err = naming.Sanitize(title.Value)
 	if err != nil {
 		return errors.New("empty title")
 	}
@@ -98,7 +77,7 @@ func translateAuthor(meta *opfMetadata, b *Book) error {
 			continue
 		}
 
-		name, err := Sanitize(c.Name)
+		name, err := naming.Sanitize(c.Name)
 		if err != nil {
 			continue
 		}
@@ -108,7 +87,7 @@ func translateAuthor(meta *opfMetadata, b *Book) error {
 			sortAs = findRefine(meta.Metas, c.ID, "file-as")
 		}
 		if sortAs != "" {
-			sortAs, _ = Sanitize(sortAs)
+			sortAs, _ = naming.Sanitize(sortAs)
 		}
 
 		b.Authors = append(b.Authors, Author{Name: name, SortAs: sortAs})
