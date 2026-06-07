@@ -4,7 +4,6 @@ import (
 	"errors"
 	"log"
 	"os"
-	"path/filepath"
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
@@ -25,11 +24,11 @@ func newInboxDir(f *fs.FS) *inboxDir {
 
 type inboxFile struct {
 	fs.BaseFile
-	path     string
-	fid      uint64
-	f        *os.File
-	lib      *library.Library
-	onIngest func(*model.Book)
+	inboxTemp string
+	fid       uint64
+	f         *os.File
+	lib       *library.Library
+	onIngest  func(*model.Book)
 }
 
 func inboxCreateFile(lib *library.Library, inboxTemp string, onIngest func(*model.Book)) createFileFunc {
@@ -55,10 +54,10 @@ func inboxCreateFile(lib *library.Library, inboxTemp string, onIngest func(*mode
 
 func newInboxFile(f *fs.FS, lib *library.Library, inboxTemp, name string, perm uint32, onIngest func(*model.Book)) *inboxFile {
 	return &inboxFile{
-		BaseFile: *fs.NewBaseFile(f.NewStat(name, "glenda", "glenda", perm)),
-		lib:      lib,
-		path:     filepath.Join(inboxTemp, filepath.Base(name)),
-		onIngest: onIngest,
+		BaseFile:  *fs.NewBaseFile(f.NewStat(name, "glenda", "glenda", perm)),
+		lib:       lib,
+		inboxTemp: inboxTemp,
+		onIngest:  onIngest,
 	}
 }
 
@@ -69,14 +68,13 @@ func (i *inboxFile) Open(fid uint64, omode proto.Mode) error {
 		return errors.New("file already open")
 	}
 
-	i.fid = fid
-
-	f, err := os.Create(i.path)
+	f, err := os.CreateTemp(i.inboxTemp, "*.epub")
 	if err != nil {
 		log.Printf("inbox: open %q: %v", i.Stat().Name, err)
 		return err
 	}
 	i.f = f
+	i.fid = fid
 
 	return nil
 }
@@ -94,6 +92,11 @@ func (i *inboxFile) Write(fid uint64, offset uint64, data []byte) (uint32, error
 
 func (i *inboxFile) Close(fid uint64) error {
 	log.Printf("inbox: close %q fid=%d", i.Stat().Name, fid)
+	if i.f == nil {
+		i.fid = 0
+		return nil
+	}
+	path := i.f.Name()
 	i.f.Close()
 	i.f = nil
 	i.fid = 0
@@ -102,17 +105,17 @@ func (i *inboxFile) Close(fid uint64) error {
 		md.DeleteChild(i.Stat().Name)
 	}
 
-	book, err := epub.Parse(i.path)
+	book, err := epub.Parse(path)
 	if err != nil {
 		log.Printf("inbox: parse %q: %v", i.Stat().Name, err)
-		os.Remove(i.path)
+		os.Remove(path)
 		return err
 	}
 
-	b, err := i.lib.Ingest(book, i.path)
+	b, err := i.lib.Ingest(book, path)
 	if err != nil {
 		log.Printf("inbox: ingest %q: %v", i.Stat().Name, err)
-		os.Remove(i.path)
+		os.Remove(path)
 		return err
 	}
 	i.onIngest(b)

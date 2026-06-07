@@ -52,7 +52,13 @@ func (f *fieldFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error
 func (f *fieldFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
 	f.Lock()
 	defer f.Unlock()
-	f.writes[fid] = append(f.writes[fid], data...)
+	end := offset + uint64(len(data))
+	buf := f.writes[fid]
+	if end > uint64(len(buf)) {
+		buf = append(buf, make([]byte, end-uint64(len(buf)))...)
+	}
+	copy(buf[offset:], data)
+	f.writes[fid] = buf
 	return uint32(len(data)), nil
 }
 

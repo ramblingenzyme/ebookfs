@@ -57,6 +57,7 @@ func (l *Library) Ingest(book *epub.Book, tmpPath string) (*model.Book, error) {
 	}
 
 	if err = tx.Commit(); err != nil {
+		tx.Rollback()
 		_ = l.store.Delete(b)
 		return nil, err
 	}
@@ -103,6 +104,7 @@ func (l *Library) Move(b *model.Book, newAuthor epub.Author, newTitle string) (*
 	updated.Authors = []model.Author{{Name: newAuthor.Name, SortName: newAuthor.SortAs}}
 	updated.LibraryPath = newLibraryPath
 	updated.EpubFilename = newEpubFilename
+	updated.Meta.DateModified = time.Now()
 
 	tx, err := l.index.Begin()
 	if err != nil {

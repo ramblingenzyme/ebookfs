@@ -25,6 +25,8 @@ func Open(path string) (*Index, error) {
 		return nil, err
 	}
 
+	db.SetMaxOpenConns(1)
+
 	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
 		return nil, err
 	}
