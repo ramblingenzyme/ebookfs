@@ -1,6 +1,8 @@
 package library
 
 import (
+	"io"
+	"io/fs"
 	"log"
 	"time"
 
@@ -9,6 +11,15 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/model"
 	"github.com/ramblingenzyme/ebookfs/internal/store"
 )
+
+// EpubReader is a handle to a book's epub content. It hides where the bytes
+// live (currently a file on disk) from the 9P layer, which needs random reads,
+// the file size (via Stat), and a close.
+type EpubReader interface {
+	io.ReaderAt
+	io.Closer
+	Stat() (fs.FileInfo, error)
+}
 
 // Library coordinates filesystem and index operations on the book collection.
 // It is the primary API for the 9P layer; store and index are implementation details.
@@ -112,8 +123,10 @@ func (l *Library) Reindex() error {
 	return nil
 }
 
-func (l *Library) EpubPath(b *model.Book) string {
-	return l.store.AbsPath(b.LibraryPath, b.EpubFilename)
+// OpenEpub returns a handle to b's epub content. The caller closes it. The 9P
+// layer reads through this rather than touching the filesystem directly.
+func (l *Library) OpenEpub(b *model.Book) (EpubReader, error) {
+	return l.store.OpenEpub(b)
 }
 
 func (l *Library) ReadMeta(b *model.Book) (*model.Meta, error) {

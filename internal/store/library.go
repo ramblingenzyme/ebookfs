@@ -24,6 +24,11 @@ func (s *Store) AbsPath(libraryPath, filename string) string {
 	return filepath.Join(s.root, libraryPath, filename)
 }
 
+// OpenEpub opens the epub file for b for reading. The caller closes it.
+func (s *Store) OpenEpub(b *model.Book) (*os.File, error) {
+	return os.Open(s.AbsPath(b.LibraryPath, b.EpubFilename))
+}
+
 // Move renames the book directory to match newAuthor/newTitle, returning the
 // new libraryPath and epubFilename.
 func (s *Store) Move(b *model.Book, newAuthor model.Author, newTitle string) (string, string, error) {

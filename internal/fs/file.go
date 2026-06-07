@@ -3,51 +3,63 @@ package fs
 import (
 	"errors"
 	"io"
-	"os"
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/internal/library"
+	"github.com/ramblingenzyme/ebookfs/internal/model"
 )
 
-// epubFile serves the epub from disk, holding one OS file handle per fid.
-// Size is snapshotted at construction; content is read on demand via ReadAt.
+// epubFile serves a book's epub through the library, holding one reader per fid.
+// Size is statted once at construction; content is read on demand via ReadAt.
+// The 9P layer never sees a filesystem path.
 type epubFile struct {
 	fs.BaseFile
-	path string
-	fids map[uint64]*os.File
+	lib  *library.Library
+	book *model.Book
+	fids map[uint64]library.EpubReader
 }
 
-func newEpubFile(stat *proto.Stat, path string) *epubFile {
-	if info, err := os.Stat(path); err == nil {
-		stat.Length = uint64(info.Size())
+func newEpubFile(stat *proto.Stat, lib *library.Library, book *model.Book) *epubFile {
+	// Stat the epub once here to fill in the 9P length; reads use per-fid handles.
+	//
+	// TODO: this length is captured at construction. When the ebook-meta edit path
+	// rewrites an epub in place its size changes, so the book's fs node must be
+	// rebuilt (or this stat refreshed) for clients to see the new length.
+	if r, err := lib.OpenEpub(book); err == nil {
+		if fi, err := r.Stat(); err == nil {
+			stat.Length = uint64(fi.Size())
+		}
+		r.Close()
 	}
 	return &epubFile{
 		BaseFile: *fs.NewBaseFile(stat),
-		path:     path,
-		fids:     make(map[uint64]*os.File),
+		lib:      lib,
+		book:     book,
+		fids:     make(map[uint64]library.EpubReader),
 	}
 }
 
 func (e *epubFile) Open(fid uint64, omode proto.Mode) error {
-	f, err := os.Open(e.path)
+	r, err := e.lib.OpenEpub(e.book)
 	if err != nil {
 		return err
 	}
 	e.Lock()
-	e.fids[fid] = f
+	e.fids[fid] = r
 	e.Unlock()
 	return nil
 }
 
 func (e *epubFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error) {
 	e.RLock()
-	f := e.fids[fid]
+	r := e.fids[fid]
 	e.RUnlock()
-	if f == nil {
+	if r == nil {
 		return nil, errors.New("not open")
 	}
 	buf := make([]byte, count)
-	n, err := f.ReadAt(buf, int64(offset))
+	n, err := r.ReadAt(buf, int64(offset))
 	if err == io.EOF {
 		err = nil
 	}
@@ -57,8 +69,8 @@ func (e *epubFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error)
 func (e *epubFile) Close(fid uint64) error {
 	e.Lock()
 	defer e.Unlock()
-	if f, ok := e.fids[fid]; ok {
-		f.Close()
+	if r, ok := e.fids[fid]; ok {
+		r.Close()
 		delete(e.fids, fid)
 	}
 	return nil

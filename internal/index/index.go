@@ -35,20 +35,31 @@ func Open(path string) (*Index, error) {
 		return nil, err
 	}
 
+	const schemaVersion = 2
+
 	var v int64
 	if err := db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
 		return nil, err
 	}
 
-	if v == 0 {
+	switch {
+	case v == 0:
+		// Fresh database: apply the current schema.
 		if _, err := db.Exec(schema); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("applying schema: %w", err)
 		}
-		if _, err := db.Exec("PRAGMA user_version=1"); err != nil {
+	case v < schemaVersion:
+		// v1 → v2: drop the unused FTS table.
+		if _, err := db.Exec(`DROP TABLE IF EXISTS books_fts`); err != nil {
 			db.Close()
-			return nil, err
+			return nil, fmt.Errorf("migrating index to v%d: %w", schemaVersion, err)
 		}
+	}
+
+	if _, err := db.Exec(fmt.Sprintf("PRAGMA user_version=%d", schemaVersion)); err != nil {
+		db.Close()
+		return nil, err
 	}
 
 	if _, err := db.Exec(
