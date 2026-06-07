@@ -2,22 +2,98 @@ package index
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 
 	"github.com/ramblingenzyme/ebookfs/internal/model"
 )
 
+// Filter selects a subset of books for Query. Zero-valued fields are ignored,
+// so Filter{} matches every book. String fields match by exact name.
+type Filter struct {
+	ID     int64  // a single book by id
+	Author string // books by an author's name
+	Tag    string // books carrying a tag
+	Status string // books with a reading status
+	Series string // books in a series
+	Recent bool   // order by date added (newest first) instead of sort title
+	Limit  int    // cap the result count; 0 means no limit
+}
+
+// Query returns the books matching f, each hydrated with authors, tags, and
+// identifiers. Every book-listing view (all books, by author, by tag, recent,
+// …) is expressed as a Filter rather than its own bespoke method.
+func (idx *Index) Query(f Filter) ([]*model.Book, error) {
+	// Each row is one optional predicate: include its expr/arg when `on` holds.
+	// Values are always parameterized; only the fixed expressions are literal.
+	conds := []struct {
+		on   bool
+		expr string
+		arg  any
+	}{
+		{f.ID != 0, "b.id = ?", f.ID},
+		{f.Status != "", "b.status = ?", f.Status},
+		{f.Author != "", "b.id IN (SELECT ba.book_id FROM book_authors ba JOIN authors a ON a.id = ba.author_id WHERE a.name = ?)", f.Author},
+		{f.Tag != "", "b.id IN (SELECT bt.book_id FROM book_tags bt JOIN tags t ON t.id = bt.tag_id WHERE t.name = ?)", f.Tag},
+		{f.Series != "", "b.series_id IN (SELECT id FROM series WHERE name = ?)", f.Series},
+	}
+
+	var (
+		where []string
+		args  []any
+	)
+	for _, c := range conds {
+		if c.on {
+			where = append(where, c.expr)
+			args = append(args, c.arg)
+		}
+	}
+
+	order := "b.sort_title"
+	if f.Recent {
+		order = "b.date_added DESC"
+	}
+
+	return idx.queryBooks(strings.Join(where, " AND "), args, order, f.Limit)
+}
+
 // ListAll returns all books ordered by sort_title.
 func (idx *Index) ListAll() ([]*model.Book, error) {
-	rows, err := idx.db.Query(`
+	return idx.Query(Filter{})
+}
+
+// GetBook returns the book with the given id, or sql.ErrNoRows if it is absent.
+func (idx *Index) GetBook(id int64) (*model.Book, error) {
+	books, err := idx.Query(Filter{ID: id})
+	if err != nil {
+		return nil, err
+	}
+	if len(books) == 0 {
+		return nil, sql.ErrNoRows
+	}
+	return books[0], nil
+}
+
+// queryBooks runs the shared book SELECT with an optional WHERE/ORDER/LIMIT and
+// hydrates the per-book authors, tags, and identifiers.
+func (idx *Index) queryBooks(where string, args []any, order string, limit int) ([]*model.Book, error) {
+	q := `
 		SELECT b.id, b.title, b.sort_title, COALESCE(b.pubdate, ''), b.description, b.language,
 		       b.library_path, b.epub_filename, b.has_cover,
 		       b.status, b.rating, b.date_added, b.date_modified,
 		       s.id, s.name, b.series_index
 		FROM books b
-		LEFT JOIN series s ON s.id = b.series_id
-		ORDER BY b.sort_title
-	`)
+		LEFT JOIN series s ON s.id = b.series_id`
+	if where != "" {
+		q += "\n\t\tWHERE " + where
+	}
+	q += "\n\t\tORDER BY " + order
+	if limit > 0 {
+		q += "\n\t\tLIMIT ?"
+		args = append(args, limit)
+	}
+
+	rows, err := idx.db.Query(q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -306,38 +382,8 @@ func deleteBook(tx *sql.Tx, id int64) error {
 	return nil
 }
 
-// GetBook returns the full index record for id.
-func (idx *Index) GetBook(id int64) (*model.Book, error) {
-	panic("not yet implemented")
-}
-
 // ListAuthors returns all authors in the index, ordered by sort_name.
 func (idx *Index) ListAuthors() ([]*model.Author, error) {
-	panic("not yet implemented")
-}
-
-// ListByAuthor returns all books by authorID, ordered by sort_title.
-func (idx *Index) ListByAuthor(authorID int64) ([]*model.Book, error) {
-	panic("not yet implemented")
-}
-
-// ListByTag returns all books with the given tag, ordered by sort_title.
-func (idx *Index) ListByTag(tag string) ([]*model.Book, error) {
-	panic("not yet implemented")
-}
-
-// ListByStatus returns all books with the given status, ordered by date_added desc.
-func (idx *Index) ListByStatus(status string) ([]*model.Book, error) {
-	panic("not yet implemented")
-}
-
-// ListBySeries returns all books in seriesID, ordered by series_index.
-func (idx *Index) ListBySeries(seriesID int64) ([]*model.Book, error) {
-	panic("not yet implemented")
-}
-
-// Recent returns the n most recently added books.
-func (idx *Index) Recent(n int) ([]*model.Book, error) {
 	panic("not yet implemented")
 }
 
