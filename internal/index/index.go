@@ -77,7 +77,7 @@ func (idx *Index) Close() error {
 }
 
 // NextID reserves and returns a new unique book ID. Must be called before
-// InsertBook so the id is available for canonical path construction.
+// Put so the id is available for canonical path construction.
 func (idx *Index) NextID() (int64, error) {
 	var id int64
 	err := idx.db.QueryRow("INSERT INTO book_id_seq DEFAULT VALUES RETURNING id").Scan(&id)

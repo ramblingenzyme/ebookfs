@@ -23,7 +23,7 @@ func (idx *Index) Rebuild(books []*model.Book, maxID int64) error {
 		}
 
 		for _, b := range books {
-			if err := insertBook(tx, b); err != nil {
+			if err := putBook(tx, b); err != nil {
 				return err
 			}
 		}

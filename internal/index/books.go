@@ -260,22 +260,49 @@ func upsertTags(tx *sql.Tx, bookID int64, tags []string) error {
 	return err
 }
 
-// InsertBook inserts b into the index.
-func (idx *Index) InsertBook(b *model.Book) error {
-	return idx.withTx(func(tx *sql.Tx) error { return insertBook(tx, b) })
+// Put writes b into the index, inserting it or fully replacing the existing
+// record for b.Meta.ID. It is the index's single write primitive: ingest, move,
+// sidecar edits, and reindex all reduce to "make the index reflect this book".
+// Pair it with DeleteBook.
+func (idx *Index) Put(b *model.Book) error {
+	return idx.withTx(func(tx *sql.Tx) error { return putBook(tx, b) })
 }
 
-func insertBook(tx *sql.Tx, b *model.Book) error {
+func putBook(tx *sql.Tx, b *model.Book) error {
+	// Resolve the series row first so its id (or NULL) goes straight into the
+	// upsert. seriesID/seriesIndex stay nil — and thus SQL NULL — when the book
+	// has no series, which also clears a series the book has just left.
+	var seriesID, seriesIndex any
+	if b.Series != nil {
+		if _, err := tx.Exec(`INSERT OR IGNORE INTO series (name) VALUES (?)`, b.Series.Name); err != nil {
+			return err
+		}
+		var id int64
+		if err := tx.QueryRow(`SELECT id FROM series WHERE name=?`, b.Series.Name).Scan(&id); err != nil {
+			return err
+		}
+		seriesID = id
+		seriesIndex = b.Series.Index
+	}
+
 	if _, err := tx.Exec(
 		`INSERT INTO books
 		    (id, title, sort_title, pubdate, description, language,
 		     library_path, epub_filename, has_cover, status, rating,
-		     date_added, date_modified)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		     date_added, date_modified, series_id, series_index)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(id) DO UPDATE SET
+		     title=excluded.title, sort_title=excluded.sort_title, pubdate=excluded.pubdate,
+		     description=excluded.description, language=excluded.language,
+		     library_path=excluded.library_path, epub_filename=excluded.epub_filename,
+		     has_cover=excluded.has_cover, status=excluded.status, rating=excluded.rating,
+		     date_added=excluded.date_added, date_modified=excluded.date_modified,
+		     series_id=excluded.series_id, series_index=excluded.series_index`,
 		b.Meta.ID, b.Title, b.SortTitle, b.Pubdate, b.Description, b.Language,
 		b.LibraryPath, b.EpubFilename, b.HasCover, b.Meta.Status, b.Meta.Rating,
 		b.Meta.DateAdded.UTC().Format(time.RFC3339),
 		b.Meta.DateModified.UTC().Format(time.RFC3339),
+		seriesID, seriesIndex,
 	); err != nil {
 		return err
 	}
@@ -283,27 +310,14 @@ func insertBook(tx *sql.Tx, b *model.Book) error {
 	if err := upsertAuthors(tx, b.Meta.ID, b.Authors); err != nil {
 		return err
 	}
-
-	if b.Series != nil {
-		if _, err := tx.Exec(`INSERT OR IGNORE INTO series (name) VALUES (?)`, b.Series.Name); err != nil {
-			return err
-		}
-		var seriesID int64
-		if err := tx.QueryRow(`SELECT id FROM series WHERE name=?`, b.Series.Name).Scan(&seriesID); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(
-			`UPDATE books SET series_id=?, series_index=? WHERE id=?`,
-			seriesID, b.Series.Index, b.Meta.ID,
-		); err != nil {
-			return err
-		}
-	}
-
 	if err := upsertTags(tx, b.Meta.ID, b.Meta.Tags); err != nil {
 		return err
 	}
 
+	// Replace identifiers wholesale.
+	if _, err := tx.Exec(`DELETE FROM identifiers WHERE book_id=?`, b.Meta.ID); err != nil {
+		return err
+	}
 	for scheme, value := range b.Identifiers {
 		if _, err := tx.Exec(
 			`INSERT INTO identifiers (book_id, scheme, value) VALUES (?, ?, ?)`,
@@ -313,48 +327,10 @@ func insertBook(tx *sql.Tx, b *model.Book) error {
 		}
 	}
 
-	return nil
-}
-
-// UpdateBook replaces all index data for b.ID. Used when the epub's internal OPF
-// is rewritten and bibliographic fields change.
-func (idx *Index) UpdateBook(b *model.Book) error {
-	panic("not yet implemented")
-}
-
-// MoveBook updates the path and author/title fields for b.ID.
-// b should reflect the post-move state.
-func (idx *Index) MoveBook(b *model.Book) error {
-	return idx.withTx(func(tx *sql.Tx) error { return moveBook(tx, b) })
-}
-
-func moveBook(tx *sql.Tx, b *model.Book) error {
-	if _, err := tx.Exec(
-		`UPDATE books SET library_path=?, epub_filename=?, title=?, sort_title=?, date_modified=? WHERE id=?`,
-		b.LibraryPath, b.EpubFilename, b.Title, b.SortTitle,
-		b.Meta.DateModified.UTC().Format(time.RFC3339), b.Meta.ID,
-	); err != nil {
-		return err
-	}
-
-	return upsertAuthors(tx, b.Meta.ID, b.Authors)
-}
-
-// UpdateMeta updates the sidecar fields (status, rating, tags, date_modified)
-// for b.ID.
-func (idx *Index) UpdateMeta(b *model.Book) error {
-	return idx.withTx(func(tx *sql.Tx) error { return updateMeta(tx, b) })
-}
-
-func updateMeta(tx *sql.Tx, b *model.Book) error {
-	if _, err := tx.Exec(
-		`UPDATE books SET status=?, rating=?, date_modified=? WHERE id=?`,
-		b.Meta.Status, b.Meta.Rating, b.Meta.DateModified.UTC().Format(time.RFC3339), b.Meta.ID,
-	); err != nil {
-		return err
-	}
-
-	return upsertTags(tx, b.Meta.ID, b.Meta.Tags)
+	// A book leaving a series can orphan the old series row (authors and tags are
+	// already cleaned by upsertAuthors/upsertTags).
+	_, err := tx.Exec(`DELETE FROM series WHERE id NOT IN (SELECT series_id FROM books WHERE series_id IS NOT NULL)`)
+	return err
 }
 
 // DeleteBook removes all index rows for id.

@@ -64,7 +64,7 @@ func (l *Library) Ingest(tmpPath string) (*model.Book, error) {
 		return nil, err
 	}
 
-	if err := l.index.InsertBook(b); err != nil {
+	if err := l.index.Put(b); err != nil {
 		// Store wrote successfully but the index did not; roll the store back so a
 		// retry starts clean. The store is authoritative, so reindex would also recover.
 		_ = l.store.Delete(b)
@@ -140,7 +140,7 @@ func (l *Library) WriteMeta(b *model.Book) error {
 		return err
 	}
 
-	return l.index.UpdateMeta(b)
+	return l.index.Put(b)
 }
 
 func (l *Library) Move(b *model.Book, newAuthor model.Author, newTitle string) (*model.Book, error) {
@@ -156,7 +156,7 @@ func (l *Library) Move(b *model.Book, newAuthor model.Author, newTitle string) (
 	updated.EpubFilename = newEpubFilename
 	updated.Meta.DateModified = time.Now()
 
-	if err := l.index.MoveBook(&updated); err != nil {
+	if err := l.index.Put(&updated); err != nil {
 		// File is already moved; the index is stale until reindex recovers it.
 		return nil, err
 	}
