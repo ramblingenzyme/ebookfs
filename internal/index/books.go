@@ -184,22 +184,6 @@ func upsertTags(tx *sql.Tx, bookID int64, tags []string) error {
 	return err
 }
 
-func ftsDelete(tx *sql.Tx, id int64, title, desc string) error {
-	_, err := tx.Exec(
-		`INSERT INTO books_fts(books_fts, rowid, title, description) VALUES('delete', ?, ?, ?)`,
-		id, title, desc,
-	)
-	return err
-}
-
-func ftsInsert(tx *sql.Tx, id int64, title, desc string) error {
-	_, err := tx.Exec(
-		`INSERT INTO books_fts(rowid, title, description) VALUES(?, ?, ?)`,
-		id, title, desc,
-	)
-	return err
-}
-
 // InsertBook inserts b into the index.
 func (idx *Index) InsertBook(b *model.Book) error {
 	return idx.withTx(func(tx *sql.Tx) error { return insertBook(tx, b) })
@@ -253,7 +237,7 @@ func insertBook(tx *sql.Tx, b *model.Book) error {
 		}
 	}
 
-	return ftsInsert(tx, b.Meta.ID, b.Title, b.Description)
+	return nil
 }
 
 // UpdateBook replaces all index data for b.ID. Used when the epub's internal OPF
@@ -269,12 +253,6 @@ func (idx *Index) MoveBook(b *model.Book) error {
 }
 
 func moveBook(tx *sql.Tx, b *model.Book) error {
-	// Read old values before modifying — needed to issue the FTS 'delete' command.
-	var oldTitle, oldDesc string
-	if err := tx.QueryRow(`SELECT title, description FROM books WHERE id=?`, b.Meta.ID).Scan(&oldTitle, &oldDesc); err != nil {
-		return err
-	}
-
 	if _, err := tx.Exec(
 		`UPDATE books SET library_path=?, epub_filename=?, title=?, sort_title=?, date_modified=? WHERE id=?`,
 		b.LibraryPath, b.EpubFilename, b.Title, b.SortTitle,
@@ -283,15 +261,7 @@ func moveBook(tx *sql.Tx, b *model.Book) error {
 		return err
 	}
 
-	if err := upsertAuthors(tx, b.Meta.ID, b.Authors); err != nil {
-		return err
-	}
-
-	// FTS content tables require explicit sync: delete old entry then insert new.
-	if err := ftsDelete(tx, b.Meta.ID, oldTitle, oldDesc); err != nil {
-		return err
-	}
-	return ftsInsert(tx, b.Meta.ID, b.Title, b.Description)
+	return upsertAuthors(tx, b.Meta.ID, b.Authors)
 }
 
 // UpdateMeta updates the sidecar fields (status, rating, tags, date_modified)
@@ -317,15 +287,6 @@ func (idx *Index) DeleteBook(id int64) error {
 }
 
 func deleteBook(tx *sql.Tx, id int64) error {
-	var title, desc string
-	if err := tx.QueryRow(`SELECT title, description FROM books WHERE id=?`, id).Scan(&title, &desc); err != nil {
-		return err
-	}
-
-	if err := ftsDelete(tx, id, title, desc); err != nil {
-		return err
-	}
-
 	// ON DELETE CASCADE handles book_authors, book_tags, identifiers.
 	if _, err := tx.Exec(`DELETE FROM books WHERE id=?`, id); err != nil {
 		return err

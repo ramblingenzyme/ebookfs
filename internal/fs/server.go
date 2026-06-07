@@ -27,6 +27,12 @@ func StartServer(cfg *config.Config) {
 
 	lib := library.New(store.New(cfg.Library.Root, cfg.Library.InboxTemp), idx)
 
+	// The store is the source of truth; rebuild the index from it on every start
+	// so a stale or missing index can't leave the served tree out of sync.
+	if err := lib.Reindex(); err != nil {
+		log.Fatalf("reindexing library: %v", err)
+	}
+
 	// allBooks is set below after newFS returns, but createFile only fires once
 	// a client writes to /inbox — well after startup completes.
 	var allBooks *allBooksDir

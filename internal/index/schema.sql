@@ -52,10 +52,3 @@ CREATE TABLE identifiers (
     value   TEXT    NOT NULL,
     UNIQUE (book_id, scheme)
 );
-
-CREATE VIRTUAL TABLE books_fts USING fts5(
-    title,
-    description,
-    content=books,
-    content_rowid=id
-);

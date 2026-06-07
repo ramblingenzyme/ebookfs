@@ -1,6 +1,7 @@
 package library
 
 import (
+	"log"
 	"time"
 
 	"github.com/ramblingenzyme/ebookfs/internal/epub"
@@ -64,6 +65,51 @@ func (l *Library) Ingest(tmpPath string) (*model.Book, error) {
 
 func (l *Library) ListAll() ([]*model.Book, error) {
 	return l.index.ListAll()
+}
+
+// Reindex rebuilds the index from the store, which is the source of truth. The
+// store is authoritative, so this recovers from a missing, stale, or partially
+// written index — it is the backstop the write paths' compensation relies on.
+// A book whose meta or epub can't be read is logged and skipped rather than
+// failing the whole rebuild; its id still counts toward the sequence high-water
+// mark so future ingests can't reuse it.
+func (l *Library) Reindex() error {
+	entries, err := l.store.Walk()
+	if err != nil {
+		return err
+	}
+
+	var (
+		books []*model.Book
+		maxID int64
+	)
+	for _, e := range entries {
+		meta, err := l.store.ReadMeta(e.LibraryPath)
+		if err != nil {
+			log.Printf("reindex: skip %s: read meta: %v", e.LibraryPath, err)
+			continue
+		}
+		if meta.ID > maxID {
+			maxID = meta.ID
+		}
+
+		book, err := epub.Parse(l.store.AbsPath(e.LibraryPath, e.EpubFilename))
+		if err != nil {
+			log.Printf("reindex: skip %s: parse epub: %v", e.LibraryPath, err)
+			continue
+		}
+
+		b := bookFromParts(book, meta)
+		b.LibraryPath = e.LibraryPath
+		b.EpubFilename = e.EpubFilename
+		books = append(books, b)
+	}
+
+	if err := l.index.Rebuild(books, maxID); err != nil {
+		return err
+	}
+	log.Printf("reindex: indexed %d of %d books", len(books), len(entries))
+	return nil
 }
 
 func (l *Library) EpubPath(b *model.Book) string {
