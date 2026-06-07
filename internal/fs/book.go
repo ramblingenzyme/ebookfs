@@ -76,5 +76,10 @@ func newBookDir(f *fs.FS, lib *library.Library, book *model.Book) *bookDir {
 		}),
 	)
 
+	d.StaticDir.AddChild(newEpubFile(
+		f.NewStat(book.EpubFilename, "glenda", "glenda", 0444),
+		lib.EpubPath(book),
+	))
+
 	return d
 }

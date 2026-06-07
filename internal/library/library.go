@@ -69,6 +69,10 @@ func (l *Library) ListAll() ([]*model.Book, error) {
 	return l.index.ListAll()
 }
 
+func (l *Library) EpubPath(b *model.Book) string {
+	return l.store.AbsPath(b.LibraryPath, b.EpubFilename)
+}
+
 func (l *Library) ReadMeta(b *model.Book) (*model.Meta, error) {
 	return l.store.ReadMeta(b.LibraryPath)
 }

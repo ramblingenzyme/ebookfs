@@ -21,6 +21,10 @@ func New(root, inboxTemp string) *Store {
 	return &Store{root: root, inboxTemp: inboxTemp}
 }
 
+func (s *Store) AbsPath(libraryPath, filename string) string {
+	return filepath.Join(s.root, libraryPath, filename)
+}
+
 // Move renames the book directory to match newAuthor/newTitle, returning the
 // new libraryPath and epubFilename.
 func (s *Store) Move(b *model.Book, newAuthor epub.Author, newTitle string) (string, string, error) {

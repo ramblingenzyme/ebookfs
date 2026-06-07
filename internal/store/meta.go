@@ -10,12 +10,12 @@ import (
 
 // ReadMeta reads the meta.toml sidecar for the book at libraryPath.
 func (s *Store) ReadMeta(libraryPath string) (*model.Meta, error) {
-	return readMeta(filepath.Join(s.root, libraryPath, "meta.toml"))
+	return readMeta(s.AbsPath(libraryPath, "meta.toml"))
 }
 
 // WriteMeta atomically replaces the meta.toml sidecar for the book at libraryPath.
 func (s *Store) WriteMeta(libraryPath string, meta *model.Meta) error {
-	return writeMeta(filepath.Join(s.root, libraryPath, "meta.toml"), meta)
+	return writeMeta(s.AbsPath(libraryPath, "meta.toml"), meta)
 }
 
 func readMeta(path string) (*model.Meta, error) {
