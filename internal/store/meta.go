@@ -8,14 +8,14 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/model"
 )
 
-// ReadMeta reads the meta.toml sidecar for the book at libraryPath.
-func (s *Store) ReadMeta(libraryPath string) (*model.Meta, error) {
-	return readMeta(s.AbsPath(libraryPath, "meta.toml"))
+// ReadMeta reads the meta.toml sidecar for the book at loc.
+func (s *Store) ReadMeta(loc model.Location) (*model.Meta, error) {
+	return readMeta(s.AbsPath(loc.LibraryPath, "meta.toml"))
 }
 
-// WriteMeta atomically replaces the meta.toml sidecar for the book at libraryPath.
-func (s *Store) WriteMeta(libraryPath string, meta *model.Meta) error {
-	return writeMeta(s.AbsPath(libraryPath, "meta.toml"), meta)
+// WriteMeta atomically replaces the meta.toml sidecar for the book at loc.
+func (s *Store) WriteMeta(loc model.Location, meta *model.Meta) error {
+	return writeMeta(s.AbsPath(loc.LibraryPath, "meta.toml"), meta)
 }
 
 func readMeta(path string) (*model.Meta, error) {

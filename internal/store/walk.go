@@ -5,20 +5,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/ramblingenzyme/ebookfs/internal/model"
 )
 
-// Entry locates a single book on disk: its directory relative to the library
-// root and the epub file within it.
-type Entry struct {
-	LibraryPath  string
-	EpubFilename string
-}
-
-// Walk enumerates every book directory in the library. A directory is treated
-// as a book if it holds a meta.toml sidecar; the walk does not descend into a
-// book directory once found.
-func (s *Store) Walk() ([]Entry, error) {
-	var entries []Entry
+// Walk enumerates every book directory in the library, returning each book's
+// location. A directory is treated as a book if it holds a meta.toml sidecar;
+// the walk does not descend into a book directory once found.
+func (s *Store) Walk() ([]model.Location, error) {
+	var entries []model.Location
 	err := filepath.WalkDir(s.root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -38,7 +33,7 @@ func (s *Store) Walk() ([]Entry, error) {
 		if err != nil {
 			return err
 		}
-		entries = append(entries, Entry{LibraryPath: rel, EpubFilename: epubName})
+		entries = append(entries, model.Location{LibraryPath: rel, EpubFilename: epubName})
 		return filepath.SkipDir // a book directory has no nested books
 	})
 	return entries, err

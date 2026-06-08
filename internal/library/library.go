@@ -57,17 +57,16 @@ func (l *Library) Ingest(tmpPath string) (*model.Book, error) {
 	}
 
 	b := bookFromParts(book, meta)
-	b.LibraryPath = store.CanonicalPath(b.Authors, b.Title, id)
-	b.EpubFilename = store.EpubFilename(b.Authors, b.Title)
+	b.Location = store.Layout(b.Authors, b.Title, id)
 
-	if err := l.store.Ingest(b, tmpPath); err != nil {
+	if err := l.store.Ingest(b.Location, &b.Meta, tmpPath); err != nil {
 		return nil, err
 	}
 
 	if err := l.index.Put(b); err != nil {
 		// Store wrote successfully but the index did not; roll the store back so a
 		// retry starts clean. The store is authoritative, so reindex would also recover.
-		_ = l.store.Delete(b)
+		_ = l.store.Delete(b.Location)
 		return nil, err
 	}
 
@@ -95,7 +94,7 @@ func (l *Library) Reindex() error {
 		maxID int64
 	)
 	for _, e := range entries {
-		meta, err := l.store.ReadMeta(e.LibraryPath)
+		meta, err := l.store.ReadMeta(e)
 		if err != nil {
 			log.Printf("reindex: skip %s: read meta: %v", e.LibraryPath, err)
 			continue
@@ -111,8 +110,7 @@ func (l *Library) Reindex() error {
 		}
 
 		b := bookFromParts(book, meta)
-		b.LibraryPath = e.LibraryPath
-		b.EpubFilename = e.EpubFilename
+		b.Location = e
 		books = append(books, b)
 	}
 
@@ -126,17 +124,17 @@ func (l *Library) Reindex() error {
 // OpenEpub returns a handle to b's epub content. The caller closes it. The 9P
 // layer reads through this rather than touching the filesystem directly.
 func (l *Library) OpenEpub(b *model.Book) (EpubReader, error) {
-	return l.store.OpenEpub(b)
+	return l.store.OpenEpub(b.Location)
 }
 
 func (l *Library) ReadMeta(b *model.Book) (*model.Meta, error) {
-	return l.store.ReadMeta(b.LibraryPath)
+	return l.store.ReadMeta(b.Location)
 }
 
 func (l *Library) WriteMeta(b *model.Book) error {
 	// Sidecar is written first because it is the source of truth. If the index
 	// update fails, the sidecar still holds the correct state and reindex recovers.
-	if err := l.store.WriteMeta(b.LibraryPath, &b.Meta); err != nil {
+	if err := l.store.WriteMeta(b.Location, &b.Meta); err != nil {
 		return err
 	}
 
@@ -144,16 +142,15 @@ func (l *Library) WriteMeta(b *model.Book) error {
 }
 
 func (l *Library) Move(b *model.Book, newAuthor model.Author, newTitle string) (*model.Book, error) {
-	newLibraryPath, newEpubFilename, err := l.store.Move(b, newAuthor, newTitle)
-	if err != nil {
+	to := store.Layout([]model.Author{newAuthor}, newTitle, b.Meta.ID)
+	if err := l.store.Move(b.Location, to); err != nil {
 		return nil, err
 	}
 
 	updated := *b
 	updated.Title = newTitle
 	updated.Authors = []model.Author{newAuthor}
-	updated.LibraryPath = newLibraryPath
-	updated.EpubFilename = newEpubFilename
+	updated.Location = to
 	updated.Meta.DateModified = time.Now()
 
 	if err := l.index.Put(&updated); err != nil {
@@ -168,7 +165,7 @@ func (l *Library) Delete(b *model.Book) error {
 	// Store is authoritative, so remove it first. If the index delete then fails,
 	// the directory is gone but a ghost row remains; reindex walks the filesystem
 	// and drops the stale row.
-	if err := l.store.Delete(b); err != nil {
+	if err := l.store.Delete(b.Location); err != nil {
 		return err
 	}
 
@@ -176,8 +173,8 @@ func (l *Library) Delete(b *model.Book) error {
 }
 
 // bookFromParts assembles a model.Book from the bibliographic data parsed out of
-// the epub plus its fresh sidecar. The caller fills in LibraryPath/EpubFilename
-// once the canonical path has been computed.
+// the epub plus its fresh sidecar. The caller fills in b.Location once the
+// canonical layout has been computed (see store.Layout).
 func bookFromParts(src *epub.Book, meta *model.Meta) *model.Book {
 	authors := make([]model.Author, len(src.Authors))
 	for i, a := range src.Authors {
@@ -200,14 +197,16 @@ func bookFromParts(src *epub.Book, meta *model.Meta) *model.Book {
 	}
 
 	return &model.Book{
-		Meta:         *meta,
-		Title:        src.Title,
-		SortTitle:    src.SortTitle,
-		Authors:      authors,
-		Series:       series,
-		Description:  src.Description,
-		Pubdate:      pubdate,
-		Identifiers:  identifiers,
-		HasCover:     src.CoverPath != "",
+		Meta: *meta,
+		Bib: model.Bib{
+			Title:       src.Title,
+			SortTitle:   src.SortTitle,
+			Authors:     authors,
+			Series:      series,
+			Description: src.Description,
+			Pubdate:     pubdate,
+			Identifiers: identifiers,
+			HasCover:    src.CoverPath != "",
+		},
 	}
 }

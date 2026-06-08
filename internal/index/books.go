@@ -102,7 +102,7 @@ func (idx *Index) queryBooks(where string, args []any, order string, limit int) 
 	var books []*model.Book
 	byID := make(map[int64]*model.Book)
 	for rows.Next() {
-		b := &model.Book{Identifiers: make(map[string]string)}
+		b := &model.Book{Bib: model.Bib{Identifiers: make(map[string]string)}}
 		var hasCover int
 		var dateAdded, dateModified string
 		var seriesID sql.NullInt64

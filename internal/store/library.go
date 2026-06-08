@@ -24,46 +24,44 @@ func (s *Store) AbsPath(libraryPath, filename string) string {
 	return filepath.Join(s.root, libraryPath, filename)
 }
 
-// OpenEpub opens the epub file for b for reading. The caller closes it.
-func (s *Store) OpenEpub(b *model.Book) (*os.File, error) {
-	return os.Open(s.AbsPath(b.LibraryPath, b.EpubFilename))
+// OpenEpub opens the epub file at loc for reading. The caller closes it.
+func (s *Store) OpenEpub(loc model.Location) (*os.File, error) {
+	return os.Open(s.AbsPath(loc.LibraryPath, loc.EpubFilename))
 }
 
-// Move renames the book directory to match newAuthor/newTitle, returning the
-// new libraryPath and epubFilename.
-func (s *Store) Move(b *model.Book, newAuthor model.Author, newTitle string) (string, string, error) {
-	newPath := CanonicalPath([]model.Author{newAuthor}, newTitle, b.Meta.ID)
-	newFilename := EpubFilename([]model.Author{newAuthor}, newTitle)
-
-	apath := filepath.Join(s.root, newPath)
+// Move relocates a book from one location to another, renaming the epub within
+// the directory if its filename differs. The caller decides the destination
+// (see Layout); the store just performs the move.
+func (s *Store) Move(from, to model.Location) error {
+	apath := filepath.Join(s.root, to.LibraryPath)
 	if _, err := os.Stat(apath); err == nil {
-		return "", "", fmt.Errorf("destination already exists: %s", newPath)
+		return fmt.Errorf("destination already exists: %s", to.LibraryPath)
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", "", err
+		return err
 	}
 
 	if err := os.MkdirAll(filepath.Dir(apath), 0755); err != nil {
-		return "", "", err
+		return err
 	}
 
-	oldPath := filepath.Join(s.root, b.LibraryPath)
+	oldPath := filepath.Join(s.root, from.LibraryPath)
 	if err := os.Rename(oldPath, apath); err != nil {
-		return "", "", err
+		return err
 	}
 
-	if newFilename != b.EpubFilename {
-		if err := os.Rename(filepath.Join(apath, b.EpubFilename), filepath.Join(apath, newFilename)); err != nil {
+	if to.EpubFilename != from.EpubFilename {
+		if err := os.Rename(filepath.Join(apath, from.EpubFilename), filepath.Join(apath, to.EpubFilename)); err != nil {
 			_ = os.Rename(apath, oldPath)
-			return "", "", err
+			return err
 		}
 	}
 
-	return newPath, newFilename, nil
+	return nil
 }
 
-// Delete removes the book directory from the library.
-func (s *Store) Delete(b *model.Book) error {
-	path := filepath.Join(s.root, b.LibraryPath)
+// Delete removes the book directory at loc from the library.
+func (s *Store) Delete(loc model.Location) error {
+	path := filepath.Join(s.root, loc.LibraryPath)
 	if err := os.RemoveAll(path); err != nil {
 		return err
 	}
