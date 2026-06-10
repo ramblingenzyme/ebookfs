@@ -9,16 +9,16 @@ import (
 )
 
 // Ingest materializes a book on disk at loc: it creates the book directory,
-// moves the staged epub into place as loc.EpubFilename, and writes the meta.toml
-// sidecar from meta. The caller computes loc (see Layout).
-func (s *Store) Ingest(loc model.Location, meta *model.Meta, tmpPath string) error {
+// moves the staged epub at epubPath into place as loc.EpubFilename, and writes
+// the meta.toml sidecar from meta. The caller computes loc (see Layout).
+func (s *Store) Ingest(epubPath string, loc model.Location, meta *model.Meta) error {
 	rpath := filepath.Join(s.root, loc.LibraryPath)
 
 	if err := os.MkdirAll(rpath, 0755); err != nil {
 		return err
 	}
 
-	if err := os.Rename(tmpPath, filepath.Join(rpath, loc.EpubFilename)); err != nil {
+	if err := os.Rename(epubPath, filepath.Join(rpath, loc.EpubFilename)); err != nil {
 		return err
 	}
 

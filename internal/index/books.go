@@ -62,9 +62,9 @@ func (idx *Index) ListAll() ([]*model.Book, error) {
 	return idx.Query(Filter{})
 }
 
-// GetBook returns the book with the given id, or sql.ErrNoRows if it is absent.
-func (idx *Index) GetBook(id int64) (*model.Book, error) {
-	books, err := idx.Query(Filter{ID: id})
+// Get returns the book with the given id, or sql.ErrNoRows if it is absent.
+func (idx *Index) Get(bookID int64) (*model.Book, error) {
+	books, err := idx.Query(Filter{ID: bookID})
 	if err != nil {
 		return nil, err
 	}
@@ -333,9 +333,9 @@ func putBook(tx *sql.Tx, b *model.Book) error {
 	return err
 }
 
-// DeleteBook removes all index rows for id.
-func (idx *Index) DeleteBook(id int64) error {
-	return idx.withTx(func(tx *sql.Tx) error { return deleteBook(tx, id) })
+// Delete removes all index rows for bookID.
+func (idx *Index) Delete(bookID int64) error {
+	return idx.withTx(func(tx *sql.Tx) error { return deleteBook(tx, bookID) })
 }
 
 func deleteBook(tx *sql.Tx, id int64) error {

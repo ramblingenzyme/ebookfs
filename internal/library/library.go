@@ -35,8 +35,8 @@ func New(s *store.Store, idx *index.Index) *Library {
 // Ingest parses the staged epub at tmpPath, lays it down in the store under its
 // canonical path, and records it in the index. epub stays an implementation
 // detail of this method; nothing above the library sees epub types.
-func (l *Library) Ingest(tmpPath string) (*model.Book, error) {
-	book, err := epub.Parse(tmpPath)
+func (l *Library) Ingest(epubPath string) (*model.Book, error) {
+	book, err := epub.Parse(epubPath)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +59,7 @@ func (l *Library) Ingest(tmpPath string) (*model.Book, error) {
 	b := bookFromParts(book, meta)
 	b.Location = store.Layout(b.Authors, b.Title, id)
 
-	if err := l.store.Ingest(b.Location, &b.Meta, tmpPath); err != nil {
+	if err := l.store.Ingest(epubPath, b.Location, &b.Meta); err != nil {
 		return nil, err
 	}
 
@@ -141,6 +141,10 @@ func (l *Library) WriteMeta(b *model.Book) error {
 	return l.index.Put(b)
 }
 
+// TODO: handle multiple authors like Calibre — take newAuthors []model.Author,
+// file under the primary (first) author, and preserve the full ordered list.
+// Today Move collapses the book to a single author, dropping any co-authors from
+// the index on Put.
 func (l *Library) Move(b *model.Book, newAuthor model.Author, newTitle string) (*model.Book, error) {
 	to := store.Layout([]model.Author{newAuthor}, newTitle, b.Meta.ID)
 	if err := l.store.Move(b.Location, to); err != nil {
@@ -169,7 +173,7 @@ func (l *Library) Delete(b *model.Book) error {
 		return err
 	}
 
-	return l.index.DeleteBook(b.Meta.ID)
+	return l.index.Delete(b.Meta.ID)
 }
 
 // bookFromParts assembles a model.Book from the bibliographic data parsed out of
