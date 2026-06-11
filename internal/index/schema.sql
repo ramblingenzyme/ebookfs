@@ -52,3 +52,5 @@ CREATE TABLE identifiers (
     value   TEXT    NOT NULL,
     UNIQUE (book_id, scheme)
 );
+
+CREATE TABLE book_id_seq (id INTEGER PRIMARY KEY AUTOINCREMENT);

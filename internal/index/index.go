@@ -54,13 +54,6 @@ func Open(path string) (*Index, error) {
 		}
 	}
 
-	if _, err := db.Exec(
-		`CREATE TABLE IF NOT EXISTS book_id_seq (id INTEGER PRIMARY KEY AUTOINCREMENT)`,
-	); err != nil {
-		db.Close()
-		return nil, err
-	}
-
 	return &Index{db: db}, nil
 }
 
