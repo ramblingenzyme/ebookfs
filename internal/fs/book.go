@@ -119,7 +119,7 @@ func newBookDir(f *fs.FS, lib *library.Library, book *model.Book) *bookDir {
 	}
 
 	// Cover image — only present when the epub declares one.
-	if book.HasCover {
+	if book.CoverPath != "" {
 		d.StaticDir.AddChild(newCoverFile(
 			f.NewStat("cover.jpg", "glenda", "glenda", 0444),
 			lib,

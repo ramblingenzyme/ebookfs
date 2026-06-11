@@ -7,7 +7,7 @@ CREATE TABLE books (
     language      TEXT    NOT NULL DEFAULT '',
     library_path  TEXT    NOT NULL,
     epub_filename TEXT    NOT NULL,
-    has_cover     INTEGER NOT NULL DEFAULT 0,
+    cover_path    TEXT    NOT NULL DEFAULT '',
     status        TEXT    NOT NULL DEFAULT 'unread',
     rating        INTEGER NOT NULL DEFAULT 0,
     date_added    TEXT    NOT NULL,

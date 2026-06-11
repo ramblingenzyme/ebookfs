@@ -79,7 +79,7 @@ func (idx *Index) Get(bookID int64) (*model.Book, error) {
 func (idx *Index) queryBooks(where string, args []any, order string, limit int) ([]*model.Book, error) {
 	q := `
 		SELECT b.id, b.title, b.sort_title, COALESCE(b.pubdate, ''), b.description, b.language,
-		       b.library_path, b.epub_filename, b.has_cover,
+		       b.library_path, b.epub_filename, b.cover_path,
 		       b.status, b.rating, b.date_added, b.date_modified,
 		       s.id, s.name, b.series_index
 		FROM books b
@@ -103,20 +103,18 @@ func (idx *Index) queryBooks(where string, args []any, order string, limit int) 
 	byID := make(map[int64]*model.Book)
 	for rows.Next() {
 		b := &model.Book{Bib: model.Bib{Identifiers: make(map[string]string)}}
-		var hasCover int
 		var dateAdded, dateModified string
 		var seriesID sql.NullInt64
 		var seriesName sql.NullString
 		var seriesIndex sql.NullFloat64
 		if err := rows.Scan(
 			&b.Meta.ID, &b.Title, &b.SortTitle, &b.Pubdate, &b.Description, &b.Language,
-			&b.LibraryPath, &b.EpubFilename, &hasCover,
+			&b.LibraryPath, &b.EpubFilename, &b.CoverPath,
 			&b.Meta.Status, &b.Meta.Rating, &dateAdded, &dateModified,
 			&seriesID, &seriesName, &seriesIndex,
 		); err != nil {
 			return nil, err
 		}
-		b.HasCover = hasCover != 0
 		b.Meta.DateAdded, _ = time.Parse(time.RFC3339, dateAdded)
 		b.Meta.DateModified, _ = time.Parse(time.RFC3339, dateModified)
 		if seriesName.Valid {
@@ -288,18 +286,18 @@ func putBook(tx *sql.Tx, b *model.Book) error {
 	if _, err := tx.Exec(
 		`INSERT INTO books
 		    (id, title, sort_title, pubdate, description, language,
-		     library_path, epub_filename, has_cover, status, rating,
+		     library_path, epub_filename, cover_path, status, rating,
 		     date_added, date_modified, series_id, series_index)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		     title=excluded.title, sort_title=excluded.sort_title, pubdate=excluded.pubdate,
 		     description=excluded.description, language=excluded.language,
 		     library_path=excluded.library_path, epub_filename=excluded.epub_filename,
-		     has_cover=excluded.has_cover, status=excluded.status, rating=excluded.rating,
+		     cover_path=excluded.cover_path, status=excluded.status, rating=excluded.rating,
 		     date_added=excluded.date_added, date_modified=excluded.date_modified,
 		     series_id=excluded.series_id, series_index=excluded.series_index`,
 		b.Meta.ID, b.Title, b.SortTitle, b.Pubdate, b.Description, b.Language,
-		b.LibraryPath, b.EpubFilename, b.HasCover, b.Meta.Status, b.Meta.Rating,
+		b.LibraryPath, b.EpubFilename, b.CoverPath, b.Meta.Status, b.Meta.Rating,
 		b.Meta.DateAdded.UTC().Format(time.RFC3339),
 		b.Meta.DateModified.UTC().Format(time.RFC3339),
 		seriesID, seriesIndex,

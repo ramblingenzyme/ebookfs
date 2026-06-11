@@ -215,7 +215,6 @@ func bookFromParts(src *epub.Book, meta *model.Meta) *model.Book {
 			Description: src.Description,
 			Pubdate:     pubdate,
 			Identifiers: identifiers,
-			HasCover:    src.CoverPath != "",
 			CoverPath:   src.CoverPath,
 		},
 	}

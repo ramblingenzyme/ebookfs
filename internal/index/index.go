@@ -17,6 +17,8 @@ type Index struct {
 	db *sql.DB
 }
 
+const schemaVersion = 3
+
 // Open opens or creates the index at path, running any pending migrations.
 func Open(path string) (*Index, error) {
 	// - Register the modernc.org/sqlite driver and call sql.Open("sqlite", path).
@@ -35,31 +37,21 @@ func Open(path string) (*Index, error) {
 		return nil, err
 	}
 
-	const schemaVersion = 2
-
 	var v int64
 	if err := db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
 		return nil, err
 	}
 
-	switch {
-	case v == 0:
-		// Fresh database: apply the current schema.
+	if v == 0 {
+		// Fresh database: apply the current schema and stamp the version.
 		if _, err := db.Exec(schema); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("applying schema: %w", err)
 		}
-	case v < schemaVersion:
-		// v1 → v2: drop the unused FTS table.
-		if _, err := db.Exec(`DROP TABLE IF EXISTS books_fts`); err != nil {
+		if _, err := db.Exec(fmt.Sprintf("PRAGMA user_version=%d", schemaVersion)); err != nil {
 			db.Close()
-			return nil, fmt.Errorf("migrating index to v%d: %w", schemaVersion, err)
+			return nil, err
 		}
-	}
-
-	if _, err := db.Exec(fmt.Sprintf("PRAGMA user_version=%d", schemaVersion)); err != nil {
-		db.Close()
-		return nil, err
 	}
 
 	if _, err := db.Exec(
@@ -70,6 +62,32 @@ func Open(path string) (*Index, error) {
 	}
 
 	return &Index{db: db}, nil
+}
+
+func (idx *Index) dropAllTables() error {
+	rows, err := idx.db.Query(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`)
+	if err != nil {
+		return err
+	}
+	var tables []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return err
+		}
+		tables = append(tables, name)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, t := range tables {
+		if _, err := idx.db.Exec(`DROP TABLE IF EXISTS ` + t); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (idx *Index) Close() error {
