@@ -51,6 +51,7 @@ func metaFields(book *model.Book, lib *library.Library) map[string]struct {
 				}
 			}),
 		},
+		// TODO: rating should be a float32 0–5 (e.g. 4.75); update model, schema, and this validation together.
 		"rating": {
 			func() string { return strconv.Itoa(book.Meta.Rating) },
 			saveMeta(func(s string) error {

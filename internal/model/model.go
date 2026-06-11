@@ -52,7 +52,7 @@ type Meta struct {
 	DateAdded    time.Time `toml:"date_added"`
 	DateModified time.Time `toml:"date_modified"`
 	Status       string    `toml:"status"`      // unread | reading | read | abandoned
-	Rating       int       `toml:"rating"`      // 0–5, 0 = unrated
+	Rating       int       `toml:"rating"`      // TODO: should be float32 0–5 (e.g. 4.75 is valid); int is a placeholder
 	Tags         []string  `toml:"custom_tags"` // toml key preserved for file compatibility
 }
 

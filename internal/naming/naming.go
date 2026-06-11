@@ -31,3 +31,29 @@ func Sanitize(s string) (string, error) {
 	}
 	return out, nil
 }
+
+// ForFAT makes s safe for use as a filename on a FAT filesystem.
+// FAT forbids \ : * ? " < > | in addition to the characters Sanitize already
+// handles, and filenames may not end with a space or period.
+func ForFAT(s string) (string, error) {
+	var b strings.Builder
+	for _, r := range s {
+		switch r {
+		case '/', '\\', ':', '*', '?', '"', '<', '>', '|':
+			b.WriteRune('-')
+		case 0x00:
+			// strip NUL
+		default:
+			if r < 0x20 {
+				// strip control characters
+				continue
+			}
+			b.WriteRune(r)
+		}
+	}
+	out := strings.TrimRight(strings.Trim(b.String(), ". \t"), " .")
+	if out == "" {
+		return "", errors.New("sanitized string is empty")
+	}
+	return out, nil
+}
