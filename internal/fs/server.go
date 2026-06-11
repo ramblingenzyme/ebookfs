@@ -36,9 +36,11 @@ func StartServer(cfg *config.Config) {
 	// allBooks is set below after newFS returns, but createFile only fires once
 	// a client writes to /inbox — well after startup completes.
 	var allBooks *allBooksDir
+	var byAuthor *byAuthorDir
 
 	ebookfs, root := newFS(inboxCreateFile(lib, cfg.Library.InboxTemp, func(b *model.Book) {
 		allBooks.add(b)
+		byAuthor.add(b)
 	}))
 
 	registry := newBookRegistry(ebookfs, lib)
@@ -48,9 +50,11 @@ func StartServer(cfg *config.Config) {
 		log.Fatalf("loading books: %v", err)
 	}
 	allBooks = newAllBooksDir(ebookfs, registry, books)
+	byAuthor = newByAuthorDir(ebookfs, registry, books)
 
 	root.AddChild(newInboxDir(ebookfs))
 	root.AddChild(allBooks)
+	root.AddChild(byAuthor)
 
 	log.Printf("serving 9P on %s", cfg.Server.Listen)
 	go9p.Serve(cfg.Server.Listen, ebookfs.Server())
