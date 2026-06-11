@@ -10,6 +10,57 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/model"
 )
 
+// coverFile serves a book's cover image, loading bytes from the epub on each open.
+type coverFile struct {
+	fs.BaseFile
+	lib  *library.Library
+	book *model.Book
+	fids map[uint64][]byte
+}
+
+func newCoverFile(stat *proto.Stat, lib *library.Library, book *model.Book) *coverFile {
+	return &coverFile{
+		BaseFile: *fs.NewBaseFile(stat),
+		lib:      lib,
+		book:     book,
+		fids:     make(map[uint64][]byte),
+	}
+}
+
+func (c *coverFile) Open(fid uint64, omode proto.Mode) error {
+	data, err := c.lib.ExtractCover(c.book)
+	if err != nil {
+		return err
+	}
+	c.Lock()
+	c.fids[fid] = data
+	c.Unlock()
+	return nil
+}
+
+func (c *coverFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error) {
+	c.RLock()
+	data := c.fids[fid]
+	c.RUnlock()
+	if data == nil {
+		return nil, errors.New("not open")
+	}
+	if offset >= uint64(len(data)) {
+		return []byte{}, nil
+	}
+	if offset+count > uint64(len(data)) {
+		count = uint64(len(data)) - offset
+	}
+	return data[offset : offset+count], nil
+}
+
+func (c *coverFile) Close(fid uint64) error {
+	c.Lock()
+	delete(c.fids, fid)
+	c.Unlock()
+	return nil
+}
+
 // epubFile serves a book's epub through the library, holding one reader per fid.
 // Size is statted once at construction; content is read on demand via ReadAt.
 // The 9P layer never sees a filesystem path.

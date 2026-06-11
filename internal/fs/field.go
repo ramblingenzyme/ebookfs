@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/knusbaum/go9p/fs"
@@ -70,6 +71,9 @@ func (f *fieldFile) Close(fid uint64) error {
 	delete(f.writes, fid)
 	if len(data) == 0 {
 		return nil
+	}
+	if f.set == nil {
+		return errors.New("read-only")
 	}
 	return f.set(strings.TrimRight(string(data), "\n"))
 }

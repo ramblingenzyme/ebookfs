@@ -127,6 +127,11 @@ func (l *Library) OpenEpub(b *model.Book) (EpubReader, error) {
 	return l.store.OpenEpub(b.Location)
 }
 
+// ExtractCover returns the cover image bytes from b's epub.
+func (l *Library) ExtractCover(b *model.Book) ([]byte, error) {
+	return epub.ExtractCover(l.store.AbsPath(b.LibraryPath, b.EpubFilename), b.CoverPath)
+}
+
 func (l *Library) ReadMeta(b *model.Book) (*model.Meta, error) {
 	return l.store.ReadMeta(b.Location)
 }
@@ -211,6 +216,7 @@ func bookFromParts(src *epub.Book, meta *model.Meta) *model.Book {
 			Pubdate:     pubdate,
 			Identifiers: identifiers,
 			HasCover:    src.CoverPath != "",
+			CoverPath:   src.CoverPath,
 		},
 	}
 }

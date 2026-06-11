@@ -89,7 +89,7 @@ func Parse(bpath string) (*Book, error) {
 	}
 
 	pkg, err := parsePackage(mfile)
-	pkg.BasePath = path.Base(mpath)
+	pkg.BasePath = path.Dir(mpath)
 
 	if err != nil {
 		return nil, err
