@@ -37,10 +37,12 @@ func StartServer(cfg *config.Config) {
 	// a client writes to /inbox — well after startup completes.
 	var allBooks *allBooksDir
 	var byAuthor *byAuthorDir
+	var bySeries *bySeriesDir
 
 	ebookfs, root := newFS(inboxCreateFile(lib, cfg.Library.InboxTemp, func(b *model.Book) {
 		allBooks.add(b)
 		byAuthor.add(b)
+		bySeries.add(b)
 	}))
 
 	registry := newBookRegistry(ebookfs, lib)
@@ -51,10 +53,12 @@ func StartServer(cfg *config.Config) {
 	}
 	allBooks = newAllBooksDir(ebookfs, registry, books)
 	byAuthor = newByAuthorDir(ebookfs, registry, books)
+	bySeries = newBySeriesDir(ebookfs, registry, books)
 
 	root.AddChild(newInboxDir(ebookfs))
 	root.AddChild(allBooks)
 	root.AddChild(byAuthor)
+	root.AddChild(bySeries)
 
 	log.Printf("serving 9P on %s", cfg.Server.Listen)
 	go9p.Serve(cfg.Server.Listen, ebookfs.Server())
