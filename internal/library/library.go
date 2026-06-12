@@ -1,6 +1,7 @@
 package library
 
 import (
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
@@ -41,13 +42,18 @@ func (l *Library) Ingest(epubPath string) (*model.Book, error) {
 		return nil, err
 	}
 
+	b := bookFromParts(book, &model.Meta{})
+	if l.store.Exists(b.Authors, b.Title) {
+		return nil, fmt.Errorf("book already in library: %q", b.Title)
+	}
+
 	id, err := l.index.NextID()
 	if err != nil {
 		return nil, err
 	}
 
 	now := time.Now()
-	meta := &model.Meta{
+	b.Meta = model.Meta{
 		ID:           id,
 		DateAdded:    now,
 		DateModified: now,
@@ -55,8 +61,6 @@ func (l *Library) Ingest(epubPath string) (*model.Book, error) {
 		Rating:       0,
 		Tags:         []string{},
 	}
-
-	b := bookFromParts(book, meta)
 	b.Location = store.Layout(b.Authors, b.Title, id)
 
 	if err := l.store.Ingest(epubPath, b.Location, &b.Meta); err != nil {

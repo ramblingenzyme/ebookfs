@@ -37,13 +37,17 @@ func epubFilename(authors []model.Author, title string) string {
 	return fmt.Sprintf("%s - %s.epub", fatTitle, fatAuthor)
 }
 
-func canonicalDir(authors []model.Author, title string, id int64) string {
-	name := "Unknown"
-	if len(authors) > 0 {
-		name = authors[0].SortName
-		if name == "" {
-			name = authors[0].Name
-		}
+func authorDirName(authors []model.Author) string {
+	if len(authors) == 0 {
+		return "Unknown"
 	}
-	return filepath.Join(name, fmt.Sprintf("%s (%d)", title, id))
+	name := authors[0].SortName
+	if name == "" {
+		name = authors[0].Name
+	}
+	return name
+}
+
+func canonicalDir(authors []model.Author, title string, id int64) string {
+	return filepath.Join(authorDirName(authors), fmt.Sprintf("%s (%d)", title, id))
 }

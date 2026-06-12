@@ -24,6 +24,14 @@ func (s *Store) AbsPath(libraryPath, filename string) string {
 	return filepath.Join(s.root, libraryPath, filename)
 }
 
+// Exists reports whether a book with the given authors and title is already
+// present in the library, regardless of its ID.
+func (s *Store) Exists(authors []model.Author, title string) bool {
+	pattern := filepath.Join(s.root, authorDirName(authors), "*", epubFilename(authors, title))
+	matches, _ := filepath.Glob(pattern)
+	return len(matches) > 0
+}
+
 // OpenEpub opens the epub file at loc for reading. The caller closes it.
 func (s *Store) OpenEpub(loc model.Location) (*os.File, error) {
 	return os.Open(s.AbsPath(loc.LibraryPath, loc.EpubFilename))
