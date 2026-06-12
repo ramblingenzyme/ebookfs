@@ -9,43 +9,22 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/model"
 )
 
-// seriesEntryDir wraps a shared *bookDir from the registry but presents it
-// under a series-index-prefixed name within a series directory.
-type seriesEntryDir struct {
-	*bookDir
-	entryStat proto.Stat
-}
-
-func (s *seriesEntryDir) Stat() proto.Stat { return s.entryStat }
-
-func seriesEntryName(book *model.Book) string {
-	index := strconv.FormatFloat(book.Series.Index, 'f', -1, 64)
-	return fmt.Sprintf("%s. %s (%d)", index, book.Title, book.Meta.ID)
-}
-
 type seriesBookListDir struct {
 	fs.StaticDir
 	reg *bookRegistry
 }
 
 func (s *seriesBookListDir) add(book *model.Book) {
-	name := seriesEntryName(book)
+	index := strconv.FormatFloat(book.Series.Index, 'f', -1, 64)
+	name := fmt.Sprintf("%s. %s (%d)", index, book.Title, book.Meta.ID)
 	stat := s.reg.f.NewStat(name, "glenda", "glenda", 0555|proto.DMDIR)
-	s.StaticDir.AddChild(&seriesEntryDir{bookDir: s.reg.getOrCreate(book), entryStat: *stat})
+	s.StaticDir.AddChild(&namedBookDir{bookDir: s.reg.getOrCreate(book), entryStat: *stat})
 }
 
-type bySeriesDir struct {
-	fs.StaticDir
-	f   *fs.FS
-	reg *bookRegistry
-}
+type bySeriesDir struct{ groupingDir }
 
 func newBySeriesDir(f *fs.FS, reg *bookRegistry, books []*model.Book) *bySeriesDir {
-	d := &bySeriesDir{
-		StaticDir: *fs.NewStaticDir(f.NewStat("by-series", "glenda", "glenda", 0555|proto.DMDIR)),
-		f:         f,
-		reg:       reg,
-	}
+	d := &bySeriesDir{newGroupingDir(f, reg, "by-series")}
 	for _, book := range books {
 		d.add(book)
 	}

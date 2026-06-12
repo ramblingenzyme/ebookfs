@@ -8,25 +8,10 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/model"
 )
 
-type idEntryDir struct {
-	*bookDir
-	entryStat proto.Stat
-}
-
-func (e *idEntryDir) Stat() proto.Stat { return e.entryStat }
-
-type byIDDir struct {
-	fs.StaticDir
-	f   *fs.FS
-	reg *bookRegistry
-}
+type byIDDir struct{ groupingDir }
 
 func newByIDDir(f *fs.FS, reg *bookRegistry, books []*model.Book) *byIDDir {
-	d := &byIDDir{
-		StaticDir: *fs.NewStaticDir(f.NewStat("by-id", "glenda", "glenda", 0555|proto.DMDIR)),
-		f:         f,
-		reg:       reg,
-	}
+	d := &byIDDir{newGroupingDir(f, reg, "by-id")}
 	for _, book := range books {
 		d.add(book)
 	}
@@ -36,5 +21,5 @@ func newByIDDir(f *fs.FS, reg *bookRegistry, books []*model.Book) *byIDDir {
 func (d *byIDDir) add(book *model.Book) {
 	name := strconv.FormatInt(book.Meta.ID, 10)
 	stat := d.f.NewStat(name, "glenda", "glenda", 0555|proto.DMDIR)
-	d.StaticDir.AddChild(&idEntryDir{bookDir: d.reg.getOrCreate(book), entryStat: *stat})
+	d.StaticDir.AddChild(&namedBookDir{bookDir: d.reg.getOrCreate(book), entryStat: *stat})
 }
