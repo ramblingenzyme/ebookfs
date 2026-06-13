@@ -28,7 +28,7 @@ type opfPackage struct {
 	UniqueId string            `xml:"unique-identifier,attr"`
 	Version  string            `xml:"version,attr"`
 	Metadata opfMetadata       `xml:"metadata"`
-	Manifest []opfManifestItem `xml:"manifest>items"`
+	Manifest []opfManifestItem `xml:"manifest>item"`
 }
 
 type opfManifestItem struct {
