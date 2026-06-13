@@ -16,7 +16,7 @@ type seriesBookListDir struct {
 
 func (s *seriesBookListDir) add(book *model.Book) {
 	index := strconv.FormatFloat(book.Series.Index, 'f', -1, 64)
-	name := fmt.Sprintf("%s. %s (%d)", index, book.Title, book.Meta.ID)
+	name := fmt.Sprintf("%s. %s", index, book.Title)
 	stat := s.reg.f.NewStat(name, "glenda", "glenda", 0555|proto.DMDIR)
 	s.StaticDir.AddChild(&namedBookDir{bookDir: s.reg.getOrCreate(book), entryStat: *stat})
 }
