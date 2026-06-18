@@ -1,6 +1,6 @@
 package index
 
-import "github.com/ramblingenzyme/ebookfs/internal/model"
+import "github.com/ramblingenzyme/ebookfs/internal/shared/model"
 
 // Search parses query and returns matching books.
 //

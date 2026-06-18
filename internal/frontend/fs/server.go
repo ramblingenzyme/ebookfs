@@ -4,8 +4,8 @@ import (
 	"log"
 
 	"github.com/knusbaum/go9p"
-	"github.com/ramblingenzyme/ebookfs/internal/library"
-	"github.com/ramblingenzyme/ebookfs/internal/model"
+	"github.com/ramblingenzyme/ebookfs/internal/backend/library"
+	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
 )
 
 // StartServer serves the library over 9P at listen. The caller owns composition

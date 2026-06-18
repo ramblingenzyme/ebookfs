@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/ramblingenzyme/ebookfs/internal/model"
+	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
 )
 
 // Store manages filesystem operations on the library directory tree.

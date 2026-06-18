@@ -6,10 +6,10 @@ import (
 	"os"
 
 	"github.com/ramblingenzyme/ebookfs/internal/config"
-	"github.com/ramblingenzyme/ebookfs/internal/fs"
-	"github.com/ramblingenzyme/ebookfs/internal/index"
-	"github.com/ramblingenzyme/ebookfs/internal/library"
-	"github.com/ramblingenzyme/ebookfs/internal/store"
+	"github.com/ramblingenzyme/ebookfs/internal/frontend/fs"
+	"github.com/ramblingenzyme/ebookfs/internal/backend/index"
+	"github.com/ramblingenzyme/ebookfs/internal/backend/library"
+	"github.com/ramblingenzyme/ebookfs/internal/backend/store"
 )
 
 func main() {

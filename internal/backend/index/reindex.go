@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/ramblingenzyme/ebookfs/internal/model"
+	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
 )
 
 // Rebuild replaces the entire derived index with books. If the schema version

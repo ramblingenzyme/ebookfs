@@ -7,10 +7,10 @@ import (
 	"log"
 	"time"
 
-	"github.com/ramblingenzyme/ebookfs/internal/epub"
-	"github.com/ramblingenzyme/ebookfs/internal/index"
-	"github.com/ramblingenzyme/ebookfs/internal/model"
-	"github.com/ramblingenzyme/ebookfs/internal/store"
+	"github.com/ramblingenzyme/ebookfs/internal/backend/epub"
+	"github.com/ramblingenzyme/ebookfs/internal/backend/index"
+	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
+	"github.com/ramblingenzyme/ebookfs/internal/backend/store"
 )
 
 // EpubReader is a handle to a book's epub content. It hides where the bytes

@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/knusbaum/go9p/proto"
-	"github.com/ramblingenzyme/ebookfs/internal/model"
+	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
 )
 
 type byIDDir struct{ groupingDir }

@@ -7,8 +7,8 @@ import (
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
-	"github.com/ramblingenzyme/ebookfs/internal/library"
-	"github.com/ramblingenzyme/ebookfs/internal/model"
+	"github.com/ramblingenzyme/ebookfs/internal/backend/library"
+	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
 )
 
 type inboxDir struct {

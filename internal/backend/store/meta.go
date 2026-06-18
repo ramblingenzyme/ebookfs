@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
-	"github.com/ramblingenzyme/ebookfs/internal/model"
+	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
 )
 
 // ReadMeta reads the meta.toml sidecar for the book at loc.

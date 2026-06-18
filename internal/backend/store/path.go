@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/ramblingenzyme/ebookfs/internal/model"
-	"github.com/ramblingenzyme/ebookfs/internal/naming"
+	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
+	"github.com/ramblingenzyme/ebookfs/internal/backend/naming"
 )
 
 // Layout returns the canonical on-disk location for a book with the given

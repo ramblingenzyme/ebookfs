@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ramblingenzyme/ebookfs/internal/naming"
+	"github.com/ramblingenzyme/ebookfs/internal/backend/naming"
 )
 
 func translate(pkg *opfPackage) (*Book, error) {

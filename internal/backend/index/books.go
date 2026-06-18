@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ramblingenzyme/ebookfs/internal/model"
+	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
 )
 
 // Filter selects a subset of books for Query. Zero-valued fields are ignored,
