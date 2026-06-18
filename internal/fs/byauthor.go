@@ -1,38 +1,38 @@
 package fs
 
 import (
-	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
-	"github.com/ramblingenzyme/ebookfs/internal/model"
 )
 
 type byAuthorDir struct{ groupingDir }
 
-// TODO: when the OPF write path lands and authors become writable, add a
-// remove/rehome path: look up the old author dirs, remove the book, then call
-// add with the updated book so it lands under the new author(s).
-func newByAuthorDir(f *fs.FS, reg *bookRegistry, books []*model.Book) *byAuthorDir {
-	d := &byAuthorDir{newGroupingDir(f, reg, "by-author")}
-	for _, book := range books {
-		d.add(book)
-	}
+func newByAuthorDir(reg *bookRegistry) *byAuthorDir {
+	d := &byAuthorDir{newGroupingDir(reg.f, "by-author")}
+	reg.AddView(d)
 	return d
 }
 
-func (d *byAuthorDir) add(book *model.Book) {
-	for _, a := range book.Authors {
-		key := a.Name
-		var authorDir *booksDir
-		if child, ok := d.Children()[key]; ok {
-			authorDir = child.(*booksDir)
-		} else {
-			authorDir = newBooksDir(
-				d.f.NewStat(key, "glenda", "glenda", 0555|proto.DMDIR),
-				d.reg,
-				nil,
-			)
-			d.StaticDir.AddChild(authorDir)
+// authorDir returns the subdir for an author name, creating it on first use.
+// TODO: prune a subdir once its last book leaves (e.g. after an author rename).
+func (d *byAuthorDir) authorDir(name string) *booksDir {
+	if child, ok := d.Children()[name]; ok {
+		return child.(*booksDir)
+	}
+	ad := newBooksDir(d.f.NewStat(name, "glenda", "glenda", 0555|proto.DMDIR))
+	d.StaticDir.AddChild(ad)
+	return ad
+}
+
+func (d *byAuthorDir) add(dir *bookDir) {
+	for _, a := range dir.Book.Authors {
+		d.authorDir(a.Name).add(dir)
+	}
+}
+
+func (d *byAuthorDir) remove(dir *bookDir) {
+	for _, a := range dir.Book.Authors {
+		if child, ok := d.Children()[a.Name]; ok {
+			child.(*booksDir).remove(dir)
 		}
-		authorDir.add(book)
 	}
 }

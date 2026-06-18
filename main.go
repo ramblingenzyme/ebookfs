@@ -3,9 +3,13 @@ package main
 import (
 	"flag"
 	"log"
+	"os"
 
 	"github.com/ramblingenzyme/ebookfs/internal/config"
 	"github.com/ramblingenzyme/ebookfs/internal/fs"
+	"github.com/ramblingenzyme/ebookfs/internal/index"
+	"github.com/ramblingenzyme/ebookfs/internal/library"
+	"github.com/ramblingenzyme/ebookfs/internal/store"
 )
 
 func main() {
@@ -17,5 +21,25 @@ func main() {
 		log.Fatalf("loading config: %v", err)
 	}
 
-	fs.StartServer(cfg)
+	if err := os.MkdirAll(cfg.Library.Root, 0755); err != nil {
+		log.Fatalf("creating library root: %v", err)
+	}
+	if err := os.MkdirAll(cfg.Library.InboxTemp, 0700); err != nil {
+		log.Fatalf("creating inbox temp dir: %v", err)
+	}
+
+	idx, err := index.Open(cfg.Index.Path)
+	if err != nil {
+		log.Fatalf("opening index: %v", err)
+	}
+
+	lib := library.New(store.New(cfg.Library.Root, cfg.Library.InboxTemp), idx)
+
+	// The store is the source of truth; rebuild the index from it on every start
+	// so a stale or missing index can't leave the served tree out of sync.
+	if err := lib.Reindex(); err != nil {
+		log.Fatalf("reindexing library: %v", err)
+	}
+
+	fs.StartServer(lib, cfg.Server.Listen, cfg.Library.InboxTemp)
 }

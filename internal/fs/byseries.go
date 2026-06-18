@@ -9,42 +9,59 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/model"
 )
 
-type seriesBookListDir struct {
-	fs.StaticDir
-	reg *bookRegistry
+func seriesEntryName(b *model.Book) string {
+	index := strconv.FormatFloat(b.Series.Index, 'f', -1, 64)
+	return fmt.Sprintf("%s. %s", index, b.Title)
 }
 
-func (s *seriesBookListDir) add(book *model.Book) {
-	index := strconv.FormatFloat(book.Series.Index, 'f', -1, 64)
-	name := fmt.Sprintf("%s. %s", index, book.Title)
-	stat := s.reg.f.NewStat(name, "glenda", "glenda", 0555|proto.DMDIR)
-	s.StaticDir.AddChild(&namedBookDir{bookDir: s.reg.getOrCreate(book), entryStat: *stat})
+type seriesBookListDir struct {
+	fs.StaticDir
+	f *fs.FS
+}
+
+func (s *seriesBookListDir) add(dir *bookDir) {
+	stat := s.f.NewStat(seriesEntryName(dir.Book), "glenda", "glenda", 0555|proto.DMDIR)
+	s.StaticDir.AddChild(&namedBookDir{bookDir: dir, baseStat: *stat, name: seriesEntryName})
+}
+
+func (s *seriesBookListDir) remove(dir *bookDir) {
+	s.StaticDir.DeleteChild(seriesEntryName(dir.Book))
 }
 
 type bySeriesDir struct{ groupingDir }
 
-func newBySeriesDir(f *fs.FS, reg *bookRegistry, books []*model.Book) *bySeriesDir {
-	d := &bySeriesDir{newGroupingDir(f, reg, "by-series")}
-	for _, book := range books {
-		d.add(book)
-	}
+func newBySeriesDir(reg *bookRegistry) *bySeriesDir {
+	d := &bySeriesDir{newGroupingDir(reg.f, "by-series")}
+	reg.AddView(d)
 	return d
 }
 
-func (d *bySeriesDir) add(book *model.Book) {
-	if book.Series == nil {
+// seriesDir returns the subdir for a series name, creating it on first use.
+// TODO: prune a subdir once its last book leaves (e.g. after a series change).
+func (d *bySeriesDir) seriesDir(name string) *seriesBookListDir {
+	if child, ok := d.Children()[name]; ok {
+		return child.(*seriesBookListDir)
+	}
+	sd := &seriesBookListDir{
+		StaticDir: *fs.NewStaticDir(d.f.NewStat(name, "glenda", "glenda", 0555|proto.DMDIR)),
+		f:         d.f,
+	}
+	d.StaticDir.AddChild(sd)
+	return sd
+}
+
+func (d *bySeriesDir) add(dir *bookDir) {
+	if dir.Book.Series == nil {
 		return
 	}
-	key := book.Series.Name
-	var seriesDir *seriesBookListDir
-	if child, ok := d.Children()[key]; ok {
-		seriesDir = child.(*seriesBookListDir)
-	} else {
-		seriesDir = &seriesBookListDir{
-			StaticDir: *fs.NewStaticDir(d.f.NewStat(key, "glenda", "glenda", 0555|proto.DMDIR)),
-			reg:       d.reg,
-		}
-		d.StaticDir.AddChild(seriesDir)
+	d.seriesDir(dir.Book.Series.Name).add(dir)
+}
+
+func (d *bySeriesDir) remove(dir *bookDir) {
+	if dir.Book.Series == nil {
+		return
 	}
-	seriesDir.add(book)
+	if child, ok := d.Children()[dir.Book.Series.Name]; ok {
+		child.(*seriesBookListDir).remove(dir)
+	}
 }
