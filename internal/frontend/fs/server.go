@@ -9,9 +9,10 @@ import (
 )
 
 // StartServer serves the library over 9P at listen. The caller owns composition
-// of the backend (store, index, library); the frontend depends only on the
-// library facade. inboxTemp is where uploads are staged before ingest.
-func StartServer(lib *library.Library, listen, inboxTemp string) {
+// of the backend (store, index, library) and chooses the reader/ Exporter
+// (original epub vs kepub); the frontend depends only on the library facade and
+// that Exporter. inboxTemp is where uploads are staged before ingest.
+func StartServer(lib *library.Library, exp Exporter, readerCfg ReaderConfig, listen, inboxTemp string) {
 	// registry is set below after newFS returns, but createFile only fires once
 	// a client writes to /inbox — well after startup completes.
 	var registry *bookRegistry
@@ -27,6 +28,7 @@ func StartServer(lib *library.Library, listen, inboxTemp string) {
 	byAuthor := newByAuthorDir(registry)
 	byID := newByIDDir(registry)
 	bySeries := newBySeriesDir(registry)
+	reader := newReaderDir(registry, exp, readerCfg)
 
 	books, err := lib.ListAll()
 	if err != nil {
@@ -41,6 +43,7 @@ func StartServer(lib *library.Library, listen, inboxTemp string) {
 	root.AddChild(byAuthor)
 	root.AddChild(byID)
 	root.AddChild(bySeries)
+	root.AddChild(reader)
 
 	log.Printf("serving 9P on %s", listen)
 	go9p.Serve(listen, ebookfs.Server())

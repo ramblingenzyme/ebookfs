@@ -8,6 +8,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/config"
 	"github.com/ramblingenzyme/ebookfs/internal/frontend/fs"
 	"github.com/ramblingenzyme/ebookfs/internal/backend/index"
+	"github.com/ramblingenzyme/ebookfs/internal/backend/kepub"
 	"github.com/ramblingenzyme/ebookfs/internal/backend/library"
 	"github.com/ramblingenzyme/ebookfs/internal/backend/store"
 )
@@ -41,5 +42,19 @@ func main() {
 		log.Fatalf("reindexing library: %v", err)
 	}
 
-	fs.StartServer(lib, cfg.Server.Listen, cfg.Library.InboxTemp)
+	// The reader/ export serves either original epubs or converted kepubs, chosen
+	// here so neither the frontend nor the library facade knows which format wins.
+	// The kepub cache lives outside the library root so the store walk never sees it.
+	var exporter fs.Exporter
+	if cfg.Reader.Convert {
+		if err := os.MkdirAll(cfg.Reader.CacheDir, 0755); err != nil {
+			log.Fatalf("creating kepub cache dir: %v", err)
+		}
+		exporter = kepub.NewCache(cfg.Reader.CacheDir, lib)
+	} else {
+		exporter = fs.NewEpubExporter(lib)
+	}
+
+	readerCfg := fs.ReaderConfig{Statuses: cfg.Reader.Statuses, Convert: cfg.Reader.Convert}
+	fs.StartServer(lib, exporter, readerCfg, cfg.Server.Listen, cfg.Library.InboxTemp)
 }

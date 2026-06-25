@@ -10,6 +10,7 @@ type Config struct {
 	Library LibraryConfig `toml:"library"`
 	Index   IndexConfig   `toml:"index"`
 	Epub    EpubConfig    `toml:"epub"`
+	Reader  ReaderConfig  `toml:"reader"`
 	Server  ServerConfig  `toml:"server"`
 	Log     LogConfig     `toml:"log"`
 }
@@ -25,6 +26,16 @@ type IndexConfig struct {
 
 type EpubConfig struct {
 	EbookMeta string `toml:"ebook_meta"`
+}
+
+// ReaderConfig configures the reader/ rsync export. Statuses selects which books
+// appear; Convert toggles kepub conversion (false serves the original epub);
+// CacheDir holds converted kepubs and MUST live outside Library.Root so the
+// store walk never treats cached files as books.
+type ReaderConfig struct {
+	Statuses []string `toml:"statuses"`
+	Convert  bool     `toml:"convert"`
+	CacheDir string   `toml:"cache_dir"`
 }
 
 type ServerConfig struct {
@@ -64,6 +75,11 @@ func defaults() *Config {
 		Epub: EpubConfig{
 			EbookMeta: "/usr/bin/ebook-meta",
 		},
+		Reader: ReaderConfig{
+			Statuses: []string{"unread", "reading"},
+			Convert:  false,
+			CacheDir: "/var/lib/ebookfs/kepub-cache",
+		},
 		Server: ServerConfig{
 			Listen: "0.0.0.0:5640",
 			Auth:   "none",
@@ -89,6 +105,20 @@ func (c *Config) validateAuth() error {
 	return nil
 }
 
+func (c *Config) validateReader() error {
+	for _, s := range c.Reader.Statuses {
+		switch s {
+		case "unread", "reading", "read", "abandoned":
+		default:
+			return fmt.Errorf("reader.statuses contains invalid status %q: must be unread, reading, read, or abandoned", s)
+		}
+	}
+	if c.Reader.Convert && c.Reader.CacheDir == "" {
+		return fmt.Errorf("reader.cache_dir is required when reader.convert = true")
+	}
+	return nil
+}
+
 func (c *Config) validate() error {
 	if c.Library.Root == "" {
 		return fmt.Errorf("library.root is required")
@@ -110,6 +140,10 @@ func (c *Config) validate() error {
 	// if info.Mode()&0111 == 0 {
 	// 	return fmt.Errorf("epub.ebook_meta %q: not executable", c.Epub.EbookMeta)
 	// }
+
+	if err := c.validateReader(); err != nil {
+		return err
+	}
 
 	if err := c.validateAuth(); err != nil {
 		return err

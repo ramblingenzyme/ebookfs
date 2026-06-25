@@ -8,6 +8,17 @@ path = "/var/lib/ebookfs/library/.index.db"
 [epub]
 ebook_meta = "/usr/bin/ebook-meta"
 
+[reader]
+# The reader/ directory is an rsync source for an e-reader: books in the listed
+# reading statuses, grouped by author.
+statuses = ["unread", "reading"]  # subset of unread | reading | read | abandoned
+# Convert epubs to Kobo's kepub format on the way out. false serves the original
+# epub (works on any e-reader); true converts and caches per book.
+convert = false
+# Where converted kepubs are cached. MUST be outside library.root so the library
+# walk never treats cached files as books. Only used when convert = true.
+cache_dir = "/var/lib/ebookfs/kepub-cache"
+
 [server]
 listen = "0.0.0.0:5640"
 auth = "none"
