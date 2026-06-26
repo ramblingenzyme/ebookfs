@@ -5,9 +5,6 @@ inbox_temp = "/var/lib/ebookfs/library/.inbox-tmp"  # must be on same filesystem
 [index]
 path = "/var/lib/ebookfs/library/.index.db"
 
-[epub]
-ebook_meta = "/usr/bin/ebook-meta"
-
 [reader]
 # The reader/ directory is an rsync source for an e-reader: books in the listed
 # reading statuses, grouped by author.

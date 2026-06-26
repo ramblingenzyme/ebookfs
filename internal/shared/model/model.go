@@ -14,9 +14,9 @@ type Book struct {
 }
 
 // Bib holds the bibliographic data parsed from the epub — the "what the book
-// is" half, distinct from the mutable Meta sidecar. The ebook-meta edit path
-// will eventually replace it wholesale (re-parse → new Bib) while leaving
-// Location and Meta intact.
+// is" half, distinct from the mutable Meta sidecar. It is replaced wholesale
+// (re-parse → new Bib) when bib fields are edited through the write path,
+// while Location and Meta remain intact.
 type Bib struct {
 	Title       string
 	SortTitle   string

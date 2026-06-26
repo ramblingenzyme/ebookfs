@@ -9,7 +9,6 @@ import (
 type Config struct {
 	Library LibraryConfig `toml:"library"`
 	Index   IndexConfig   `toml:"index"`
-	Epub    EpubConfig    `toml:"epub"`
 	Reader  ReaderConfig  `toml:"reader"`
 	Server  ServerConfig  `toml:"server"`
 	Log     LogConfig     `toml:"log"`
@@ -22,10 +21,6 @@ type LibraryConfig struct {
 
 type IndexConfig struct {
 	Path string `toml:"path"`
-}
-
-type EpubConfig struct {
-	EbookMeta string `toml:"ebook_meta"`
 }
 
 // ReaderConfig configures the reader/ rsync export. Statuses selects which books
@@ -71,9 +66,6 @@ func defaults() *Config {
 		},
 		Index: IndexConfig{
 			Path: "/var/lib/ebookfs/library/.index.db",
-		},
-		Epub: EpubConfig{
-			EbookMeta: "/usr/bin/ebook-meta",
 		},
 		Reader: ReaderConfig{
 			Statuses: []string{"unread", "reading"},
@@ -129,17 +121,6 @@ func (c *Config) validate() error {
 	if c.Index.Path == "" {
 		return fmt.Errorf("index.path is required")
 	}
-	// ebook-meta is not yet used; skip validation until it is.
-	// if c.Epub.EbookMeta == "" {
-	// 	return fmt.Errorf("epub.ebook_meta is required")
-	// }
-	// info, err := os.Stat(c.Epub.EbookMeta)
-	// if err != nil {
-	// 	return fmt.Errorf("epub.ebook_meta %q: %w", c.Epub.EbookMeta, err)
-	// }
-	// if info.Mode()&0111 == 0 {
-	// 	return fmt.Errorf("epub.ebook_meta %q: not executable", c.Epub.EbookMeta)
-	// }
 
 	if err := c.validateReader(); err != nil {
 		return err
