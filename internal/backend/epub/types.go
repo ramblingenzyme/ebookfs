@@ -2,7 +2,6 @@ package epub
 
 import (
 	"encoding/xml"
-	"time"
 )
 
 /*
@@ -43,7 +42,7 @@ type opfMetadata struct {
 	Creators    []opfCreator `xml:"creator"`
 	Identifiers []Identifier `xml:"identifier"`
 	Languages   []string     `xml:"language"`
-	Dates       []string     `xml:"date"`
+	Dates       []opfDate    `xml:"date"`
 	Description string       `xml:"description"`
 	Metas       []opfMeta    `xml:"meta"`
 }
@@ -51,6 +50,14 @@ type opfMetadata struct {
 type opfTitle struct {
 	Value string `xml:",chardata"`
 	ID    string `xml:"id,attr"`
+}
+
+type opfDate struct {
+	Value string `xml:",chardata"`
+	// Event is the EPUB 2 opf:event ("publication"/"creation"/"modification");
+	// matched by local name, so the opf: prefix need not be pinned. Absent in
+	// EPUB 3, which carries a single dc:date and stores last-modified elsewhere.
+	Event string `xml:"event,attr"`
 }
 
 type opfCreator struct {
@@ -80,7 +87,7 @@ type Book struct {
 	Description string
 	Authors     []Author
 	Language    string
-	PubDate     time.Time
+	PubDate     string
 	CoverPath   string
 	Series      string
 	SeriesIndex float64

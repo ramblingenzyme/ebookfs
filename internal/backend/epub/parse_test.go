@@ -22,22 +22,104 @@ const multiRootContainer = `<?xml version="1.0"?>
 
 // opfMarkupCoverImage mislabels an XHTML cover page with
 // properties="cover-image"; the real raster cover is reached via <meta name="cover">.
-const opfMarkupCoverImage = `<?xml version="1.0" encoding="utf-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
-  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:identifier id="bookid">urn:uuid:1234</dc:identifier>
+var opfMarkupCoverImage = opf3Meta(`
     <dc:title>Original Title</dc:title>
     <dc:creator id="creator1">Jane Doe</dc:creator>
     <meta refines="#creator1" property="role">aut</meta>
-    <meta name="cover" content="real-cover"/>
+    <meta name="cover" content="real-cover"/>`,
+	`<item id="coverpage" href="coverpage.xhtml" media-type="application/xhtml+xml" properties="cover-image"/>
+    <item id="real-cover" href="cover.jpg" media-type="image/jpeg"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`,
+)
+
+// opfSeriesSetCollection carries an EPUB 3 belongs-to-collection of type "set"
+// (a publisher bundle, not a series) alongside a legacy calibre:series. The set
+// must be ignored so the real series is the one read.
+var opfSeriesSetCollection = opf3Meta(`
+    <dc:title>Box Set Book</dc:title>
+    <dc:creator id="creator1">Jane Doe</dc:creator>
+    <meta refines="#creator1" property="role">aut</meta>
+    <meta property="belongs-to-collection" id="c1">Some Box Set</meta>
+    <meta refines="#c1" property="collection-type">set</meta>
+    <meta name="calibre:series" content="Real Series"/>
+    <meta name="calibre:series_index" content="3"/>`,
+	"",
+)
+
+// opfSeriesNoIndexV3 is an EPUB 3 series collection with no group-position; the
+// index should default to 1.
+var opfSeriesNoIndexV3 = opf3Meta(`
+    <dc:title>Lonely Book</dc:title>
+    <dc:creator id="creator1">Jane Doe</dc:creator>
+    <meta refines="#creator1" property="role">aut</meta>
+    <meta property="belongs-to-collection" id="c1">Lonely Series</meta>
+    <meta refines="#c1" property="collection-type">series</meta>`,
+	"",
+)
+
+// opfSeriesNoIndexV2 is an EPUB 2 calibre:series with no calibre:series_index;
+// the index should default to 1.
+var opfSeriesNoIndexV2 = opf2Meta(`
+    <dc:title>Lonely Book</dc:title>
+    <dc:creator opf:role="aut">Jane Doe</dc:creator>
+    <meta name="calibre:series" content="Lonely Series"/>`,
+)
+
+// opf3Meta wraps a metadata block and an optional <manifest> body in an
+// EPUB 3 package skeleton. An empty manifest uses the default single-chapter
+// entry so callers need only supply their <metadata> children.
+func opf3Meta(metadata, manifest string) string {
+	if manifest == "" {
+		manifest = `<item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`
+	}
+	return `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="bookid">urn:uuid:1234</dc:identifier>
+    ` + metadata + `
   </metadata>
   <manifest>
-    <item id="coverpage" href="coverpage.xhtml" media-type="application/xhtml+xml" properties="cover-image"/>
-    <item id="real-cover" href="cover.jpg" media-type="image/jpeg"/>
-    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+    ` + manifest + `
   </manifest>
   <spine><itemref idref="ch1"/></spine>
 </package>`
+}
+
+// opf2Meta wraps a metadata block in an EPUB 2 package skeleton.
+func opf2Meta(metadata string) string {
+	return `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" xmlns:opf="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="bookid">urn:uuid:1234</dc:identifier>
+    ` + metadata + `
+  </metadata>
+  <manifest>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine toc="ncx"><itemref idref="ch1"/></spine>
+</package>`
+}
+
+// opfWithDates builds a minimal EPUB 2 package whose <metadata> carries the
+// given raw <dc:date ...> elements, for exercising publication-date selection.
+func opfWithDates(dateXML string) string {
+	return opf2Meta(`
+    <dc:title>Dated Book</dc:title>
+    <dc:creator opf:role="aut">Jane Doe</dc:creator>
+    ` + dateXML)
+}
+
+// opfV3WithModified is an EPUB 3 package with a publication dc:date and a
+// dcterms:modified meta; the latter is not a dc:date and must not be read as the
+// publication date.
+var opfV3WithModified = opf3Meta(`
+    <dc:title>V3 Book</dc:title>
+    <dc:creator id="creator1">Jane Doe</dc:creator>
+    <meta refines="#creator1" property="role">aut</meta>
+    <dc:date>2015-06-01</dc:date>
+    <meta property="dcterms:modified">2022-09-09T00:00:00Z</meta>`,
+	"",
+)
 
 func withContainer(entries []entry, container string) []entry {
 	out := make([]entry, len(entries))
@@ -108,20 +190,13 @@ func TestCoverUrl(t *testing.T) {
 // A percent-encoded cover href must resolve to the literal zip entry so the
 // cover is found by both Parse and the WriteCover/ExtractCover lookups.
 func TestParseResolvesEncodedCoverHref(t *testing.T) {
-	const opfEncoded = `<?xml version="1.0" encoding="utf-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
-  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:identifier id="bookid">urn:uuid:1234</dc:identifier>
+	opfEncoded := opf3Meta(`
     <dc:title>Original Title</dc:title>
     <dc:creator id="creator1">Jane Doe</dc:creator>
-    <meta refines="#creator1" property="role">aut</meta>
-  </metadata>
-  <manifest>
-    <item id="cover-img" href="cover%20image.jpg" media-type="image/jpeg" properties="cover-image"/>
-    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
-  </manifest>
-  <spine><itemref idref="ch1"/></spine>
-</package>`
+    <meta refines="#creator1" property="role">aut</meta>`,
+		`<item id="cover-img" href="cover%20image.jpg" media-type="image/jpeg" properties="cover-image"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`,
+	)
 	entries := []entry{
 		{name: "mimetype", data: []byte("application/epub+zip"), store: true},
 		{name: "META-INF/container.xml", data: []byte(containerXML)},
@@ -206,5 +281,128 @@ func TestMultipleRootfilesKobo(t *testing.T) {
 	}
 	if edited.Title != "Edited Title" {
 		t.Errorf("edited title = %q, want Edited Title", edited.Title)
+	}
+}
+
+// A belongs-to-collection of type "set" is not a series, so it must be ignored
+// and the legacy calibre:series read instead — not mistaken for the series.
+func TestTranslateSeriesSetCollectionIgnored(t *testing.T) {
+	path := writeEpub(t, baseEntries(opfSeriesSetCollection))
+	book, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if book.Series != "Real Series" {
+		t.Errorf("series = %q, want Real Series (set collection should be ignored)", book.Series)
+	}
+	if book.SeriesIndex != 3 {
+		t.Errorf("series index = %v, want 3", book.SeriesIndex)
+	}
+}
+
+// Publication-date selection across the opf:event vocabulary: an explicit
+// "publication" wins; otherwise evented dates are dropped and only a lone
+// untagged dc:date is used, with genuinely ambiguous cases left unset.
+func TestTranslateDateSelection(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		dates string
+		want  string // "" means no date (zero time)
+	}{
+		{
+			"publication wins over creation and modification",
+			`<dc:date opf:event="publication">2016-11-29</dc:date>
+     <dc:date opf:event="creation">2020-07-20</dc:date>
+     <dc:date opf:event="modification">2019-05-12</dc:date>`,
+			"2016-11-29",
+		},
+		{
+			"untagged used when only a modification is tagged",
+			`<dc:date opf:event="modification">2021-03-01</dc:date>
+     <dc:date>2019-05-01</dc:date>`,
+			"2019-05-01",
+		},
+		{
+			"single untagged date",
+			`<dc:date>2018-04-04</dc:date>`,
+			"2018-04-04",
+		},
+		{
+			"two untagged dates are ambiguous, left unset",
+			`<dc:date>2019-01-01</dc:date>
+     <dc:date>2021-01-01</dc:date>`,
+			"",
+		},
+		{
+			"only a creation date is not a publication date, left unset",
+			`<dc:date opf:event="creation">1851-01-01</dc:date>`,
+			"",
+		},
+		{
+			// Selection is by authored count, so the unreadable sibling cannot
+			// resolve the ambiguity by dropping out — it stays two untagged dates.
+			"two untagged, one unreadable, still ambiguous",
+			`<dc:date>2019-05-01</dc:date>
+     <dc:date>not-a-date</dc:date>`,
+			"",
+		},
+		{
+			// A designated publication date is authoritative and stored verbatim,
+			// even if it would not have been parseable as an ISO date.
+			"publication date stored verbatim even if not ISO",
+			`<dc:date opf:event="publication">not-a-date</dc:date>
+     <dc:date>2019-05-01</dc:date>`,
+			"not-a-date",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeEpub(t, baseEntries(opfWithDates(tc.dates)))
+			book, err := Parse(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if book.PubDate != tc.want {
+				t.Errorf("pubdate = %q, want %q", book.PubDate, tc.want)
+			}
+		})
+	}
+}
+
+// EPUB 3 stores last-modified as a meta property, not a dc:date, so it must not
+// be mistaken for the publication date.
+func TestTranslateDateIgnoresDctermsModified(t *testing.T) {
+	path := writeEpub(t, baseEntries(opfV3WithModified))
+	book, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if book.PubDate != "2015-06-01" {
+		t.Errorf("pubdate = %q, want 2015-06-01 (dcterms:modified must be ignored)", book.PubDate)
+	}
+}
+
+// A series with no position defaults to index 1 (calibre's convention), not the
+// float64 zero value, which would render as "0. Title" in the by-series view.
+func TestTranslateSeriesDefaultsIndexToOne(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		opf  string
+	}{
+		{"epub3 collection without group-position", opfSeriesNoIndexV3},
+		{"epub2 calibre:series without index", opfSeriesNoIndexV2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeEpub(t, baseEntries(tc.opf))
+			book, err := Parse(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if book.Series != "Lonely Series" {
+				t.Fatalf("series = %q, want Lonely Series", book.Series)
+			}
+			if book.SeriesIndex != 1 {
+				t.Errorf("series index = %v, want 1 (calibre default)", book.SeriesIndex)
+			}
+		})
 	}
 }

@@ -26,7 +26,7 @@ type Bib struct {
 	Pubdate     string // ISO 8601, may be partial
 	Description string
 	Identifiers map[string]string // scheme → value, e.g. "isbn" → "978-..."
-	CoverPath   string // zip-relative path to cover image; empty if none
+	CoverPath   string            // zip-relative path to cover image; empty if none
 }
 
 type Author struct {

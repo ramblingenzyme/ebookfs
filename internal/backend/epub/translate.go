@@ -6,7 +6,6 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/ramblingenzyme/ebookfs/internal/backend/naming"
 )
@@ -60,29 +59,44 @@ func translateLanguage(meta *opfMetadata, b *Book) {
 	}
 }
 
-// translateDate parses the first usable <dc:date>. EPUB dates are nominally
-// ISO 8601 but vary in precision, so a short list of layouts is tried from most
-// to least precise; an unparseable date is left zero rather than failing.
+// translateDate resolves the publication date from the <dc:date> elements. In
+// EPUB 2 these may be tagged with an opf:event ("publication"/"creation"/
+// "modification" — the spec's example vocabulary). Publication-date selection
+// is independent of parseability — we store the raw value as-is.
+//
+//  1. A designated opf:event="publication" date is authoritative (first match
+//     if a malformed file declares several) and is stored verbatim.
+//  2. Otherwise every evented date is the file declaring "this is not the
+//     publication date", leaving only untagged <dc:date>. Exactly one untagged
+//     date is used; zero or several leaves the date unset.
+//
+// EPUB 3 carries a single untagged <dc:date> (last-modified lives in a separate
+// <meta property="dcterms:modified">, not a <dc:date>, so it never reaches here),
+// falling through to the step-2 single-date case. Empty <dc:date> elements are
+// ignored throughout.
 func translateDate(meta *opfMetadata, b *Book) {
+	var (
+		untagged string
+		count    int
+	)
 	for _, d := range meta.Dates {
-		if t, ok := parseEpubDate(d); ok {
-			b.PubDate = t
+		val := strings.TrimSpace(d.Value)
+		event := strings.TrimSpace(d.Event)
+		if val == "" {
+			continue
+		}
+		if strings.ToLower(event) == "publication" {
+			b.PubDate = val
 			return
 		}
-	}
-}
-
-func parseEpubDate(s string) (time.Time, bool) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return time.Time{}, false
-	}
-	for _, layout := range []string{time.RFC3339, "2006-01-02", "2006-01", "2006"} {
-		if t, err := time.Parse(layout, s); err == nil {
-			return t, true
+		if event == "" {
+			count++
+			untagged = val
 		}
 	}
-	return time.Time{}, false
+	if count == 1 {
+		b.PubDate = untagged
+	}
 }
 
 func translateTitle(meta *opfMetadata, b *Book) error {
@@ -145,33 +159,44 @@ func translateAuthor(meta *opfMetadata, b *Book) error {
 	return nil
 }
 
+// translateSeries resolves the series name and index, mirroring calibre's
+// read_series precedence. An EPUB 3 belongs-to-collection wins, but only when it
+// is genuinely a series: it must carry an id (needed to resolve its refines) and
+// a collection-type refine of "series". A "set" collection (e.g. a publisher
+// bundle) is skipped rather than mistaken for a series, so a legitimate
+// calibre:series can still be found. Failing an EPUB 3 series, the proprietary
+// EPUB 2 calibre:series / calibre:series_index metas are used.
+//
+// The index defaults to 1 (calibre's convention) whenever a series is present
+// but carries no parseable position — a 0 would surface as "0. Title" in the
+// by-series view and sort ahead of the real, numbered entries.
 func translateSeries(meta *opfMetadata, b *Book) {
-	var collectionID string
-	for _, m := range meta.Metas {
-		if m.Property == "belongs-to-collection" {
-			b.Series = strings.TrimSpace(m.Value)
-			collectionID = m.ID
-			break
-		}
+	b.SeriesIndex = 1
 
-		if m.Name == "calibre:series" {
-			b.Series = strings.TrimSpace(m.Content)
+	for _, m := range meta.Metas {
+		if m.Property != "belongs-to-collection" || m.ID == "" {
+			continue
 		}
-		if m.Name == "calibre:series_index" {
-			if idx, err := strconv.ParseFloat(m.Content, 64); err == nil {
+		name := strings.TrimSpace(m.Value)
+		if name == "" || findRefine(meta.Metas, m.ID, "collection-type") != "series" {
+			continue
+		}
+		b.Series = name
+		if pos := findRefine(meta.Metas, m.ID, "group-position"); pos != "" {
+			if idx, err := strconv.ParseFloat(pos, 64); err == nil {
 				b.SeriesIndex = idx
 			}
 		}
+		return
 	}
 
-	if collectionID != "" {
-		// Reset in case we pulled it from calibre
-		b.SeriesIndex = 0
-
-		pos := findRefine(meta.Metas, collectionID, "group-position")
-		if pos != "" {
-			if index, err := strconv.ParseFloat(pos, 64); err == nil {
-				b.SeriesIndex = index
+	for _, m := range meta.Metas {
+		switch m.Name {
+		case "calibre:series":
+			b.Series = strings.TrimSpace(m.Content)
+		case "calibre:series_index":
+			if idx, err := strconv.ParseFloat(m.Content, 64); err == nil {
+				b.SeriesIndex = idx
 			}
 		}
 	}

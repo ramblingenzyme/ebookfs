@@ -67,7 +67,6 @@ func TestWriteBibSimpleFields(t *testing.T) {
 			book, err := WriteBib(path, Edits{
 				Title:       ptr("New Title"),
 				Description: ptr("New description."),
-				Pubdate:     ptr("1999-12-31"),
 				Language:    ptr("fr"),
 			})
 			if err != nil {
@@ -81,9 +80,6 @@ func TestWriteBibSimpleFields(t *testing.T) {
 			}
 			if book.Language != "fr" {
 				t.Errorf("language = %q, want fr", book.Language)
-			}
-			if got := book.PubDate.Format("2006-01-02"); got != "1999-12-31" {
-				t.Errorf("pubdate = %q, want 1999-12-31", got)
 			}
 			// Re-parse from disk independently to confirm it persisted.
 			reparsed, err := Parse(path)
@@ -276,29 +272,31 @@ func TestWriteBibSortTitleIgnoredForEpub2(t *testing.T) {
 	}
 }
 
-func TestWriteBibRejectsInvalidPubdate(t *testing.T) {
+func TestWriteBibRejectsInvalidLanguage(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
-	if _, err := WriteBib(path, Edits{Pubdate: ptr("not a date")}); err == nil {
-		t.Fatal("expected rejection of unparseable pubdate, got nil")
+	if _, err := WriteBib(path, Edits{Language: ptr("Klingon")}); err == nil {
+		t.Fatal("expected rejection of unrecognised language code, got nil")
 	}
-	// Original untouched and still the old date.
+	// Original untouched and still the old language.
 	book, err := Parse(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := book.PubDate.Format("2006-01-02"); got != "2020-01-02" {
-		t.Errorf("pubdate = %q, want 2020-01-02 (unchanged)", got)
+	if book.Language != "en" {
+		t.Errorf("language = %q, want en (unchanged)", book.Language)
 	}
 }
 
-func TestWriteBibClearsPubdate(t *testing.T) {
+func TestWriteBibAcceptsValidLanguageVerbatim(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
-	book, err := WriteBib(path, Edits{Pubdate: ptr("")})
+	// A recognised tag is accepted and written through verbatim — validated, not
+	// canonicalised (calibre would rewrite "pt-BR" to a 3-letter code).
+	book, err := WriteBib(path, Edits{Language: ptr("pt-BR")})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !book.PubDate.IsZero() {
-		t.Errorf("pubdate = %v, want zero after clearing", book.PubDate)
+	if book.Language != "pt-BR" {
+		t.Errorf("language = %q, want pt-BR (verbatim, not normalised)", book.Language)
 	}
 }
 

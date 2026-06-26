@@ -5,12 +5,12 @@ import (
 	"log"
 	"os"
 
-	"github.com/ramblingenzyme/ebookfs/internal/config"
-	"github.com/ramblingenzyme/ebookfs/internal/frontend/fs"
 	"github.com/ramblingenzyme/ebookfs/internal/backend/index"
 	"github.com/ramblingenzyme/ebookfs/internal/backend/kepub"
 	"github.com/ramblingenzyme/ebookfs/internal/backend/library"
 	"github.com/ramblingenzyme/ebookfs/internal/backend/store"
+	"github.com/ramblingenzyme/ebookfs/internal/config"
+	"github.com/ramblingenzyme/ebookfs/internal/frontend/fs"
 )
 
 func main() {

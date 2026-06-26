@@ -9,8 +9,8 @@ import (
 
 	"github.com/ramblingenzyme/ebookfs/internal/backend/epub"
 	"github.com/ramblingenzyme/ebookfs/internal/backend/index"
-	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
 	"github.com/ramblingenzyme/ebookfs/internal/backend/store"
+	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
 )
 
 // EpubReader is a handle to a book's epub content. It hides where the bytes
@@ -204,10 +204,7 @@ func bookFromParts(src *epub.Book, meta *model.Meta) *model.Book {
 		identifiers[ident.ID] = ident.Value
 	}
 
-	pubdate := ""
-	if !src.PubDate.IsZero() {
-		pubdate = src.PubDate.Format(time.RFC3339)
-	}
+	pubdate := src.PubDate
 
 	return &model.Book{
 		Meta: *meta,

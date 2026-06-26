@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/beevik/etree"
+	"golang.org/x/text/language"
 )
 
 const opfNamespace = "http://www.idpf.org/2007/opf"
@@ -36,7 +37,6 @@ type Edits struct {
 	Title       *string
 	SortTitle   *string
 	Description *string
-	Pubdate     *string
 	Language    *string
 	Authors     *[]Author
 	Series      *string
@@ -150,13 +150,14 @@ func coverFormat(coverPath string) string {
 // encoding/xml's encoder would. Untargeted nodes, comments, and formatting are
 // left as-is.
 func editOPF(opfBytes []byte, e Edits) ([]byte, error) {
-	// Reject a pubdate our own reader can't parse back: it would be written but
-	// silently read as no-date (translateDate doesn't fail), so WriteBib would
-	// report a date the OPF doesn't actually carry. An empty value clears it.
-	if e.Pubdate != nil {
-		if v := strings.TrimSpace(*e.Pubdate); v != "" {
-			if _, ok := parseEpubDate(v); !ok {
-				return nil, fmt.Errorf("pubdate %q is not a recognised date (expected ISO 8601, e.g. 2006-01-02)", *e.Pubdate)
+	// Reject a language we can't recognise as a BCP 47 / ISO 639 tag. We validate
+	// but deliberately do not normalise: a recognised tag is written through
+	// verbatim (so "en" stays "en", not "eng"), unlike calibre which
+	// canonicalises. An empty value clears it.
+	if e.Language != nil {
+		if v := strings.TrimSpace(*e.Language); v != "" {
+			if _, err := language.Parse(v); err != nil {
+				return nil, fmt.Errorf("language %q is not a recognised BCP 47 / ISO 639 code: %w", *e.Language, err)
 			}
 		}
 	}
@@ -188,14 +189,10 @@ func editOPF(opfBytes []byte, e Edits) ([]byte, error) {
 	if e.Description != nil {
 		setDCText(md, dc, "description", *e.Description)
 	}
-	if e.Pubdate != nil {
-		setDCText(md, dc, "date", *e.Pubdate)
-	}
 	if e.Language != nil {
-		// TODO: guard against invalid language codes. Unlike pubdate (validated
-		// above), the language is written as-is and read back as-is, so a bogus
-		// value like "Klingon" round-trips silently instead of being rejected or
-		// normalised to a BCP 47 / ISO 639 code the way calibre canonicalises it.
+		// Validated above (unrecognised codes are rejected); written verbatim so a
+		// recognised tag is preserved as authored rather than canonicalised the way
+		// calibre would (e.g. "en" stays "en", not "eng").
 		setDCText(md, dc, "language", *e.Language)
 	}
 	if e.Authors != nil {
