@@ -42,6 +42,7 @@ type opfMetadata struct {
 	Titles      []opfTitle   `xml:"title"`
 	Creators    []opfCreator `xml:"creator"`
 	Identifiers []Identifier `xml:"identifier"`
+	Languages   []string     `xml:"language"`
 	Dates       []string     `xml:"date"`
 	Description string       `xml:"description"`
 	Metas       []opfMeta    `xml:"meta"`
@@ -78,10 +79,11 @@ type Book struct {
 	SortTitle   string
 	Description string
 	Authors     []Author
+	Language    string
 	PubDate     time.Time
 	CoverPath   string
 	Series      string
-	SeriesIndex uint16
+	SeriesIndex float64
 	Identifiers []Identifier
 }
 

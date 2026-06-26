@@ -4,6 +4,7 @@ go 1.26.1
 
 require (
 	github.com/BurntSushi/toml v1.6.0
+	github.com/beevik/etree v1.1.0
 	github.com/knusbaum/go9p v1.18.0
 	github.com/pgaskin/kepubify/v4 v4.0.4
 	modernc.org/sqlite v1.51.0
@@ -14,7 +15,6 @@ replace github.com/knusbaum/go9p => github.com/ramblingenzyme/go9p v0.0.0-202405
 require (
 	9fans.net/go v0.0.2 // indirect
 	github.com/Plan9-Archive/libauth v0.0.0-20180917063427-d1ca9e94969d // indirect
-	github.com/beevik/etree v1.1.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emersion/go-sasl v0.0.0-20200509203442-7bfe0ed36a21 // indirect
 	github.com/fhs/mux9p v0.3.1 // indirect

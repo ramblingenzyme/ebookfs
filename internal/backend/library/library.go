@@ -196,7 +196,7 @@ func bookFromParts(src *epub.Book, meta *model.Meta) *model.Book {
 
 	var series *model.SeriesRef
 	if src.Series != "" {
-		series = &model.SeriesRef{Name: src.Series, Index: float64(src.SeriesIndex)}
+		series = &model.SeriesRef{Name: src.Series, Index: src.SeriesIndex}
 	}
 
 	identifiers := make(map[string]string, len(src.Identifiers))
@@ -216,6 +216,7 @@ func bookFromParts(src *epub.Book, meta *model.Meta) *model.Book {
 			SortTitle:   src.SortTitle,
 			Authors:     authors,
 			Series:      series,
+			Language:    src.Language,
 			Description: src.Description,
 			Pubdate:     pubdate,
 			Identifiers: identifiers,
