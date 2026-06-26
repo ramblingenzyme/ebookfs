@@ -98,8 +98,12 @@ func translateTitle(meta *opfMetadata, b *Book) error {
 		return errors.New("empty title")
 	}
 
+	// The title sort is the EPUB 3 file-as refine on the title; EPUB 2 has no
+	// standard mechanism, so it is simply absent there.
 	b.SortTitle = findRefine(meta.Metas, title.ID, "file-as")
-	// TODO: decide whether to add sort title heuristic when not found
+	// TODO: decide whether to derive a sort title heuristically when none is set
+	// (calibre strips leading articles, e.g. "The Hobbit" -> "Hobbit, The"); it is
+	// language-dependent, so for now an unset sort title is left empty.
 
 	return nil
 }

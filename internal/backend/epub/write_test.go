@@ -186,6 +186,96 @@ func TestWriteBibSeriesRoundTrip(t *testing.T) {
 	}
 }
 
+func TestWriteBibSetsSortTitle(t *testing.T) {
+	path := writeEpub(t, baseEntries(opf3))
+	book, err := WriteBib(path, Edits{
+		Title:     ptr("New Title"),
+		SortTitle: ptr("New Title, A"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if book.Title != "New Title" {
+		t.Errorf("title = %q, want New Title", book.Title)
+	}
+	if book.SortTitle != "New Title, A" {
+		t.Errorf("sort title = %q, want %q", book.SortTitle, "New Title, A")
+	}
+
+	// Stored as the standard EPUB 3 file-as refine, never calibre:title_sort.
+	opf, ok, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
+	if !ok {
+		t.Fatal("OPF entry not found")
+	}
+	if !bytes.Contains(opf, []byte(`property="file-as"`)) {
+		t.Error("expected a file-as refine for the title sort")
+	}
+	if bytes.Contains(opf, []byte("calibre:title_sort")) {
+		t.Error("OPF must not contain calibre:title_sort")
+	}
+}
+
+func TestWriteBibSortTitleAloneLeavesTitle(t *testing.T) {
+	// Setting only the sort title must not disturb the title.
+	path := writeEpub(t, baseEntries(opf3))
+	book, err := WriteBib(path, Edits{SortTitle: ptr("Sorted, Just")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if book.Title != "Original Title" {
+		t.Errorf("title = %q, want Original Title (unchanged)", book.Title)
+	}
+	if book.SortTitle != "Sorted, Just" {
+		t.Errorf("sort title = %q, want %q", book.SortTitle, "Sorted, Just")
+	}
+}
+
+func TestWriteBibTitleChangeClearsStaleSortTitle(t *testing.T) {
+	// opf3 starts with sort title "Title, Original"; changing the title without a
+	// new sort title must clear it rather than leave a value derived from the old
+	// title.
+	path := writeEpub(t, baseEntries(opf3))
+	before, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before.SortTitle != "Title, Original" {
+		t.Fatalf("precondition: sort title = %q, want Title, Original", before.SortTitle)
+	}
+
+	book, err := WriteBib(path, Edits{Title: ptr("Wuthering Heights")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if book.SortTitle != "" {
+		t.Errorf("sort title = %q, want empty after a title change", book.SortTitle)
+	}
+}
+
+func TestWriteBibSortTitleIgnoredForEpub2(t *testing.T) {
+	// Sort titles are an EPUB 3 feature; setting one on an EPUB 2 file is a no-op
+	// and must not introduce a file-as refine or a calibre:title_sort meta.
+	path := writeEpub(t, baseEntries(opf2))
+	book, err := WriteBib(path, Edits{SortTitle: ptr("Ignored, This")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if book.SortTitle != "" {
+		t.Errorf("sort title = %q, want empty (ignored for EPUB 2)", book.SortTitle)
+	}
+
+	opf, ok, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
+	if !ok {
+		t.Fatal("OPF entry not found")
+	}
+	if bytes.Contains(opf, []byte(`property="file-as"`)) {
+		t.Error("EPUB 2 OPF must not gain a file-as refine")
+	}
+	if bytes.Contains(opf, []byte("calibre:title_sort")) {
+		t.Error("EPUB 2 OPF must not gain calibre:title_sort")
+	}
+}
+
 func TestWriteBibRejectsInvalidPubdate(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
 	if _, err := WriteBib(path, Edits{Pubdate: ptr("not a date")}); err == nil {

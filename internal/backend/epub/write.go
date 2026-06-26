@@ -25,8 +25,16 @@ const opfNamespace = "http://www.idpf.org/2007/opf"
 //
 // A non-nil Series pointing at "" removes the series. SeriesIndex is only
 // consulted when Series is being set to a non-empty value.
+//
+// SortTitle is the EPUB 3 file-as refine on the title and follows the same
+// nil/empty rules; it is ignored for EPUB 2, which has no standard sort-title
+// mechanism. As a special case, changing Title without supplying a SortTitle
+// clears any existing sort title — it was derived from the old title, so leaving
+// it would make the sort title disagree with the title. (We clear rather than
+// regenerate; a heuristic is language-dependent and deferred — see translateTitle.)
 type Edits struct {
 	Title       *string
+	SortTitle   *string
 	Description *string
 	Pubdate     *string
 	Language    *string
@@ -170,6 +178,13 @@ func editOPF(opfBytes []byte, e Edits) ([]byte, error) {
 	if e.Title != nil {
 		setDCText(md, dc, "title", *e.Title)
 	}
+	// An explicit sort title wins; otherwise a title change invalidates any
+	// existing sort title, so clear it.
+	if e.SortTitle != nil {
+		setTitleSort(pkg, md, *e.SortTitle)
+	} else if e.Title != nil {
+		setTitleSort(pkg, md, "")
+	}
 	if e.Description != nil {
 		setDCText(md, dc, "description", *e.Description)
 	}
@@ -219,6 +234,40 @@ func setDCText(md *etree.Element, dc, tag, value string) {
 		return
 	}
 	md.CreateElement(qualify(dc, tag)).SetText(value)
+}
+
+// setTitleSort manages the title's sort value, which in EPUB is the EPUB 3
+// file-as refine on the title. EPUB 2 has no standard title-sort mechanism, and
+// since the sort title is not exposed for editing in the frontend we do not add
+// a proprietary fallback for it (contrast setSeries) — so it is not handled for
+// EPUB 2 at all. Removes any existing refine and, unless value is empty, writes a
+// fresh one (assigning the title an id if it lacks one).
+func setTitleSort(pkg, md *etree.Element, value string) {
+	if !strings.HasPrefix(packageVersion(pkg), "3") {
+		return // sort titles are an EPUB 3 feature
+	}
+	title := md.SelectElement("title")
+	if title == nil {
+		return // no title to sort; title edits are validated elsewhere
+	}
+	titleID := title.SelectAttrValue("id", "")
+
+	for _, m := range md.SelectElements("meta") {
+		if titleID != "" && m.SelectAttrValue("property", "") == "file-as" &&
+			strings.TrimPrefix(m.SelectAttrValue("refines", ""), "#") == titleID {
+			md.RemoveChild(m)
+		}
+	}
+
+	if strings.TrimSpace(value) == "" {
+		return // sort title cleared
+	}
+
+	if titleID == "" {
+		titleID = "ebookfs-title"
+		title.CreateAttr("id", titleID)
+	}
+	addRefine(md, titleID, "file-as", value, "")
 }
 
 // setAuthors replaces the author creators (role "aut", or no role per the EPUB
@@ -281,6 +330,13 @@ func isAuthorCreator(md, c *etree.Element) bool {
 // belongs-to-collection plus its refines, or the EPUB 2 calibre:series metas)
 // and, unless name is empty, writes a fresh one in the version-appropriate shape
 // that translateSeries reads back.
+//
+// Note: unlike the title sort (EPUB 3 only — see setTitleSort), we do write
+// calibre's proprietary calibre:series / calibre:series_index metas for EPUB 2.
+// Series is exposed for editing in the frontend, EPUB 2 has no standard
+// collection model, and those metas are its de-facto convention, so we need that
+// fallback. The sort title is not exposed in the frontend, so it needs no EPUB 2
+// equivalent and stays EPUB 3 only.
 func setSeries(pkg, md *etree.Element, name string, index *float64) {
 	var collectionIDs []string
 	for _, m := range md.SelectElements("meta") {
