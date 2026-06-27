@@ -136,6 +136,14 @@ func (l *Library) ExtractCover(b *model.Book) ([]byte, error) {
 	return epub.ExtractCover(l.store.AbsPath(b.LibraryPath, b.EpubFilename), b.CoverPath)
 }
 
+// WriteCover replaces the cover image in b's epub with img, validates the image
+// format matches the existing cover entry, and rewrites the epub atomically.
+func (l *Library) WriteCover(b *model.Book, img []byte) error {
+	epubPath := l.store.AbsPath(b.LibraryPath, b.EpubFilename)
+	_, err := epub.WriteCover(epubPath, b.CoverPath, img)
+	return err
+}
+
 func (l *Library) ReadMeta(b *model.Book) (*model.Meta, error) {
 	return l.store.ReadMeta(b.Location)
 }
@@ -148,6 +156,70 @@ func (l *Library) WriteMeta(b *model.Book) error {
 	}
 
 	return l.index.Put(b)
+}
+
+// WriteBib applies bibliographic edits to the book's epub, rebuilds the bib
+// from the re-parsed result, and persists everything. If the title or authors
+// change the canonical location, the book directory is moved.
+func (l *Library) WriteBib(b *model.Book, edits epub.Edits) (*model.Book, error) {
+	epubPath := l.store.AbsPath(b.LibraryPath, b.EpubFilename)
+	re, err := epub.WriteBib(epubPath, edits)
+	if err != nil {
+		return nil, err
+	}
+
+	updated := *b
+	updated.Bib = bibFromEpub(re)
+	updated.Meta.DateModified = time.Now()
+
+	newLoc := store.Layout(updated.Authors, updated.Title, updated.Meta.ID)
+	if newLoc != b.Location {
+		if err := l.store.Move(b.Location, newLoc); err != nil {
+			return nil, err
+		}
+		updated.Location = newLoc
+	}
+
+	if err := l.store.WriteMeta(updated.Location, &updated.Meta); err != nil {
+		return nil, err
+	}
+	if err := l.index.Put(&updated); err != nil {
+		return nil, err
+	}
+
+	return &updated, nil
+}
+
+// bibFromEpub converts an epub.Book (the parsed result of an OPF) into a
+// model.Bib, extracting and converting the fields that are shared between the
+// two representations.
+func bibFromEpub(src *epub.Book) model.Bib {
+	authors := make([]model.Author, len(src.Authors))
+	for i, a := range src.Authors {
+		authors[i] = model.Author{Name: a.Name, SortName: a.SortAs}
+	}
+
+	var series *model.SeriesRef
+	if src.Series != "" {
+		series = &model.SeriesRef{Name: src.Series, Index: src.SeriesIndex}
+	}
+
+	identifiers := make(map[string]string, len(src.Identifiers))
+	for _, ident := range src.Identifiers {
+		identifiers[ident.ID] = ident.Value
+	}
+
+	return model.Bib{
+		Title:       src.Title,
+		SortTitle:   src.SortTitle,
+		Authors:     authors,
+		Series:      series,
+		Language:    src.Language,
+		Pubdate:     src.PubDate,
+		Description: src.Description,
+		Identifiers: identifiers,
+		CoverPath:   src.CoverPath,
+	}
 }
 
 // TODO: handle multiple authors like Calibre — take newAuthors []model.Author,
@@ -189,35 +261,8 @@ func (l *Library) Delete(b *model.Book) error {
 // the epub plus its fresh sidecar. The caller fills in b.Location once the
 // canonical layout has been computed (see store.Layout).
 func bookFromParts(src *epub.Book, meta *model.Meta) *model.Book {
-	authors := make([]model.Author, len(src.Authors))
-	for i, a := range src.Authors {
-		authors[i] = model.Author{Name: a.Name, SortName: a.SortAs}
-	}
-
-	var series *model.SeriesRef
-	if src.Series != "" {
-		series = &model.SeriesRef{Name: src.Series, Index: src.SeriesIndex}
-	}
-
-	identifiers := make(map[string]string, len(src.Identifiers))
-	for _, ident := range src.Identifiers {
-		identifiers[ident.ID] = ident.Value
-	}
-
-	pubdate := src.PubDate
-
 	return &model.Book{
 		Meta: *meta,
-		Bib: model.Bib{
-			Title:       src.Title,
-			SortTitle:   src.SortTitle,
-			Authors:     authors,
-			Series:      series,
-			Language:    src.Language,
-			Description: src.Description,
-			Pubdate:     pubdate,
-			Identifiers: identifiers,
-			CoverPath:   src.CoverPath,
-		},
+		Bib:  bibFromEpub(src),
 	}
 }

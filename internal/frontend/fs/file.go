@@ -10,12 +10,15 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
 )
 
-// coverFile serves a book's cover image, loading bytes from the epub on each open.
+// coverFile serves a book's cover image, loading bytes from the epub on each
+// open. It also supports writing new cover bytes, accumulated per fid and
+// committed when the fid is closed.
 type coverFile struct {
 	fs.BaseFile
-	lib  *library.Library
-	book *model.Book
-	fids map[uint64][]byte
+	lib    *library.Library
+	book   *model.Book
+	reads  map[uint64][]byte
+	writes map[uint64][]byte
 }
 
 func newCoverFile(stat *proto.Stat, lib *library.Library, book *model.Book) *coverFile {
@@ -23,7 +26,8 @@ func newCoverFile(stat *proto.Stat, lib *library.Library, book *model.Book) *cov
 		BaseFile: *fs.NewBaseFile(stat),
 		lib:      lib,
 		book:     book,
-		fids:     make(map[uint64][]byte),
+		reads:    make(map[uint64][]byte),
+		writes:   make(map[uint64][]byte),
 	}
 }
 
@@ -33,14 +37,15 @@ func (c *coverFile) Open(fid uint64, omode proto.Mode) error {
 		return err
 	}
 	c.Lock()
-	c.fids[fid] = data
+	c.reads[fid] = data
+	c.writes[fid] = nil
 	c.Unlock()
 	return nil
 }
 
 func (c *coverFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error) {
 	c.RLock()
-	data := c.fids[fid]
+	data := c.reads[fid]
 	c.RUnlock()
 	if data == nil {
 		return nil, errors.New("not open")
@@ -54,16 +59,34 @@ func (c *coverFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error
 	return data[offset : offset+count], nil
 }
 
+func (c *coverFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
+	c.Lock()
+	defer c.Unlock()
+	end := offset + uint64(len(data))
+	buf := c.writes[fid]
+	if end > uint64(len(buf)) {
+		buf = append(buf, make([]byte, end-uint64(len(buf)))...)
+	}
+	copy(buf[offset:], data)
+	c.writes[fid] = buf
+	return uint32(len(data)), nil
+}
+
 func (c *coverFile) Close(fid uint64) error {
 	c.Lock()
-	delete(c.fids, fid)
-	c.Unlock()
-	return nil
+	defer c.Unlock()
+	data := c.writes[fid]
+	delete(c.reads, fid)
+	delete(c.writes, fid)
+	if len(data) == 0 {
+		return nil
+	}
+	return c.lib.WriteCover(c.book, data)
 }
 
 // epubFile serves a book's epub through the library, holding one reader per fid.
-// Size is statted once at construction; content is read on demand via ReadAt.
-// The 9P layer never sees a filesystem path.
+// The 9P layer never sees a filesystem path. Stat is live: it reports the
+// current EpubFilename and on-disk size on each call.
 type epubFile struct {
 	fs.BaseFile
 	lib  *library.Library
@@ -72,23 +95,24 @@ type epubFile struct {
 }
 
 func newEpubFile(stat *proto.Stat, lib *library.Library, book *model.Book) *epubFile {
-	// Stat the epub once here to fill in the 9P length; reads use per-fid handles.
-	//
-	// TODO: this length is captured at construction. When the ebook-meta edit path
-	// rewrites an epub in place its size changes, so the book's fs node must be
-	// rebuilt (or this stat refreshed) for clients to see the new length.
-	if r, err := lib.OpenEpub(book); err == nil {
-		if fi, err := r.Stat(); err == nil {
-			stat.Length = uint64(fi.Size())
-		}
-		r.Close()
-	}
 	return &epubFile{
 		BaseFile: *fs.NewBaseFile(stat),
 		lib:      lib,
 		book:     book,
 		fids:     make(map[uint64]library.EpubReader),
 	}
+}
+
+func (e *epubFile) Stat() proto.Stat {
+	s := e.BaseFile.Stat()
+	s.Name = e.book.EpubFilename
+	if r, err := e.lib.OpenEpub(e.book); err == nil {
+		if fi, err := r.Stat(); err == nil {
+			s.Length = uint64(fi.Size())
+		}
+		r.Close()
+	}
+	return s
 }
 
 func (e *epubFile) Open(fid uint64, omode proto.Mode) error {
