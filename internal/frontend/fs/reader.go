@@ -186,8 +186,8 @@ func (r *readerFile) Open(fid uint64, omode proto.Mode) error {
 
 func (r *readerFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error) {
 	r.RLock()
+	defer r.RUnlock()
 	rd := r.fids[fid]
-	r.RUnlock()
 	if rd == nil {
 		return nil, errors.New("not open")
 	}

@@ -128,8 +128,8 @@ func (e *epubFile) Open(fid uint64, omode proto.Mode) error {
 
 func (e *epubFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error) {
 	e.RLock()
+	defer e.RUnlock()
 	r := e.fids[fid]
-	e.RUnlock()
 	if r == nil {
 		return nil, errors.New("not open")
 	}
