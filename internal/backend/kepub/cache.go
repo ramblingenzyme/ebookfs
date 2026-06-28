@@ -84,7 +84,7 @@ func (c *Cache) ensureLocked(b *model.Book) error {
 	}
 	defer src.Close()
 
-	sfi, err := src.Stat()
+	sfi, err := b.Stat()
 	if err != nil {
 		return err
 	}

@@ -106,11 +106,8 @@ func newEpubFile(stat *proto.Stat, lib *library.Library, book *model.Book) *epub
 func (e *epubFile) Stat() proto.Stat {
 	s := e.BaseFile.Stat()
 	s.Name = e.book.EpubFilename
-	if r, err := e.lib.OpenEpub(e.book); err == nil {
-		if fi, err := r.Stat(); err == nil {
-			s.Length = uint64(fi.Size())
-		}
-		r.Close()
+	if fi, err := e.book.Stat(); err == nil {
+		s.Length = uint64(fi.Size())
 	}
 	return s
 }

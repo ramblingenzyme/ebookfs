@@ -47,12 +47,7 @@ func (e epubExporter) Open(b *model.Book) (library.EpubReader, error) {
 }
 
 func (e epubExporter) Size(b *model.Book) (int64, bool) {
-	r, err := e.lib.OpenEpub(b)
-	if err != nil {
-		return 0, false
-	}
-	defer r.Close()
-	fi, err := r.Stat()
+	fi, err := b.Stat()
 	if err != nil {
 		return 0, false
 	}

@@ -1,16 +1,56 @@
 // Package model defines the shared types used across store, index, and library.
 package model
 
-import "time"
+import (
+	"os"
+	"time"
+)
 
 // Book is the complete record for a book in the library: where it lives
 // (Location), what it is (Bib), and its mutable sidecar state (Meta). Location
 // and Bib are embedded so their fields read flat (b.Title, b.LibraryPath); Meta
 // stays named so sidecar state is explicitly addressed as b.Meta.
+//
+// Book may carry self-contained methods (Stat, WithBib, etc.) that operate on
+// its own fields without depending on Store, Index, or the epub parser. Library
+// remains the single orchestrator for persistence and transactions; Book methods
+// are helpers for in-memory transformation and inspection.
 type Book struct {
 	Location
 	Bib
 	Meta Meta
+}
+
+// NewBook returns a Book with all fields populated. Location is required so
+// EpubPath is always set; the caller computes it via store.Layout or store.Walk.
+// Zero-valued fields are set to sensible defaults so callers don't need to
+// repeat them.
+func NewBook(bib Bib, meta Meta, loc Location) *Book {
+	if bib.Authors == nil {
+		bib.Authors = []Author{}
+	}
+	if bib.Identifiers == nil {
+		bib.Identifiers = map[string]string{}
+	}
+	if meta.DateAdded.IsZero() {
+		meta.DateAdded = time.Now()
+	}
+	if meta.DateModified.IsZero() {
+		meta.DateModified = time.Now()
+	}
+	if meta.Status == "" {
+		meta.Status = "unread"
+	}
+	if meta.Tags == nil {
+		meta.Tags = []string{}
+	}
+	return &Book{Location: loc, Bib: bib, Meta: meta}
+}
+
+// Stat returns the FileInfo for the book's epub file. EpubPath must be
+// populated, which it always is when NewBook created the Book.
+func (b *Book) Stat() (os.FileInfo, error) {
+	return os.Stat(b.EpubPath)
 }
 
 // Bib holds the bibliographic data parsed from the epub — the "what the book
@@ -44,6 +84,7 @@ type SeriesRef struct {
 type Location struct {
 	LibraryPath  string
 	EpubFilename string
+	EpubPath     string // absolute path to the epub file; set when Location is created
 }
 
 // Meta mirrors the meta.toml sidecar schema.

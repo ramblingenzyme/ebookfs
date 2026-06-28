@@ -12,10 +12,13 @@ import (
 // authors, title, and id: its directory relative to the library root and the
 // epub filename within it. It is the single source of the naming convention;
 // ingest and move both lay books down through it.
-func Layout(authors []model.Author, title string, id int64) model.Location {
+func (s *Store) Layout(authors []model.Author, title string, id int64) model.Location {
+	libPath := canonicalDir(authors, title, id)
+	filename := epubFilename(authors, title)
 	return model.Location{
-		LibraryPath:  canonicalDir(authors, title, id),
-		EpubFilename: epubFilename(authors, title),
+		LibraryPath:  libPath,
+		EpubFilename: filename,
+		EpubPath:     filepath.Join(s.root, libPath, filename),
 	}
 }
 

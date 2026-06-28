@@ -3,7 +3,6 @@ package library
 import (
 	"fmt"
 	"io"
-	"io/fs"
 	"log"
 	"time"
 
@@ -14,12 +13,11 @@ import (
 )
 
 // EpubReader is a handle to a book's epub content. It hides where the bytes
-// live (currently a file on disk) from the 9P layer, which needs random reads,
-// the file size (via Stat), and a close.
+// live (currently a file on disk) from the 9P layer, which needs random reads
+// and a close.
 type EpubReader interface {
 	io.ReaderAt
 	io.Closer
-	Stat() (fs.FileInfo, error)
 }
 
 // Library coordinates filesystem and index operations on the book collection.
@@ -42,9 +40,9 @@ func (l *Library) Ingest(epubPath string) (*model.Book, error) {
 		return nil, err
 	}
 
-	b := bookFromParts(book, &model.Meta{})
-	if l.store.Exists(b.Authors, b.Title) {
-		return nil, fmt.Errorf("book already in library: %q", b.Title)
+	bib := bibFromEpub(book)
+	if l.store.Exists(bib.Authors, bib.Title) {
+		return nil, fmt.Errorf("book already in library: %q", bib.Title)
 	}
 
 	id, err := l.index.NextID()
@@ -53,15 +51,13 @@ func (l *Library) Ingest(epubPath string) (*model.Book, error) {
 	}
 
 	now := time.Now()
-	b.Meta = model.Meta{
+	meta := model.Meta{
 		ID:           id,
 		DateAdded:    now,
 		DateModified: now,
-		Status:       "unread",
-		Rating:       0,
-		Tags:         []string{},
 	}
-	b.Location = store.Layout(b.Authors, b.Title, id)
+	loc := l.store.Layout(bib.Authors, bib.Title, id)
+	b := model.NewBook(bib, meta, loc)
 
 	if err := l.store.Ingest(epubPath, b.Location, &b.Meta); err != nil {
 		return nil, err
@@ -78,7 +74,14 @@ func (l *Library) Ingest(epubPath string) (*model.Book, error) {
 }
 
 func (l *Library) ListAll() ([]*model.Book, error) {
-	return l.index.ListAll()
+	books, err := l.index.ListAll()
+	if err != nil {
+		return nil, err
+	}
+	for _, b := range books {
+		b.EpubPath = l.store.AbsPath(b.LibraryPath, b.EpubFilename)
+	}
+	return books, nil
 }
 
 // Reindex rebuilds the index from the store, which is the source of truth. The
@@ -107,15 +110,13 @@ func (l *Library) Reindex() error {
 			maxID = meta.ID
 		}
 
-		book, err := epub.Parse(l.store.AbsPath(e.LibraryPath, e.EpubFilename))
+		book, err := epub.Parse(e.EpubPath)
 		if err != nil {
 			log.Printf("reindex: skip %s: parse epub: %v", e.LibraryPath, err)
 			continue
 		}
 
-		b := bookFromParts(book, meta)
-		b.Location = e
-		books = append(books, b)
+		books = append(books, model.NewBook(bibFromEpub(book), *meta, e))
 	}
 
 	if err := l.index.Rebuild(books, maxID); err != nil {
@@ -133,14 +134,13 @@ func (l *Library) OpenEpub(b *model.Book) (EpubReader, error) {
 
 // ExtractCover returns the cover image bytes from b's epub.
 func (l *Library) ExtractCover(b *model.Book) ([]byte, error) {
-	return epub.ExtractCover(l.store.AbsPath(b.LibraryPath, b.EpubFilename), b.CoverPath)
+	return epub.ExtractCover(b.EpubPath, b.CoverPath)
 }
 
 // WriteCover replaces the cover image in b's epub with img, validates the image
 // format matches the existing cover entry, and rewrites the epub atomically.
 func (l *Library) WriteCover(b *model.Book, img []byte) error {
-	epubPath := l.store.AbsPath(b.LibraryPath, b.EpubFilename)
-	_, err := epub.WriteCover(epubPath, b.CoverPath, img)
+	_, err := epub.WriteCover(b.EpubPath, b.CoverPath, img)
 	return err
 }
 
@@ -162,8 +162,7 @@ func (l *Library) WriteMeta(b *model.Book) error {
 // from the re-parsed result, and persists everything. If the title or authors
 // change the canonical location, the book directory is moved.
 func (l *Library) WriteBib(b *model.Book, edits epub.Edits) (*model.Book, error) {
-	epubPath := l.store.AbsPath(b.LibraryPath, b.EpubFilename)
-	re, err := epub.WriteBib(epubPath, edits)
+	re, err := epub.WriteBib(b.EpubPath, edits)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +171,7 @@ func (l *Library) WriteBib(b *model.Book, edits epub.Edits) (*model.Book, error)
 	updated.Bib = bibFromEpub(re)
 	updated.Meta.DateModified = time.Now()
 
-	newLoc := store.Layout(updated.Authors, updated.Title, updated.Meta.ID)
+	newLoc := l.store.Layout(updated.Authors, updated.Title, updated.Meta.ID)
 	if newLoc != b.Location {
 		if err := l.store.Move(b.Location, newLoc); err != nil {
 			return nil, err
@@ -227,7 +226,7 @@ func bibFromEpub(src *epub.Book) model.Bib {
 // Today Move collapses the book to a single author, dropping any co-authors from
 // the index on Put.
 func (l *Library) Move(b *model.Book, newAuthor model.Author, newTitle string) (*model.Book, error) {
-	to := store.Layout([]model.Author{newAuthor}, newTitle, b.Meta.ID)
+	to := l.store.Layout([]model.Author{newAuthor}, newTitle, b.Meta.ID)
 	if err := l.store.Move(b.Location, to); err != nil {
 		return nil, err
 	}
@@ -257,12 +256,4 @@ func (l *Library) Delete(b *model.Book) error {
 	return l.index.Delete(b.Meta.ID)
 }
 
-// bookFromParts assembles a model.Book from the bibliographic data parsed out of
-// the epub plus its fresh sidecar. The caller fills in b.Location once the
-// canonical layout has been computed (see store.Layout).
-func bookFromParts(src *epub.Book, meta *model.Meta) *model.Book {
-	return &model.Book{
-		Meta: *meta,
-		Bib:  bibFromEpub(src),
-	}
-}
+
