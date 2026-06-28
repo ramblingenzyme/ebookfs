@@ -25,11 +25,28 @@ func (s *Store) AbsPath(libraryPath, filename string) string {
 }
 
 // Exists reports whether a book with the given authors and title is already
-// present in the library, regardless of its ID.
+// in the library, regardless of its database ID. Each book lives in a
+// subdirectory named "Title (id)" under the author directory — we iterate
+// those subdirectories and check whether any already holds the target epub
+// file. Walking avoids glob patterns entirely, so metacharacters like [],
+// ?, and * in names are handled correctly.
 func (s *Store) Exists(authors []model.Author, title string) bool {
-	pattern := filepath.Join(s.root, authorDirName(authors), "*", epubFilename(authors, title))
-	matches, _ := filepath.Glob(pattern)
-	return len(matches) > 0
+	authorDir := filepath.Join(s.root, authorDirName(authors))
+	entries, err := os.ReadDir(authorDir)
+	if err != nil {
+		return false
+	}
+	targetEpub := epubFilename(authors, title)
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		epubPath := filepath.Join(authorDir, entry.Name(), targetEpub)
+		if _, err := os.Stat(epubPath); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // OpenEpub opens the epub file at loc for reading. The caller closes it.
