@@ -2,6 +2,7 @@ package fs
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -139,7 +140,7 @@ func bibFields() map[string]bibField {
 				if b.Series == nil {
 					return ""
 				}
-				return strconv.FormatFloat(b.Series.Index, 'f', -1, 64)
+				return strconv.FormatFloat(b.Series.Index, 'f', 1, 64)
 			},
 			edits: func(b *model.Book, s string) (epub.Edits, error) {
 				if b.Series == nil {
@@ -149,6 +150,7 @@ func bibFields() map[string]bibField {
 				if err != nil {
 					return epub.Edits{}, fmt.Errorf("invalid series index %q", s)
 				}
+				idx = math.Round(idx*10) / 10
 				name := b.Series.Name
 				return epub.Edits{Series: &name, SeriesIndex: &idx}, nil
 			},
