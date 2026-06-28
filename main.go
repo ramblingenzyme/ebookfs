@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/ramblingenzyme/ebookfs/internal/backend/index"
 	"github.com/ramblingenzyme/ebookfs/internal/backend/kepub"
@@ -27,6 +28,10 @@ func main() {
 	}
 	if err := os.MkdirAll(cfg.Library.InboxTemp, 0700); err != nil {
 		log.Fatalf("creating inbox temp dir: %v", err)
+	}
+
+	if err := checkSameFilesystem(cfg.Library.Root, cfg.Library.InboxTemp); err != nil {
+		log.Fatalf("inbox_temp must be on the same filesystem as library.root: %v", err)
 	}
 
 	idx, err := index.Open(cfg.Index.Path)
@@ -57,4 +62,25 @@ func main() {
 
 	readerCfg := fs.ReaderConfig{Statuses: cfg.Reader.Statuses, Convert: cfg.Reader.Convert}
 	fs.StartServer(lib, exporter, readerCfg, cfg.Server.Listen, cfg.Library.InboxTemp)
+}
+
+// checkSameFilesystem verifies a and b are on the same filesystem by
+// creating a temp file in one and trying os.Rename to the other. os.Rename
+// across mount points returns EXDEV, so this is a portable probe of the
+// actual invariant the ingest path needs.
+func checkSameFilesystem(a, b string) error {
+	tmp, err := os.CreateTemp(a, ".fschk-*")
+	if err != nil {
+		return err
+	}
+	tmp.Close()
+	defer os.Remove(tmp.Name())
+
+	dst := filepath.Join(b, filepath.Base(tmp.Name()))
+	if err := os.Rename(tmp.Name(), dst); err != nil {
+		os.Remove(dst)
+		return err
+	}
+	os.Remove(dst)
+	return nil
 }
