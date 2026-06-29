@@ -62,6 +62,8 @@ func newInboxFile(f *fs.FS, lib *library.Library, inboxTemp, name string, perm u
 
 func (i *inboxFile) Open(fid uint64, omode proto.Mode) error {
 	log.Printf("inbox: open %q fid=%d omode=%d", i.Stat().Name, fid, omode)
+	i.Lock()
+	defer i.Unlock()
 	if i.fid != 0 {
 		log.Printf("already open")
 		return errors.New("file already open")
@@ -79,6 +81,8 @@ func (i *inboxFile) Open(fid uint64, omode proto.Mode) error {
 }
 
 func (i *inboxFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
+	i.Lock()
+	defer i.Unlock()
 	if i.f == nil || i.fid != fid {
 		log.Printf("inbox: write file was not opened")
 		return 0, errors.New("wtf")
@@ -91,6 +95,13 @@ func (i *inboxFile) Write(fid uint64, offset uint64, data []byte) (uint32, error
 
 func (i *inboxFile) Close(fid uint64) error {
 	log.Printf("inbox: close %q fid=%d", i.Stat().Name, fid)
+
+	// Parent is set once during AddChild and never changes; read it before
+	// acquiring the lock so we can use defer without reentrancy issues.
+	parent := i.Parent()
+
+	i.Lock()
+	defer i.Unlock()
 	if i.f == nil {
 		i.fid = 0
 		return nil
@@ -100,7 +111,7 @@ func (i *inboxFile) Close(fid uint64) error {
 	i.f = nil
 	i.fid = 0
 
-	if md, ok := i.Parent().(fs.ModDir); ok {
+	if md, ok := parent.(fs.ModDir); ok {
 		md.DeleteChild(i.Stat().Name)
 	}
 

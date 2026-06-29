@@ -45,8 +45,8 @@ func (c *coverFile) Open(fid uint64, omode proto.Mode) error {
 
 func (c *coverFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error) {
 	c.RLock()
+	defer c.RUnlock()
 	data := c.reads[fid]
-	c.RUnlock()
 	if data == nil {
 		return nil, errors.New("not open")
 	}
