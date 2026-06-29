@@ -106,6 +106,9 @@ func newEpubFile(stat *proto.Stat, lib *library.Library, book *model.Book) *epub
 func (e *epubFile) Stat() proto.Stat {
 	s := e.BaseFile.Stat()
 	s.Name = e.book.EpubFilename
+	// TODO: e.book.Stat() calls os.Stat on the epub path. During a rename
+	// (title/authors edit) the file is in flight between view remove and add;
+	// this Stat could get a stale path or fail.
 	if fi, err := e.book.Stat(); err == nil {
 		s.Length = uint64(fi.Size())
 	}
