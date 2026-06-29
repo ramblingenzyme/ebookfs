@@ -29,15 +29,19 @@ type bookLister interface {
 	remove(dir *bookDir)
 }
 
-// groupingDir is the shared base for by-x view directories.
+// groupingDir is the shared base for by-x view directories. StaticDir is a
+// pointer, never a value, because fs.StaticDir embeds sync.RWMutex (via its
+// BaseFile). Copying a mutex after first use is undefined behaviour, and
+// groupingDir is returned by value and embedded by value in every view type
+// (byAuthorDir, bySeriesDir, readerDir). A pointer avoids copying the mutex.
 type groupingDir struct {
-	fs.StaticDir
+	*fs.StaticDir
 	f *fs.FS
 }
 
 func newGroupingDir(f *fs.FS, name string) groupingDir {
 	return groupingDir{
-		StaticDir: *fs.NewStaticDir(f.NewStat(name, "glenda", "glenda", 0555|proto.DMDIR)),
+		StaticDir: fs.NewStaticDir(f.NewStat(name, "glenda", "glenda", 0555|proto.DMDIR)),
 		f:         f,
 	}
 }

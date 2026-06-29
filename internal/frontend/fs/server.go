@@ -16,6 +16,9 @@ func StartServer(lib *library.Library, exp Exporter, readerCfg ReaderConfig, lis
 	registry := newBookRegistry(ebookfs, lib)
 	ebookfs.CreateFile = inboxCreateFile(lib, inboxTemp, registry.Add)
 
+	// TODO: add graceful shutdown. go9p.Serve blocks; the warmer's 4 goroutines
+	// (reader.go) leak on exit because their channel is never closed.
+
 	// Each view self-registers with the registry on construction.
 	allBooks := newAllBooksDir(registry)
 	byAuthor := newByAuthorDir(registry)

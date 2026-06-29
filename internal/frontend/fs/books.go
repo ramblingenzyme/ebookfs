@@ -19,14 +19,8 @@ func newBooksDir(stat *proto.Stat) *booksDir {
 func (d *booksDir) add(dir *bookDir)    { d.StaticDir.AddChild(dir) }
 func (d *booksDir) remove(dir *bookDir) { d.StaticDir.DeleteChild(dir.Stat().Name) }
 
-type allBooksDir struct {
-	booksDir
-}
-
-func newAllBooksDir(reg *bookRegistry) *allBooksDir {
-	d := &allBooksDir{
-		booksDir: *newBooksDir(reg.f.NewStat("books", "glenda", "glenda", 0555|proto.DMDIR)),
-	}
+func newAllBooksDir(reg *bookRegistry) *booksDir {
+	d := newBooksDir(reg.f.NewStat("books", "glenda", "glenda", 0555|proto.DMDIR))
 	reg.AddView(d)
 	return d
 }
