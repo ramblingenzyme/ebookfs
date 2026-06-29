@@ -5,7 +5,6 @@ import (
 
 	"github.com/knusbaum/go9p"
 	"github.com/ramblingenzyme/ebookfs/internal/backend/library"
-	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
 )
 
 // StartServer serves the library over 9P at listen. The caller owns composition
@@ -13,15 +12,9 @@ import (
 // (original epub vs kepub); the frontend depends only on the library facade and
 // that Exporter. inboxTemp is where uploads are staged before ingest.
 func StartServer(lib *library.Library, exp Exporter, readerCfg ReaderConfig, listen, inboxTemp string) {
-	// registry is set below after newFS returns, but createFile only fires once
-	// a client writes to /inbox — well after startup completes.
-	var registry *bookRegistry
-
-	ebookfs, root := newFS(inboxCreateFile(lib, inboxTemp, func(b *model.Book) {
-		registry.Add(b)
-	}))
-
-	registry = newBookRegistry(ebookfs, lib)
+	ebookfs, root := newFS()
+	registry := newBookRegistry(ebookfs, lib)
+	ebookfs.CreateFile = inboxCreateFile(lib, inboxTemp, registry.Add)
 
 	// Each view self-registers with the registry on construction.
 	allBooks := newAllBooksDir(registry)

@@ -37,8 +37,7 @@ type field struct {
 	edits func(*model.Book, string) (model.Edits, error)
 }
 
-func fields() map[string]field {
-	return map[string]field{
+var fields = map[string]field{
 		"status": {
 			get: func(b *model.Book) string { return b.Meta.Status },
 			edits: func(b *model.Book, s string) (model.Edits, error) {
@@ -134,7 +133,6 @@ func fields() map[string]field {
 			},
 		},
 	}
-}
 
 func newBookDir(reg *bookRegistry, book *model.Book) *bookDir {
 	f, lib := reg.f, reg.lib
@@ -157,7 +155,7 @@ func newBookDir(reg *bookRegistry, book *model.Book) *bookDir {
 	// Editable fields route through the registry so the change is validated,
 	// persisted, and bracketed by view remove/add (rehoming if the grouping or
 	// name changed). get reads the live book; set constructs Edits for the field.
-	for name, fld := range fields() {
+	for name, fld := range fields {
 		get := func() string { return fld.get(d.Book) }
 		set := func(s string) error {
 			edits, err := fld.edits(d.Book, s)
