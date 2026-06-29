@@ -7,6 +7,8 @@ import (
 	"image/jpeg"
 	"image/png"
 	"testing"
+
+	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
 )
 
 // --- writer-only helpers ---------------------------------------------------
@@ -64,7 +66,7 @@ func TestWriteBibSimpleFields(t *testing.T) {
 	}{{"epub3", opf3}, {"epub2", opf2}} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEpub(t, baseEntries(tc.opf))
-			book, err := WriteBib(path, Edits{
+			book, err := WriteBib(path, model.Edits{
 				Title:       ptr("New Title"),
 				Description: ptr("New description."),
 				Language:    ptr("fr"),
@@ -95,7 +97,7 @@ func TestWriteBibSimpleFields(t *testing.T) {
 
 func TestWriteBibPreservesContainerLayout(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
-	if _, err := WriteBib(path, Edits{Title: ptr("Another Title")}); err != nil {
+	if _, err := WriteBib(path, model.Edits{Title: ptr("Another Title")}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -130,21 +132,21 @@ func TestWriteBibAuthorsRoundTrip(t *testing.T) {
 	}{{"epub3", opf3}, {"epub2", opf2}} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEpub(t, baseEntries(tc.opf))
-			authors := []Author{
-				{Name: "Alice Smith", SortAs: "Smith, Alice"},
-				{Name: "Bob Jones", SortAs: "Jones, Bob"},
+			authors := []model.Author{
+				{Name: "Alice Smith", SortName: "Smith, Alice"},
+				{Name: "Bob Jones", SortName: "Jones, Bob"},
 			}
-			book, err := WriteBib(path, Edits{Authors: &authors})
+			book, err := WriteBib(path, model.Edits{Authors: &authors})
 			if err != nil {
 				t.Fatal(err)
 			}
 			if len(book.Authors) != 2 {
 				t.Fatalf("got %d authors, want 2: %+v", len(book.Authors), book.Authors)
 			}
-			if book.Authors[0].Name != "Alice Smith" || book.Authors[0].SortAs != "Smith, Alice" {
+			if book.Authors[0].Name != "Alice Smith" || book.Authors[0].SortName != "Smith, Alice" {
 				t.Errorf("author[0] = %+v", book.Authors[0])
 			}
-			if book.Authors[1].Name != "Bob Jones" || book.Authors[1].SortAs != "Jones, Bob" {
+			if book.Authors[1].Name != "Bob Jones" || book.Authors[1].SortName != "Jones, Bob" {
 				t.Errorf("author[1] = %+v", book.Authors[1])
 			}
 		})
@@ -159,7 +161,7 @@ func TestWriteBibSeriesRoundTrip(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEpub(t, baseEntries(tc.opf))
 			// A fractional index (e.g. a 1.5 novella) must round-trip, not truncate.
-			book, err := WriteBib(path, Edits{Series: ptr("The Saga"), SeriesIndex: ptr(1.5)})
+			book, err := WriteBib(path, model.Edits{Series: ptr("The Saga"), SeriesIndex: ptr(1.5)})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -171,7 +173,7 @@ func TestWriteBibSeriesRoundTrip(t *testing.T) {
 			}
 
 			// Clearing it removes the series.
-			book, err = WriteBib(path, Edits{Series: ptr("")})
+			book, err = WriteBib(path, model.Edits{Series: ptr("")})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -184,7 +186,7 @@ func TestWriteBibSeriesRoundTrip(t *testing.T) {
 
 func TestWriteBibSetsSortTitle(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
-	book, err := WriteBib(path, Edits{
+	book, err := WriteBib(path, model.Edits{
 		Title:     ptr("New Title"),
 		SortTitle: ptr("New Title, A"),
 	})
@@ -214,7 +216,7 @@ func TestWriteBibSetsSortTitle(t *testing.T) {
 func TestWriteBibSortTitleAloneLeavesTitle(t *testing.T) {
 	// Setting only the sort title must not disturb the title.
 	path := writeEpub(t, baseEntries(opf3))
-	book, err := WriteBib(path, Edits{SortTitle: ptr("Sorted, Just")})
+	book, err := WriteBib(path, model.Edits{SortTitle: ptr("Sorted, Just")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +241,7 @@ func TestWriteBibTitleChangeClearsStaleSortTitle(t *testing.T) {
 		t.Fatalf("precondition: sort title = %q, want Title, Original", before.SortTitle)
 	}
 
-	book, err := WriteBib(path, Edits{Title: ptr("Wuthering Heights")})
+	book, err := WriteBib(path, model.Edits{Title: ptr("Wuthering Heights")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +254,7 @@ func TestWriteBibSortTitleIgnoredForEpub2(t *testing.T) {
 	// Sort titles are an EPUB 3 feature; setting one on an EPUB 2 file is a no-op
 	// and must not introduce a file-as refine or a calibre:title_sort meta.
 	path := writeEpub(t, baseEntries(opf2))
-	book, err := WriteBib(path, Edits{SortTitle: ptr("Ignored, This")})
+	book, err := WriteBib(path, model.Edits{SortTitle: ptr("Ignored, This")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,26 +274,11 @@ func TestWriteBibSortTitleIgnoredForEpub2(t *testing.T) {
 	}
 }
 
-func TestWriteBibRejectsInvalidLanguage(t *testing.T) {
-	path := writeEpub(t, baseEntries(opf3))
-	if _, err := WriteBib(path, Edits{Language: ptr("Klingon")}); err == nil {
-		t.Fatal("expected rejection of unrecognised language code, got nil")
-	}
-	// Original untouched and still the old language.
-	book, err := Parse(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if book.Language != "en" {
-		t.Errorf("language = %q, want en (unchanged)", book.Language)
-	}
-}
-
 func TestWriteBibAcceptsValidLanguageVerbatim(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
 	// A recognised tag is accepted and written through verbatim — validated, not
 	// canonicalised (calibre would rewrite "pt-BR" to a 3-letter code).
-	book, err := WriteBib(path, Edits{Language: ptr("pt-BR")})
+	book, err := WriteBib(path, model.Edits{Language: ptr("pt-BR")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +289,7 @@ func TestWriteBibAcceptsValidLanguageVerbatim(t *testing.T) {
 
 func TestWriteBibBlankTitleRejected(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
-	if _, err := WriteBib(path, Edits{Title: ptr("   ")}); err == nil {
+	if _, err := WriteBib(path, model.Edits{Title: ptr("   ")}); err == nil {
 		t.Fatal("expected error blanking title, got nil")
 	}
 	// Original must be untouched and still valid.
@@ -323,7 +310,7 @@ func TestWriteBibRefusesEncryptedOPF(t *testing.T) {
   </enc:EncryptedData>
 </encryption>`
 	path := writeEpub(t, baseEntries(opf3, entry{name: "META-INF/encryption.xml", data: []byte(enc)}))
-	if _, err := WriteBib(path, Edits{Title: ptr("Hack")}); err == nil {
+	if _, err := WriteBib(path, model.Edits{Title: ptr("Hack")}); err == nil {
 		t.Fatal("expected refusal on encrypted OPF, got nil")
 	}
 }
@@ -341,7 +328,7 @@ func TestWriteBibAllowsFontObfuscation(t *testing.T) {
 		entry{name: "OEBPS/fonts/x.otf", data: []byte("obfuscated-font")},
 	)
 	path := writeEpub(t, entries)
-	book, err := WriteBib(path, Edits{Title: ptr("Obfuscated OK")})
+	book, err := WriteBib(path, model.Edits{Title: ptr("Obfuscated OK")})
 	if err != nil {
 		t.Fatalf("font obfuscation should not block edits: %v", err)
 	}

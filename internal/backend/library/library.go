@@ -137,39 +137,24 @@ func (l *Library) ExtractCover(b *model.Book) ([]byte, error) {
 	return epub.ExtractCover(b.EpubPath, b.CoverPath)
 }
 
-// WriteCover replaces the cover image in b's epub with img, validates the image
-// format matches the existing cover entry, and rewrites the epub atomically.
-func (l *Library) WriteCover(b *model.Book, img []byte) error {
-	_, err := epub.WriteCover(b.EpubPath, b.CoverPath, img)
-	return err
-}
-
-func (l *Library) ReadMeta(b *model.Book) (*model.Meta, error) {
-	return l.store.ReadMeta(b.Location)
-}
-
-func (l *Library) WriteMeta(b *model.Book) error {
-	// Sidecar is written first because it is the source of truth. If the index
-	// update fails, the sidecar still holds the correct state and reindex recovers.
-	if err := l.store.WriteMeta(b.Location, &b.Meta); err != nil {
-		return err
+// Edit applies edits to a book, persists everything, and returns the updated
+// book. Bib (OPF) edits trigger an epub rewrite and re-parse. Meta edits are
+// applied in-memory. If the title or authors change the canonical location, the
+// book directory is moved. WriteCover handles binary cover replacement.
+func (l *Library) Edit(b *model.Book, e model.Edits) (*model.Book, error) {
+	if v := e.Validate(b); v != nil {
+		return nil, v
 	}
 
-	return l.index.Put(b)
-}
+	updated := b.Edit(e)
 
-// WriteBib applies bibliographic edits to the book's epub, rebuilds the bib
-// from the re-parsed result, and persists everything. If the title or authors
-// change the canonical location, the book directory is moved.
-func (l *Library) WriteBib(b *model.Book, edits epub.Edits) (*model.Book, error) {
-	re, err := epub.WriteBib(b.EpubPath, edits)
-	if err != nil {
-		return nil, err
+	if e.HasBibEdits() {
+		re, err := epub.WriteBib(b.EpubPath, e)
+		if err != nil {
+			return nil, err
+		}
+		updated.Bib = bibFromEpub(re)
 	}
-
-	updated := *b
-	updated.Bib = bibFromEpub(re)
-	updated.Meta.DateModified = time.Now()
 
 	newLoc := l.store.Layout(updated.Authors, updated.Title, updated.Meta.ID)
 	if newLoc != b.Location {
@@ -182,22 +167,22 @@ func (l *Library) WriteBib(b *model.Book, edits epub.Edits) (*model.Book, error)
 	if err := l.store.WriteMeta(updated.Location, &updated.Meta); err != nil {
 		return nil, err
 	}
-	if err := l.index.Put(&updated); err != nil {
+	if err := l.index.Put(updated); err != nil {
 		return nil, err
 	}
 
-	return &updated, nil
+	return updated, nil
 }
 
-// bibFromEpub converts an epub.Book (the parsed result of an OPF) into a
-// model.Bib, extracting and converting the fields that are shared between the
-// two representations.
-func bibFromEpub(src *epub.Book) model.Bib {
-	authors := make([]model.Author, len(src.Authors))
-	for i, a := range src.Authors {
-		authors[i] = model.Author{Name: a.Name, SortName: a.SortAs}
-	}
+// WriteCover replaces the cover image in b's epub with img, validates the image
+// format matches the existing cover entry, and rewrites the epub atomically.
+func (l *Library) WriteCover(b *model.Book, img []byte) error {
+	_, err := epub.WriteCover(b.EpubPath, b.CoverPath, img)
+	return err
+}
 
+// bibFromEpub converts a parsed epub.Book into a model.Bib.
+func bibFromEpub(src *epub.Book) model.Bib {
 	var series *model.SeriesRef
 	if src.Series != "" {
 		series = &model.SeriesRef{Name: src.Series, Index: src.SeriesIndex}
@@ -211,7 +196,7 @@ func bibFromEpub(src *epub.Book) model.Bib {
 	return model.Bib{
 		Title:       src.Title,
 		SortTitle:   src.SortTitle,
-		Authors:     authors,
+		Authors:     src.Authors,
 		Series:      series,
 		Language:    src.Language,
 		Pubdate:     src.PubDate,
@@ -219,30 +204,6 @@ func bibFromEpub(src *epub.Book) model.Bib {
 		Identifiers: identifiers,
 		CoverPath:   src.CoverPath,
 	}
-}
-
-// TODO: handle multiple authors like Calibre — take newAuthors []model.Author,
-// file under the primary (first) author, and preserve the full ordered list.
-// Today Move collapses the book to a single author, dropping any co-authors from
-// the index on Put.
-func (l *Library) Move(b *model.Book, newAuthor model.Author, newTitle string) (*model.Book, error) {
-	to := l.store.Layout([]model.Author{newAuthor}, newTitle, b.Meta.ID)
-	if err := l.store.Move(b.Location, to); err != nil {
-		return nil, err
-	}
-
-	updated := *b
-	updated.Title = newTitle
-	updated.Authors = []model.Author{newAuthor}
-	updated.Location = to
-	updated.Meta.DateModified = time.Now()
-
-	if err := l.index.Put(&updated); err != nil {
-		// File is already moved; the index is stale until reindex recovers it.
-		return nil, err
-	}
-
-	return &updated, nil
 }
 
 func (l *Library) Delete(b *model.Book) error {

@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
 )
 
 // --- parser-only fixtures & helpers ----------------------------------------
@@ -275,7 +277,7 @@ func TestMultipleRootfilesKobo(t *testing.T) {
 		t.Errorf("title = %q, want Original Title", book.Title)
 	}
 
-	edited, err := WriteBib(path, Edits{Title: ptr("Edited Title")})
+	edited, err := WriteBib(path, model.Edits{Title: ptr("Edited Title")})
 	if err != nil {
 		t.Fatalf("WriteBib failed on Kobo multi-rootfile epub: %v", err)
 	}

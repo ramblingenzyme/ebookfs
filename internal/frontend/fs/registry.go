@@ -3,10 +3,8 @@ package fs
 import (
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/knusbaum/go9p/fs"
-	"github.com/ramblingenzyme/ebookfs/internal/backend/epub"
 	"github.com/ramblingenzyme/ebookfs/internal/backend/library"
 	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
 )
@@ -94,38 +92,16 @@ func (r *bookRegistry) Remove(id int64) {
 	delete(r.books, id)
 }
 
-// editMeta validates and persists a sidecar change against a copy, then commits
-// it in place so views can rehome the book when a meta field drives grouping.
-func (r *bookRegistry) editMeta(id int64, mutate func(*model.Book) error) error {
+// edit persists edits to a book and commits the change so views rehome the
+// book if its grouping or name changed.
+func (r *bookRegistry) edit(id int64, edits model.Edits) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	dir, ok := r.books[id]
 	if !ok {
 		return fmt.Errorf("no book with id %d", id)
 	}
-	candidate := *dir.Book
-	if err := mutate(&candidate); err != nil {
-		return err
-	}
-	candidate.Meta.DateModified = time.Now()
-	if err := r.lib.WriteMeta(&candidate); err != nil {
-		return err
-	}
-	r.commit(dir, func() { *dir.Book = candidate })
-	return nil
-}
-
-// editBib applies bibliographic edits to the book's epub, persists the
-// re-parsed result, then commits the change so views rehome the book if its
-// title or authors changed.
-func (r *bookRegistry) editBib(id int64, edits epub.Edits) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	dir, ok := r.books[id]
-	if !ok {
-		return fmt.Errorf("no book with id %d", id)
-	}
-	updated, err := r.lib.WriteBib(dir.Book, edits)
+	updated, err := r.lib.Edit(dir.Book, edits)
 	if err != nil {
 		return err
 	}

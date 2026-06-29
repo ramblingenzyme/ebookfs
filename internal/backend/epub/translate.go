@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/ramblingenzyme/ebookfs/internal/backend/naming"
+	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
 )
 
 func translate(pkg *opfPackage) (*Book, error) {
@@ -150,7 +151,7 @@ func translateAuthor(meta *opfMetadata, b *Book) error {
 			sortAs, _ = naming.Sanitize(sortAs)
 		}
 
-		b.Authors = append(b.Authors, Author{Name: name, SortAs: sortAs})
+		b.Authors = append(b.Authors, model.Author{Name: name, SortName: sortAs})
 	}
 	if len(b.Authors) == 0 {
 		return errors.New("no authors")

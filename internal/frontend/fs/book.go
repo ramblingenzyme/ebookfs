@@ -8,7 +8,6 @@ import (
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
-	"github.com/ramblingenzyme/ebookfs/internal/backend/epub"
 	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
 )
 
@@ -30,73 +29,55 @@ func (d *bookDir) Stat() proto.Stat {
 	return s
 }
 
-type metaField struct {
-	get func(*model.Book) string
-	set func(*model.Book, string) error
-}
-
-type bibField struct {
+type field struct {
 	get   func(*model.Book) string
-	edits func(*model.Book, string) (epub.Edits, error)
+	// edits converts string input to typed Edits. Error return is for input
+	// parsing failures (e.g. strconv.Atoi); validation is centralized in
+	// model.Edits.Validate.
+	edits func(*model.Book, string) (model.Edits, error)
 }
 
-func metaFields() map[string]metaField {
-	return map[string]metaField{
+func fields() map[string]field {
+	return map[string]field{
 		"status": {
-			func(b *model.Book) string { return b.Meta.Status },
-			func(b *model.Book, s string) error {
-				switch s {
-				case "unread", "reading", "read", "abandoned":
-					b.Meta.Status = s
-					return nil
-				default:
-					return fmt.Errorf("invalid status %q: must be unread, reading, read, or abandoned", s)
-				}
+			get: func(b *model.Book) string { return b.Meta.Status },
+			edits: func(b *model.Book, s string) (model.Edits, error) {
+				return model.Edits{Status: &s}, nil
 			},
 		},
-		// TODO: rating should be a float32 0–5 (e.g. 4.75); update model, schema, and this validation together.
 		"rating": {
-			func(b *model.Book) string { return strconv.Itoa(b.Meta.Rating) },
-			func(b *model.Book, s string) error {
+			get: func(b *model.Book) string { return strconv.Itoa(b.Meta.Rating) },
+			edits: func(b *model.Book, s string) (model.Edits, error) {
 				n, err := strconv.Atoi(s)
-				if err != nil || n < 0 || n > 5 {
-					return fmt.Errorf("invalid rating %q: must be an integer 0-5", s)
+				if err != nil {
+					return model.Edits{}, fmt.Errorf("invalid rating %q", s)
 				}
-				b.Meta.Rating = n
-				return nil
+				return model.Edits{Rating: &n}, nil
 			},
 		},
 		"tags": {
-			func(b *model.Book) string { return strings.Join(b.Meta.Tags, "\n") },
-			func(b *model.Book, s string) error {
-				b.Meta.Tags = strings.FieldsFunc(s, func(r rune) bool { return r == '\n' })
-				return nil
+			get: func(b *model.Book) string { return strings.Join(b.Meta.Tags, "\n") },
+			edits: func(b *model.Book, s string) (model.Edits, error) {
+				tags := strings.FieldsFunc(s, func(r rune) bool { return r == '\n' })
+				return model.Edits{Tags: &tags}, nil
 			},
 		},
-	}
-}
-
-func bibFields() map[string]bibField {
-	return map[string]bibField{
 		"title": {
 			get: func(b *model.Book) string { return b.Title },
-			edits: func(b *model.Book, s string) (epub.Edits, error) {
-				if strings.TrimSpace(s) == "" {
-					return epub.Edits{}, fmt.Errorf("title must not be empty")
-				}
-				return epub.Edits{Title: &s}, nil
+			edits: func(b *model.Book, s string) (model.Edits, error) {
+				return model.Edits{Title: &s}, nil
 			},
 		},
 		"language": {
 			get: func(b *model.Book) string { return b.Language },
-			edits: func(b *model.Book, s string) (epub.Edits, error) {
-				return epub.Edits{Language: &s}, nil
+			edits: func(b *model.Book, s string) (model.Edits, error) {
+				return model.Edits{Language: &s}, nil
 			},
 		},
 		"description": {
 			get: func(b *model.Book) string { return b.Description },
-			edits: func(b *model.Book, s string) (epub.Edits, error) {
-				return epub.Edits{Description: &s}, nil
+			edits: func(b *model.Book, s string) (model.Edits, error) {
+				return model.Edits{Description: &s}, nil
 			},
 		},
 		"authors": {
@@ -107,21 +88,18 @@ func bibFields() map[string]bibField {
 				}
 				return strings.Join(names, "\n")
 			},
-			edits: func(b *model.Book, s string) (epub.Edits, error) {
+			edits: func(b *model.Book, s string) (model.Edits, error) {
 				var names []string
 				for _, n := range strings.Split(s, "\n") {
 					if n = strings.TrimSpace(n); n != "" {
 						names = append(names, n)
 					}
 				}
-				if len(names) == 0 {
-					return epub.Edits{}, fmt.Errorf("at least one author is required")
-				}
-				authors := make([]epub.Author, len(names))
+				authors := make([]model.Author, len(names))
 				for i, n := range names {
-					authors[i] = epub.Author{Name: n}
+					authors[i] = model.Author{Name: n}
 				}
-				return epub.Edits{Authors: &authors}, nil
+				return model.Edits{Authors: &authors}, nil
 			},
 		},
 		"series": {
@@ -131,8 +109,8 @@ func bibFields() map[string]bibField {
 				}
 				return b.Series.Name
 			},
-			edits: func(b *model.Book, s string) (epub.Edits, error) {
-				return epub.Edits{Series: &s}, nil
+			edits: func(b *model.Book, s string) (model.Edits, error) {
+				return model.Edits{Series: &s}, nil
 			},
 		},
 		"series_index": {
@@ -142,17 +120,17 @@ func bibFields() map[string]bibField {
 				}
 				return strconv.FormatFloat(b.Series.Index, 'f', 1, 64)
 			},
-			edits: func(b *model.Book, s string) (epub.Edits, error) {
-				if b.Series == nil {
-					return epub.Edits{}, fmt.Errorf("book has no series to set an index on")
-				}
+			edits: func(b *model.Book, s string) (model.Edits, error) {
 				idx, err := strconv.ParseFloat(s, 64)
 				if err != nil {
-					return epub.Edits{}, fmt.Errorf("invalid series index %q", s)
+					return model.Edits{}, fmt.Errorf("invalid series index %q", s)
 				}
 				idx = math.Round(idx*10) / 10
-				name := b.Series.Name
-				return epub.Edits{Series: &name, SeriesIndex: &idx}, nil
+				e := model.Edits{SeriesIndex: &idx}
+				if b.Series != nil {
+					e.Series = &b.Series.Name
+				}
+				return e, nil
 			},
 		},
 	}
@@ -176,28 +154,17 @@ func newBookDir(reg *bookRegistry, book *model.Book) *bookDir {
 		book,
 	))
 
-	// Meta writes route through the registry so the change is validated,
-	// persisted, and bracketed by view remove/add (rehoming if a meta field
-	// drives grouping). get reads the live book; set mutates a validated copy.
-	for name, fld := range metaFields() {
-		get := func() string { return fld.get(d.Book) }
-		set := func(s string) error {
-			return reg.editMeta(d.Book.Meta.ID, func(b *model.Book) error {
-				return fld.set(b, s)
-			})
-		}
-		d.StaticDir.AddChild(newFieldFile(f.NewStat(name, "glenda", "glenda", 0644), get, set))
-	}
-
-	// Bib fields — writable through the registry.
-	for name, fld := range bibFields() {
+	// Editable fields route through the registry so the change is validated,
+	// persisted, and bracketed by view remove/add (rehoming if the grouping or
+	// name changed). get reads the live book; set constructs Edits for the field.
+	for name, fld := range fields() {
 		get := func() string { return fld.get(d.Book) }
 		set := func(s string) error {
 			edits, err := fld.edits(d.Book, s)
 			if err != nil {
 				return err
 			}
-			return reg.editBib(d.Book.Meta.ID, edits)
+			return reg.edit(d.Book.Meta.ID, edits)
 		}
 		d.StaticDir.AddChild(newFieldFile(f.NewStat(name, "glenda", "glenda", 0644), get, set))
 	}

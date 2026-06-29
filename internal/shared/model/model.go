@@ -2,8 +2,12 @@
 package model
 
 import (
+	"fmt"
 	"os"
+	"strings"
 	"time"
+
+	"golang.org/x/text/language"
 )
 
 // Book is the complete record for a book in the library: where it lives
@@ -11,8 +15,8 @@ import (
 // and Bib are embedded so their fields read flat (b.Title, b.LibraryPath); Meta
 // stays named so sidecar state is explicitly addressed as b.Meta.
 //
-// Book may carry self-contained methods (Stat, WithBib, etc.) that operate on
-// its own fields without depending on Store, Index, or the epub parser. Library
+// Book may carry self-contained methods (Stat, Edit, etc.) that operate on its
+// own fields without depending on Store, Index, or the epub parser. Library
 // remains the single orchestrator for persistence and transactions; Book methods
 // are helpers for in-memory transformation and inspection.
 type Book struct {
@@ -105,4 +109,157 @@ type Stats struct {
 	TotalSize    int64
 	LastAdded    time.Time
 	LastModified time.Time
+}
+
+// Edits is a partial update to a Book's fields. A nil pointer leaves the field
+// untouched; a non-nil pointer (including one to a zero value) applies the
+// change. This lets a caller change exactly one field — e.g. just the title —
+// without having to supply the rest.
+//
+// A non-nil Series pointing at "" removes the series. SeriesIndex is only
+// consulted when Series is being set to a non-empty value.
+//
+// SortTitle follows the same nil/empty rules. As a special case, changing Title
+// without supplying a SortTitle clears any existing sort title — it was derived
+// from the old title, so leaving it would make the sort title disagree with the
+// title.
+type Edits struct {
+	// Bib fields (written to the epub OPF).
+	Title       *string
+	SortTitle   *string
+	Description *string
+	Language    *string
+	Authors     *[]Author
+	Series      *string
+	SeriesIndex *float64
+
+	// Meta fields (written to the meta.toml sidecar).
+	Status *string
+	Rating *int
+	Tags   *[]string
+}
+
+// HasBibEdits reports whether any OPF-level field is non-nil.
+func (e Edits) HasBibEdits() bool {
+	return e.Title != nil || e.SortTitle != nil || e.Description != nil ||
+		e.Language != nil || e.Authors != nil || e.Series != nil || e.SeriesIndex != nil
+}
+
+// ApplyMeta applies the meta fields in e to m. Fields set to nil are left untouched.
+func (e Edits) ApplyMeta(m *Meta) {
+	if e.Status != nil {
+		m.Status = *e.Status
+	}
+	if e.Rating != nil {
+		m.Rating = *e.Rating
+	}
+	if e.Tags != nil {
+		m.Tags = *e.Tags
+	}
+}
+
+// FieldError pairs a field name with a human-readable validation error message,
+// so frontends can display feedback next to the relevant field.
+type FieldError struct {
+	Field   string
+	Message string
+}
+
+func (fe FieldError) Error() string { return fe.Field + ": " + fe.Message }
+
+// ValidationError collects per-field validation errors from Validate(). It
+// satisfies the error interface for simple "if err != nil" checks; callers can
+// use errors.As to recover the structured field map.
+type ValidationError []FieldError
+
+func (ve ValidationError) Error() string {
+	switch len(ve) {
+	case 0:
+		return ""
+	case 1:
+		return ve[0].Error()
+	}
+	// Multi-field: "field1: msg; field2: msg"
+	var s strings.Builder
+	for i, fe := range ve {
+		if i > 0 {
+			s.WriteString("; ")
+		}
+		s.WriteString(fe.Field)
+		s.WriteString(": ")
+		s.WriteString(fe.Message)
+	}
+	return s.String()
+}
+
+// Validate validates e against b's current state and returns per-field errors.
+// A nil return means all fields are valid.
+func (e Edits) Validate(b *Book) *ValidationError {
+	var ve ValidationError
+	add := func(field, msg string) {
+		ve = append(ve, FieldError{Field: field, Message: msg})
+	}
+
+	if e.Status != nil {
+		switch *e.Status {
+		case "unread", "reading", "read", "abandoned":
+		default:
+			add("status", fmt.Sprintf("invalid status %q: must be unread, reading, read, or abandoned", *e.Status))
+		}
+	}
+
+	if e.Rating != nil {
+		if *e.Rating < 0 || *e.Rating > 5 {
+			add("rating", fmt.Sprintf("invalid rating %d: must be 0-5", *e.Rating))
+		}
+	}
+
+	if e.Title != nil {
+		if strings.TrimSpace(*e.Title) == "" {
+			add("title", "title must not be empty")
+		}
+	}
+
+	if e.Authors != nil {
+		if len(*e.Authors) == 0 {
+			add("authors", "at least one author is required")
+		} else {
+			for i, a := range *e.Authors {
+				if strings.TrimSpace(a.Name) == "" {
+					add("authors", fmt.Sprintf("author %d has an empty name", i+1))
+					break
+				}
+			}
+		}
+	}
+
+	if e.Language != nil {
+		if v := strings.TrimSpace(*e.Language); v != "" {
+			if _, err := language.Parse(v); err != nil {
+				add("language", fmt.Sprintf("language %q is not a recognised BCP 47 / ISO 639 code", *e.Language))
+			}
+		}
+	}
+
+	if e.SeriesIndex != nil && e.Series == nil {
+		if b.Series == nil {
+			add("series_index", "book has no series to set an index on")
+		}
+	}
+
+	if len(ve) == 0 {
+		return nil
+	}
+	return &ve
+}
+
+// Edit returns a shallow copy of b with the meta fields in e applied and
+// DateModified set to now. It is a pure in-memory operation; it does not touch
+// the epub file or the sidecar. For bib edits the caller must re-parse the epub
+// and overwrite b.Bib from the result (see Library.Edit).
+func (b *Book) Edit(e Edits) *Book {
+	updated := *b
+	e.ApplyMeta(&updated.Meta)
+	updated.Meta.DateModified = time.Now()
+	return &updated
 }

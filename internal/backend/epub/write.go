@@ -14,41 +14,17 @@ import (
 	"strings"
 
 	"github.com/beevik/etree"
-	"golang.org/x/text/language"
+	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
 )
 
 const opfNamespace = "http://www.idpf.org/2007/opf"
-
-// Edits is a partial update to a book's bibliographic metadata. A nil pointer
-// leaves the field untouched; a non-nil pointer (including one to a zero value)
-// applies the change. This lets a caller change exactly one field — e.g. just
-// the title — without having to supply the rest.
-//
-// A non-nil Series pointing at "" removes the series. SeriesIndex is only
-// consulted when Series is being set to a non-empty value.
-//
-// SortTitle is the EPUB 3 file-as refine on the title and follows the same
-// nil/empty rules; it is ignored for EPUB 2, which has no standard sort-title
-// mechanism. As a special case, changing Title without supplying a SortTitle
-// clears any existing sort title — it was derived from the old title, so leaving
-// it would make the sort title disagree with the title. (We clear rather than
-// regenerate; a heuristic is language-dependent and deferred — see translateTitle.)
-type Edits struct {
-	Title       *string
-	SortTitle   *string
-	Description *string
-	Language    *string
-	Authors     *[]Author
-	Series      *string
-	SeriesIndex *float64
-}
 
 // WriteBib applies edits to the package document of the epub at epubPath and
 // rewrites the file in place. The OPF is edited surgically — only the targeted
 // <metadata> nodes change, every other zip entry is preserved byte-for-byte —
 // and the result is validated by re-parsing before the original is replaced.
 // The re-parsed Book is returned so the caller sees exactly what is now on disk.
-func WriteBib(epubPath string, e Edits) (*Book, error) {
+func WriteBib(epubPath string, e model.Edits) (*Book, error) {
 	zrc, err := zip.OpenReader(epubPath)
 	if err != nil {
 		return nil, err
@@ -149,19 +125,7 @@ func coverFormat(coverPath string) string {
 // without rewriting namespace declarations or mangling the dc: prefixes the way
 // encoding/xml's encoder would. Untargeted nodes, comments, and formatting are
 // left as-is.
-func editOPF(opfBytes []byte, e Edits) ([]byte, error) {
-	// Reject a language we can't recognise as a BCP 47 / ISO 639 tag. We validate
-	// but deliberately do not normalise: a recognised tag is written through
-	// verbatim (so "en" stays "en", not "eng"), unlike calibre which
-	// canonicalises. An empty value clears it.
-	if e.Language != nil {
-		if v := strings.TrimSpace(*e.Language); v != "" {
-			if _, err := language.Parse(v); err != nil {
-				return nil, fmt.Errorf("language %q is not a recognised BCP 47 / ISO 639 code: %w", *e.Language, err)
-			}
-		}
-	}
-
+func editOPF(opfBytes []byte, e model.Edits) ([]byte, error) {
 	doc := etree.NewDocument()
 	if err := doc.ReadFromBytes(opfBytes); err != nil {
 		return nil, err
@@ -190,9 +154,9 @@ func editOPF(opfBytes []byte, e Edits) ([]byte, error) {
 		setDCText(md, dc, "description", *e.Description)
 	}
 	if e.Language != nil {
-		// Validated above (unrecognised codes are rejected); written verbatim so a
-		// recognised tag is preserved as authored rather than canonicalised the way
-		// calibre would (e.g. "en" stays "en", not "eng").
+		// Written verbatim so a recognised tag is preserved as authored rather than
+		// canonicalised the way calibre would (e.g. "en" stays "en", not "eng");
+		// validation of the language code is handled by model.Edits.Validate.
 		setDCText(md, dc, "language", *e.Language)
 	}
 	if e.Authors != nil {
@@ -272,7 +236,7 @@ func setTitleSort(pkg, md *etree.Element, value string) {
 // illustrators — in place. New creators are written in the shape this package's
 // own parser reads back: EPUB 3 refines for v3 packages, opf:role/opf:file-as
 // attributes for v2.
-func setAuthors(pkg, md *etree.Element, dc string, authors []Author) {
+func setAuthors(pkg, md *etree.Element, dc string, authors []model.Author) {
 	epub3 := strings.HasPrefix(packageVersion(pkg), "3")
 
 	var removedIDs []string
@@ -300,14 +264,14 @@ func setAuthors(pkg, md *etree.Element, dc string, authors []Author) {
 		c.SetText(a.Name)
 		if epub3 {
 			addRefine(md, id, "role", "aut", "marc:relators")
-			if a.SortAs != "" {
-				addRefine(md, id, "file-as", a.SortAs, "")
+			if a.SortName != "" {
+				addRefine(md, id, "file-as", a.SortName, "")
 			}
 		} else {
 			opf := ensureOPFPrefix(pkg)
 			c.CreateAttr(qualify(opf, "role"), "aut")
-			if a.SortAs != "" {
-				c.CreateAttr(qualify(opf, "file-as"), a.SortAs)
+			if a.SortName != "" {
+				c.CreateAttr(qualify(opf, "file-as"), a.SortName)
 			}
 		}
 	}

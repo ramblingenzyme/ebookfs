@@ -2,6 +2,8 @@ package epub
 
 import (
 	"encoding/xml"
+
+	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
 )
 
 /*
@@ -85,16 +87,11 @@ type Book struct {
 	Title       string
 	SortTitle   string
 	Description string
-	Authors     []Author
+	Authors     []model.Author
 	Language    string
 	PubDate     string
 	CoverPath   string
 	Series      string
 	SeriesIndex float64
 	Identifiers []Identifier
-}
-
-type Author struct {
-	Name   string
-	SortAs string
 }
