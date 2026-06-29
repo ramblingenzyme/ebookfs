@@ -88,10 +88,9 @@ func newReaderDir(reg *bookRegistry, exp Exporter, cfg ReaderConfig) *readerDir 
 }
 
 // authorDir returns the subdir for an author name, creating it on first use.
-// TODO: prune a subdir once its last book leaves (mirrors byAuthorDir).
-func (d *readerDir) authorDir(name string) *fs.StaticDir {
+func (d *readerDir) authorDir(name string) fs.ModDir {
 	if child, ok := d.Children()[name]; ok {
-		return child.(*fs.StaticDir)
+		return child.(fs.ModDir)
 	}
 	ad := fs.NewStaticDir(d.f.NewStat(name, "glenda", "glenda", 0555|proto.DMDIR))
 	d.StaticDir.AddChild(ad)
@@ -134,8 +133,10 @@ func (d *readerDir) remove(dir *bookDir) {
 	if !d.included[dir.Book.Meta.Status] {
 		return
 	}
-	if child, ok := d.Children()[d.authorName(dir.Book)]; ok {
-		child.(*fs.StaticDir).DeleteChild(d.exp.Filename(dir.Book))
+	name := d.authorName(dir.Book)
+	if child, ok := d.Children()[name]; ok {
+		child.(fs.ModDir).DeleteChild(d.exp.Filename(dir.Book))
+		d.pruneEmpty(name)
 	}
 }
 

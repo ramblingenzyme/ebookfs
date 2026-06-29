@@ -87,10 +87,9 @@ func newBySeriesDir(reg *bookRegistry) *bySeriesDir {
 }
 
 // seriesDir returns the subdir for a series name, creating it on first use.
-// TODO: prune a subdir once its last book leaves (e.g. after a series change).
-func (d *bySeriesDir) seriesDir(name string) *seriesBookListDir {
+func (d *bySeriesDir) seriesDir(name string) bookLister {
 	if child, ok := d.Children()[name]; ok {
-		return child.(*seriesBookListDir)
+		return child.(bookLister)
 	}
 	sd := newSeriesBookListDir(d.f, name)
 	d.StaticDir.AddChild(sd)
@@ -109,6 +108,7 @@ func (d *bySeriesDir) remove(dir *bookDir) {
 		return
 	}
 	if child, ok := d.Children()[dir.Book.Series.Name]; ok {
-		child.(*seriesBookListDir).remove(dir)
+		child.(bookLister).remove(dir)
+		d.pruneEmpty(dir.Book.Series.Name)
 	}
 }

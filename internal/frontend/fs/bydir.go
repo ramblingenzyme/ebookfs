@@ -22,6 +22,13 @@ func (n *namedBookDir) Stat() proto.Stat {
 	return s
 }
 
+// bookLister is the common interface for subdirectories that contain book
+// entries (by-author, by-series). Both *booksDir and *seriesBookListDir satisfy it.
+type bookLister interface {
+	add(dir *bookDir)
+	remove(dir *bookDir)
+}
+
 // groupingDir is the shared base for by-x view directories.
 type groupingDir struct {
 	fs.StaticDir
@@ -32,5 +39,17 @@ func newGroupingDir(f *fs.FS, name string) groupingDir {
 	return groupingDir{
 		StaticDir: *fs.NewStaticDir(f.NewStat(name, "glenda", "glenda", 0555|proto.DMDIR)),
 		f:         f,
+	}
+}
+
+// pruneEmpty removes a child subdirectory if it exists and has no children of
+// its own. Safe to call unconditionally after removing an entry from a subdir.
+func (g *groupingDir) pruneEmpty(name string) {
+	child, ok := g.Children()[name]
+	if !ok {
+		return
+	}
+	if dir, ok := child.(fs.Dir); ok && len(dir.Children()) == 0 {
+		g.StaticDir.DeleteChild(name)
 	}
 }

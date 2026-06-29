@@ -13,10 +13,9 @@ func newByAuthorDir(reg *bookRegistry) *byAuthorDir {
 }
 
 // authorDir returns the subdir for an author name, creating it on first use.
-// TODO: prune a subdir once its last book leaves (e.g. after an author rename).
-func (d *byAuthorDir) authorDir(name string) *booksDir {
+func (d *byAuthorDir) authorDir(name string) bookLister {
 	if child, ok := d.Children()[name]; ok {
-		return child.(*booksDir)
+		return child.(bookLister)
 	}
 	ad := newBooksDir(d.f.NewStat(name, "glenda", "glenda", 0555|proto.DMDIR))
 	d.StaticDir.AddChild(ad)
@@ -32,7 +31,8 @@ func (d *byAuthorDir) add(dir *bookDir) {
 func (d *byAuthorDir) remove(dir *bookDir) {
 	for _, a := range dir.Book.Authors {
 		if child, ok := d.Children()[a.Name]; ok {
-			child.(*booksDir).remove(dir)
+			child.(bookLister).remove(dir)
+			d.pruneEmpty(a.Name)
 		}
 	}
 }
