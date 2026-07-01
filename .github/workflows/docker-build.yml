@@ -11,7 +11,20 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Run tests
+        run: go test ./...
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read

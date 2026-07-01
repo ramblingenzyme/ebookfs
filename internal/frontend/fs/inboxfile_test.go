@@ -5,6 +5,7 @@ package fs
 
 import (
 	"testing"
+	"time"
 
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
@@ -136,5 +137,63 @@ func TestInboxFileReopenAfterClose(t *testing.T) {
 
 	if ingestCount != 2 {
 		t.Errorf("expected 2 ingests, got %d", ingestCount)
+	}
+}
+
+// TestInboxFileCloseWithParentDeadlockRegression verifies that Close completes
+// when the inboxFile has a real parent directory. This is a regression test for
+// a deadlock where Close held the file's lock while calling DeleteChild, which
+// in turn called SetParent on the removed child, trying to acquire the same lock.
+func TestInboxFileCloseWithParentDeadlockRegression(t *testing.T) {
+	ingested := make(chan *model.Book, 1)
+	f := newTestFS(t)
+	lib := fakeLib{
+		ingestFn: func(path string) (*model.Book, error) {
+			return makeBook(42, "Test", "Author"), nil
+		},
+	}
+
+	inbox := newInboxDir(f)
+	cf := inboxCreateFile(lib, t.TempDir(), func(b *model.Book) {
+		ingested <- b
+	})
+
+	file, err := cf(f, inbox, "glenda", "test.epub", 0644, 0)
+	if err != nil {
+		t.Fatalf("inboxCreateFile: %v", err)
+	}
+
+	fid := uint64(1)
+	if err := file.Open(fid, proto.Mode(0)); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	if _, err := file.Write(fid, 0, []byte("epub data")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	// This used to deadlock. Use a timeout to detect it.
+	done := make(chan error, 1)
+	go func() {
+		done <- file.Close(fid)
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Close: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close deadlocked")
+	}
+
+	// Verify ingest was called
+	select {
+	case b := <-ingested:
+		if b.Meta.ID != 42 {
+			t.Errorf("ingested book id = %d, want 42", b.Meta.ID)
+		}
+	default:
+		t.Fatal("onIngest was not called")
 	}
 }

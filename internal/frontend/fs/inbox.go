@@ -93,6 +93,23 @@ func (i *inboxFile) Write(fid uint64, offset uint64, data []byte) (uint32, error
 	return uint32(n), err
 }
 
+// teardown closes the underlying temp file and clears the fid. It runs
+// under the lock; the caller must not hold it when calling DeleteChild
+// or Ingest, since those re-enter the mutex via SetParent.
+func (i *inboxFile) teardown() (string, error) {
+	i.Lock()
+	defer i.Unlock()
+	if i.f == nil {
+		i.fid = 0
+		return "", nil
+	}
+	p := i.f.Name()
+	i.f.Close()
+	i.f = nil
+	i.fid = 0
+	return p, nil
+}
+
 func (i *inboxFile) Close(fid uint64) error {
 	log.Printf("inbox: close %q fid=%d", i.Stat().Name, fid)
 
@@ -100,16 +117,13 @@ func (i *inboxFile) Close(fid uint64) error {
 	// acquiring the lock so we can use defer without reentrancy issues.
 	parent := i.Parent()
 
-	i.Lock()
-	defer i.Unlock()
-	if i.f == nil {
-		i.fid = 0
+	path, err := i.teardown()
+	if err != nil {
+		return err
+	}
+	if path == "" {
 		return nil
 	}
-	path := i.f.Name()
-	i.f.Close()
-	i.f = nil
-	i.fid = 0
 
 	if md, ok := parent.(fs.ModDir); ok {
 		md.DeleteChild(i.Stat().Name)
