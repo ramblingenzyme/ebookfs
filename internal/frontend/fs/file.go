@@ -15,13 +15,13 @@ import (
 // committed when the fid is closed.
 type coverFile struct {
 	fs.BaseFile
-	lib    *library.Library
+	lib    library.Library
 	book   *model.Book
 	reads  map[uint64][]byte
 	writes map[uint64][]byte
 }
 
-func newCoverFile(stat *proto.Stat, lib *library.Library, book *model.Book) *coverFile {
+func newCoverFile(stat *proto.Stat, lib library.Library, book *model.Book) *coverFile {
 	return &coverFile{
 		BaseFile: *fs.NewBaseFile(stat),
 		lib:      lib,
@@ -89,12 +89,12 @@ func (c *coverFile) Close(fid uint64) error {
 // current EpubFilename and on-disk size on each call.
 type epubFile struct {
 	fs.BaseFile
-	lib  *library.Library
+	lib  library.Library
 	book *model.Book
 	fids map[uint64]library.EpubReader
 }
 
-func newEpubFile(stat *proto.Stat, lib *library.Library, book *model.Book) *epubFile {
+func newEpubFile(stat *proto.Stat, lib library.Library, book *model.Book) *epubFile {
 	return &epubFile{
 		BaseFile: *fs.NewBaseFile(stat),
 		lib:      lib,

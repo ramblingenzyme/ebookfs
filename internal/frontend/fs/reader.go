@@ -34,11 +34,11 @@ type Exporter interface {
 // epubExporter is the convert=false passthrough: it serves the original epub
 // straight from the library, with conversion warming as a no-op.
 type epubExporter struct {
-	lib *library.Library
+	lib library.Library
 }
 
 // NewEpubExporter returns the passthrough Exporter that serves original epubs.
-func NewEpubExporter(lib *library.Library) Exporter {
+func NewEpubExporter(lib library.Library) Exporter {
 	return epubExporter{lib: lib}
 }
 

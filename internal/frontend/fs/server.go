@@ -1,9 +1,11 @@
 package fs
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/knusbaum/go9p"
+	"github.com/knusbaum/go9p/fs"
 	"github.com/ramblingenzyme/ebookfs/internal/backend/library"
 )
 
@@ -11,7 +13,19 @@ import (
 // of the backend (store, index, library) and chooses the reader/ Exporter
 // (original epub vs kepub); the frontend depends only on the library facade and
 // that Exporter. inboxTemp is where uploads are staged before ingest.
-func StartServer(lib *library.Library, exp Exporter, readerCfg ReaderConfig, listen, inboxTemp string) {
+func StartServer(lib library.Library, exp Exporter, readerCfg ReaderConfig, listen, inboxTemp string) {
+	ebookfs, _, err := setupServer(lib, exp, readerCfg, inboxTemp)
+	if err != nil {
+		log.Fatalf("setting up server: %v", err)
+	}
+	log.Printf("serving 9P on %s", listen)
+	go9p.Serve(listen, ebookfs.Server())
+}
+
+// setupServer wires the FS, registry, and views without starting the 9P
+// listener, so the wiring can be tested without blocking. It returns the FS
+// and the root directory for inspection.
+func setupServer(lib library.Library, exp Exporter, readerCfg ReaderConfig, inboxTemp string) (*fs.FS, *fs.StaticDir, error) {
 	ebookfs, root := newFS()
 	registry := newBookRegistry(ebookfs, lib)
 	ebookfs.CreateFile = inboxCreateFile(lib, inboxTemp, registry.Add)
@@ -28,7 +42,7 @@ func StartServer(lib *library.Library, exp Exporter, readerCfg ReaderConfig, lis
 
 	books, err := lib.ListAll()
 	if err != nil {
-		log.Fatalf("loading books: %v", err)
+		return nil, nil, fmt.Errorf("loading books: %w", err)
 	}
 	for _, b := range books {
 		registry.Add(b)
@@ -41,6 +55,5 @@ func StartServer(lib *library.Library, exp Exporter, readerCfg ReaderConfig, lis
 	root.AddChild(bySeries)
 	root.AddChild(reader)
 
-	log.Printf("serving 9P on %s", listen)
-	go9p.Serve(listen, ebookfs.Server())
+	return ebookfs, root, nil
 }

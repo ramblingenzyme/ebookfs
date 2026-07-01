@@ -26,10 +26,10 @@ type bookRegistry struct {
 	books map[int64]*bookDir
 	views []bookView
 	f     *fs.FS
-	lib   *library.Library
+	lib   library.Library
 }
 
-func newBookRegistry(f *fs.FS, lib *library.Library) *bookRegistry {
+func newBookRegistry(f *fs.FS, lib library.Library) *bookRegistry {
 	return &bookRegistry{
 		books: make(map[int64]*bookDir),
 		f:     f,

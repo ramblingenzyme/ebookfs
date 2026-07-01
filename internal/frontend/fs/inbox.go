@@ -26,11 +26,11 @@ type inboxFile struct {
 	inboxTemp string
 	fid       uint64
 	f         *os.File
-	lib       *library.Library
+	lib       library.Library
 	onIngest  func(*model.Book)
 }
 
-func inboxCreateFile(lib *library.Library, inboxTemp string, onIngest func(*model.Book)) createFileFunc {
+func inboxCreateFile(lib library.Library, inboxTemp string, onIngest func(*model.Book)) createFileFunc {
 	return func(f *fs.FS, parent fs.Dir, user, name string, perm uint32, mode uint8) (fs.File, error) {
 		log.Printf("inbox: create %q perm=%o mode=%d parent=%s", name, perm, mode, fs.FullPath(parent))
 		var inbox *inboxDir
@@ -51,7 +51,7 @@ func inboxCreateFile(lib *library.Library, inboxTemp string, onIngest func(*mode
 	}
 }
 
-func newInboxFile(f *fs.FS, lib *library.Library, inboxTemp, name string, perm uint32, onIngest func(*model.Book)) *inboxFile {
+func newInboxFile(f *fs.FS, lib library.Library, inboxTemp, name string, perm uint32, onIngest func(*model.Book)) *inboxFile {
 	return &inboxFile{
 		BaseFile:  *fs.NewBaseFile(f.NewStat(name, "glenda", "glenda", perm)),
 		lib:       lib,

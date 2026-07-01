@@ -16,7 +16,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
 )
 
-// EpubSource provides read access to a book's source epub. *library.Library
+// EpubSource provides read access to a book's source epub. library.Library
 // satisfies it via OpenEpub, which is the cache's only inbound dependency.
 type EpubSource interface {
 	OpenEpub(*model.Book) (library.EpubReader, error)

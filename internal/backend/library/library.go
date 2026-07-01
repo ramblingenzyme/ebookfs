@@ -20,21 +20,33 @@ type EpubReader interface {
 	io.Closer
 }
 
-// Library coordinates filesystem and index operations on the book collection.
-// It is the primary API for the 9P layer; store and index are implementation details.
-type Library struct {
+// Library defines the public API for filesystem and index operations on the
+// book collection. The concrete implementation is unexported; construct via New.
+type Library interface {
+	Ingest(epubPath string) (*model.Book, error)
+	ListAll() ([]*model.Book, error)
+	Reindex() error
+	OpenEpub(b *model.Book) (EpubReader, error)
+	ExtractCover(b *model.Book) ([]byte, error)
+	Edit(b *model.Book, e model.Edits) (*model.Book, error)
+	WriteCover(b *model.Book, img []byte) error
+	Delete(b *model.Book) error
+}
+
+// libraryImpl is the concrete Library implementation.
+type libraryImpl struct {
 	store *store.Store
 	index *index.Index
 }
 
-func New(s *store.Store, idx *index.Index) *Library {
-	return &Library{store: s, index: idx}
+func New(s *store.Store, idx *index.Index) Library {
+	return &libraryImpl{store: s, index: idx}
 }
 
 // Ingest parses the staged epub at tmpPath, lays it down in the store under its
 // canonical path, and records it in the index. epub stays an implementation
 // detail of this method; nothing above the library sees epub types.
-func (l *Library) Ingest(epubPath string) (*model.Book, error) {
+func (l *libraryImpl) Ingest(epubPath string) (*model.Book, error) {
 	book, err := epub.Parse(epubPath)
 	if err != nil {
 		return nil, err
@@ -73,7 +85,7 @@ func (l *Library) Ingest(epubPath string) (*model.Book, error) {
 	return b, nil
 }
 
-func (l *Library) ListAll() ([]*model.Book, error) {
+func (l *libraryImpl) ListAll() ([]*model.Book, error) {
 	books, err := l.index.ListAll()
 	if err != nil {
 		return nil, err
@@ -90,7 +102,7 @@ func (l *Library) ListAll() ([]*model.Book, error) {
 // A book whose meta or epub can't be read is logged and skipped rather than
 // failing the whole rebuild; its id still counts toward the sequence high-water
 // mark so future ingests can't reuse it.
-func (l *Library) Reindex() error {
+func (l *libraryImpl) Reindex() error {
 	entries, err := l.store.Walk()
 	if err != nil {
 		return err
@@ -128,12 +140,12 @@ func (l *Library) Reindex() error {
 
 // OpenEpub returns a handle to b's epub content. The caller closes it. The 9P
 // layer reads through this rather than touching the filesystem directly.
-func (l *Library) OpenEpub(b *model.Book) (EpubReader, error) {
+func (l *libraryImpl) OpenEpub(b *model.Book) (EpubReader, error) {
 	return l.store.OpenEpub(b.Location)
 }
 
 // ExtractCover returns the cover image bytes from b's epub.
-func (l *Library) ExtractCover(b *model.Book) ([]byte, error) {
+func (l *libraryImpl) ExtractCover(b *model.Book) ([]byte, error) {
 	return epub.ExtractCover(b.EpubPath, b.CoverPath)
 }
 
@@ -141,7 +153,7 @@ func (l *Library) ExtractCover(b *model.Book) ([]byte, error) {
 // book. Bib (OPF) edits trigger an epub rewrite and re-parse. Meta edits are
 // applied in-memory. If the title or authors change the canonical location, the
 // book directory is moved. WriteCover handles binary cover replacement.
-func (l *Library) Edit(b *model.Book, e model.Edits) (*model.Book, error) {
+func (l *libraryImpl) Edit(b *model.Book, e model.Edits) (*model.Book, error) {
 	if v := e.Validate(b); v != nil {
 		return nil, v
 	}
@@ -176,7 +188,7 @@ func (l *Library) Edit(b *model.Book, e model.Edits) (*model.Book, error) {
 
 // WriteCover replaces the cover image in b's epub with img, validates the image
 // format matches the existing cover entry, and rewrites the epub atomically.
-func (l *Library) WriteCover(b *model.Book, img []byte) error {
+func (l *libraryImpl) WriteCover(b *model.Book, img []byte) error {
 	_, err := epub.WriteCover(b.EpubPath, b.CoverPath, img)
 	return err
 }
@@ -206,7 +218,7 @@ func bibFromEpub(src *epub.Book) model.Bib {
 	}
 }
 
-func (l *Library) Delete(b *model.Book) error {
+func (l *libraryImpl) Delete(b *model.Book) error {
 	// Store is authoritative, so remove it first. If the index delete then fails,
 	// the directory is gone but a ghost row remains; reindex walks the filesystem
 	// and drops the stale row.
