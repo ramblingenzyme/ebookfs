@@ -36,12 +36,19 @@ library/
 │   └── Foundation (47)/
 │       └── ...
 └── .index.db                       ← derived SQLite cache
-
-# Note: inbox/ is NOT a real directory. It exists only as a synthetic
-# node in the 9P namespace. See "9P namespace > Inbox" below.
 ```
 
-Author directories use `Surname, Forename` form (the OPF `file-as` convention). Book directories are `Title (id)`. The `(id)` is the integer primary key from the SQLite index — it gives every book a stable, short identifier that survives renames.
+Author directories use `Surname, Forename` form (the OPF `file-as` / `sort_name`
+convention). When a book has no authors, the directory is `Unknown/`. Book
+directories are `Title (id)`. The `(id)` is the integer primary key from the
+SQLite index — it gives every book a stable, short identifier that survives
+renames.
+
+Epub filenames are `Title - FirstAuthor.epub` (single-author form). Both title
+and author are sanitised for FAT filesystems (see `internal/backend/naming/`).
+Books with no authors produce `Title.epub`.
+
+The `inbox/` node exists only in the 9P namespace — see [10P namespace > Inbox](#inbox-1).
 
 ## `meta.toml` sidecar schema
 
@@ -54,14 +61,11 @@ date_modified = "2026-05-07T14:23:00Z"
 status = "unread"            # unread | reading | read | abandoned
 rating = 0                   # 0-5, 0 = unrated
 custom_tags = ["sci-fi", "feminist", "classic"]
-
-[reading]
-last_position = ""           # opaque epub CFI when populated by Kobo sync
-last_read = ""               # ISO 8601
-
-[notes]
-text = ""
 ```
+
+The `[reading]` and `[notes]` sections from the original design
+(`last_position`, `last_read`, `text`) are reserved for a future Kobo sync
+feature (post-1.0) and are not yet written or read by the server.
 
 **Bibliographic metadata (title, authors, series, identifiers, language, pubdate, description) lives inside the epub's own OPF — `OEBPS/content.opf` within the zip.** This is the canonical source. The Kobo, every reader app, and every other tool reads metadata from there. There is no sidecar OPF — it would just duplicate what the epub already contains, and the two would inevitably drift.
 
@@ -69,68 +73,72 @@ text = ""
 
 ## SQLite index
 
-Lives at `library/.index.db` — never accessed over 9P. Pure cache. `ebookfs reindex` rebuilds from scratch.
+Lives at `library/.index.db` — never accessed over 9P. Pure cache. Rebuilt from
+the filesystem on every server start (see [Cold start](#cold-start)).
 
 Use `modernc.org/sqlite` (pure Go) so the Pi binary cross-compiles without cgo.
 
 ```sql
--- Schema v1
+-- Planned schema
 
 CREATE TABLE books (
-    id              INTEGER PRIMARY KEY,
-    title           TEXT NOT NULL,
-    sort_title      TEXT,
-    series_id       INTEGER REFERENCES series(id) ON DELETE SET NULL,
-    series_index    REAL,
-    pubdate         TEXT,                    -- ISO 8601, may be partial
-    description     TEXT,
-    language        TEXT,
-    library_path    TEXT NOT NULL UNIQUE,    -- relative to library root
-    epub_filename   TEXT NOT NULL,
-    has_cover       INTEGER NOT NULL DEFAULT 0,
-    status          TEXT NOT NULL DEFAULT 'unread',
-    rating          INTEGER NOT NULL DEFAULT 0,
-    date_added      TEXT NOT NULL,
-    date_modified   TEXT NOT NULL
+    id            INTEGER PRIMARY KEY,
+    title         TEXT    NOT NULL,
+    sort_title    TEXT,                      -- nullable; NULL = no sort title
+    pubdate       TEXT,
+    description   TEXT    NOT NULL DEFAULT '',
+    language      TEXT    NOT NULL DEFAULT '',
+    library_path  TEXT    NOT NULL,
+    epub_filename TEXT    NOT NULL,
+    cover_path    TEXT    NOT NULL DEFAULT '',
+    status        TEXT    NOT NULL DEFAULT 'unread',
+    rating        REAL    NOT NULL DEFAULT 0,
+    date_added    TEXT    NOT NULL,
+    date_modified TEXT    NOT NULL,
+    series_id     INTEGER REFERENCES series(id) ON DELETE SET NULL,
+    series_index  REAL
 );
 
 CREATE TABLE authors (
-    id          INTEGER PRIMARY KEY,
-    name        TEXT NOT NULL UNIQUE,        -- display form: "Ursula K. Le Guin"
-    sort_name   TEXT NOT NULL                -- file-as form: "Le Guin, Ursula K"
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    name      TEXT NOT NULL UNIQUE,          -- display form: "Ursula K. Le Guin"
+    sort_name TEXT NOT NULL                  -- file-as form: "Le Guin, Ursula K"
 );
 
 CREATE TABLE book_authors (
-    book_id     INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-    author_id   INTEGER NOT NULL REFERENCES authors(id) ON DELETE CASCADE,
-    role        TEXT NOT NULL DEFAULT 'aut', -- aut, edt, ill, trl
-    position    INTEGER NOT NULL DEFAULT 0,
+    book_id   INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+    author_id INTEGER NOT NULL REFERENCES authors(id) ON DELETE CASCADE,
+    role      TEXT NOT NULL DEFAULT 'aut',   -- aut, edt, ill, trl
+    position  INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (book_id, author_id, role)
 );
 
 CREATE TABLE series (
-    id          INTEGER PRIMARY KEY,
-    name        TEXT NOT NULL UNIQUE,
-    sort_name   TEXT
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    name      TEXT NOT NULL UNIQUE,
+    sort_name TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE tags (
-    id          INTEGER PRIMARY KEY,
-    name        TEXT NOT NULL UNIQUE
+    id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE
 );
 
 CREATE TABLE book_tags (
-    book_id     INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-    tag_id      INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+    tag_id  INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
     PRIMARY KEY (book_id, tag_id)
 );
 
 CREATE TABLE identifiers (
-    book_id     INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-    scheme      TEXT NOT NULL,               -- isbn, uuid, openlibrary, etc.
-    value       TEXT NOT NULL,
-    PRIMARY KEY (book_id, scheme)
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+    scheme  TEXT    NOT NULL,                -- isbn, uuid, openlibrary, etc.
+    value   TEXT    NOT NULL,
+    UNIQUE (book_id, scheme)
 );
+
+CREATE TABLE book_id_seq (id PRIMARY KEY AUTOINCREMENT);
 
 CREATE VIRTUAL TABLE books_fts USING fts5(
     title, description,
@@ -144,7 +152,10 @@ CREATE INDEX idx_books_date_added  ON books(date_added);
 CREATE INDEX idx_authors_sort      ON authors(sort_name);
 ```
 
-Schema versioning lives in a `pragma user_version`. Migrations are append-only — never edit a past migration.
+Schema versioning lives in a `pragma user_version`. Migrations are append-only —
+never edit a past migration. Currently at v3 (without indexes, FTS5, role,
+sort_name, or ON DELETE SET NULL); the planned schema above represents the
+target state.
 
 ## 9P namespace
 
@@ -152,65 +163,95 @@ The synthetic filesystem `ebookfs` exposes. This is the contract.
 
 ```
 /
+├── books/                       ← flat listing of all books by title
+│   └── The Left Hand of Darkness (1042)/
+│       ├── book.epub            ← real file, read-only stream
+│       ├── title                ← read/write
+│       ├── authors              ← newline-separated, read/write
+│       ├── series               ← single-line, read/write
+│       ├── series_index         ← single number, read/write
+│       ├── language             ← single-line, read/write
+│       ├── description          ← read/write
+│       ├── pubdate              ← read-only
+│       ├── cover.jpg            ← read/write (only when epub declares a cover)
+│       ├── tags                 ← newline-separated, read/write
+│       ├── status               ← single-line, read/write
+│       ├── rating               ← single integer, read/write
+│       └── id                   ← read-only "1042"
 ├── by-author/
 │   └── Le Guin, Ursula K/
-│       └── The Left Hand of Darkness (1042)/
-│           ├── book.epub        ← real file, read-only stream
-│           ├── metadata         ← TOML, read/write — front-end for meta.toml
-│           ├── opf              ← raw OPF XML extracted from the epub, read-only
-│           ├── cover.jpg        ← read/write
-│           ├── tags             ← newline-separated, read/write
-│           ├── status           ← single-line, read/write
-│           ├── rating           ← single integer, read/write
-│           └── id               ← read-only "1042"
+│       └── (book directories, like books/)
 ├── by-series/
 │   └── Foundation/
-│       ├── 1 - Foundation (47).epub
-│       ├── 2 - Foundation and Empire (48).epub
-│       └── 3 - Second Foundation (49).epub
+│       ├── 1 - The Left Hand of Darkness
+│       └── 2 - Foundation and Empire
 ├── by-tag/
 │   └── sci-fi/
-│       └── (book directories, like by-author)
+│       └── (book directories, like books/)
 ├── by-status/
 │   ├── unread/
 │   ├── reading/
 │   ├── read/
 │   └── abandoned/
 ├── by-id/
-│   └── 1042/                    ← same per-book directory shape as above
+│   └── 1042. The Left Hand of Darkness/
+│       └── (book directory)
 ├── recent/                      ← last 50 added, by date_added desc
 ├── search/
 │   ├── title:foundation/        ← walk to a synthetic dir, get matches
 │   ├── author:asimov/
 │   └── fts:robot+laws/
-├── inbox/                       ← write here to ingest
+├── inbox/                       ← write here to ingest (purely synthetic)
+├── reader/                      ← export view for rsync-to-Kobo
+│   └── Le Guin, Ursula K/       ← all authors joined with " & "
+│       └── The Left Hand of Darkness.epub  ← or .kepub.epub when Convert
 ├── ctl                          ← command file for batch ops
 └── stats                        ← read-only library statistics
 ```
 
 ### Per-book directory file semantics
 
-The files in a per-book directory split into two categories:
+Each bib/sidecar field is a separate 9P file, backed by either the epub's
+internal OPF (bib fields) or `meta.toml` (sidecar fields). The combined
+`metadata` TOML file from the original design was replaced by individual
+field files — more Plan 9-idiomatic and avoids TOML parsing on every write.
 
-- **OPF-backed** (lives in the epub): `metadata`, `opf`, `cover.jpg`. Writes to these rewrite the epub via `ebook-meta` (see *Write path* below).
-- **Sidecar-backed** (lives in `meta.toml`): `tags`, `status`, `rating`. Writes update `meta.toml` and the SQLite index.
+- **OPF-backed** (rewrites the epub): `title`, `authors`, `series`,
+  `series_index`, `language`, `description`, `cover.jpg`. Writes to these
+  rewrite the epub via the hand-written OPF XML editor
+  (`internal/backend/epub/write.go`).
+- **Sidecar-backed** (lives in `meta.toml`): `tags`, `status`, `rating`.
+  Writes update `meta.toml` and the SQLite index.
 
 | File | Backing | Mode | Read returns | Write effect |
 |---|---|---|---|---|
 | `book.epub` | epub | `0444` | streams the actual epub bytes | (denied) |
-| `metadata` | epub | `0644` | OPF data projected as TOML (title, authors, series, language, pubdate, description, identifiers) | parses TOML, invokes `ebook-meta` to rewrite the epub's internal OPF |
-| `opf` | epub | `0444` | raw OPF XML extracted from the epub | (denied) |
-| `cover.jpg` | epub | `0644` | extracted cover image bytes | invokes `ebook-meta --cover` to embed new cover into the epub |
+| `title` | epub | `0644` | single line, the book's title | rewrites OPF `<dc:title>` |
+| `authors` | epub | `0644` | newline-separated author names | rewrites OPF `<dc:creator>` elements |
+| `series` | epub | `0644` | series name | rewrites OPF collection / calibre:series |
+| `series_index` | epub | `0644` | float, e.g. `"1.5"` | rewrites OPF group-position / calibre:series_index |
+| `language` | epub | `0644` | BCP 47 code | rewrites OPF `<dc:language>` |
+| `description` | epub | `0644` | book synopsis | rewrites OPF `<dc:description>` |
+| `pubdate` | epub | `0444` | ISO 8601 publication date | (denied) |
+| `cover.jpg` | epub | `0644` | extracted cover image bytes | rewrites the cover zip entry in-place |
 | `tags` | sidecar | `0644` | newline-separated tag list | updates `meta.toml` and index |
 | `status` | sidecar | `0644` | single line, e.g. `reading\n` | validates against enum, updates `meta.toml` and index |
 | `rating` | sidecar | `0644` | single integer 0-5 | validates, updates `meta.toml` and index |
 | `id` | sidecar | `0444` | integer | (denied) |
 
-**Write transactionality:** writes are buffered server-side and flushed on `Tclunk`. Partial writes don't corrupt state. If a write fails validation (e.g. invalid status, malformed TOML, `ebook-meta` returns nonzero), `Tclunk` returns an error and the buffered content is discarded. For epub-backed writes, `ebook-meta` runs against a temp copy and atomic-renames over the canonical file on success — so a failed rewrite leaves the original intact.
+**Write transactionality:** writes are buffered server-side and flushed on
+`Tclunk`. Partial writes don't corrupt state. If a write fails validation
+(e.g. invalid status, rewrite error), `Tclunk` returns an error and the
+buffered content is discarded. For epub-backed writes, the OPF is rewritten
+surgically and the zip is replaced atomically via temp-file + rename — a
+failed rewrite leaves the original intact.
 
 ### Search directories
 
-`search/` is a virtual root. Walking to a name like `author:asimov` triggers a query parse. Reading the directory returns matching book entries (as symlinks back into `by-id/` or as the per-book directories themselves — implementation choice).
+`search/` is a virtual root. Walking to a name like `author:asimov` triggers a
+query parse. Reading the directory returns matching book entries (as symlinks
+back into `by-id/` or as the per-book directories themselves — implementation
+choice).
 
 Supported query prefixes:
 
@@ -226,7 +267,8 @@ Compound queries via `+` joining: `tag:sci-fi+status:unread`.
 
 ### `ctl` file
 
-Plan 9-style control file. Write a command line, server parses and executes. Reading returns a summary of the last command's result.
+Plan 9-style control file. Write a command line, server parses and executes.
+Reading returns a summary of the last command's result.
 
 Commands:
 
@@ -249,7 +291,8 @@ cat ctl  # => "ok: 3 books updated"
 
 ### Inbox
 
-`inbox/` is **purely synthetic** — there is no real `inbox/` directory on disk. It exists only as a node in the 9P namespace.
+`inbox/` is **purely synthetic** — there is no real `inbox/` directory on
+disk. It exists only as a node in the 9P namespace.
 
 Ingestion happens entirely through 9P file operations:
 
@@ -283,43 +326,60 @@ last-added: 2026-05-06 14:22
 last-modified: 2026-05-07 09:11
 ```
 
-## Module layout
+## Module layout (actual)
 
 ```
 ebookfs/
-├── cmd/
-│   └── ebookfs/
-│       └── main.go                 # config loading, signal handling, wire up subsystems
+├── main.go                         # entry point: config, store, index, library, server
 ├── internal/
+│   ├── backend/
+│   │   ├── epub/                   # hand-written epub I/O
+│   │   │   ├── types.go            # XML types for container + OPF
+│   │   │   ├── parse.go            # zip + container.xml + OPF parser
+│   │   │   ├── translate.go        # OPF XML → Book struct
+│   │   │   ├── extract.go          # cover image extraction
+│   │   │   ├── write.go            # surgical OPF XML editor (beevik/etree)
+│   │   │   └── zip.go              # shared zip utilities, atomic rewrite
+│   │   ├── store/                  # filesystem operations
+│   │   │   ├── library.go          # Store type: AbsPath, Exists, OpenEpub, Move, Delete
+│   │   │   ├── ingest.go           # inbox → canonical path
+│   │   │   ├── path.go             # canonical path construction, sanitisation
+│   │   │   ├── meta.go             # meta.toml read/write (atomic)
+│   │   │   └── walk.go             # library tree enumeration
+│   │   ├── index/                  # SQLite-backed cache
+│   │   │   ├── schema.sql          # embedded (go:embed)
+│   │   │   ├── index.go            # Index type: Open, Close, NextID, withTx
+│   │   │   ├── books.go            # book CRUD: Query, Get, Put, Delete, Filter
+│   │   │   ├── search.go           # (stub — not yet implemented)
+│   │   │   └── reindex.go          # Rebuild: full index rebuild from filesystem
+│   │   ├── library/                # orchestrator facade
+│   │   │   └── library.go          # Library interface: Ingest, ListAll, Reindex, Edit, Delete, …
+│   │   ├── naming/                 # filename sanitisation
+│   │   │   └── naming.go           # Sanitize, ForFAT
+│   │   └── kepub/                  # Kobo-format conversion (kepubify)
+│   │       ├── convert.go          # kepubify wrapper
+│   │       └── cache.go            # on-disk cache with mtime invalidation
 │   ├── config/                     # TOML config parsing
-│   ├── epub/                       # epub I/O
-│   │   ├── parse.go                # hand-written: zip + OPF parser, ~200 lines
-│   │   ├── cover.go                # extract cover bytes from an epub
-│   │   └── write.go                # subprocess wrapper around `ebook-meta`
-│   ├── store/                      # filesystem operations on the library tree
-│   │   ├── store.go                # high-level Library type
-│   │   ├── ingest.go               # inbox -> canonical path
-│   │   ├── path.go                 # safe path construction (sanitise filenames)
-│   │   └── meta.go                 # meta.toml read/write
-│   ├── index/                      # SQLite-backed search/lookup
-│   │   ├── schema.sql              # embedded
-│   │   ├── migrate.go
-│   │   ├── books.go                # book CRUD
-│   │   ├── search.go               # query parser + executor
-│   │   └── reindex.go              # full rebuild from filesystem
-│   ├── ninep/                      # 9P server
-│   │   ├── server.go               # main 9P loop, transport setup
-│   │   ├── fs.go                   # FileSystem interface implementation
-│   │   ├── nodes/                  # node types
-│   │   │   ├── byauthor.go
-│   │   │   ├── bytag.go
-│   │   │   ├── byid.go
-│   │   │   ├── book.go             # per-book directory
-│   │   │   ├── search.go
-│   │   │   ├── ctl.go
-│   │   │   ├── inbox.go            # synthetic dir; Tcreate/Twrite/Tclunk → ingest
-│   │   │   └── stats.go
-│   │   └── ops.go                  # buffered write semantics, validation
+│   │   └── config.go
+│   ├── frontend/
+│   │   └── fs/                     # 9P synthetic filesystem (go9p)
+│   │       ├── fs.go               # newFS helper
+│   │       ├── server.go           # StartServer, setupServer
+│   │       ├── registry.go         # bookRegistry: id → bookDir, view management
+│   │       ├── book.go             # per-book directory + field map
+│   │       ├── field.go            # generic read/write 9P file for string values
+│   │       ├── file.go             # epubFile, coverFile
+│   │       ├── books.go            # all-books flat listing
+│   │       ├── byauthor.go         # by-author grouped view
+│   │       ├── byseries.go         # by-series grouped view
+│   │       ├── byid.go             # by-id flat listing
+│   │       ├── bydir.go            # shared groupingDir base, namedBookDir
+│   │       ├── reader.go           # reader/ export view, warmer
+│   │       ├── inbox.go            # synthetic inbox directory + file
+│   │       └── series.go           # series entry name formatting
+│   └── shared/
+│       └── model/                  # shared types
+│           └── model.go            # Book, Bib, Meta, Edits, Location, Author, …
 ├── go.mod
 └── go.sum
 ```
@@ -328,14 +388,22 @@ ebookfs/
 
 | Concern | Pick | Why |
 |---|---|---|
-| 9P implementation | `github.com/hugelgupf/p9` | Modern, 9P2000.L, well maintained, used in production |
+| 9P implementation | `github.com/knusbaum/go9p` (forked) | Simpler API for synthetic filesystem patterns; actively maintained fork |
 | SQLite driver | `modernc.org/sqlite` | Pure Go, no cgo, clean ARM cross-compile |
 | Config | `github.com/BurntSushi/toml` | TOML stdlib equivalent |
-| Logging | `log/slog` (stdlib) | Built in since 1.21 |
-| Testing | stdlib + `testing/fstest` | No need for a framework |
-| epub writes | `ebook-meta` (Calibre CLI, runtime dep) | The Go ebook ecosystem has no maintained library for writing into existing epubs. `ebook-meta` is Calibre's single-purpose CLI for exactly this and has 15+ years of edge-case handling. Invoked as a subprocess; no Calibre daemon runs. |
+| Logging | `log` (stdlib) | Small project; structured logging deferred |
+| Epub parser | Hand-written (`internal/backend/epub/parse.go`) | Zip + OPF parsing is small and well-defined |
+| Epub writer | Hand-written (`internal/backend/epub/write.go`, uses `beevik/etree`) | Eliminates Calibre runtime dependency; surgical OPF XML editing + atomic zip rewrite |
+| KEPUB conversion | `github.com/pgaskin/kepubify/v4` | Native Go conversion library for Kobo-format epubs |
+| EPUB XML editing | `github.com/beevik/etree` | Round-trips XML without mangling namespace declarations |
+| Testing | stdlib | No need for a framework |
 
-The epub *parser* is hand-written (~200 lines: zip open, find container.xml, parse OPF) — the stated goal of understanding the format applies to reads. *Writes* delegate to `ebook-meta`. The asymmetry is deliberate: zip + OPF parsing is small and well-defined, but a robust epub writer has to handle ZIP64, malformed mimetype entries, ADEPT-encrypted files, EPUB 2 vs 3 schema differences, and vendor-specific OPF extensions — too much surface area to hand-roll responsibly when a battle-tested CLI exists.
+The epub *parser* and *writer* are both hand-written. The parser is ~160 lines
+(zip open, container.xml, OPF parsing). The writer is ~400 lines of surgical
+OPF XML editing using `beevik/etree`, paired with an atomic zip rewrite that
+preserves the `mimetype` entry's STORED compression. This eliminates any
+Calibre runtime dependency — `ebookfs` is a static binary with no external
+tools required.
 
 ## Configuration
 
@@ -352,12 +420,13 @@ inbox_temp = "/mnt/storage/library/.inbox-tmp"   # buffer dir for in-flight 9P
 [index]
 path = "/mnt/storage/library/.index.db"
 
-[epub]
-ebook_meta = "/usr/bin/ebook-meta"   # path to Calibre's ebook-meta CLI
-                                      # ebookfs refuses to start if missing
+[reader]
+statuses = ["unread", "reading"]      # which statuses appear in reader/ view
+convert = false                       # convert to KEPUB; requires cache_dir
+cache_dir = "/mnt/storage/kepub-cache" # must be OUTSIDE library root
 
 [server]
-listen = "tcp!0.0.0.0!5640"          # 9P standard port
+listen = "0.0.0.0:5640"              # TCP listen address
 auth = "none"                         # "none" | "shared-secret"
 shared_secret_file = ""               # path if auth = shared-secret
 
@@ -368,15 +437,14 @@ format = "text"                       # "text" | "json"
 
 ## Deployment
 
-### Prerequisites on the Pi
+### Prerequisites
 
-```
-apt install --no-install-recommends calibre-bin
-```
+`ebookfs` has no runtime dependencies beyond the standard Linux kernel (for 9P
+mounting on the client side). The server binary is statically compiled with
+`CGO_ENABLED=0` and runs on any Linux system regardless of installed packages.
 
-This pulls in Calibre's CLI tools (`ebook-meta`, `ebook-convert`, etc.) without the GUI stack. Roughly 80MB on disk. The Calibre application is never invoked; only `ebook-meta` runs, as a short-lived subprocess on each epub write.
-
-`ebookfs` checks for `ebook-meta` on startup (path from config) and refuses to start if it's missing or non-executable. Failing fast at boot is much better than failing at first metadata edit.
+Optional: the KEPUB conversion path uses `github.com/pgaskin/kepubify/v4` at
+build time (linked in). No external tools are needed at runtime.
 
 ### systemd unit
 
@@ -437,67 +505,118 @@ The architectural property worth naming: 9P is the only ingestion path, full sto
 ### Cold start
 
 1. Load config.
-2. Verify `ebook-meta` is present at the configured path; refuse to start if missing.
-3. Ensure `inbox_temp` directory exists; clean any stale temp files left by previous crashed writes.
-4. Open SQLite index. Check schema version. Run migrations if needed.
-5. Quick sanity check: count rows in `books` vs count of book-directories in `library/`. If they differ by more than a small threshold, log a warning and offer `--reindex` hint. Don't auto-reindex without an explicit flag.
-6. Bind 9P listener, serve.
+2. Ensure `library_root` and `inbox_temp` directories exist.
+3. Verify `inbox_temp` is on the same filesystem as `library_root` (via `rename(2)` probe — required for atomic ingest).
+4. Open SQLite index. Apply schema if fresh (version == 0); if version mismatch, tables are dropped and recreated during reindex.
+5. **Always reindex from the filesystem.** The store is authoritative; rebuilding on every start guarantees the index never drifts from the filesystem. On the target hardware (Pi 3, ~500 books) a full reindex completes in seconds.
+6. Optionally initialise the KEPUB cache directory if conversion is enabled.
+7. Bind 9P listener, serve.
 
 ### Inbox ingestion via 9P
 
-1. Client (TUI on Optiplex, or `cp` on Pi via loopback mount) issues `Tcreate inbox/<filename>`. Server allocates a temp file at `<inbox_temp>/<random>.epub` and associates it with the 9P fid.
-2. Client streams bytes via `Twrite`. Server appends to the temp file.
+1. Client issues `Tcreate inbox/<filename>`. Server allocates a temp file at
+   `<inbox_temp>/<random>.epub` and associates it with the 9P fid.
+2. Client streams bytes via `Twrite`. Server appends via `WriteAt` to the temp
+   file (no memory pressure for large epubs).
 3. Client issues `Tclunk`. Server begins ingestion.
-4. Parse epub: open zip, find container.xml, parse OPF. On parse failure: delete temp, return descriptive error from `Tclunk`.
-5. Validate: must have at minimum a title and one creator. On validation failure: delete temp, return error.
-6. Begin SQLite transaction. Insert book row, get auto-incremented id.
-7. Construct canonical path `library/<file-as>/<title> (id)/<title> - <author>.epub`. Sanitise for filesystem-illegal characters.
-8. `rename(2)` temp into canonical location (works because temp dir is on the same filesystem).
-9. Write `meta.toml` (id + defaults for status/rating + empty custom_tags + `date_added`/`date_modified`).
-10. Commit transaction.
-11. Return success on `Tclunk`.
+4. **Parse epub:** open zip, find container.xml, parse OPF. On parse failure:
+   delete temp, return descriptive error from `Tclunk`.
+5. **Validate:** must have at minimum a title and one creator. On validation
+   failure: delete temp, return error.
+6. **Allocate id** from `book_id_seq` (SQLite `INSERT ... RETURNING id`).
+7. **Construct canonical path** via `store.Layout(authors, title, id)`. Check
+   `store.Exists` to reject duplicates.
+8. **Rename and sidecar:** `mkdir` the book directory, `rename(2)` the temp
+   into place, and write `meta.toml` (id + defaults).
+9. **Index:** call `index.Put` to insert or update the SQLite rows. On
+   failure, the store directory is deleted (compensation) and the error is
+   returned.
+10. Return success from `Tclunk`. The book is registered in all 9P views.
 
-If anything between step 4 and step 10 fails: rollback transaction, delete temp, return descriptive error. The client (TUI or shell command) sees the error directly. No `.failed` files litter the disk.
+If anything between step 4 and step 9 fails: delete the temp file (if still in
+inbox_temp), delete partially-created book directory, return descriptive error.
+The client sees the error directly. No `.failed` files litter the disk.
 
 ### Sidecar write via 9P (status, tags, rating)
 
-1. Client `Topen` on `/by-id/1042/status`, `Twrite` `"reading\n"`, `Tclunk`.
-2. On `Tclunk`, server validates content against status enum.
-3. Begin SQLite transaction. Update `books.status`. Rewrite `meta.toml` on disk. Commit.
-4. Return success. If validation or disk write fails, return error from `Tclunk` and discard buffered state.
+1. Client `Topen` on a sidecar field file (e.g. `/books/.../status`),
+   `Twrite "reading\n"`, `Tclunk`.
+2. On `Tclunk`, server validates content (e.g. status against enum, rating 0-5).
+3. Server calls `library.Edit`, which updates the SQLite index first via
+   `index.Put`, then rewrites `meta.toml` on disk. The book dir is re-homed in
+   9P views if the title or authors changed (sidecar fields never trigger
+   rehoming).
+4. Return success. If validation or write fails, return error from `Tclunk`
+   and discard buffered state.
 
 ### OPF write via 9P (title, authors, series, etc.)
 
-1. Client `Topen` on `/by-id/1042/metadata`, `Twrite` with new TOML, `Tclunk`.
-2. On `Tclunk`, server parses the TOML. If parse fails, error and stop.
-3. Server copies `book.epub` to `book.epub.tmp` in the same directory.
-4. Server invokes `ebook-meta book.epub.tmp --title="..." --authors="..." [...]` with flags derived from the parsed TOML. Captures stdout/stderr.
-5. If `ebook-meta` exits non-zero, delete temp, return error from `Tclunk`.
-6. Open the temp file as a zip; verify it parses and that container.xml + OPF are still readable. If not, delete temp, return error.
-7. `fsync` temp, then atomic `rename(2)` over `book.epub`. The original is replaced atomically; readers either see old or new, never partial.
-8. Update SQLite index from the new epub's OPF in the same transaction as `meta.toml` `date_modified`. Commit.
-9. Return success.
+1. Client `Topen` on a bib field file (e.g. `/books/.../title`), `Twrite` the
+   new value, `Tclunk`.
+2. On `Tclunk`, server constructs an `Edits` struct from the written value and
+   calls `library.Edit` with it.
+3. `Edit` validates the edits against the book's current state. On failure,
+   return error and discard.
+4. If bib fields changed (`HasBibEdits`), `epub.WriteBib` is called. This reads
+   the existing zip, surgically edits the OPF XML in memory (using
+   `beevik/etree`), then writes a new zip atomically via temp-file + rename.
+   The result is verified by re-parsing before returning.
+5. If the canonical path changed (title or authors edited), `store.Move`
+   relocates the book directory using two-phase `rename(2)` with rollback on
+   failure.
+6. `meta.toml` is rewritten with the new `date_modified`.
+7. The index is updated via `index.Put`.
+8. The updated `*model.Book` is returned; the 9P registry re-homes the book
+   dir in all views based on the new title/authors/status.
+9. Return success from `Tclunk`. On any failure between steps 3 and 7, the
+   error propagates to `Tclunk` and the write is discarded.
 
 ### Cover write via 9P
 
-Same as OPF write but `ebook-meta book.epub.tmp --cover=<temp-image-file>`. Image bytes are buffered in memory (or to a temp file if large), passed by path.
+1. Client `Topen` on `/books/.../cover.jpg`, `Twrite` image bytes, `Tclunk`.
+2. On `Tclunk`, server validates the image format: it must be a valid JPEG or
+   PNG whose format matches the existing cover entry's extension (.jpg/.png).
+   No transcoding is performed.
+3. `epub.WriteCover` opens the epub zip, reads the existing cover entry bytes,
+   and writes a new zip atomically (temp-file + rename) with the cover entry
+   replaced. Encryption and DRM checks prevent replacing protected covers.
+4. The cover entry is verified by re-parsing the epub. The updated book is
+   registered back (cover path unchanged).
 
 ### Reindex
 
-1. Walk `library/` looking for `meta.toml` files.
-2. For each, parse the adjacent epub's internal OPF directly (zip open + container.xml + content.opf).
-3. Truncate `books`, `authors`, `book_authors`, `tags`, `book_tags`, `series`, `identifiers`, `books_fts`.
-4. Bulk-insert from epub OPF (bibliographic) + meta.toml (sidecar fields).
-5. The `id` field in `meta.toml` is preserved — that's the whole point of having it. Reindex doesn't allocate new ids unless a `meta.toml` is missing one (in which case allocate from `MAX(id)+1`).
-6. **Id collisions during reindex are fatal.** If two `meta.toml` files claim the same id, abort reindex and surface the conflict — never silently renumber. The user fixes it manually (typically by deleting one of the two `meta.toml` files, since the duplicate almost always means a restored backup or a botched manual copy).
+1. Walk `library/` via `store.Walk` — enumerates directories that contain
+   `meta.toml` + an `.epub` file.
+2. For each entry, read `meta.toml` and parse the epub's OPF via `epub.Parse`.
+   Books whose meta or epub can't be read are logged and skipped (not fatal).
+3. Call `index.Rebuild(books, maxID)`, which:
+   - Checks the schema version; drops and recreates all tables on mismatch.
+   - Deletes all rows (child tables first for FK safety) and bulk-re-inserts
+     all books.
+   - Advances `book_id_seq` past `maxID` so future `NextID` calls don't collide.
+4. The `id` field in `meta.toml` is preserved — that's the whole point of
+   having it. Reindex doesn't allocate new ids unless a `meta.toml` is missing
+   one (in which case the max is tracked and the sequence advanced).
+5. **Id collisions during reindex are fatal.** If two `meta.toml` files claim
+   the same id, abort reindex and surface the conflict — never silently
+   renumber. The user fixes it manually (typically by deleting one of the two
+   `meta.toml` files, since the duplicate almost always means a restored backup
+   or a botched manual copy).
 
 ## Testing strategy
 
-- **Unit tests** for epub parser, path sanitisation, query parser, meta.toml serialisation.
-- **Integration tests** for the 9P server using a fake transport (in-process). Mount the FS via the library's test harness and exercise read/write/walk.
-- **End-to-end test** with a fixture library of 10 sample epubs (public domain, e.g. from Project Gutenberg), spinning up `ebookfs` against a temp directory and driving it via real 9P client calls. The end-to-end suite requires `ebook-meta` on `$PATH` and exercises the full edit→rewrite path against real epubs.
-- **`ebook-meta` wrapper tests** verify subprocess argument construction, exit-code handling, and that a failed `ebook-meta` invocation leaves the original epub untouched (atomic rename invariant).
-- **No mocking of SQLite.** Use real SQLite against `:memory:` for index tests.
+- **Unit tests** for epub parser, epub writer (edit-and-reparse round-trip),
+  path sanitisation, Edits validation, and 9P file semantics (field reads,
+  writes, multi-fid, close behaviour).
+- **Integration tests** for the 9P server using go9p's in-process FS —
+  `setupServer` is called directly, views populated, and 9P operations
+  exercised through the library mock (`fakeLib`).
+- **End-to-end test** with a fixture library of sample epubs, spinning up
+  `ebookfs` against a temp directory and driving it via real 9P client calls.
+  Exercises the full edit → rewrite path against real epubs.
+- **No mocking of SQLite.** Index tests use real SQLite against `:memory:`.
+- **Test infrastructure:** hand-written functional mocks (`fakeLib`,
+  `testExporter`, `fakeEpubReader`). No mock generation framework.
 
 ## Out of scope for v1
 
@@ -750,8 +869,8 @@ Build in stages so something works end-to-end at each step.
 
 **ebookfs:**
 - Read-only 9P server.
-- In-memory index built by walking the library on startup (no SQLite yet).
-- Exposes `by-author/` and `by-id/` only. Per-book directory exposes `book.epub` only.
+- SQLite index, derived from filesystem on startup.
+- Exposes `by-author/` and `by-id/`. Per-book directory exposes `book.epub` only.
 - No inbox, no `ctl`, no writes.
 
 **ebooktui:**
@@ -763,11 +882,13 @@ Build in stages so something works end-to-end at each step.
 ## v0.2 — index and search
 
 **ebookfs:**
-- SQLite index, derived from filesystem on startup.
-- Add `by-tag/`, `by-series/`, `by-status/`, `recent/`, `stats`.
+- SQLite index with full CRUD (Query, Get, Put, Delete).
+- All-books, `by-author/`, `by-series/`, `by-id/` views.
+- `by-tag/`, `by-status/`, `recent/` views.
 - `search/` namespace with title/author/fts queries.
-- Per-book directory adds `metadata`, `cover.jpg`, `id` (all read-only).
-- `--reindex` flag.
+- Per-book directory adds all field files.
+- `stats` file.
+- Rebuild index from filesystem on every startup.
 
 **ebooktui:**
 - Three-panel layout.
@@ -778,10 +899,11 @@ Build in stages so something works end-to-end at each step.
 ## v0.3 — writes
 
 **ebookfs:**
-- Per-book directory makes `metadata`, `tags`, `status`, `rating` writable.
-- `meta.toml` round-trips.
+- Per-book directory makes all field files writable.
+- `meta.toml` round-trips (atomic temp-file writes).
 - Buffered write + clunk-flush semantics.
 - Validation on write.
+- Hand-written epub writer (OPF XML surgery via `beevik/etree`).
 
 **ebooktui:**
 - `e` opens metadata in `$EDITOR`.
@@ -791,16 +913,22 @@ Build in stages so something works end-to-end at each step.
 ## v0.4 — inbox and ctl
 
 **ebookfs:**
-- Synthetic `inbox/` 9P node with full ingestion pipeline (Tcreate/Twrite/Tclunk → parse/validate/move/index).
+- Synthetic `inbox/` 9P node with full ingestion pipeline.
 - `ctl` file with batch commands.
-- Local loopback mount of the 9P export on the Pi (systemd mount unit), enabling external tools to write to `inbox/` via filesystem ops.
+- Local loopback mount of the 9P export on the Pi (systemd mount unit),
+  enabling external tools to write to `inbox/` via filesystem ops.
 
 **ebooktui:**
-- Inbox view (`i`) — drag-and-drop or path-paste to copy a file into `/mnt/library/inbox/`.
+- Inbox view (`i`).
 - Command palette (`:`) feeds ctl directly.
 - Bulk operations on selection use ctl under the hood.
 
 ## v0.5 — Kobo
+
+**ebookfs:**
+- `reader/` export view for rsync-to-Kobo, filtered by configured statuses.
+- Optional KEPUB conversion via `kepubify/v4` with on-disk cache.
+- Proactive warmer (4 goroutines) for ahead-of-time conversion.
 
 **ebooktui:**
 - USB detection.
@@ -818,6 +946,7 @@ Build in stages so something works end-to-end at each step.
 
 ## Post-1.0 (when you actually want them)
 
+- Full-text search via FTS5.
 - Reading progress sync from KoboReader.sqlite.
 - Cover art display via sixel/kitty.
 - Online metadata enrichment (OpenLibrary).
@@ -832,7 +961,7 @@ Record of choices made during design, so the reasoning isn't lost when revisitin
 
 | # | Decision | Reasoning |
 |---|---|---|
-| 1 | No Calibre application, no Calibre-Web | Dislike Calibre's bloat; Calibre-Web depends on Calibre's runtime and database. We do however use one Calibre CLI tool (`ebook-meta`) as a narrow runtime dependency — see decision 16. |
+| 1 | No Calibre application, no Calibre-Web | Dislike Calibre's bloat; Calibre-Web depends on Calibre's runtime and database. No Calibre tools used at runtime. |
 | 2 | Filesystem as source of truth, SQLite as derived index | Pi 3 RAM and IO budget. In-memory index too slow on cold start. Plus filesystem-as-truth survives `ebookfs` retirement. |
 | 3 | Calibre-compatible directory layout | Free interop hatch with zero ongoing cost. Stable de-facto standard. |
 | 4 | 9P as the only protocol | Aesthetics and architectural clarity. Keeps client/server contract minimal. Mountable from any 9P client. |
@@ -840,14 +969,19 @@ Record of choices made during design, so the reasoning isn't lost when revisitin
 | 6 | tview for the TUI | Widget-rich, simpler than Bubble Tea for a CRUD-shaped app. k9s exists as proof of scale. |
 | 7 | USB-only Kobo sync, no Drive | Avoids Google ecosystem dependency. Keeps every layer owned. |
 | 8 | No Kobo HTTP browser interface | "I'm away and want a book" is a hypothetical problem. Speculative design rejected. |
-| 9 | Hand-write the epub *parser*; delegate writes | Reads are simple and well-defined. Writes require handling ZIP64, malformed mimetype quirks, ADEPT, EPUB 2/3 schema differences, vendor extensions — too much surface area to hand-roll responsibly. |
+| 9 | Hand-write both the epub parser and writer | Both zip+OPF parsing and surgical OPF XML editing are well-defined problems. Using `beevik/etree` for round-trip-safe XML edits plus an atomic zip rewrite gives a zero-dependency static binary. Outcome: no Calibre or external tools required at runtime. |
 | 10 | `modernc.org/sqlite` over `mattn/go-sqlite3` | Pure Go, no cgo, clean ARM cross-compile. |
-| 11 | `hugelgupf/p9` for 9P | Modern, 9P2000.L, active. |
+| 11 | `knusbaum/go9p` for 9P (forked) | Simpler API for synthetic filesystem construction versus `hugelgupf/p9`. Active personal fork at `ramblingenzyme/go9p`. |
 | 12 | Per-book directory with synthetic files | Plan 9 idiom, makes editing first-class through filesystem ops, `$EDITOR` works for free. |
 | 13 | `ctl` file for batch operations | Avoids 100-round-trip patterns over 9P; Plan 9 idiomatic. |
 | 14 | TUI talks to `/mnt/library` only, never directly to 9P | Lets TUI be tested against a fake directory; keeps surface minimal. |
 | 15 | Epub's internal OPF is canonical for bibliographic metadata; `meta.toml` carries only sidecar extras | One source of truth for bibliographic data. The Kobo and every other reader read OPF from inside the epub, so editing metadata must update the file itself. Avoids drift between sidecar and embedded OPF entirely. |
-| 16 | Shell out to `ebook-meta` for epub writes | The Go ecosystem has no maintained library for editing existing epubs. `ebook-meta` is Calibre's single-purpose CLI for exactly this, with 15+ years of edge-case handling. Subprocess invocation; no Calibre daemon runs. Narrow, contained dependency. |
+| 16 | Hand-write the epub writer rather than shelling out to `ebook-meta` | Eliminates the Calibre runtime dependency; `ebookfs` becomes a static binary with zero external tool requirements. The writer uses `beevik/etree` for round-trip-safe OPF XML editing and an atomic zip rewrite that preserves the `mimetype` entry's STORED compression. No more complex than the subprocess+temp-file pattern `ebook-meta` would have required. |
 | 17 | Id collisions during reindex are fatal, never silently renumber | Duplicate ids almost always indicate user error (restored backup, manual copy). Silent renumbering would break stable references in the Kobo filename mapping. Fail loud. |
 | 18 | `inbox/` is a synthetic 9P directory, not a real filesystem path | `Tclunk` provides an explicit transaction boundary — no fsnotify, no partial-write races, no `.failed` files lingering on disk. Errors propagate synchronously to the writing client. Drops the fsnotify dependency entirely. |
 | 19 | The Pi loopback-mounts its own 9P export | Re-enables "drop a file in a directory" workflows for external tools (LazyLibrarian, scripts) without compromising the 9P-only ingestion contract. Local and remote tools share one code path. |
+| 20 | Always reindex from the filesystem on every startup | Safety over performance. The index is a derived cache; rebuilding on every start guarantees it never drifts from the authoritative store. On the target hardware (Pi 3, ~500 books) a reindex completes in seconds. |
+| 21 | Individual field files instead of combined TOML `metadata` file | More Plan 9-idiomatic (one value per file). Avoids TOML parsing on every write. Each editable field is ~5 lines of declarative config in the `fields` map. The combined `metadata` file was in the original design but was replaced as an unnecessary abstraction layer. |
+| 22 | KEPUB conversion for Kobo-format output | Post-plan feature. Native KEPUB avoids on-device conversion and fixes formatting issues on Kobo devices. Uses `kepubify/v4` with an on-disk cache (per-book mutex locks, mtime-based staleness). The `reader/` 9P export view serves either original epub or converted kepub. |
+| 23 | Logging via `log` package | Small project; structured logging adds little value today. Migration to `log/slog` would be mechanical when desired. |
+| 24 | Array fields (authors, tags) **overwrite** by default; append via write-offset convention deferred | `Twrite` carries an offset: `write(fid, 0, data)` overwrites (`>`), `write(fid, current-length, data)` appends (`>>`). Current `fieldFile` ignores the offset — always overwrites. Append would parse the existing value, add newline-separated entries, and commit. |
