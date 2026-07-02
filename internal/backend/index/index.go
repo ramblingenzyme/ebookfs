@@ -17,7 +17,7 @@ type Index struct {
 	db *sql.DB
 }
 
-const schemaVersion = 3
+const schemaVersion = 4
 
 // Open opens or creates the index at path, running any pending migrations.
 func Open(path string) (*Index, error) {

@@ -1,7 +1,7 @@
 CREATE TABLE books (
     id            INTEGER PRIMARY KEY,
     title         TEXT    NOT NULL,
-    sort_title    TEXT    NOT NULL,
+    sort_title    TEXT,
     pubdate       TEXT,
     description   TEXT    NOT NULL DEFAULT '',
     language      TEXT    NOT NULL DEFAULT '',
@@ -54,3 +54,9 @@ CREATE TABLE identifiers (
 );
 
 CREATE TABLE book_id_seq (id INTEGER PRIMARY KEY AUTOINCREMENT);
+
+CREATE INDEX idx_books_status     ON books(status);
+CREATE INDEX idx_books_pubdate    ON books(pubdate);
+CREATE INDEX idx_books_date_added ON books(date_added);
+CREATE INDEX idx_authors_sort     ON authors(sort_name);
+CREATE INDEX idx_book_authors_aid ON book_authors(author_id);

@@ -48,59 +48,6 @@ without error.
 collision would then fail with a constraint violation, which `Rebuild` would
 return as a fatal error.
 
-### `series_id` missing `ON DELETE SET NULL`
-
-**Plan:** `series_id INTEGER REFERENCES series(id) ON DELETE SET NULL`
-
-**Actual:** `series_id INTEGER REFERENCES series(id)` — no `ON DELETE` clause.
-
-With `PRAGMA foreign_keys=ON`, deleting a series row that is still referenced
-by books will fail with a foreign-key violation rather than setting those
-books' `series_id` to NULL as intended.
-
-**Fix:** Add `ON DELETE SET NULL` to the `series_id` column definition.
-
-### `book_authors` missing `role` column
-
-**Plan:**
-```sql
-CREATE TABLE book_authors (
-    book_id     INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-    author_id   INTEGER NOT NULL REFERENCES authors(id) ON DELETE CASCADE,
-    role        TEXT NOT NULL DEFAULT 'aut',  -- aut, edt, ill, trl
-    position    INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (book_id, author_id, role)
-);
-```
-
-**Actual:** No `role` column — `PRIMARY KEY (book_id, author_id)` with only
-`position`.
-
-The epub parser (`translate.go`) reads roles from OPF. The writer
-(`write.go`) distinguishes author-creators from non-author-creators
-(`isAuthorCreator`). But the role is discarded on insert. Non-author
-contributors (editors, illustrators, translators) are lost.
-
-**Fix:** Add `role TEXT NOT NULL DEFAULT 'aut'` column, include it in the PK,
-and populate it during `upsertAuthors`.
-
-### `series.sort_name` missing
-
-**Plan:**
-```sql
-CREATE TABLE series (
-    id          INTEGER PRIMARY KEY,
-    name        TEXT NOT NULL UNIQUE,
-    sort_name   TEXT
-);
-```
-
-**Actual:** No `sort_name` column. Series listings lack a sort-order hint,
-unlike `authors.sort_name`.
-
-**Fix:** Add `sort_name TEXT NOT NULL DEFAULT ''` column and populate it from
-the OPF (the parser already reads series metadata).
-
 ### No SQL indexes
 
 **Plan:** Four indexes:
@@ -252,8 +199,5 @@ USB sync) is out of scope for this repository.
 | Ingest minimum-field validation | ~30 min | Medium (corrupt epubs) |
 | `sort_title` nullable | ~1 hr | Low (schema hygiene) |
 | Reindex id collision → INSERT | ~30 min | Medium (data loss on duplicate) |
-| `series_id` ON DELETE SET NULL | ~1 hr | Medium (FK violation on series delete) |
 | Edit write order (index first) | ~1 hr | Medium (skew window) |
-| `series.sort_name` column | ~1 hr | Low (sort consistency) |
 | SQL indexes | ~2 hr | High (performance at scale) |
-| `book_authors.role` column | ~4 hr | High (data loss for non-author roles) |
