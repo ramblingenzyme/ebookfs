@@ -31,6 +31,16 @@ func newCoverFile(stat *proto.Stat, lib library.Library, book *model.Book) *cove
 	}
 }
 
+func (c *coverFile) Stat() proto.Stat {
+	s := c.BaseFile.Stat()
+	if c.lib != nil {
+		if data, err := c.lib.ExtractCover(c.book); err == nil {
+			s.Length = uint64(len(data))
+		}
+	}
+	return s
+}
+
 func (c *coverFile) Open(fid uint64, omode proto.Mode) error {
 	data, err := c.lib.ExtractCover(c.book)
 	if err != nil {

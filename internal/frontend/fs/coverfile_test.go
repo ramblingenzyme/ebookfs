@@ -7,6 +7,33 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
 )
 
+func TestCoverFileStatLength(t *testing.T) {
+	f := newTestFS(t)
+	lib := fakeLib{
+		extractCoverFn: func(b *model.Book) ([]byte, error) {
+			return []byte("cover image data"), nil
+		},
+	}
+	book := makeBook(1, "Test", "Author")
+	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, book)
+
+	s := cf.Stat()
+	if s.Length != 16 {
+		t.Errorf("Stat().Length = %d, want 16", s.Length)
+	}
+}
+
+func TestCoverFileStatLengthNilLib(t *testing.T) {
+	f := newTestFS(t)
+	book := makeBook(1, "Test", "Author")
+	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), nil, book)
+
+	s := cf.Stat()
+	if s.Length != 0 {
+		t.Errorf("Stat().Length with nil lib = %d, want 0", s.Length)
+	}
+}
+
 func TestCoverFileOpenRead(t *testing.T) {
 	f := newTestFS(t)
 	lib := fakeLib{

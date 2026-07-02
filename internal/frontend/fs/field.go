@@ -29,6 +29,12 @@ func newFieldFile(stat *proto.Stat, get func() string, set func(string) error) *
 	}
 }
 
+func (f *fieldFile) Stat() proto.Stat {
+	s := f.BaseFile.Stat()
+	s.Length = uint64(len(f.get() + "\n"))
+	return s
+}
+
 func (f *fieldFile) Open(fid uint64, omode proto.Mode) error {
 	f.Lock()
 	defer f.Unlock()

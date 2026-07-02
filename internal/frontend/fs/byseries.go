@@ -23,7 +23,7 @@ func seriesEntryName(b *model.Book, pad int) string {
 			s += "." + parts[1]
 		}
 	}
-	return fmt.Sprintf("%-4s  %s", s, b.Title)
+	return fmt.Sprintf("%s - %s", s, b.Title)
 }
 
 func seriesEntryNameFunc(pad int) func(*model.Book) string {

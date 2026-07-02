@@ -64,8 +64,10 @@ func TestWarmerWarmsMultipleBooks(t *testing.T) {
 }
 
 func TestWarmerErrorDoesNotPanic(t *testing.T) {
+	done := make(chan struct{})
 	exp := testExporter{
 		ensureFn: func(b *model.Book) error {
+			defer close(done)
 			return errTest
 		},
 	}
@@ -74,12 +76,10 @@ func TestWarmerErrorDoesNotPanic(t *testing.T) {
 
 	w.warm(makeBook(1, "Test", "Author"))
 
-	if !waitFor(t, func() bool {
-		// The goroutine should have consumed the book without panicking.
-		// We just verify the test completes without a panic.
-		return true
-	}) {
-		t.Fatal("timed out")
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("warmer goroutine did not call ensureFn")
 	}
 }
 

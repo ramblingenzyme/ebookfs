@@ -185,6 +185,28 @@ func TestFieldFileWriteReadOnly(t *testing.T) {
 	}
 }
 
+func TestFieldFileStatLength(t *testing.T) {
+	f := newTestFS(t)
+	stat := f.NewStat("test", "glenda", "glenda", 0444)
+	ff := newFieldFile(stat, func() string { return "hello" }, nil)
+
+	s := ff.Stat()
+	if s.Length != 6 {
+		t.Errorf("Stat().Length = %d, want 6 (hello + \\n)", s.Length)
+	}
+}
+
+func TestFieldFileStatLengthEmpty(t *testing.T) {
+	f := newTestFS(t)
+	stat := f.NewStat("test", "glenda", "glenda", 0444)
+	ff := newFieldFile(stat, func() string { return "" }, nil)
+
+	s := ff.Stat()
+	if s.Length != 1 {
+		t.Errorf("Stat().Length for empty field = %d, want 1 (just \\n)", s.Length)
+	}
+}
+
 func TestFieldFilePerFidBuffers(t *testing.T) {
 	f := newTestFS(t)
 	stat := f.NewStat("test", "glenda", "glenda", 0644)

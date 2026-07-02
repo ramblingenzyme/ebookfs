@@ -40,6 +40,7 @@ func TestRegistryRemoveUnknownID(t *testing.T) {
 func TestRegistryAddSameIDTwiceUsesSameDir(t *testing.T) {
 	f := newTestFS(t)
 	reg := newTestRegistry(t, f)
+	allBooks := newAllBooksDir(reg)
 
 	b1 := makeBook(1, "First Title", "Author")
 	b2 := makeBook(1, "Second Title", "Author")
@@ -47,9 +48,15 @@ func TestRegistryAddSameIDTwiceUsesSameDir(t *testing.T) {
 	reg.Add(b1)
 	reg.Add(b2)
 
-	// After second Add, the book dir should reflect the second book's state
-	// because dirLocked returns the existing dir and doesn't update the book pointer.
-	// This is current behavior — the caller is expected to not reuse IDs.
+	// dirLocked returns the existing dir and doesn't update the book pointer,
+	// so the first title persists. The caller is expected to not reuse IDs.
+	children := dirChildNames(allBooks)
+	if len(children) != 1 {
+		t.Fatalf("expected 1 child, got %d: %v", len(children), children)
+	}
+	if children[0] != "First Title" {
+		t.Errorf("expected 'First Title', got %q", children[0])
+	}
 }
 
 // ---- BooksDir ----
@@ -547,7 +554,7 @@ func TestReaderDirMultipleBooksSameAuthor(t *testing.T) {
 	}
 }
 
-func TestReaderDirWithConversion(t *testing.T) {
+func TestReaderDirWithConvertEnabled(t *testing.T) {
 	f := newTestFS(t)
 	reg := newTestRegistry(t, f)
 	d := newReaderDir(reg, testExporter{}, ReaderConfig{

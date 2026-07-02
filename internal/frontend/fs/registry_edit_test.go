@@ -3,6 +3,7 @@ package fs
 import (
 	"testing"
 
+	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
 )
@@ -131,7 +132,7 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 	}
 	reg := newBookRegistry(f, lib)
 	allBooks := newAllBooksDir(reg)
-	_ = newReaderDir(reg, testExporter{}, ReaderConfig{
+	readerDir := newReaderDir(reg, testExporter{}, ReaderConfig{
 		Statuses: []string{"reading"},
 	})
 
@@ -140,7 +141,11 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 	book.Meta.Status = "unread"
 	reg.Add(book)
 
-	// At this point the reader view should not show the book (status is unread).
+	// Reader view should not show the book when status is "unread".
+	if n := len(readerDir.Children()); n != 0 {
+		t.Fatalf("expected 0 reader children for unread book, got %d", n)
+	}
+
 	// Change status to "reading" via the field file.
 	bd := allBooks.Children()["Test"].(*bookDir)
 	statusFF := bd.Children()["status"].(*fieldFile)
@@ -150,9 +155,15 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 	statusFF.Write(fid, 0, []byte("reading"))
 	statusFF.Close(fid)
 
-	// Now the reader view should reflect the change — but we can't easily
-	// check it without access to the readerDir. The edit exercised the full
-	// path through the registry to verify no panic or deadlock.
+	// Now the reader view should reflect the change.
+	ad, ok := readerDir.Children()["Author1"]
+	if !ok {
+		t.Fatal("reader should have 'Author1' subdir for a 'reading' status book")
+	}
+	ald := ad.(fs.ModDir)
+	if _, ok := ald.Children()["Test.epub"]; !ok {
+		t.Error("Author1's reader dir should contain 'Test.epub'")
+	}
 }
 
 func TestRegistryEditUnknownID(t *testing.T) {
