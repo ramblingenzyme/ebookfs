@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/ramblingenzyme/ebookfs/internal/backend/index"
 	"github.com/ramblingenzyme/ebookfs/internal/backend/kepub"
@@ -28,6 +29,9 @@ func main() {
 	}
 	if err := os.MkdirAll(cfg.Library.InboxTemp, 0700); err != nil {
 		log.Fatalf("creating inbox temp dir: %v", err)
+	}
+	if err := cleanInboxTemp(cfg.Library.InboxTemp); err != nil {
+		log.Fatalf("cleaning inbox temp: %v", err)
 	}
 
 	if err := checkSameFilesystem(cfg.Library.Root, cfg.Library.InboxTemp); err != nil {
@@ -62,6 +66,28 @@ func main() {
 
 	readerCfg := fs.ReaderConfig{Statuses: cfg.Reader.Statuses, Convert: cfg.Reader.Convert}
 	fs.StartServer(lib, exporter, readerCfg, cfg.Server.Listen, cfg.Library.InboxTemp)
+}
+
+// cleanInboxTemp removes stale temp files left by previous crashed writes.
+// It only deletes regular files with a .epub suffix, matching the pattern
+// os.CreateTemp uses in the inbox file handler.
+func cleanInboxTemp(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if !e.Type().IsRegular() || !strings.HasSuffix(e.Name(), ".epub") {
+			continue
+		}
+		path := filepath.Join(dir, e.Name())
+		if err := os.Remove(path); err != nil {
+			log.Printf("warning: removing stale inbox temp %q: %v", path, err)
+		} else {
+			log.Printf("removed stale inbox temp %q", path)
+		}
+	}
+	return nil
 }
 
 // checkSameFilesystem verifies a and b are on the same filesystem by
