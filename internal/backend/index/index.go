@@ -17,11 +17,10 @@ type Index struct {
 	db *sql.DB
 }
 
-const schemaVersion = 4
+const schemaVersion = 5
 
-// Open opens or creates the index at path, running any pending migrations.
+// Open opens or creates the index at path.
 func Open(path string) (*Index, error) {
-	// - Register the modernc.org/sqlite driver and call sql.Open("sqlite", path).
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, err
@@ -95,15 +94,29 @@ func (idx *Index) NextID() (int64, error) {
 	return id, err
 }
 
-// withTx runs fn inside a transaction, committing on success and rolling back
-// on error. Each public mutator wraps its work in withTx so that the index owns
-// its own transactions and callers never handle *sql.Tx.
+// setDirty marks the index as potentially inconsistent, forcing a reindex
+// on the next startup if a crash occurs before withTx clears the flag.
+func (idx *Index) setDirty() error {
+	_, err := idx.db.Exec("UPDATE library_meta SET dirty = 1")
+	return err
+}
+
+// withTx sets the dirty flag, runs fn in a transaction, then clears the flag
+// on commit. setDirty runs via idx.db (outside the tx), so a crash before
+// tx.Commit leaves the flag set and forces a reindex.
 func (idx *Index) withTx(fn func(*sql.Tx) error) error {
+	if err := idx.setDirty(); err != nil {
+		return err
+	}
 	tx, err := idx.db.Begin()
 	if err != nil {
 		return err
 	}
 	if err := fn(tx); err != nil {
+		tx.Rollback()
+		return err
+	}
+	if _, err := tx.Exec("UPDATE library_meta SET dirty = 0"); err != nil {
 		tx.Rollback()
 		return err
 	}

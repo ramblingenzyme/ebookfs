@@ -2,21 +2,36 @@ package index
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
 )
 
-// Rebuild replaces the entire derived index with books. If the schema version
-// is out of date, all tables are dropped and recreated before reinserting —
-// tying the schema reset to the reindex so the two are never decoupled.
-// maxID is the highest book id present on disk; the id sequence is advanced
-// past it so future NextID values cannot collide with reindexed ids.
-//
-// TODO: invert this coupling. If startup reindexing becomes conditional (e.g.
-// skipped when the book count matches), the schema version check should move
-// up to the library or server layer so an outdated schema can force a reindex
-// rather than being silently skipped.
+// NeedsReindex reports whether the index must be rebuilt — true when the
+// schema version is stale or the dirty flag is set.
+func (idx *Index) NeedsReindex() (bool, error) {
+	var v int64
+	if err := idx.db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
+		return true, err
+	}
+	if v != schemaVersion {
+		return true, nil
+	}
+	var dirty int64
+	err := idx.db.QueryRow("SELECT dirty FROM library_meta LIMIT 1").Scan(&dirty)
+	if errors.Is(err, sql.ErrNoRows) {
+		return true, nil // no meta row — fresh or corrupt database
+	}
+	if err != nil {
+		return true, err
+	}
+	return dirty != 0, nil
+}
+
+// Rebuild replaces the entire index with books, dropping and recreating tables
+// if the schema is stale. maxID advances the id sequence past all reindexed ids.
+// The dirty flag is cleared inside the same transaction as the book data.
 func (idx *Index) Rebuild(books []*model.Book, maxID int64) error {
 	var v int64
 	if err := idx.db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
@@ -36,6 +51,7 @@ func (idx *Index) Rebuild(books []*model.Book, maxID int64) error {
 		for _, t := range []string{
 			"book_authors", "book_tags", "identifiers",
 			"books", "authors", "series", "tags",
+			"library_meta",
 		} {
 			if _, err := tx.Exec("DELETE FROM " + t); err != nil {
 				return err
@@ -57,6 +73,11 @@ func (idx *Index) Rebuild(books []*model.Book, maxID int64) error {
 			); err != nil {
 				return err
 			}
+		}
+
+		// Insert the meta row as clean; withTx's UPDATE dirty=0 is redundant.
+		if _, err := tx.Exec("INSERT INTO library_meta (dirty) VALUES (0)"); err != nil {
+			return err
 		}
 		return nil
 	}); err != nil {

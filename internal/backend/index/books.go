@@ -74,8 +74,8 @@ func (idx *Index) Get(bookID int64) (*model.Book, error) {
 	return books[0], nil
 }
 
-// queryBooks runs the shared book SELECT with an optional WHERE/ORDER/LIMIT and
-// hydrates the per-book authors, tags, and identifiers.
+// queryBooks runs the shared book SELECT with optional WHERE/ORDER/LIMIT and
+// hydrates per-book authors, tags, and identifiers.
 func (idx *Index) queryBooks(where string, args []any, order string, limit int) ([]*model.Book, error) {
 	q := `
 		SELECT b.id, b.title, b.sort_title, COALESCE(b.pubdate, ''), b.description, b.language,
@@ -145,18 +145,13 @@ func (idx *Index) queryBooks(where string, args []any, order string, limit int) 
 	return books, nil
 }
 
-// maxScopeIDs caps how many book ids scopeByBook will bind into an IN clause;
-// above it we fall back to a full table scan. 900 sits just under SQLite's
-// legacy SQLITE_MAX_VARIABLE_NUMBER of 999 (raised to 32766 in 3.32.0), so it
-// holds regardless of the SQLite build — and it is also past the point where a
-// large IN list stops beating a sequential scan, so the exact value isn't
-// load-bearing.
+// maxScopeIDs caps how many ids scopeByBook binds into an IN clause before
+// falling back to a full table scan. 900 is safely below every SQLite build's
+// SQLITE_MAX_VARIABLE_NUMBER and past the point IN beats a scan anyway.
 const maxScopeIDs = 900
 
-// scopeByBook returns a "WHERE <col> IN (…)" clause and its args restricting a
-// child-row query to the books in byID, or ("", nil) to fall back to a full
-// scan when there are too many ids to bind. col is the book-id column of the
-// child query, injected before its ORDER BY.
+// scopeByBook returns a "WHERE <col> IN (…)" clause scoped to byID, or ("", nil)
+// for a full scan when there are too many ids.
 func scopeByBook(col string, byID map[int64]*model.Book) (string, []any) {
 	if len(byID) == 0 || len(byID) > maxScopeIDs {
 		return "", nil
@@ -292,19 +287,22 @@ func upsertTags(tx *sql.Tx, bookID int64, tags []string) error {
 	return err
 }
 
-// Put writes b into the index, inserting it or fully replacing the existing
-// record for b.Meta.ID. It is the index's single write primitive: ingest, move,
-// sidecar edits, and reindex all reduce to "make the index reflect this book".
-// Pair it with DeleteBook.
-func (idx *Index) Put(b *model.Book) error {
-	return idx.withTx(func(tx *sql.Tx) error { return putBook(tx, b) })
+// Put writes b into the index, inserting or replacing the record for b.Meta.ID.
+// The optional storeWrite runs between setDirty and the index write so a crash
+// during the store write forces a reindex on the next startup.
+func (idx *Index) Put(b *model.Book, storeWrite func() error) error {
+	return idx.withTx(func(tx *sql.Tx) error {
+		if storeWrite != nil {
+			if err := storeWrite(); err != nil {
+				return err
+			}
+		}
+		return putBook(tx, b)
+	})
 }
 
-// upsertSeries points the book at its series, creating the series row when
-// needed and clearing series_id when the book has none, then removes any series
-// row no longer referenced by a book. Like upsertAuthors and upsertTags, it owns
-// the book's entire series relationship, so it must run after the books row
-// exists (it writes series_id/series_index with an UPDATE).
+// upsertSeries points the book at its series or clears series_id, then removes
+// orphaned series rows. It must run after the books row exists.
 func upsertSeries(tx *sql.Tx, b *model.Book) error {
 	var seriesID, seriesIndex any
 	if b.Series != nil {
@@ -330,8 +328,7 @@ func upsertSeries(tx *sql.Tx, b *model.Book) error {
 	return err
 }
 
-// finishBook writes the per-book child rows (authors, tags, identifiers, series).
-// Called after the books row itself has been inserted or updated.
+// finishBook writes the per-book child rows after the books row exists.
 func finishBook(tx *sql.Tx, b *model.Book) error {
 	if err := upsertAuthors(tx, b.Meta.ID, b.Authors); err != nil {
 		return err
@@ -357,8 +354,7 @@ func finishBook(tx *sql.Tx, b *model.Book) error {
 	return nil
 }
 
-// insertBook inserts a new book row. It fails with a constraint violation if
-// b.Meta.ID already exists — used by Rebuild to detect id collisions.
+// insertBook inserts a new book row, failing on id conflict — used by Rebuild.
 func insertBook(tx *sql.Tx, b *model.Book) error {
 	sortTitle := any(b.SortTitle)
 	if sortTitle == "" {
@@ -383,8 +379,7 @@ func insertBook(tx *sql.Tx, b *model.Book) error {
 	return finishBook(tx, b)
 }
 
-// putBook inserts or replaces b in the index. It uses ON CONFLICT to update
-// an existing row — the semantics needed by Ingest (idempotent) and Edit.
+// putBook inserts or replaces b, using ON CONFLICT to update an existing row.
 // Rebuild, which must surface id collisions, uses insertBook instead.
 func putBook(tx *sql.Tx, b *model.Book) error {
 	sortTitle := any(b.SortTitle)
@@ -416,9 +411,17 @@ func putBook(tx *sql.Tx, b *model.Book) error {
 	return finishBook(tx, b)
 }
 
-// Delete removes all index rows for bookID.
-func (idx *Index) Delete(bookID int64) error {
-	return idx.withTx(func(tx *sql.Tx) error { return deleteBook(tx, bookID) })
+// Delete removes all index rows for bookID. The optional storeWrite runs
+// between setDirty and the index delete (see Put).
+func (idx *Index) Delete(bookID int64, storeWrite func() error) error {
+	return idx.withTx(func(tx *sql.Tx) error {
+		if storeWrite != nil {
+			if err := storeWrite(); err != nil {
+				return err
+			}
+		}
+		return deleteBook(tx, bookID)
+	})
 }
 
 func deleteBook(tx *sql.Tx, id int64) error {

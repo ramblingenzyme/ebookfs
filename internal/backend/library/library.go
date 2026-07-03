@@ -43,9 +43,8 @@ func New(s *store.Store, idx *index.Index) Library {
 	return &libraryImpl{store: s, index: idx}
 }
 
-// Ingest parses the staged epub at tmpPath, lays it down in the store under its
-// canonical path, and records it in the index. epub stays an implementation
-// detail of this method; nothing above the library sees epub types.
+// Ingest parses the staged epub, lays it down in the store, and records it
+// in the index.
 func (l *libraryImpl) Ingest(epubPath string) (*model.Book, error) {
 	book, err := epub.Parse(epubPath)
 	if err != nil {
@@ -71,13 +70,10 @@ func (l *libraryImpl) Ingest(epubPath string) (*model.Book, error) {
 	loc := l.store.Layout(bib.Authors, bib.Title, id)
 	b := model.NewBook(bib, meta, loc)
 
-	if err := l.store.Ingest(epubPath, b.Location, &b.Meta); err != nil {
-		return nil, err
-	}
-
-	if err := l.index.Put(b); err != nil {
-		// Store wrote successfully but the index did not; roll the store back so a
-		// retry starts clean. The store is authoritative, so reindex would also recover.
+	if err := l.index.Put(b, func() error {
+		return l.store.Ingest(epubPath, b.Location, &b.Meta)
+	}); err != nil {
+		// Index write failed after the store wrote; clean up so a retry starts fresh.
 		_ = l.store.Delete(b.Location)
 		return nil, err
 	}
@@ -96,13 +92,20 @@ func (l *libraryImpl) ListAll() ([]*model.Book, error) {
 	return books, nil
 }
 
-// Reindex rebuilds the index from the store, which is the source of truth. The
-// store is authoritative, so this recovers from a missing, stale, or partially
-// written index — it is the backstop the write paths' compensation relies on.
-// A book whose meta or epub can't be read is logged and skipped rather than
-// failing the whole rebuild; its id still counts toward the sequence high-water
-// mark so future ingests can't reuse it.
+// Reindex rebuilds the index from the store (the source of truth). Skips
+// entirely (O(1)) when the dirty flag is clear. Books that can't be read are
+// logged and skipped rather than failing the whole rebuild.
 func (l *libraryImpl) Reindex() error {
+	needs, err := l.index.NeedsReindex()
+	if err != nil {
+		log.Printf("reindex: could not check index state (%v), forcing rebuild", err)
+		needs = true
+	}
+	if !needs {
+		log.Printf("reindex: index is clean, skipping")
+		return nil
+	}
+
 	entries, err := l.store.Walk()
 	if err != nil {
 		return err
@@ -138,8 +141,7 @@ func (l *libraryImpl) Reindex() error {
 	return nil
 }
 
-// OpenEpub returns a handle to b's epub content. The caller closes it. The 9P
-// layer reads through this rather than touching the filesystem directly.
+// OpenEpub returns a handle to b's epub content. The caller must close it.
 func (l *libraryImpl) OpenEpub(b *model.Book) (EpubReader, error) {
 	return l.store.OpenEpub(b.Location)
 }
@@ -150,9 +152,7 @@ func (l *libraryImpl) ExtractCover(b *model.Book) ([]byte, error) {
 }
 
 // Edit applies edits to a book, persists everything, and returns the updated
-// book. Bib (OPF) edits trigger an epub rewrite and re-parse. Meta edits are
-// applied in-memory. If the title or authors change the canonical location, the
-// book directory is moved. WriteCover handles binary cover replacement.
+// book. If the title or authors change, the book directory is moved.
 func (l *libraryImpl) Edit(b *model.Book, e model.Edits) (*model.Book, error) {
 	if v := e.Validate(b); v != nil {
 		return nil, v
@@ -160,34 +160,30 @@ func (l *libraryImpl) Edit(b *model.Book, e model.Edits) (*model.Book, error) {
 
 	updated := b.Edit(e)
 
-	if e.HasBibEdits() {
-		re, err := epub.WriteBib(b.EpubPath, e)
-		if err != nil {
-			return nil, err
+	if err := l.index.Put(updated, func() error {
+		if e.HasBibEdits() {
+			re, err := epub.WriteBib(b.EpubPath, e)
+			if err != nil {
+				return err
+			}
+			updated.Bib = bibFromEpub(re)
 		}
-		updated.Bib = bibFromEpub(re)
-	}
-
-	newLoc := l.store.Layout(updated.Authors, updated.Title, updated.Meta.ID)
-	if newLoc != b.Location {
-		if err := l.store.Move(b.Location, newLoc); err != nil {
-			return nil, err
+		newLoc := l.store.Layout(updated.Authors, updated.Title, updated.Meta.ID)
+		if newLoc != b.Location {
+			if err := l.store.Move(b.Location, newLoc); err != nil {
+				return err
+			}
+			updated.Location = newLoc
 		}
-		updated.Location = newLoc
-	}
-
-	if err := l.store.WriteMeta(updated.Location, &updated.Meta); err != nil {
-		return nil, err
-	}
-	if err := l.index.Put(updated); err != nil {
+		return l.store.WriteMeta(updated.Location, &updated.Meta)
+	}); err != nil {
 		return nil, err
 	}
 
 	return updated, nil
 }
 
-// WriteCover replaces the cover image in b's epub with img, validates the image
-// format matches the existing cover entry, and rewrites the epub atomically.
+// WriteCover replaces the cover image in b's epub with img.
 func (l *libraryImpl) WriteCover(b *model.Book, img []byte) error {
 	_, err := epub.WriteCover(b.EpubPath, b.CoverPath, img)
 	return err
@@ -219,14 +215,8 @@ func bibFromEpub(src *epub.Book) model.Bib {
 }
 
 func (l *libraryImpl) Delete(b *model.Book) error {
-	// Store is authoritative, so remove it first. If the index delete then fails,
-	// the directory is gone but a ghost row remains; reindex walks the filesystem
-	// and drops the stale row.
-	if err := l.store.Delete(b.Location); err != nil {
-		return err
-	}
-
-	return l.index.Delete(b.Meta.ID)
+	// Store is authoritative; a ghost index row is cleaned up by reindex.
+	return l.index.Delete(b.Meta.ID, func() error { return l.store.Delete(b.Location) })
 }
 
 
