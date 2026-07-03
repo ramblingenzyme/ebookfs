@@ -39,6 +39,7 @@ type fakeLib struct {
 	editFn         func(*model.Book, model.Edits) (*model.Book, error)
 	ingestFn       func(string) (*model.Book, error)
 	extractCoverFn func(*model.Book) ([]byte, error)
+	extractOPFFn   func(*model.Book) ([]byte, error)
 	writeCoverFn   func(*model.Book, []byte) error
 	openEpubFn     func(*model.Book) (library.EpubReader, error)
 	listAllFn      func() ([]*model.Book, error)
@@ -61,6 +62,12 @@ func (l fakeLib) Ingest(path string) (*model.Book, error) {
 func (l fakeLib) ExtractCover(b *model.Book) ([]byte, error) {
 	if l.extractCoverFn != nil {
 		return l.extractCoverFn(b)
+	}
+	return nil, nil
+}
+func (l fakeLib) ExtractOPF(b *model.Book) ([]byte, error) {
+	if l.extractOPFFn != nil {
+		return l.extractOPFFn(b)
 	}
 	return nil, nil
 }

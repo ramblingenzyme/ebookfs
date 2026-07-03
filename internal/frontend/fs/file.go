@@ -10,6 +10,67 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/shared/model"
 )
 
+// opfFile serves a book's raw OPF XML, loading bytes from the epub on each open.
+type opfFile struct {
+	fs.BaseFile
+	lib   library.Library
+	book  *model.Book
+	reads map[uint64][]byte
+}
+
+func newOPFFile(stat *proto.Stat, lib library.Library, book *model.Book) *opfFile {
+	return &opfFile{
+		BaseFile: *fs.NewBaseFile(stat),
+		lib:      lib,
+		book:     book,
+		reads:    make(map[uint64][]byte),
+	}
+}
+
+func (o *opfFile) Stat() proto.Stat {
+	s := o.BaseFile.Stat()
+	if o.lib != nil {
+		if data, err := o.lib.ExtractOPF(o.book); err == nil {
+			s.Length = uint64(len(data))
+		}
+	}
+	return s
+}
+
+func (o *opfFile) Open(fid uint64, omode proto.Mode) error {
+	data, err := o.lib.ExtractOPF(o.book)
+	if err != nil {
+		return err
+	}
+	o.Lock()
+	o.reads[fid] = data
+	o.Unlock()
+	return nil
+}
+
+func (o *opfFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error) {
+	o.RLock()
+	defer o.RUnlock()
+	data := o.reads[fid]
+	if data == nil {
+		return nil, errors.New("not open")
+	}
+	if offset >= uint64(len(data)) {
+		return []byte{}, nil
+	}
+	if offset+count > uint64(len(data)) {
+		count = uint64(len(data)) - offset
+	}
+	return data[offset : offset+count], nil
+}
+
+func (o *opfFile) Close(fid uint64) error {
+	o.Lock()
+	defer o.Unlock()
+	delete(o.reads, fid)
+	return nil
+}
+
 // coverFile serves a book's cover image, loading bytes from the epub on each
 // open. It also supports writing new cover bytes, accumulated per fid and
 // committed when the fid is closed.

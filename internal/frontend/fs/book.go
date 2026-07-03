@@ -152,6 +152,12 @@ func newBookDir(reg *bookRegistry, book *model.Book) *bookDir {
 		book,
 	))
 
+	d.StaticDir.AddChild(newOPFFile(
+		f.NewStat("opf", "glenda", "glenda", 0444),
+		lib,
+		book,
+	))
+
 	// Editable fields route through the registry so the change is validated,
 	// persisted, and bracketed by view remove/add (rehoming if the grouping or
 	// name changed). get reads the live book; set constructs Edits for the field.

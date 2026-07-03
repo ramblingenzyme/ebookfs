@@ -28,6 +28,7 @@ type Library interface {
 	Reindex() error
 	OpenEpub(b *model.Book) (EpubReader, error)
 	ExtractCover(b *model.Book) ([]byte, error)
+	ExtractOPF(b *model.Book) ([]byte, error)
 	Edit(b *model.Book, e model.Edits) (*model.Book, error)
 	WriteCover(b *model.Book, img []byte) error
 	Delete(b *model.Book) error
@@ -155,6 +156,11 @@ func (l *libraryImpl) OpenEpub(b *model.Book) (EpubReader, error) {
 // ExtractCover returns the cover image bytes from b's epub.
 func (l *libraryImpl) ExtractCover(b *model.Book) ([]byte, error) {
 	return epub.ExtractCover(b.EpubPath, b.CoverPath)
+}
+
+// ExtractOPF returns the raw OPF XML bytes from b's epub.
+func (l *libraryImpl) ExtractOPF(b *model.Book) ([]byte, error) {
+	return epub.ExtractOPF(b.EpubPath)
 }
 
 // Edit applies edits to a book, persists everything, and returns the updated

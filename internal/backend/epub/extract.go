@@ -28,3 +28,18 @@ func ExtractCover(epubPath, coverPath string) ([]byte, error) {
 
 	return nil, fmt.Errorf("cover not found in epub: %s", coverPath)
 }
+
+// ExtractOPF returns the raw OPF XML bytes from the epub at epubPath.
+func ExtractOPF(epubPath string) ([]byte, error) {
+	r, err := zip.OpenReader(epubPath)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+
+	path, err := opfPath(&r.Reader)
+	if err != nil {
+		return nil, err
+	}
+	return readEntry(&r.Reader, path)
+}
