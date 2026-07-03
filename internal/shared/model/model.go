@@ -233,6 +233,15 @@ func (e Edits) Validate(b *Book) *ValidationError {
 		}
 	}
 
+	if e.Tags != nil {
+		for i, t := range *e.Tags {
+			if strings.TrimSpace(t) == "" {
+				add("tags", fmt.Sprintf("tag %d is empty", i+1))
+				break
+			}
+		}
+	}
+
 	if e.Language != nil {
 		if v := strings.TrimSpace(*e.Language); v != "" {
 			if _, err := language.Parse(v); err != nil {

@@ -8,23 +8,14 @@ These are called out in the plan or known to be needed but the phased build
 hasn't reached them yet. They are not oversights. Listed here to distinguish
 "not done" from "should be done."
 
-### Overwrite vs append for array fields (authors, tags)
+### Overwrite vs append for array fields (authors, tags) — Done
 
-The 9P `Twrite` message carries an offset. The current implementation
-ignores it — writes are buffered and committed wholesale on close, always
-replacing the entire value.
-
-A natural 9P-idiomatic enhancement would key on the write offset:
-- `write(fid, offset=0, data)` → **overwrite** the value (like `>`)
-- `write(fid, offset=<current-length>, data)` → **append** to the value
-  (like `>>`)
-
-This would let a client add a single tag or author without round-tripping
-the full list. The `fieldFile` layer would need to distinguish between the
-two modes: on overwrite the buffered value replaces the field; on append the
-data is added to the existing list (parsed as newline-separated entries).
-Atomicity with the index update follows the same pattern as full-field edits
-— written on close, validated through `model.Edits.Validate`.
+`fieldFile.Open` now honours `proto.Otrunc` (the Plan 9 `OTRUNC` flag in the
+open mode). When a client opens with `OTRUNC` (shell `>`), the write buffer
+starts empty — the first write replaces the whole value. Without `OTRUNC`
+(`>>` or in-place edit), the buffer starts as a copy of the current value, so
+writing at the end naturally appends. Validation and atomicity still flow
+through `model.Edits.Validate` on close.
 
 ### 9P namespace views
 

@@ -285,3 +285,113 @@ func TestFieldFileGetUpdatesOnReopen(t *testing.T) {
 		t.Errorf("Read after reopen = %q, want %q", data, "second\n")
 	}
 }
+
+func TestFieldFileOtruncOverwrite(t *testing.T) {
+	f := newTestFS(t)
+	stat := f.NewStat("test", "glenda", "glenda", 0644)
+
+	var got string
+	ff := newFieldFile(stat, func() string { return "oldvalue" }, func(s string) error {
+		got = s
+		return nil
+	})
+
+	fid := uint64(1)
+	if err := ff.Open(fid, proto.Otrunc); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	if _, err := ff.Write(fid, 0, []byte("new")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	if err := ff.Close(fid); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	if got != "new" {
+		t.Errorf("set was called with %q, want %q", got, "new")
+	}
+}
+
+func TestFieldFileAppendWithoutOtrunc(t *testing.T) {
+	f := newTestFS(t)
+	stat := f.NewStat("test", "glenda", "glenda", 0644)
+
+	var got string
+	ff := newFieldFile(stat, func() string { return "old" }, func(s string) error {
+		got = s
+		return nil
+	})
+
+	fid := uint64(1)
+	if err := ff.Open(fid, proto.Mode(0)); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	// Snapshot is "old\n" = 4 bytes. Write at end.
+	if _, err := ff.Write(fid, 4, []byte("new\n")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	if err := ff.Close(fid); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	if got != "old\nnew" {
+		t.Errorf("set was called with %q, want %q", got, "old\nnew")
+	}
+}
+
+func TestFieldFilePartialOverwriteWithoutOtrunc(t *testing.T) {
+	f := newTestFS(t)
+	stat := f.NewStat("test", "glenda", "glenda", 0644)
+
+	var got string
+	ff := newFieldFile(stat, func() string { return "hello world" }, func(s string) error {
+		got = s
+		return nil
+	})
+
+	fid := uint64(1)
+	if err := ff.Open(fid, proto.Mode(0)); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	// Replace "lo " at offset 3 with "XY".
+	if _, err := ff.Write(fid, 3, []byte("XY")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	if err := ff.Close(fid); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	if got != "helXY world" {
+		t.Errorf("set was called with %q, want %q", got, "helXY world")
+	}
+}
+
+func TestFieldFileOtruncNoWriteDoesNotCallSet(t *testing.T) {
+	f := newTestFS(t)
+	stat := f.NewStat("test", "glenda", "glenda", 0644)
+
+	called := false
+	ff := newFieldFile(stat, func() string { return "old" }, func(s string) error {
+		called = true
+		return nil
+	})
+
+	fid := uint64(1)
+	if err := ff.Open(fid, proto.Otrunc); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	if err := ff.Close(fid); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	if called {
+		t.Error("set was called even though no data was written")
+	}
+}

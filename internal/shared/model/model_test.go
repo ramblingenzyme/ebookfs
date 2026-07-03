@@ -180,6 +180,47 @@ func TestValidateLanguage(t *testing.T) {
 	}
 }
 
+func TestValidateTags(t *testing.T) {
+	book := &Book{}
+	for _, tc := range []struct {
+		name    string
+		tags    *[]string
+		wantErr bool
+	}{
+		{"nil untouched", nil, false},
+		{"valid", &[]string{"fiction", "sci-fi"}, false},
+		{"single valid", &[]string{"fiction"}, false},
+		{"empty tag", &[]string{""}, true},
+		{"whitespace tag", &[]string{"  "}, true},
+		{"mixed valid and empty", &[]string{"good", "", "bad"}, true},
+		{"empty first", &[]string{"", "good"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := Edits{Tags: tc.tags}
+			err := e.Validate(book)
+			if (err != nil) != tc.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
+			}
+			if err != nil {
+				var ve *ValidationError
+				if !errors.As(err, &ve) {
+					t.Fatalf("error is not *ValidationError: %T", err)
+				}
+				found := false
+				for _, fe := range *ve {
+					if fe.Field == "tags" {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("expected tags field error, got %v", *ve)
+				}
+			}
+		})
+	}
+}
+
 func TestValidateSeriesIndex(t *testing.T) {
 	for _, tc := range []struct {
 		name       string

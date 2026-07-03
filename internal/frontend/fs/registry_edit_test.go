@@ -39,7 +39,7 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 	titleFF := bd.Children()["title"].(*fieldFile)
 
 	fid := uint64(1)
-	if err := titleFF.Open(fid, proto.Mode(0)); err != nil {
+	if err := titleFF.Open(fid, proto.Otrunc); err != nil {
 		t.Fatalf("Open title field: %v", err)
 	}
 	if _, err := titleFF.Write(fid, 0, []byte("New Title")); err != nil {
@@ -98,7 +98,7 @@ func TestRegistryEditAuthorsRehomesInByAuthor(t *testing.T) {
 	authorsFF := bd.Children()["authors"].(*fieldFile)
 
 	fid := uint64(1)
-	authorsFF.Open(fid, proto.Mode(0))
+	authorsFF.Open(fid, proto.Otrunc)
 	authorsFF.Write(fid, 0, []byte("Bob"))
 	authorsFF.Close(fid)
 
@@ -151,7 +151,7 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 	statusFF := bd.Children()["status"].(*fieldFile)
 
 	fid := uint64(1)
-	statusFF.Open(fid, proto.Mode(0))
+	statusFF.Open(fid, proto.Otrunc)
 	statusFF.Write(fid, 0, []byte("reading"))
 	statusFF.Close(fid)
 
