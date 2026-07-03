@@ -85,7 +85,7 @@ func (i *inboxFile) Write(fid uint64, offset uint64, data []byte) (uint32, error
 	defer i.Unlock()
 	if i.f == nil || i.fid != fid {
 		log.Printf("inbox: write file was not opened")
-		return 0, errors.New("wtf")
+		return 0, errors.New("file not opened with this fid")
 	}
 
 	n, err := i.f.WriteAt(data, int64(offset))

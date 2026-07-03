@@ -15,113 +15,20 @@ Sections:
 
 ## Likely oversights
 
-### No stale inbox temp file cleanup on startup
+### `Edit` sidecar write is no longer transactional (already mitigated)
 
-**Plan** (§Cold start step 3):
-> Ensure `inbox_temp` directory exists; clean any stale temp files left by
-> previous crashed writes.
+The `setDirty` design in `withTx` means `meta.toml` is now written *inside*
+the same `withTx` callback as the index row — the store write happens after
+`setDirty` and before the index write + `dirty=0`. If `WriteMeta` fails, the
+index is left dirty and reindex recovers.
 
-**Actual:** `main.go:29` creates the directory but never scans for or removes
-stale `.tmp` files. A crash during `inboxFile.Write` leaves garbage in the
-temp dir.
+However, if `WriteMeta` succeeds and the subsequent index write fails, the
+meta on disk and the `setDirty + dirty=0` sequence means the flag stays set
+and reindex runs. The store (meta.toml) is the authority, so reindex reads
+it back correctly.
 
-**Fix:** On startup, list files in `inbox_temp` and delete any that look like
-temp files (e.g. matching `<prefix>*.epub` where `<prefix>` is the pattern
-`os.CreateTemp` uses).
-
-### Id collisions during reindex silently overwrite
-
-**Plan** (§Reindex step 6 and decision #17):
-> **Id collisions during reindex are fatal.** If two `meta.toml` files claim
-> the same id, abort reindex and surface the conflict — never silently
-> renumber.
-
-**Actual:** `putBook` (`index/books.go:286-306`) uses:
-```sql
-INSERT INTO books (...) VALUES (...)
-ON CONFLICT(id) DO UPDATE SET ...
-```
-This UPSERT silently overwrites the existing row. A duplicate id is absorbed
-without error.
-
-**Fix:** Change `ON CONFLICT(id) DO UPDATE SET` to a plain `INSERT`. An id
-collision would then fail with a constraint violation, which `Rebuild` would
-return as a fatal error.
-
-### No SQL indexes
-
-**Plan:** Four indexes:
-- `idx_books_status ON books(status)`
-- `idx_books_pubdate ON books(pubdate)`
-- `idx_books_date_added ON books(date_added)`
-- `idx_authors_sort ON authors(sort_name)`
-
-**Actual:** No indexes at all (besides the implicit PK and UNIQUE indexes).
-Every `Filter`-based query — listing by author, status, tag, series — does a
-full table scan on `books` + related tables.
-
-**Fix:** Add the four planned indexes, plus an index on
-`book_authors(author_id)` (the join column used by the `by-author` filter
-subquery).
-
-### `sort_title NOT NULL` instead of nullable
-
-**Plan:** `sort_title TEXT` (nullable — no sort title means NULL).
-
-**Actual:** `sort_title TEXT NOT NULL`. When no sort title is available, an
-empty string is stored.
-
-**Why this is an oversight:** `NULL` is a clearer "not set" sentinel. Empty
-string can be confused with "the sort title is literally an empty string."
-It also prevents indexes from excluding null rows (not relevant until
-indexes exist, but still a schema anti-pattern).
-
-**Fix:** Change to `sort_title TEXT` (nullable) and insert `NULL` when no
-sort title is available.
-
-### No minimum-field validation in `Ingest`
-
-**Plan** (§Inbox ingestion via 9P, step 5):
-> Validate: must have at minimum a title and one creator. On validation
-> failure: delete temp, return error.
-
-**Actual:** `library.Ingest` calls `epub.Parse` and `bibFromEpub` but never
-verifies that the result has a non-empty title and at least one author. A
-corrupt or edge-case epub with no title would be ingested successfully.
-
-**Fix:** After `bibFromEpub`, check `bib.Title != ""` and
-`len(bib.Authors) > 0` before proceeding. Return a `ValidationError` on
-failure.
-
-### `Edit` sidecar write is not transactional
-
-**Plan** (§Sidecar write via 9P):
-> Begin SQLite transaction. Update `books.status`. Rewrite `meta.toml` on
-> disk. Commit.
-
-The plan implies the meta.toml write and the index update are coordinated.
-
-**Actual:** `library.Edit` calls `store.WriteMeta` first, then `index.Put`
-sequentially. If `index.Put` fails, `meta.toml` has already been updated —
-they're out of sync until the next reindex. The comment in `library.go:183`
-notes this gap: "If the index delete then fails… reindex walks the
-filesystem and drops the stale row."
-
-**Fix:** Swap the order — update the index first, then write `meta.toml`. If
-the meta write fails, the index has been updated but meta.toml is stale —
-still a skew, but the authoritative store can recover it. A better fix would
-be a compensating write to restore the meta.toml on index failure, or a
-cross-system transaction (outside the current scope).
-
-### `"wtf"` error message in `inbox.Write`
-
-**File:** `inbox.go:88`
-```go
-return 0, errors.New("wtf")
-```
-
-**Fix:** Replace with a descriptive error message, e.g.
-`"file not opened with this fid"`.
+This is no longer a meaningful gap — reindex always recovers the correct
+state in any crash or partial-failure scenario.
 
 ### No `opf` file in per-book directory
 
@@ -192,12 +99,6 @@ USB sync) is out of scope for this repository.
 ## Summary of oversight fix effort
 
 | Fix | Effort | Impact |
-|---|---|---|
-| "wtf" error message | minutes | Low (cosmetic) |
+|---|---|---|---|
 | No `opf` file | ~30 min | Low (debugging aid) |
-| Stale temp cleanup | ~30 min | Medium (stale files on disk) |
-| Ingest minimum-field validation | ~30 min | Medium (corrupt epubs) |
-| `sort_title` nullable | ~1 hr | Low (schema hygiene) |
-| Reindex id collision → INSERT | ~30 min | Medium (data loss on duplicate) |
 | Edit write order (index first) | ~1 hr | Medium (skew window) |
-| SQL indexes | ~2 hr | High (performance at scale) |

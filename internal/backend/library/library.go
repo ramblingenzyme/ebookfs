@@ -52,6 +52,12 @@ func (l *libraryImpl) Ingest(epubPath string) (*model.Book, error) {
 	}
 
 	bib := bibFromEpub(book)
+	if bib.Title == "" {
+		return nil, fmt.Errorf("epub has no title")
+	}
+	if len(bib.Authors) == 0 {
+		bib.Authors = []model.Author{{Name: "Unknown", SortName: "Unknown"}}
+	}
 	if l.store.Exists(bib.Authors, bib.Title) {
 		return nil, fmt.Errorf("book already in library: %q", bib.Title)
 	}
