@@ -127,6 +127,12 @@ func (idx *Index) queryBooks(where string, args []any, order string, limit int) 
 		return nil, err
 	}
 
+	// Nothing matched: skip the child queries entirely rather than scanning
+	// three tables to hydrate zero books.
+	if len(byID) == 0 {
+		return books, nil
+	}
+
 	if err := idx.loadAuthors(byID); err != nil {
 		return nil, err
 	}
@@ -139,13 +145,39 @@ func (idx *Index) queryBooks(where string, args []any, order string, limit int) 
 	return books, nil
 }
 
+// maxScopeIDs caps how many book ids scopeByBook will bind into an IN clause;
+// above it we fall back to a full table scan. 900 sits just under SQLite's
+// legacy SQLITE_MAX_VARIABLE_NUMBER of 999 (raised to 32766 in 3.32.0), so it
+// holds regardless of the SQLite build — and it is also past the point where a
+// large IN list stops beating a sequential scan, so the exact value isn't
+// load-bearing.
+const maxScopeIDs = 900
+
+// scopeByBook returns a "WHERE <col> IN (…)" clause and its args restricting a
+// child-row query to the books in byID, or ("", nil) to fall back to a full
+// scan when there are too many ids to bind. col is the book-id column of the
+// child query, injected before its ORDER BY.
+func scopeByBook(col string, byID map[int64]*model.Book) (string, []any) {
+	if len(byID) == 0 || len(byID) > maxScopeIDs {
+		return "", nil
+	}
+	placeholders := make([]string, 0, len(byID))
+	args := make([]any, 0, len(byID))
+	for id := range byID {
+		placeholders = append(placeholders, "?")
+		args = append(args, id)
+	}
+	return " WHERE " + col + " IN (" + strings.Join(placeholders, ",") + ")", args
+}
+
 func (idx *Index) loadAuthors(byID map[int64]*model.Book) error {
+	where, args := scopeByBook("ba.book_id", byID)
 	rows, err := idx.db.Query(`
 		SELECT ba.book_id, a.id, a.name, a.sort_name
 		FROM book_authors ba
-		JOIN authors a ON a.id = ba.author_id
+		JOIN authors a ON a.id = ba.author_id`+where+`
 		ORDER BY ba.book_id, ba.position
-	`)
+	`, args...)
 	if err != nil {
 		return err
 	}
@@ -164,12 +196,13 @@ func (idx *Index) loadAuthors(byID map[int64]*model.Book) error {
 }
 
 func (idx *Index) loadTags(byID map[int64]*model.Book) error {
+	where, args := scopeByBook("bt.book_id", byID)
 	rows, err := idx.db.Query(`
 		SELECT bt.book_id, t.name
 		FROM book_tags bt
-		JOIN tags t ON t.id = bt.tag_id
+		JOIN tags t ON t.id = bt.tag_id`+where+`
 		ORDER BY bt.book_id, t.name
-	`)
+	`, args...)
 	if err != nil {
 		return err
 	}
@@ -188,7 +221,8 @@ func (idx *Index) loadTags(byID map[int64]*model.Book) error {
 }
 
 func (idx *Index) loadIdentifiers(byID map[int64]*model.Book) error {
-	rows, err := idx.db.Query(`SELECT book_id, scheme, value FROM identifiers`)
+	where, args := scopeByBook("book_id", byID)
+	rows, err := idx.db.Query(`SELECT book_id, scheme, value FROM identifiers`+where, args...)
 	if err != nil {
 		return err
 	}
@@ -266,10 +300,12 @@ func (idx *Index) Put(b *model.Book) error {
 	return idx.withTx(func(tx *sql.Tx) error { return putBook(tx, b) })
 }
 
-func putBook(tx *sql.Tx, b *model.Book) error {
-	// Resolve the series row first so its id (or NULL) goes straight into the
-	// upsert. seriesID/seriesIndex stay nil — and thus SQL NULL — when the book
-	// has no series, which also clears a series the book has just left.
+// upsertSeries points the book at its series, creating the series row when
+// needed and clearing series_id when the book has none, then removes any series
+// row no longer referenced by a book. Like upsertAuthors and upsertTags, it owns
+// the book's entire series relationship, so it must run after the books row
+// exists (it writes series_id/series_index with an UPDATE).
+func upsertSeries(tx *sql.Tx, b *model.Book) error {
 	var seriesID, seriesIndex any
 	if b.Series != nil {
 		if _, err := tx.Exec(`INSERT OR IGNORE INTO series (name) VALUES (?)`, b.Series.Name); err != nil {
@@ -279,40 +315,34 @@ func putBook(tx *sql.Tx, b *model.Book) error {
 		if err := tx.QueryRow(`SELECT id FROM series WHERE name=?`, b.Series.Name).Scan(&id); err != nil {
 			return err
 		}
-		seriesID = id
-		seriesIndex = b.Series.Index
+		seriesID, seriesIndex = id, b.Series.Index
 	}
 
 	if _, err := tx.Exec(
-		`INSERT INTO books
-		    (id, title, sort_title, pubdate, description, language,
-		     library_path, epub_filename, cover_path, status, rating,
-		     date_added, date_modified, series_id, series_index)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		 ON CONFLICT(id) DO UPDATE SET
-		     title=excluded.title, sort_title=excluded.sort_title, pubdate=excluded.pubdate,
-		     description=excluded.description, language=excluded.language,
-		     library_path=excluded.library_path, epub_filename=excluded.epub_filename,
-		     cover_path=excluded.cover_path, status=excluded.status, rating=excluded.rating,
-		     date_added=excluded.date_added, date_modified=excluded.date_modified,
-		     series_id=excluded.series_id, series_index=excluded.series_index`,
-		b.Meta.ID, b.Title, b.SortTitle, b.Pubdate, b.Description, b.Language,
-		b.LibraryPath, b.EpubFilename, b.CoverPath, b.Meta.Status, b.Meta.Rating,
-		b.Meta.DateAdded.UTC().Format(time.RFC3339),
-		b.Meta.DateModified.UTC().Format(time.RFC3339),
-		seriesID, seriesIndex,
+		`UPDATE books SET series_id=?, series_index=? WHERE id=?`,
+		seriesID, seriesIndex, b.Meta.ID,
 	); err != nil {
 		return err
 	}
 
+	// Remove series no longer referenced by any book.
+	_, err := tx.Exec(`DELETE FROM series WHERE id NOT IN (SELECT series_id FROM books WHERE series_id IS NOT NULL)`)
+	return err
+}
+
+// finishBook writes the per-book child rows (authors, tags, identifiers, series).
+// Called after the books row itself has been inserted or updated.
+func finishBook(tx *sql.Tx, b *model.Book) error {
 	if err := upsertAuthors(tx, b.Meta.ID, b.Authors); err != nil {
 		return err
 	}
 	if err := upsertTags(tx, b.Meta.ID, b.Meta.Tags); err != nil {
 		return err
 	}
+	if err := upsertSeries(tx, b); err != nil {
+		return err
+	}
 
-	// Replace identifiers wholesale.
 	if _, err := tx.Exec(`DELETE FROM identifiers WHERE book_id=?`, b.Meta.ID); err != nil {
 		return err
 	}
@@ -324,11 +354,66 @@ func putBook(tx *sql.Tx, b *model.Book) error {
 			return err
 		}
 	}
+	return nil
+}
 
-	// A book leaving a series can orphan the old series row (authors and tags are
-	// already cleaned by upsertAuthors/upsertTags).
-	_, err := tx.Exec(`DELETE FROM series WHERE id NOT IN (SELECT series_id FROM books WHERE series_id IS NOT NULL)`)
-	return err
+// insertBook inserts a new book row. It fails with a constraint violation if
+// b.Meta.ID already exists — used by Rebuild to detect id collisions.
+func insertBook(tx *sql.Tx, b *model.Book) error {
+	sortTitle := any(b.SortTitle)
+	if sortTitle == "" {
+		sortTitle = nil
+	}
+
+	// series_id/series_index are set by finishBook's upsertSeries.
+	if _, err := tx.Exec(
+		`INSERT INTO books
+		    (id, title, sort_title, pubdate, description, language,
+		     library_path, epub_filename, cover_path, status, rating,
+		     date_added, date_modified)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		b.Meta.ID, b.Title, sortTitle, b.Pubdate, b.Description, b.Language,
+		b.LibraryPath, b.EpubFilename, b.CoverPath, b.Meta.Status, b.Meta.Rating,
+		b.Meta.DateAdded.UTC().Format(time.RFC3339),
+		b.Meta.DateModified.UTC().Format(time.RFC3339),
+	); err != nil {
+		return err
+	}
+
+	return finishBook(tx, b)
+}
+
+// putBook inserts or replaces b in the index. It uses ON CONFLICT to update
+// an existing row — the semantics needed by Ingest (idempotent) and Edit.
+// Rebuild, which must surface id collisions, uses insertBook instead.
+func putBook(tx *sql.Tx, b *model.Book) error {
+	sortTitle := any(b.SortTitle)
+	if sortTitle == "" {
+		sortTitle = nil
+	}
+
+	// series_id/series_index are set by finishBook's upsertSeries.
+	if _, err := tx.Exec(
+		`INSERT INTO books
+		    (id, title, sort_title, pubdate, description, language,
+		     library_path, epub_filename, cover_path, status, rating,
+		     date_added, date_modified)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(id) DO UPDATE SET
+		     title=excluded.title, sort_title=excluded.sort_title, pubdate=excluded.pubdate,
+		     description=excluded.description, language=excluded.language,
+		     library_path=excluded.library_path, epub_filename=excluded.epub_filename,
+		     cover_path=excluded.cover_path, status=excluded.status, rating=excluded.rating,
+		     date_added=excluded.date_added, date_modified=excluded.date_modified`,
+		b.Meta.ID, b.Title, sortTitle, b.Pubdate, b.Description, b.Language,
+		b.LibraryPath, b.EpubFilename, b.CoverPath, b.Meta.Status, b.Meta.Rating,
+		b.Meta.DateAdded.UTC().Format(time.RFC3339),
+		b.Meta.DateModified.UTC().Format(time.RFC3339),
+	); err != nil {
+		return err
+	}
+
+	return finishBook(tx, b)
 }
 
 // Delete removes all index rows for bookID.

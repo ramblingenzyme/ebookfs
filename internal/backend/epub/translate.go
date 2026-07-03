@@ -134,9 +134,16 @@ func translateAuthor(meta *opfMetadata, b *Book) error {
 			role = "aut"
 		}
 
-		if role != "aut" {
-			continue
-		}
+	// Non-author contributors (editors, illustrators, translators) are
+	// parsed correctly but deliberately excluded: the frontend has no
+	// concept of contributor roles — the 9P authors field is a flat list
+	// of names — and WriteBib's setAuthors leaves non-aut creators
+	// untouched in the OPF, so exposing them would create a broken
+	// round-trip where removing an editor from the 9P authors field
+	// appears to work but the editor survives in the epub.
+	if role != "aut" {
+		continue
+	}
 
 		name, err := naming.Sanitize(c.Name)
 		if err != nil {
