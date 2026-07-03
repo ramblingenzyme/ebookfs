@@ -104,11 +104,12 @@ func (idx *Index) queryBooks(where string, args []any, order string, limit int) 
 	for rows.Next() {
 		b := &model.Book{Bib: model.Bib{Identifiers: make(map[string]string)}}
 		var dateAdded, dateModified string
+		var sortTitle sql.NullString
 		var seriesID sql.NullInt64
 		var seriesName sql.NullString
 		var seriesIndex sql.NullFloat64
 		if err := rows.Scan(
-			&b.Meta.ID, &b.Title, &b.SortTitle, &b.Pubdate, &b.Description, &b.Language,
+			&b.Meta.ID, &b.Title, &sortTitle, &b.Pubdate, &b.Description, &b.Language,
 			&b.LibraryPath, &b.EpubFilename, &b.CoverPath,
 			&b.Meta.Status, &b.Meta.Rating, &dateAdded, &dateModified,
 			&seriesID, &seriesName, &seriesIndex,
@@ -117,6 +118,7 @@ func (idx *Index) queryBooks(where string, args []any, order string, limit int) 
 		}
 		b.Meta.DateAdded, _ = time.Parse(time.RFC3339, dateAdded)
 		b.Meta.DateModified, _ = time.Parse(time.RFC3339, dateModified)
+		b.SortTitle = sortTitle.String
 		if seriesName.Valid {
 			b.Series = &model.SeriesRef{ID: seriesID.Int64, Name: seriesName.String, Index: seriesIndex.Float64}
 		}
