@@ -14,6 +14,7 @@ package fs
 import (
 	"bytes"
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/knusbaum/go9p/fs"
@@ -160,6 +161,18 @@ func (e testExporter) Filename(b *model.Book) string {
 		return e.filenameFn(b)
 	}
 	return b.EpubFilename
+}
+func (e testExporter) Dirname(b *model.Book) string {
+	var names []string
+	for _, a := range b.Authors {
+		if a.Name != "" {
+			names = append(names, a.Name)
+		}
+	}
+	if len(names) == 0 {
+		return "Unknown"
+	}
+	return strings.Join(names, " & ")
 }
 
 func dirChildNames(d fs.Dir) []string {

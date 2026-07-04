@@ -9,7 +9,6 @@ import (
 
 	"github.com/ramblingenzyme/ebookfs/library/config"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index"
-	"github.com/ramblingenzyme/ebookfs/library/internal/naming"
 	"github.com/ramblingenzyme/ebookfs/library/internal/store"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
@@ -42,6 +41,7 @@ type Exporter interface {
 	Size(*model.Book) (int64, bool)       // cheap; 9P stat length, false when cold
 	Ensure(*model.Book) error             // proactive warm hook
 	Filename(*model.Book) string          // FAT-safe export name
+	Dirname(*model.Book) string           // FAT-safe export directory name
 }
 
 func Open(cfg *config.Config) (Library, error) {
@@ -108,7 +108,5 @@ func checkSameFilesystem(a, b string) error {
 	os.Remove(dst)
 	return nil
 }
-
-func ForFAT(s string) (string, error) { return naming.ForFAT(s) }
 
 

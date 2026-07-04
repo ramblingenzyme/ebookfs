@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io"
 	"log"
-	"strings"
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
@@ -58,31 +57,11 @@ func (d *readerDir) authorDir(name string) fs.ModDir {
 	return ad
 }
 
-// authorName is the FAT-safe folder name for a book's authors, joined so a
-// co-authored book lands in one folder; the result survives an rsync onto a FAT
-// device.
-func (d *readerDir) authorName(b *model.Book) string {
-	var names []string
-	for _, a := range b.Authors {
-		if a.Name != "" {
-			names = append(names, a.Name)
-		}
-	}
-	name := "Unknown"
-	if len(names) > 0 {
-		name = strings.Join(names, " & ")
-	}
-	if fat, err := library.ForFAT(name); err == nil {
-		name = fat
-	}
-	return name
-}
-
 func (d *readerDir) add(dir *bookDir) {
 	if !d.included[dir.Book.Meta.Status] {
 		return
 	}
-	ad := d.authorDir(d.authorName(dir.Book))
+	ad := d.authorDir(d.exp.Dirname(dir.Book))
 	stat := d.f.NewStat(d.exp.Filename(dir.Book), "glenda", "glenda", 0444)
 	ad.AddChild(newReaderFile(stat, d.exp, dir.Book))
 	if d.warmer != nil {
@@ -94,7 +73,7 @@ func (d *readerDir) remove(dir *bookDir) {
 	if !d.included[dir.Book.Meta.Status] {
 		return
 	}
-	name := d.authorName(dir.Book)
+	name := d.exp.Dirname(dir.Book)
 	if child, ok := d.Children()[name]; ok {
 		child.(fs.ModDir).DeleteChild(d.exp.Filename(dir.Book))
 		d.pruneEmpty(name)
