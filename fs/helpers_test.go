@@ -39,8 +39,8 @@ var _ io.ReaderAt = (*fakeEpubReader)(nil)
 
 type fakeLib struct {
 	editFn         func(*model.Book, model.Edits) (*model.Book, error)
-	ingestFn       func(*library.StagedFile) (*model.Book, error)
-	createTempFn   func() (*library.StagedFile, error)
+	ingestFn       func(string) (*model.Book, error)
+	createIngestFn func() (*library.IngestHandle, error)
 	extractCoverFn func(*model.Book) ([]byte, error)
 	extractOPFFn   func(*model.Book) ([]byte, error)
 	writeCoverFn   func(*model.Book, []byte) error
@@ -56,22 +56,20 @@ func (l fakeLib) Edit(b *model.Book, e model.Edits) (*model.Book, error) {
 	}
 	return b, nil
 }
-func (l fakeLib) CreateTemp() (*library.StagedFile, error) {
-	if l.createTempFn != nil {
-		return l.createTempFn()
+func (l fakeLib) CreateIngest() (*library.IngestHandle, error) {
+	if l.createIngestFn != nil {
+		return l.createIngestFn()
 	}
 	f, err := os.CreateTemp("", "*.epub")
 	if err != nil {
 		return nil, err
 	}
-	return library.NewStagedFile(f, f.Name()), nil
-}
-func (l fakeLib) Ingest(sf *library.StagedFile) (*model.Book, error) {
-	sf.Close()
-	if l.ingestFn != nil {
-		return l.ingestFn(sf)
-	}
-	return nil, nil
+	return library.NewIngestHandle(f, f.Name(), func(path string) (*model.Book, error) {
+		if l.ingestFn != nil {
+			return l.ingestFn(path)
+		}
+		return nil, nil
+	}), nil
 }
 func (l fakeLib) ExtractCover(b *model.Book) ([]byte, error) {
 	if l.extractCoverFn != nil {

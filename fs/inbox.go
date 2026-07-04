@@ -23,7 +23,7 @@ func newInboxDir(f *fs.FS) *inboxDir {
 type inboxFile struct {
 	fs.BaseFile
 	fid      uint64
-	staged   *library.StagedFile
+	handle   *library.IngestHandle
 	lib      library.Library
 	onIngest func(*model.Book)
 }
@@ -66,12 +66,12 @@ func (i *inboxFile) Open(fid uint64, omode proto.Mode) error {
 		return errors.New("file already open")
 	}
 
-	sf, err := i.lib.CreateTemp()
+	h, err := i.lib.CreateIngest()
 	if err != nil {
 		log.Printf("inbox: open %q: %v", i.Stat().Name, err)
 		return err
 	}
-	i.staged = sf
+	i.handle = h
 	i.fid = fid
 
 	return nil
@@ -80,33 +80,33 @@ func (i *inboxFile) Open(fid uint64, omode proto.Mode) error {
 func (i *inboxFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
 	i.Lock()
 	defer i.Unlock()
-	if i.staged == nil || i.fid != fid {
+	if i.handle == nil || i.fid != fid {
 		log.Printf("inbox: write file was not opened")
 		return 0, errors.New("file not opened with this fid")
 	}
 
-	n, err := i.staged.WriteAt(data, int64(offset))
+	n, err := i.handle.WriteAt(data, int64(offset))
 
 	return uint32(n), err
 }
 
-// teardown releases the staged file under the lock. The caller must not
+// teardown releases the ingest handle under the lock. The caller must not
 // hold the lock when calling DeleteChild or Ingest, since those re-enter
 // the mutex via SetParent.
-func (i *inboxFile) teardown() *library.StagedFile {
+func (i *inboxFile) teardown() *library.IngestHandle {
 	i.Lock()
 	defer i.Unlock()
-	sf := i.staged
-	i.staged = nil
+	h := i.handle
+	i.handle = nil
 	i.fid = 0
-	return sf
+	return h
 }
 
 func (i *inboxFile) Close(fid uint64) error {
 	log.Printf("inbox: close %q fid=%d", i.Stat().Name, fid)
 
-	sf := i.teardown()
-	if sf == nil {
+	h := i.teardown()
+	if h == nil {
 		return nil
 	}
 
@@ -115,7 +115,7 @@ func (i *inboxFile) Close(fid uint64) error {
 		md.DeleteChild(i.Stat().Name)
 	}
 
-	b, err := i.lib.Ingest(sf)
+	b, err := h.Ingest()
 	if err != nil {
 		log.Printf("inbox: ingest %q: %v", i.Stat().Name, err)
 		return err

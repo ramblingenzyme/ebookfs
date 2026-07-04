@@ -58,17 +58,17 @@ func TestInboxCreateFile_WrongParent(t *testing.T) {
 	}
 }
 
-func TestInboxFileOpenCreateTempError(t *testing.T) {
+func TestInboxFileOpenCreateIngestError(t *testing.T) {
 	f := newTestFS(t)
 	lib := fakeLib{
-		createTempFn: func() (*library.StagedFile, error) {
-			return nil, errors.New("CreateTemp failed")
+		createIngestFn: func() (*library.IngestHandle, error) {
+			return nil, errors.New("CreateIngest failed")
 		},
 	}
 	inf := newInboxFile(f, lib, "test.epub", 0644, nil)
 
 	err := inf.Open(1, proto.Mode(0))
 	if err == nil {
-		t.Fatal("expected error from CreateTemp")
+		t.Fatal("expected error from CreateIngest")
 	}
 }

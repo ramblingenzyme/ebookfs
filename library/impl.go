@@ -18,19 +18,12 @@ type libraryImpl struct {
 	inboxTemp string
 }
 
-func (l *libraryImpl) CreateTemp() (*StagedFile, error) {
+func (l *libraryImpl) CreateIngest() (*IngestHandle, error) {
 	f, err := os.CreateTemp(l.inboxTemp, "*.epub")
 	if err != nil {
 		return nil, err
 	}
-	return NewStagedFile(f, f.Name()), nil
-}
-
-func (l *libraryImpl) Ingest(sf *StagedFile) (*model.Book, error) {
-	sf.Close()
-	b, err := l.ingestPath(sf.path)
-	os.Remove(sf.path)
-	return b, err
+	return NewIngestHandle(f, f.Name(), l.ingestPath), nil
 }
 
 // ingestPath parses the staged epub, lays it down in the store, and records it

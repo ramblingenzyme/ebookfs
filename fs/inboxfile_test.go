@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/knusbaum/go9p/proto"
-	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -16,7 +15,7 @@ func TestInboxFileOpenWriteCloseIngests(t *testing.T) {
 	ingested := make(chan *model.Book, 1)
 	f := newTestFS(t)
 	lib := fakeLib{
-		ingestFn: func(_ *library.StagedFile) (*model.Book, error) {
+		ingestFn: func(_ string) (*model.Book, error) {
 			return makeBook(42, "Ingested", "Author"), nil
 		},
 	}
@@ -86,7 +85,7 @@ func TestInboxFileCloseWithoutOpen(t *testing.T) {
 func TestInboxFileIngestErrorReturnsError(t *testing.T) {
 	f := newTestFS(t)
 	lib := fakeLib{
-		ingestFn: func(_ *library.StagedFile) (*model.Book, error) {
+		ingestFn: func(_ string) (*model.Book, error) {
 			return nil, errTest
 		},
 	}
@@ -111,7 +110,7 @@ func TestInboxFileReopenAfterClose(t *testing.T) {
 	ingestCount := 0
 	f := newTestFS(t)
 	lib := fakeLib{
-		ingestFn: func(_ *library.StagedFile) (*model.Book, error) {
+		ingestFn: func(_ string) (*model.Book, error) {
 			ingestCount++
 			return makeBook(int64(ingestCount), "Test", "Author"), nil
 		},
@@ -149,7 +148,7 @@ func TestInboxFileCloseWithParentDeadlockRegression(t *testing.T) {
 	ingested := make(chan *model.Book, 1)
 	f := newTestFS(t)
 	lib := fakeLib{
-		ingestFn: func(_ *library.StagedFile) (*model.Book, error) {
+		ingestFn: func(_ string) (*model.Book, error) {
 			return makeBook(42, "Test", "Author"), nil
 		},
 	}

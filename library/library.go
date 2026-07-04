@@ -18,27 +18,37 @@ import (
 // and a close.
 type EpubReader = model.EpubReader
 
-// StagedFile is a temp file created by the library for upload staging.
-// The frontend writes to it via WriteAt, then passes it to Library.Ingest
-// which takes ownership and closes it. CreateTemp is the intended
-// creation path; NewStagedFile is provided for tests.
-type StagedFile struct {
-	file *os.File
-	path string
+// IngestHandle is a writable handle returned by Library.CreateIngest.
+// The frontend writes upload bytes via WriteAt, then calls Ingest to
+// finalize: the file is closed, the epub is parsed and laid down in the
+// store, and the temp file is cleaned up. NewIngestHandle is exported for
+// tests; production code uses CreateIngest.
+type IngestHandle struct {
+	file   *os.File
+	path   string
+	ingest func(string) (*model.Book, error)
 }
 
-func NewStagedFile(f *os.File, path string) *StagedFile {
-	return &StagedFile{file: f, path: path}
+func NewIngestHandle(f *os.File, path string, ingest func(string) (*model.Book, error)) *IngestHandle {
+	return &IngestHandle{file: f, path: path, ingest: ingest}
 }
 
-func (s *StagedFile) WriteAt(p []byte, off int64) (int, error) { return s.file.WriteAt(p, off) }
-func (s *StagedFile) Close() error                             { return s.file.Close() }
+func (h *IngestHandle) WriteAt(p []byte, off int64) (int, error) { return h.file.WriteAt(p, off) }
+
+func (h *IngestHandle) Ingest() (*model.Book, error) {
+	h.file.Close()
+	if h.ingest == nil {
+		return nil, nil
+	}
+	b, err := h.ingest(h.path)
+	os.Remove(h.path)
+	return b, err
+}
 
 // Library defines the public API for filesystem and index operations on the
 // book collection. The concrete implementation is unexported; construct via New.
 type Library interface {
-	CreateTemp() (*StagedFile, error)
-	Ingest(*StagedFile) (*model.Book, error)
+	CreateIngest() (*IngestHandle, error)
 	ListAll() ([]*model.Book, error)
 	Reindex() error
 	OpenEpub(b *model.Book) (EpubReader, error)
