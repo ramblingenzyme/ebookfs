@@ -431,9 +431,7 @@ func TestByIDDirTitleChangeReflected(t *testing.T) {
 func TestReaderDirAddIncludedStatus(t *testing.T) {
 	f := newTestFS(t)
 	reg := newTestRegistry(t, f)
-	d := newReaderDir(reg, testExporter{}, ReaderConfig{
-		Statuses: []string{"unread"},
-	})
+	d := newReaderDir(reg, testExporter{statuses: []string{"unread"}})
 
 	b := makeBook(1, "To Read", "Author1")
 	b.EpubFilename = "To Read.epub"
@@ -453,9 +451,7 @@ func TestReaderDirAddIncludedStatus(t *testing.T) {
 func TestReaderDirSkipExcludedStatus(t *testing.T) {
 	f := newTestFS(t)
 	reg := newTestRegistry(t, f)
-	d := newReaderDir(reg, testExporter{}, ReaderConfig{
-		Statuses: []string{"unread"},
-	})
+	d := newReaderDir(reg, testExporter{statuses: []string{"unread"}})
 
 	b := makeBook(1, "Finished", "Author2")
 	b.Meta.Status = "read"
@@ -469,9 +465,7 @@ func TestReaderDirSkipExcludedStatus(t *testing.T) {
 func TestReaderDirRemoveLastPrunesDir(t *testing.T) {
 	f := newTestFS(t)
 	reg := newTestRegistry(t, f)
-	d := newReaderDir(reg, testExporter{}, ReaderConfig{
-		Statuses: []string{"unread"},
-	})
+	d := newReaderDir(reg, testExporter{statuses: []string{"unread"}})
 
 	b := makeBook(1, "Only", "Author3")
 	b.EpubFilename = "Only.epub"
@@ -487,9 +481,7 @@ func TestReaderDirRemoveLastPrunesDir(t *testing.T) {
 func TestReaderDirCoAuthorSingleDir(t *testing.T) {
 	f := newTestFS(t)
 	reg := newTestRegistry(t, f)
-	d := newReaderDir(reg, testExporter{}, ReaderConfig{
-		Statuses: []string{"unread"},
-	})
+	d := newReaderDir(reg, testExporter{statuses: []string{"unread"}})
 
 	b := makeBook(1, "Joint", "Alice", "Bob")
 	b.EpubFilename = "Joint.epub"
@@ -510,9 +502,7 @@ func TestReaderDirCoAuthorSingleDir(t *testing.T) {
 func TestReaderDirCoAuthorRemove(t *testing.T) {
 	f := newTestFS(t)
 	reg := newTestRegistry(t, f)
-	d := newReaderDir(reg, testExporter{}, ReaderConfig{
-		Statuses: []string{"unread"},
-	})
+	d := newReaderDir(reg, testExporter{statuses: []string{"unread"}})
 
 	b := makeBook(1, "Joint", "Alice", "Bob")
 	b.EpubFilename = "Joint.epub"
@@ -528,9 +518,7 @@ func TestReaderDirCoAuthorRemove(t *testing.T) {
 func TestReaderDirMultipleBooksSameAuthor(t *testing.T) {
 	f := newTestFS(t)
 	reg := newTestRegistry(t, f)
-	d := newReaderDir(reg, testExporter{}, ReaderConfig{
-		Statuses: []string{"unread"},
-	})
+	d := newReaderDir(reg, testExporter{statuses: []string{"unread"}})
 
 	b1 := makeBook(1, "Book A", "SameAuthor")
 	b1.EpubFilename = "A.epub"
@@ -557,10 +545,7 @@ func TestReaderDirMultipleBooksSameAuthor(t *testing.T) {
 func TestReaderDirWithConvertEnabled(t *testing.T) {
 	f := newTestFS(t)
 	reg := newTestRegistry(t, f)
-	d := newReaderDir(reg, testExporter{}, ReaderConfig{
-		Statuses: []string{"unread"},
-		Convert:  true,
-	})
+	d := newReaderDir(reg, testExporter{statuses: []string{"unread"}})
 
 	b := makeBook(1, "Convert Me", "AuthorX")
 	b.EpubFilename = "Convert.epub"

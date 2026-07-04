@@ -3,13 +3,10 @@ package library
 import (
 	"fmt"
 	"log"
-	"os"
 	"time"
 
-	"github.com/ramblingenzyme/ebookfs/library/config"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index"
-	"github.com/ramblingenzyme/ebookfs/library/internal/kepub"
 	"github.com/ramblingenzyme/ebookfs/library/internal/store"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
@@ -17,7 +14,6 @@ import (
 type libraryImpl struct {
 	store *store.Store
 	index *index.Index
-	cfg   *config.Config
 }
 
 // Ingest parses the staged epub, lays it down in the store, and records it
@@ -205,14 +201,4 @@ func bibFromEpub(src *epub.Book) model.Bib {
 func (l *libraryImpl) Delete(b *model.Book) error {
 	// Store is authoritative; a ghost index row is cleaned up by reindex.
 	return l.index.Delete(b.Meta.ID, func() error { return l.store.Delete(b.Location) })
-}
-
-func (l *libraryImpl) Exporter() Exporter {
-	if l.cfg.Reader.Convert {
-		if err := os.MkdirAll(l.cfg.Reader.CacheDir, 0755); err != nil {
-			log.Fatalf("creating kepub cache dir: %v", err)
-		}
-		return &KepubCache{c: kepub.NewCache(l.cfg.Reader.CacheDir, l)}
-	}
-	return epubExporter{lib: l}
 }

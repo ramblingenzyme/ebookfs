@@ -1,29 +1,41 @@
 package library
 
 import (
+	"log"
+	"os"
 	"strings"
 
+	"github.com/ramblingenzyme/ebookfs/library/config"
 	"github.com/ramblingenzyme/ebookfs/library/internal/kepub"
 	"github.com/ramblingenzyme/ebookfs/library/internal/naming"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-type KepubCache struct {
-	c *kepub.Cache
+func NewExporter(cfg config.ReaderConfig, lib Library) Exporter {
+	if cfg.Convert {
+		if err := os.MkdirAll(cfg.CacheDir, 0755); err != nil {
+			log.Fatalf("creating kepub cache dir: %v", err)
+		}
+		return &kepubCache{statuses: cfg.Statuses, c: kepub.NewCache(cfg.CacheDir, lib)}
+	}
+	return epubExporter{statuses: cfg.Statuses, lib: lib}
 }
 
-func NewKepubCache(dir string, lib Library) *KepubCache {
-	return &KepubCache{c: kepub.NewCache(dir, lib)}
+type kepubCache struct {
+	statuses []string
+	c        *kepub.Cache
 }
 
-func (k *KepubCache) Open(b *model.Book) (EpubReader, error) { return k.c.Open(b) }
-func (k *KepubCache) Size(b *model.Book) (int64, bool)      { return k.c.Size(b) }
-func (k *KepubCache) Ensure(b *model.Book) error             { return k.c.Ensure(b) }
-func (k *KepubCache) Filename(b *model.Book) string          { return k.c.Filename(b) }
-func (k *KepubCache) Dirname(b *model.Book) string           { return exportDirname(b) }
+func (k *kepubCache) Statuses() []string { return k.statuses }
+func (k *kepubCache) Open(b *model.Book) (EpubReader, error) { return k.c.Open(b) }
+func (k *kepubCache) Size(b *model.Book) (int64, bool)      { return k.c.Size(b) }
+func (k *kepubCache) Ensure(b *model.Book) error             { return k.c.Ensure(b) }
+func (k *kepubCache) Filename(b *model.Book) string          { return k.c.Filename(b) }
+func (k *kepubCache) Dirname(b *model.Book) string           { return exportDirname(b) }
 
 type epubExporter struct {
-	lib Library
+	statuses []string
+	lib      Library
 }
 
 func (e epubExporter) Open(b *model.Book) (EpubReader, error) {
@@ -38,8 +50,8 @@ func (e epubExporter) Size(b *model.Book) (int64, bool) {
 	return fi.Size(), true
 }
 
-func (e epubExporter) Ensure(*model.Book) error { return nil }
-
+func (e epubExporter) Ensure(*model.Book) error    { return nil }
+func (e epubExporter) Statuses() []string          { return e.statuses }
 func (e epubExporter) Filename(b *model.Book) string { return b.EpubFilename }
 func (e epubExporter) Dirname(b *model.Book) string  { return exportDirname(b) }
 

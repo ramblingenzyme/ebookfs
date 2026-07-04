@@ -13,8 +13,8 @@ import (
 // of the backend (store, index, library) and chooses the reader/ Exporter
 // (original epub vs kepub); the frontend depends only on the library facade and
 // that Exporter. inboxTemp is where uploads are staged before ingest.
-func StartServer(lib library.Library, exp library.Exporter, readerCfg ReaderConfig, listen, inboxTemp string) {
-	ebookfs, _, err := setupServer(lib, exp, readerCfg, inboxTemp)
+func StartServer(lib library.Library, exp library.Exporter, listen, inboxTemp string) {
+	ebookfs, _, err := setupServer(lib, exp, inboxTemp)
 	if err != nil {
 		log.Fatalf("setting up server: %v", err)
 	}
@@ -25,7 +25,7 @@ func StartServer(lib library.Library, exp library.Exporter, readerCfg ReaderConf
 // setupServer wires the FS, registry, and views without starting the 9P
 // listener, so the wiring can be tested without blocking. It returns the FS
 // and the root directory for inspection.
-func setupServer(lib library.Library, exp library.Exporter, readerCfg ReaderConfig, inboxTemp string) (*fs.FS, *fs.StaticDir, error) {
+func setupServer(lib library.Library, exp library.Exporter, inboxTemp string) (*fs.FS, *fs.StaticDir, error) {
 	ebookfs, root := newFS()
 	registry := newBookRegistry(ebookfs, lib)
 	ebookfs.CreateFile = inboxCreateFile(lib, inboxTemp, registry.Add)
@@ -38,7 +38,7 @@ func setupServer(lib library.Library, exp library.Exporter, readerCfg ReaderConf
 	byAuthor := newByAuthorDir(registry)
 	byID := newByIDDir(registry)
 	bySeries := newBySeriesDir(registry)
-	reader := newReaderDir(registry, exp, readerCfg)
+	reader := newReaderDir(registry, exp)
 
 	books, err := lib.ListAll()
 	if err != nil {

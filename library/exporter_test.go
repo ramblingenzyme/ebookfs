@@ -42,7 +42,6 @@ func (l testLib) Edit(b *model.Book, e model.Edits) (*model.Book, error) {
 }
 func (l testLib) WriteCover(b *model.Book, img []byte) error { return nil }
 func (l testLib) Delete(b *model.Book) error                 { return nil }
-func (l testLib) Exporter() Exporter                         { return nil }
 
 func makeBook(id int64, title string, authors ...string) *model.Book {
 	auths := make([]model.Author, len(authors))

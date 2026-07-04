@@ -102,9 +102,6 @@ func (l fakeLib) Delete(b *model.Book) error {
 	}
 	return nil
 }
-func (l fakeLib) Exporter() library.Exporter {
-	return nil
-}
 
 var _ library.Library = (fakeLib{})
 
@@ -132,6 +129,7 @@ func newTestRegistry(t *testing.T, f *fs.FS) *bookRegistry {
 }
 
 type testExporter struct {
+	statuses   []string
 	openFn     func(*model.Book) (library.EpubReader, error)
 	sizeFn     func(*model.Book) (int64, bool)
 	ensureFn   func(*model.Book) error
@@ -174,6 +172,7 @@ func (e testExporter) Dirname(b *model.Book) string {
 	}
 	return strings.Join(names, " & ")
 }
+func (e testExporter) Statuses() []string { return e.statuses }
 
 func dirChildNames(d fs.Dir) []string {
 	var names []string

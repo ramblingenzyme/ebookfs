@@ -30,7 +30,6 @@ type Library interface {
 	Edit(b *model.Book, e model.Edits) (*model.Book, error)
 	WriteCover(b *model.Book, img []byte) error
 	Delete(b *model.Book) error
-	Exporter() Exporter
 }
 
 // Exporter produces the rsync-export rendition of a book for the reader/ view.
@@ -42,31 +41,28 @@ type Exporter interface {
 	Ensure(*model.Book) error             // proactive warm hook
 	Filename(*model.Book) string          // FAT-safe export name
 	Dirname(*model.Book) string           // FAT-safe export directory name
+	Statuses() []string                   // which book statuses appear in the reader view
 }
 
-func Open(cfg *config.Config) (Library, error) {
-	root := cfg.Library.Root
-	inboxTemp := cfg.Library.InboxTemp
-	indexPath := cfg.Index.Path
-
-	if err := os.MkdirAll(root, 0755); err != nil {
+func Open(cfg config.LibraryConfig) (Library, error) {
+	if err := os.MkdirAll(cfg.Root, 0755); err != nil {
 		return nil, fmt.Errorf("creating library root: %w", err)
 	}
-	if err := os.MkdirAll(inboxTemp, 0700); err != nil {
+	if err := os.MkdirAll(cfg.InboxTemp, 0700); err != nil {
 		return nil, fmt.Errorf("creating inbox temp dir: %w", err)
 	}
-	if err := cleanInboxTemp(inboxTemp); err != nil {
+	if err := cleanInboxTemp(cfg.InboxTemp); err != nil {
 		return nil, fmt.Errorf("cleaning inbox temp: %w", err)
 	}
-	if err := checkSameFilesystem(root, inboxTemp); err != nil {
+	if err := checkSameFilesystem(cfg.Root, cfg.InboxTemp); err != nil {
 		return nil, fmt.Errorf("inbox_temp must be on the same filesystem as library.root: %w", err)
 	}
 
-	idx, err := index.Open(indexPath)
+	idx, err := index.Open(cfg.IndexPath)
 	if err != nil {
 		return nil, err
 	}
-	lib := &libraryImpl{store: store.New(root, inboxTemp), index: idx, cfg: cfg}
+	lib := &libraryImpl{store: store.New(cfg.Root, cfg.InboxTemp), index: idx}
 	if err := lib.Reindex(); err != nil {
 		return nil, fmt.Errorf("reindexing library: %w", err)
 	}

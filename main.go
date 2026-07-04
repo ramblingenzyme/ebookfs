@@ -18,11 +18,11 @@ func main() {
 		log.Fatalf("loading config: %v", err)
 	}
 
-	lib, err := library.Open(cfg)
+	lib, err := library.Open(cfg.Library)
 	if err != nil {
 		log.Fatalf("opening library: %v", err)
 	}
 
-	readerCfg := fs.ReaderConfig{Statuses: cfg.Reader.Statuses, Convert: cfg.Reader.Convert}
-	fs.StartServer(lib, lib.Exporter(), readerCfg, cfg.Server.Listen, cfg.Library.InboxTemp)
+	fs.StartServer(lib, library.NewExporter(cfg.Reader, lib),
+		cfg.Server.Listen, cfg.Library.InboxTemp)
 }

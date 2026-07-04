@@ -16,10 +16,9 @@ func TestSetupServer(t *testing.T) {
 			return []*model.Book{b1, b2}, nil
 		},
 	}
-	exp := testExporter{}
-	cfg := ReaderConfig{Statuses: []string{"unread"}}
+	exp := testExporter{statuses: []string{"unread"}}
 
-	_, root, err := setupServer(lib, exp, cfg, "/tmp")
+	_, root, err := setupServer(lib, exp, "/tmp")
 	if err != nil {
 		t.Fatalf("setupServer: %v", err)
 	}
@@ -41,7 +40,7 @@ func TestSetupServer_ListAllError(t *testing.T) {
 			return nil, errTest
 		},
 	}
-	_, _, err := setupServer(lib, testExporter{}, ReaderConfig{}, "/tmp")
+	_, _, err := setupServer(lib, testExporter{}, "/tmp")
 	if err == nil {
 		t.Fatal("expected error from setupServer when ListAll fails")
 	}
@@ -55,7 +54,7 @@ func TestSetupServer_BooksPopulated(t *testing.T) {
 			return []*model.Book{b}, nil
 		},
 	}
-	_, root, err := setupServer(lib, testExporter{}, ReaderConfig{}, "/tmp")
+	_, root, err := setupServer(lib, testExporter{}, "/tmp")
 	if err != nil {
 		t.Fatalf("setupServer: %v", err)
 	}

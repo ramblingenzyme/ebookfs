@@ -132,9 +132,7 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 	}
 	reg := newBookRegistry(f, lib)
 	allBooks := newAllBooksDir(reg)
-	readerDir := newReaderDir(reg, testExporter{}, ReaderConfig{
-		Statuses: []string{"reading"},
-	})
+	readerDir := newReaderDir(reg, testExporter{statuses: []string{"reading"}})
 
 	book := makeBook(1, "Test", "Author1")
 	book.EpubFilename = "Test.epub"

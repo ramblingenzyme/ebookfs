@@ -11,13 +11,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-// ReaderConfig is the frontend's view of the reader/ settings. main builds it
-// from config so the frontend stays decoupled from the config package.
-type ReaderConfig struct {
-	Statuses []string
-	Convert  bool
-}
-
 // readerDir is the reader/ export view: the books whose status is in the
 // configured set, grouped by author, served through the injected Exporter. It
 // mirrors byAuthorDir, but its leaves are export files rather than bookDirs and
@@ -27,21 +20,19 @@ type readerDir struct {
 	groupingDir
 	exp      library.Exporter
 	included map[string]bool
-	warmer   *warmer // nil unless conversion is enabled
+	warmer   *warmer
 }
 
-func newReaderDir(reg *bookRegistry, exp library.Exporter, cfg ReaderConfig) *readerDir {
-	included := make(map[string]bool, len(cfg.Statuses))
-	for _, s := range cfg.Statuses {
+func newReaderDir(reg *bookRegistry, exp library.Exporter) *readerDir {
+	included := make(map[string]bool)
+	for _, s := range exp.Statuses() {
 		included[s] = true
 	}
 	d := &readerDir{
 		groupingDir: newGroupingDir(reg.f, "reader"),
 		exp:         exp,
 		included:    included,
-	}
-	if cfg.Convert {
-		d.warmer = newWarmer(exp)
+		warmer:      newWarmer(exp),
 	}
 	reg.AddView(d)
 	return d
@@ -64,9 +55,7 @@ func (d *readerDir) add(dir *bookDir) {
 	ad := d.authorDir(d.exp.Dirname(dir.Book))
 	stat := d.f.NewStat(d.exp.Filename(dir.Book), "glenda", "glenda", 0444)
 	ad.AddChild(newReaderFile(stat, d.exp, dir.Book))
-	if d.warmer != nil {
-		d.warmer.warm(dir.Book)
-	}
+	d.warmer.warm(dir.Book)
 }
 
 func (d *readerDir) remove(dir *bookDir) {

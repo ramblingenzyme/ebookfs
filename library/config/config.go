@@ -8,7 +8,6 @@ import (
 
 type Config struct {
 	Library LibraryConfig `toml:"library"`
-	Index   IndexConfig   `toml:"index"`
 	Reader  ReaderConfig  `toml:"reader"`
 	Server  ServerConfig  `toml:"server"`
 	Log     LogConfig     `toml:"log"`
@@ -17,10 +16,7 @@ type Config struct {
 type LibraryConfig struct {
 	Root      string `toml:"root"`
 	InboxTemp string `toml:"inbox_temp"`
-}
-
-type IndexConfig struct {
-	Path string `toml:"path"`
+	IndexPath string `toml:"index_path"`
 }
 
 // ReaderConfig configures the reader/ rsync export. Statuses selects which books
@@ -63,9 +59,7 @@ func defaults() *Config {
 		Library: LibraryConfig{
 			Root:      "/var/lib/ebookfs/library",
 			InboxTemp: "/var/lib/ebookfs/library/.inbox-tmp",
-		},
-		Index: IndexConfig{
-			Path: "/var/lib/ebookfs/library/.index.db",
+			IndexPath: "/var/lib/ebookfs/library/.index.db",
 		},
 		Reader: ReaderConfig{
 			Statuses: []string{"unread", "reading"},
@@ -118,8 +112,8 @@ func (c *Config) validate() error {
 	if c.Library.InboxTemp == "" {
 		return fmt.Errorf("library.inbox_temp is required")
 	}
-	if c.Index.Path == "" {
-		return fmt.Errorf("index.path is required")
+	if c.Library.IndexPath == "" {
+		return fmt.Errorf("library.index_path is required")
 	}
 
 	if err := c.validateReader(); err != nil {
