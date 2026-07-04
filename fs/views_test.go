@@ -594,3 +594,284 @@ func TestBySeriesDirRemoveNilSeriesNoOp(t *testing.T) {
 
 	d.remove(bd) // Should not panic — early return when Series is nil
 }
+
+// ---- ByTagDir ----
+
+func TestByTagDirAddBookWithTags(t *testing.T) {
+	f := newTestFS(t)
+	reg := newTestRegistry(t, f)
+	d := newByTagDir(reg)
+
+	b := makeBook(1, "Tagged Book", "Author")
+	b.Meta.Tags = []string{"fiction", "fantasy"}
+	reg.Add(b)
+
+	for _, tag := range []string{"fiction", "fantasy"} {
+		td, ok := d.Children()[tag]
+		if !ok {
+			t.Fatalf("by-tag should have %q subdir", tag)
+		}
+		bld := td.(*booksDir)
+		if _, ok := bld.Children()["Tagged Book"]; !ok {
+			t.Errorf("%s's dir should contain 'Tagged Book'", tag)
+		}
+	}
+}
+
+func TestByTagDirNoTags(t *testing.T) {
+	f := newTestFS(t)
+	reg := newTestRegistry(t, f)
+	d := newByTagDir(reg)
+
+	b := makeBook(1, "Untagged", "Author")
+	b.Meta.Tags = nil
+	reg.Add(b)
+
+	if n := len(d.Children()); n != 0 {
+		t.Errorf("by-tag should have no children for tagless book, got %d", n)
+	}
+}
+
+func TestByTagDirRemoveLastPrunesDir(t *testing.T) {
+	f := newTestFS(t)
+	reg := newTestRegistry(t, f)
+	d := newByTagDir(reg)
+
+	b := makeBook(1, "Only Tagged", "Author")
+	b.Meta.Tags = []string{"ephemeral"}
+	reg.Add(b)
+	reg.Remove(1)
+
+	if _, ok := d.Children()["ephemeral"]; ok {
+		t.Error("tag subdir should be pruned after last book removed")
+	}
+}
+
+func TestByTagDirMultipleBooksSameTag(t *testing.T) {
+	f := newTestFS(t)
+	reg := newTestRegistry(t, f)
+	d := newByTagDir(reg)
+
+	b1 := makeBook(1, "Book A", "Author")
+	b1.Meta.Tags = []string{"scifi"}
+	b2 := makeBook(2, "Book B", "Author")
+	b2.Meta.Tags = []string{"scifi"}
+
+	reg.Add(b1)
+	reg.Add(b2)
+
+	td := d.Children()["scifi"].(*booksDir)
+	children := dirChildNames(td)
+	if len(children) != 2 {
+		t.Fatalf("expected 2 books under scifi, got %d: %v", len(children), children)
+	}
+}
+
+func TestByTagDirRemoveOneOfTwo(t *testing.T) {
+	f := newTestFS(t)
+	reg := newTestRegistry(t, f)
+	d := newByTagDir(reg)
+
+	b1 := makeBook(1, "Keep", "Author")
+	b1.Meta.Tags = []string{"tag"}
+	b2 := makeBook(2, "Remove", "Author")
+	b2.Meta.Tags = []string{"tag"}
+
+	reg.Add(b1)
+	reg.Add(b2)
+	reg.Remove(2)
+
+	td := d.Children()["tag"].(*booksDir)
+	if _, ok := td.Children()["Remove"]; ok {
+		t.Error("'Remove' book should be gone from tag dir")
+	}
+	if _, ok := td.Children()["Keep"]; !ok {
+		t.Error("'Keep' book should remain in tag dir")
+	}
+}
+
+func TestByTagDirTagWithSlash(t *testing.T) {
+	f := newTestFS(t)
+	reg := newTestRegistry(t, f)
+	d := newByTagDir(reg)
+
+	b := makeBook(1, "Slash Tag", "Author")
+	b.Meta.Tags = []string{"a/b"}
+	reg.Add(b)
+
+	if _, ok := d.Children()["a_b"]; !ok {
+		t.Fatalf("by-tag should have 'a_b' subdir for tag 'a/b', got: %v", dirChildNames(d))
+	}
+	if _, ok := d.Children()["a/b"]; ok {
+		t.Error("by-tag should NOT have 'a/b' subdir (slash not valid in 9P names)")
+	}
+}
+
+func TestByTagDirRemoveWithSlashTag(t *testing.T) {
+	f := newTestFS(t)
+	reg := newTestRegistry(t, f)
+	d := newByTagDir(reg)
+
+	b := makeBook(1, "Slash Tag", "Author")
+	b.Meta.Tags = []string{"x/y"}
+	reg.Add(b)
+	reg.Remove(1)
+
+	if _, ok := d.Children()["x_y"]; ok {
+		t.Error("tag subdir should be pruned after remove")
+	}
+}
+
+func TestByTagDirEditTags(t *testing.T) {
+	f := newTestFS(t)
+	reg := newTestRegistry(t, f)
+	d := newByTagDir(reg)
+
+	b := makeBook(1, "Retagged", "Author")
+	b.Meta.Tags = []string{"oldtag"}
+	reg.Add(b)
+
+	if _, ok := d.Children()["oldtag"]; !ok {
+		t.Fatal("by-tag should have 'oldtag' subdir")
+	}
+
+	reg.Remove(1)
+	b.Meta.Tags = []string{"newtag"}
+	reg.Add(b)
+
+	if _, ok := d.Children()["oldtag"]; ok {
+		t.Error("'oldtag' subdir should be pruned after retag")
+	}
+	td, ok := d.Children()["newtag"]
+	if !ok {
+		t.Fatal("by-tag should have 'newtag' subdir after retag")
+	}
+	if _, ok := td.(*booksDir).Children()["Retagged"]; !ok {
+		t.Error("'Retagged' should appear under 'newtag'")
+	}
+}
+
+// ---- ByStatusDir ----
+
+func TestByStatusDirAddBook(t *testing.T) {
+	f := newTestFS(t)
+	reg := newTestRegistry(t, f)
+	d := newByStatusDir(reg)
+
+	b := makeBook(1, "My Book", "Author")
+	reg.Add(b)
+
+	sd, ok := d.Children()["unread"]
+	if !ok {
+		t.Fatal("by-status should have 'unread' subdir")
+	}
+	bld := sd.(*booksDir)
+	if _, ok := bld.Children()["My Book"]; !ok {
+		t.Error("unread dir should contain 'My Book'")
+	}
+}
+
+func TestByStatusDirDifferentStatuses(t *testing.T) {
+	f := newTestFS(t)
+	reg := newTestRegistry(t, f)
+	d := newByStatusDir(reg)
+
+	b1 := makeBook(1, "Unread Book", "Author")
+	b1.Meta.Status = "unread"
+	b2 := makeBook(2, "Read Book", "Author")
+	b2.Meta.Status = "read"
+
+	reg.Add(b1)
+	reg.Add(b2)
+
+	for _, status := range []string{"unread", "read"} {
+		sd, ok := d.Children()[status]
+		if !ok {
+			t.Fatalf("by-status should have %q subdir", status)
+		}
+		bld := sd.(*booksDir)
+		if n := len(bld.Children()); n != 1 {
+			t.Errorf("expected 1 book in %q, got %d", status, n)
+		}
+	}
+}
+
+func TestByStatusDirRemoveLastPrunesDir(t *testing.T) {
+	f := newTestFS(t)
+	reg := newTestRegistry(t, f)
+	d := newByStatusDir(reg)
+
+	b := makeBook(1, "Only", "Author")
+	b.Meta.Status = "reading"
+	reg.Add(b)
+	reg.Remove(1)
+
+	if _, ok := d.Children()["reading"]; ok {
+		t.Error("status subdir should be pruned after last book removed")
+	}
+}
+
+func TestByStatusDirMultipleBooksSameStatus(t *testing.T) {
+	f := newTestFS(t)
+	reg := newTestRegistry(t, f)
+	d := newByStatusDir(reg)
+
+	reg.Add(makeBook(1, "Book A", "Author"))
+	reg.Add(makeBook(2, "Book B", "Author"))
+
+	sd := d.Children()["unread"].(*booksDir)
+	children := dirChildNames(sd)
+	if len(children) != 2 {
+		t.Fatalf("expected 2 books under unread, got %d: %v", len(children), children)
+	}
+}
+
+func TestByStatusDirRemoveOneOfTwo(t *testing.T) {
+	f := newTestFS(t)
+	reg := newTestRegistry(t, f)
+	d := newByStatusDir(reg)
+
+	b1 := makeBook(1, "Keep", "Author")
+	b2 := makeBook(2, "Remove", "Author")
+
+	reg.Add(b1)
+	reg.Add(b2)
+	reg.Remove(2)
+
+	sd := d.Children()["unread"].(*booksDir)
+	if _, ok := sd.Children()["Remove"]; ok {
+		t.Error("'Remove' book should be gone from status dir")
+	}
+	if _, ok := sd.Children()["Keep"]; !ok {
+		t.Error("'Keep' book should remain in status dir")
+	}
+}
+
+func TestByStatusDirEditStatus(t *testing.T) {
+	f := newTestFS(t)
+	reg := newTestRegistry(t, f)
+	d := newByStatusDir(reg)
+
+	b := makeBook(1, "Status Change", "Author")
+	b.Meta.Status = "unread"
+	reg.Add(b)
+
+	if _, ok := d.Children()["unread"]; !ok {
+		t.Fatal("by-status should have 'unread' subdir")
+	}
+
+	reg.Remove(1)
+	b.Meta.Status = "read"
+	reg.Add(b)
+
+	if _, ok := d.Children()["unread"]; ok {
+		t.Error("'unread' subdir should be pruned after status change")
+	}
+	sd, ok := d.Children()["read"]
+	if !ok {
+		t.Fatal("by-status should have 'read' subdir after status change")
+	}
+	if _, ok := sd.(*booksDir).Children()["Status Change"]; !ok {
+		t.Error("'Status Change' should appear under 'read'")
+	}
+}

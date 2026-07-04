@@ -38,6 +38,8 @@ func setupServer(lib library.Library, exp library.Exporter) (*fs.FS, *fs.StaticD
 	byAuthor := newByAuthorDir(registry)
 	byID := newByIDDir(registry)
 	bySeries := newBySeriesDir(registry)
+	byTag := newByTagDir(registry)
+	byStatus := newByStatusDir(registry)
 	reader := newReaderDir(registry, exp)
 
 	books, err := lib.ListAll()
@@ -53,6 +55,8 @@ func setupServer(lib library.Library, exp library.Exporter) (*fs.FS, *fs.StaticD
 	root.AddChild(byAuthor)
 	root.AddChild(byID)
 	root.AddChild(bySeries)
+	root.AddChild(byTag)
+	root.AddChild(byStatus)
 	root.AddChild(reader)
 
 	return ebookfs, root, nil
