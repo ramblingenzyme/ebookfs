@@ -3,6 +3,7 @@ package fs
 import (
 	"fmt"
 	"math"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -179,10 +180,8 @@ func newBookDir(reg *bookRegistry, book *model.Book) *bookDir {
 
 	// Cover image — only present when the epub declares one.
 	if book.CoverPath != "" {
-		// TODO: derive the filename from book.CoverPath so PNG and other
-		// formats aren't mislabeled as cover.jpg.
 		d.StaticDir.AddChild(newCoverFile(
-			f.NewStat("cover.jpg", "glenda", "glenda", 0644),
+			f.NewStat("cover"+filepath.Ext(book.CoverPath), "glenda", "glenda", 0644),
 			lib,
 			book,
 		))
