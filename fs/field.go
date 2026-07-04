@@ -15,8 +15,10 @@ import (
 // When the client opens with Otrunc (shell >), the write buffer starts empty —
 // the first write completely replaces the field value. Without Otrunc (>> or
 // in-place edit), the write buffer starts as a copy of the current value so
-// the client can append, edit a middle offset, etc. On Close the result is
-// sent through set → edits → Validate; an error aborts the commit.
+// the client can append, edit a middle offset, etc. A first write at offset 0
+// that is shorter than the current value replaces it entirely (no trailing
+// bytes from the old value leak through). On Close the result is sent through
+// set → edits → Validate; an error aborts the commit.
 type fieldFile struct {
 	fs.BaseFile
 	get       func() string
@@ -86,6 +88,17 @@ func (f *fieldFile) Write(fid uint64, offset uint64, data []byte) (uint32, error
 		buf = append(buf, make([]byte, end-uint64(len(buf)))...)
 	}
 	copy(buf[offset:], data)
+
+	// Without Otrunc the write buffer is seeded from the old value (snapshot).
+	// When writing shorter content at offset 0, truncate the buffer so residual
+	// bytes from the old value don't leak through. This matters for clients
+	// like Linux v9fs on 9P2000 that don't send Otrunc on file open.
+	firstWrite := f.writes[fid] == nil
+	shorter := uint64(len(data)) < uint64(len(buf))
+	if offset == 0 && firstWrite && !f.truncated[fid] && shorter {
+		buf = buf[:len(data)]
+	}
+
 	f.writes[fid] = buf
 	return uint32(len(data)), nil
 }

@@ -372,6 +372,36 @@ func TestFieldFilePartialOverwriteWithoutOtrunc(t *testing.T) {
 	}
 }
 
+func TestFieldFileShorterOverwriteWithoutOtrunc(t *testing.T) {
+	f := newTestFS(t)
+	stat := f.NewStat("test", "glenda", "glenda", 0644)
+
+	var got string
+	ff := newFieldFile(stat, func() string { return "reading" }, func(s string) error {
+		got = s
+		return nil
+	})
+
+	fid := uint64(1)
+	if err := ff.Open(fid, proto.Mode(0)); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	// Write "read\n" at offset 0 — shorter than the snapshot "reading\n".
+	// Without the fix, residual bytes produce "read\ning".
+	if _, err := ff.Write(fid, 0, []byte("read\n")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	if err := ff.Close(fid); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	if got != "read" {
+		t.Errorf("set was called with %q, want %q", got, "read")
+	}
+}
+
 func TestFieldFileOtruncNoWriteDoesNotCallSet(t *testing.T) {
 	f := newTestFS(t)
 	stat := f.NewStat("test", "glenda", "glenda", 0644)
