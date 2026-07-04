@@ -103,7 +103,7 @@ type Meta struct {
 	DateAdded    time.Time `toml:"date_added"`
 	DateModified time.Time `toml:"date_modified"`
 	Status       string    `toml:"status"`      // unread | reading | read | abandoned
-	Rating       int       `toml:"rating"`      // TODO: should be float32 0–5 (e.g. 4.75 is valid); int is a placeholder
+	Rating       float64   `toml:"rating"`
 	Tags         []string  `toml:"custom_tags"` // toml key preserved for file compatibility
 }
 
@@ -141,7 +141,7 @@ type Edits struct {
 
 	// Meta fields (written to the meta.toml sidecar).
 	Status *string
-	Rating *int
+	Rating *float64
 	Tags   *[]string
 }
 
@@ -216,7 +216,7 @@ func (e Edits) Validate(b *Book) *ValidationError {
 
 	if e.Rating != nil {
 		if *e.Rating < 0 || *e.Rating > 5 {
-			add("rating", fmt.Sprintf("invalid rating %d: must be 0-5", *e.Rating))
+			add("rating", fmt.Sprintf("invalid rating %g: must be 0-5", *e.Rating))
 		}
 	}
 

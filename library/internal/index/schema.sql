@@ -9,7 +9,7 @@ CREATE TABLE books (
     epub_filename TEXT    NOT NULL,
     cover_path    TEXT    NOT NULL DEFAULT '',
     status        TEXT    NOT NULL DEFAULT 'unread',
-    rating        REAL    NOT NULL DEFAULT 0, -- TODO: validate 0–5 float (e.g. 4.75); currently stored as int
+    rating        REAL    NOT NULL DEFAULT 0, -- validated as 0–5 float (e.g. 4.75) in model.Edits.Validate; rounded to 2dp on write
     date_added    TEXT    NOT NULL,
     date_modified TEXT    NOT NULL,
     series_id     INTEGER REFERENCES series(id),

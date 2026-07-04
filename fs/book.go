@@ -45,12 +45,13 @@ var fields = map[string]field{
 			},
 		},
 		"rating": {
-			get: func(b *model.Book) string { return strconv.Itoa(b.Meta.Rating) },
+			get: func(b *model.Book) string { return strconv.FormatFloat(b.Meta.Rating, 'f', -1, 64) },
 			edits: func(b *model.Book, s string) (model.Edits, error) {
-				n, err := strconv.Atoi(s)
+				n, err := strconv.ParseFloat(s, 64)
 				if err != nil {
 					return model.Edits{}, fmt.Errorf("invalid rating %q", s)
 				}
+				n = math.Round(n*100) / 100
 				return model.Edits{Rating: &n}, nil
 			},
 		},

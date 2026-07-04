@@ -45,12 +45,13 @@ func TestValidateRating(t *testing.T) {
 	book := &Book{}
 	for _, tc := range []struct {
 		name    string
-		rating  int
+		rating  float64
 		wantErr bool
 	}{
 		{"zero", 0, false},
 		{"five", 5, false},
 		{"three", 3, false},
+		{"decimal", 4.75, false},
 		{"negative", -1, true},
 		{"too high", 6, true},
 	} {
@@ -264,7 +265,7 @@ func TestValidateMultipleErrors(t *testing.T) {
 	book := &Book{}
 	e := Edits{
 		Status: ptr("invalid"),
-		Rating: ptr(-1),
+		Rating: ptr(-1.0),
 		Title:  ptr(""),
 	}
 	err := e.Validate(book)
@@ -293,7 +294,7 @@ func TestValidateNoErrors(t *testing.T) {
 	book := &Book{Bib: Bib{Series: &SeriesRef{Name: "Series"}}}
 	e := Edits{
 		Status:      ptr("reading"),
-		Rating:      ptr(4),
+		Rating:      ptr(4.0),
 		Title:       ptr("Valid Title"),
 		Authors:     &[]Author{{Name: "Author"}},
 		Language:    ptr("en"),
