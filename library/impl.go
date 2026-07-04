@@ -18,6 +18,8 @@ type libraryImpl struct {
 	inboxTemp string
 }
 
+func (l *libraryImpl) Close() error { return l.index.Close() }
+
 func (l *libraryImpl) CreateIngest() (*IngestHandle, error) {
 	f, err := os.CreateTemp(l.inboxTemp, "*.epub")
 	if err != nil {

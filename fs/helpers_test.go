@@ -50,6 +50,7 @@ type fakeLib struct {
 	deleteFn       func(*model.Book) error
 }
 
+func (l fakeLib) Close() error { return nil }
 func (l fakeLib) Edit(b *model.Book, e model.Edits) (*model.Book, error) {
 	if l.editFn != nil {
 		return l.editFn(b, e)
@@ -158,6 +159,7 @@ func (e testExporter) Size(b *model.Book) (int64, bool) {
 	}
 	return 0, false
 }
+func (e testExporter) Close() error     { return nil }
 func (e testExporter) Warm(*model.Book) {}
 func (e testExporter) Filename(b *model.Book) string {
 	if e.filenameFn != nil {

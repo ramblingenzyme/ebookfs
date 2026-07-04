@@ -26,6 +26,7 @@ type testLib struct {
 	openEpubFn func(*model.Book) (EpubReader, error)
 }
 
+func (l testLib) Close() error                                { return nil }
 func (l testLib) CreateIngest() (*IngestHandle, error) { return nil, nil }
 func (l testLib) ListAll() ([]*model.Book, error)             { return nil, nil }
 func (l testLib) Reindex() error                              { return nil }

@@ -48,6 +48,7 @@ func (h *IngestHandle) Ingest() (*model.Book, error) {
 // Library defines the public API for filesystem and index operations on the
 // book collection. The concrete implementation is unexported; construct via New.
 type Library interface {
+	Close() error
 	CreateIngest() (*IngestHandle, error)
 	ListAll() ([]*model.Book, error)
 	Reindex() error
@@ -63,6 +64,7 @@ type Library interface {
 // It is the single swap point between serving the original epub and a converted
 // kepub: the Library returns the appropriate implementation based on config.
 type Exporter interface {
+	Close() error
 	Open(*model.Book) (EpubReader, error) // bytes for reads
 	Size(*model.Book) (int64, bool)       // cheap; 9P stat length, false when cold
 	Warm(*model.Book)                     // non-blocking proactive warm hint

@@ -29,15 +29,25 @@ type Cache struct {
 	dir string
 	src EpubSource
 
-	mu     sync.Mutex
-	locks  map[int64]*sync.Mutex // per-book conversion lock, lazily created
-	warmer *warmer
+	mu        sync.Mutex
+	closeOnce sync.Once
+	locks     map[int64]*sync.Mutex // per-book conversion lock, lazily created
+	warmer    *warmer
 }
 
 func NewCache(dir string, src EpubSource) *Cache {
 	c := &Cache{dir: dir, src: src, locks: make(map[int64]*sync.Mutex)}
 	c.warmer = newWarmer(c.Ensure)
 	return c
+}
+
+// Close stops the warmer goroutines and blocks until they finish.
+func (c *Cache) Close() error {
+	c.closeOnce.Do(func() {
+		close(c.warmer.ch)
+		c.warmer.wg.Wait()
+	})
+	return nil
 }
 
 // Warm is a non-blocking hint that b's kepub should be pro-actively cached.
@@ -146,10 +156,12 @@ func (c *Cache) lockFor(id int64) *sync.Mutex {
 type warmer struct {
 	ensure func(*model.Book) error
 	ch     chan *model.Book
+	wg     sync.WaitGroup
 }
 
 func newWarmer(ensure func(*model.Book) error) *warmer {
 	w := &warmer{ensure: ensure, ch: make(chan *model.Book, 4096)}
+	w.wg.Add(4)
 	for i := 0; i < 4; i++ {
 		go w.run()
 	}
@@ -164,6 +176,7 @@ func (w *warmer) warm(b *model.Book) {
 }
 
 func (w *warmer) run() {
+	defer w.wg.Done()
 	for b := range w.ch {
 		if err := w.ensure(b); err != nil {
 			log.Printf("kepub: warm book %d: %v", b.Meta.ID, err)

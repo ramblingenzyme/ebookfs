@@ -9,6 +9,17 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
+func TestCacheClose(t *testing.T) {
+	c := NewCache(t.TempDir(), noopSource{})
+	c.Close()
+}
+
+type noopSource struct{}
+
+func (noopSource) OpenEpub(*model.Book) (model.EpubReader, error) {
+	return nil, errors.New("not used in this test")
+}
+
 func TestWarmerWarmsBook(t *testing.T) {
 	var (
 		mu   sync.Mutex

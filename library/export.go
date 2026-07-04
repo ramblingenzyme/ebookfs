@@ -26,6 +26,7 @@ type kepubCache struct {
 	c        *kepub.Cache
 }
 
+func (k *kepubCache) Close() error                            { return k.c.Close() }
 func (k *kepubCache) Statuses() []string                     { return k.statuses }
 func (k *kepubCache) Open(b *model.Book) (EpubReader, error) { return k.c.Open(b) }
 func (k *kepubCache) Size(b *model.Book) (int64, bool)       { return k.c.Size(b) }
@@ -50,6 +51,7 @@ func (e epubExporter) Size(b *model.Book) (int64, bool) {
 	return fi.Size(), true
 }
 
+func (e epubExporter) Close() error                     { return nil }
 func (e epubExporter) Warm(*model.Book)                 {}
 func (e epubExporter) Statuses() []string               { return e.statuses }
 func (e epubExporter) Filename(b *model.Book) string    { return b.EpubFilename }

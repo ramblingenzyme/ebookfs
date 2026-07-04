@@ -3,6 +3,9 @@ package main
 import (
 	"flag"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/ramblingenzyme/ebookfs/fs"
 	"github.com/ramblingenzyme/ebookfs/library"
@@ -23,6 +26,17 @@ func main() {
 		log.Fatalf("opening library: %v", err)
 	}
 
-	fs.StartServer(lib, library.NewExporter(cfg.Reader, lib),
-		cfg.Server.Listen)
+	exp := library.NewExporter(cfg.Reader, lib)
+
+	go func() {
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+		<-sig
+		log.Print("shutting down…")
+		exp.Close()
+		lib.Close()
+		os.Exit(0)
+	}()
+
+	fs.StartServer(lib, exp, cfg.Server.Listen)
 }
