@@ -18,10 +18,27 @@ import (
 // and a close.
 type EpubReader = model.EpubReader
 
+// StagedFile is a temp file created by the library for upload staging.
+// The frontend writes to it via WriteAt, then passes it to Library.Ingest
+// which takes ownership and closes it. CreateTemp is the intended
+// creation path; NewStagedFile is provided for tests.
+type StagedFile struct {
+	file *os.File
+	path string
+}
+
+func NewStagedFile(f *os.File, path string) *StagedFile {
+	return &StagedFile{file: f, path: path}
+}
+
+func (s *StagedFile) WriteAt(p []byte, off int64) (int, error) { return s.file.WriteAt(p, off) }
+func (s *StagedFile) Close() error                             { return s.file.Close() }
+
 // Library defines the public API for filesystem and index operations on the
 // book collection. The concrete implementation is unexported; construct via New.
 type Library interface {
-	Ingest(epubPath string) (*model.Book, error)
+	CreateTemp() (*StagedFile, error)
+	Ingest(*StagedFile) (*model.Book, error)
 	ListAll() ([]*model.Book, error)
 	Reindex() error
 	OpenEpub(b *model.Book) (EpubReader, error)
@@ -62,7 +79,7 @@ func Open(cfg config.LibraryConfig) (Library, error) {
 	if err != nil {
 		return nil, err
 	}
-	lib := &libraryImpl{store: store.New(cfg.Root, cfg.InboxTemp), index: idx}
+	lib := &libraryImpl{store: store.New(cfg.Root, cfg.InboxTemp), index: idx, inboxTemp: cfg.InboxTemp}
 	if err := lib.Reindex(); err != nil {
 		return nil, fmt.Errorf("reindexing library: %w", err)
 	}

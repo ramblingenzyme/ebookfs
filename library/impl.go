@@ -3,6 +3,7 @@ package library
 import (
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
@@ -12,13 +13,29 @@ import (
 )
 
 type libraryImpl struct {
-	store *store.Store
-	index *index.Index
+	store     *store.Store
+	index     *index.Index
+	inboxTemp string
 }
 
-// Ingest parses the staged epub, lays it down in the store, and records it
+func (l *libraryImpl) CreateTemp() (*StagedFile, error) {
+	f, err := os.CreateTemp(l.inboxTemp, "*.epub")
+	if err != nil {
+		return nil, err
+	}
+	return NewStagedFile(f, f.Name()), nil
+}
+
+func (l *libraryImpl) Ingest(sf *StagedFile) (*model.Book, error) {
+	sf.Close()
+	b, err := l.ingestPath(sf.path)
+	os.Remove(sf.path)
+	return b, err
+}
+
+// ingestPath parses the staged epub, lays it down in the store, and records it
 // in the index.
-func (l *libraryImpl) Ingest(epubPath string) (*model.Book, error) {
+func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 	book, err := epub.Parse(epubPath)
 	if err != nil {
 		return nil, err

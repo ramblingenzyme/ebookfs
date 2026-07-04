@@ -1,10 +1,12 @@
 package fs
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/library"
 )
 
 func TestNewInboxDir(t *testing.T) {
@@ -23,7 +25,7 @@ func TestNewInboxDir(t *testing.T) {
 func TestInboxCreateFile_Success(t *testing.T) {
 	f := newTestFS(t)
 	lib := fakeLib{}
-	cf := inboxCreateFile(lib, t.TempDir(), nil)
+	cf := inboxCreateFile(lib, nil)
 
 	inbox := newInboxDir(f)
 	file, err := cf(f, inbox, "glenda", "test.epub", 0644, 0)
@@ -43,7 +45,7 @@ func TestInboxCreateFile_Success(t *testing.T) {
 func TestInboxCreateFile_WrongParent(t *testing.T) {
 	f := newTestFS(t)
 	lib := fakeLib{}
-	cf := inboxCreateFile(lib, t.TempDir(), nil)
+	cf := inboxCreateFile(lib, nil)
 
 	// Pass a plain StaticDir as parent instead of *inboxDir.
 	parent := fs.NewStaticDir(f.NewStat("wrong", "glenda", "glenda", 0755|proto.DMDIR))
@@ -58,10 +60,15 @@ func TestInboxCreateFile_WrongParent(t *testing.T) {
 
 func TestInboxFileOpenCreateTempError(t *testing.T) {
 	f := newTestFS(t)
-	inf := newInboxFile(f, fakeLib{}, "/nonexistent-random-path", "test.epub", 0644, nil)
+	lib := fakeLib{
+		createTempFn: func() (*library.StagedFile, error) {
+			return nil, errors.New("CreateTemp failed")
+		},
+	}
+	inf := newInboxFile(f, lib, "test.epub", 0644, nil)
 
 	err := inf.Open(1, proto.Mode(0))
 	if err == nil {
-		t.Fatal("expected error from CreateTemp with nonexistent directory")
+		t.Fatal("expected error from CreateTemp")
 	}
 }

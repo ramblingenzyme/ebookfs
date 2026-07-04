@@ -14,6 +14,7 @@ package fs
 import (
 	"bytes"
 	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -38,7 +39,8 @@ var _ io.ReaderAt = (*fakeEpubReader)(nil)
 
 type fakeLib struct {
 	editFn         func(*model.Book, model.Edits) (*model.Book, error)
-	ingestFn       func(string) (*model.Book, error)
+	ingestFn       func(*library.StagedFile) (*model.Book, error)
+	createTempFn   func() (*library.StagedFile, error)
 	extractCoverFn func(*model.Book) ([]byte, error)
 	extractOPFFn   func(*model.Book) ([]byte, error)
 	writeCoverFn   func(*model.Book, []byte) error
@@ -54,9 +56,20 @@ func (l fakeLib) Edit(b *model.Book, e model.Edits) (*model.Book, error) {
 	}
 	return b, nil
 }
-func (l fakeLib) Ingest(path string) (*model.Book, error) {
+func (l fakeLib) CreateTemp() (*library.StagedFile, error) {
+	if l.createTempFn != nil {
+		return l.createTempFn()
+	}
+	f, err := os.CreateTemp("", "*.epub")
+	if err != nil {
+		return nil, err
+	}
+	return library.NewStagedFile(f, f.Name()), nil
+}
+func (l fakeLib) Ingest(sf *library.StagedFile) (*model.Book, error) {
+	sf.Close()
 	if l.ingestFn != nil {
-		return l.ingestFn(path)
+		return l.ingestFn(sf)
 	}
 	return nil, nil
 }

@@ -24,5 +24,5 @@ func main() {
 	}
 
 	fs.StartServer(lib, library.NewExporter(cfg.Reader, lib),
-		cfg.Server.Listen, cfg.Library.InboxTemp)
+		cfg.Server.Listen)
 }

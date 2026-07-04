@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -15,12 +16,12 @@ func TestInboxFileOpenWriteCloseIngests(t *testing.T) {
 	ingested := make(chan *model.Book, 1)
 	f := newTestFS(t)
 	lib := fakeLib{
-		ingestFn: func(path string) (*model.Book, error) {
+		ingestFn: func(_ *library.StagedFile) (*model.Book, error) {
 			return makeBook(42, "Ingested", "Author"), nil
 		},
 	}
 
-	inf := newInboxFile(f, lib, t.TempDir(), "test.epub", 0644, func(b *model.Book) {
+	inf := newInboxFile(f, lib, "test.epub", 0644, func(b *model.Book) {
 		ingested <- b
 	})
 
@@ -49,7 +50,7 @@ func TestInboxFileOpenWriteCloseIngests(t *testing.T) {
 
 func TestInboxFileDoubleOpenRejected(t *testing.T) {
 	f := newTestFS(t)
-	inf := newInboxFile(f, fakeLib{}, t.TempDir(), "test.epub", 0644, nil)
+	inf := newInboxFile(f, fakeLib{}, "test.epub", 0644, nil)
 
 	fid1, fid2 := uint64(1), uint64(2)
 	if err := inf.Open(fid1, proto.Mode(0)); err != nil {
@@ -64,7 +65,7 @@ func TestInboxFileDoubleOpenRejected(t *testing.T) {
 
 func TestInboxFileWriteWithoutOpen(t *testing.T) {
 	f := newTestFS(t)
-	inf := newInboxFile(f, fakeLib{}, t.TempDir(), "test.epub", 0644, nil)
+	inf := newInboxFile(f, fakeLib{}, "test.epub", 0644, nil)
 
 	_, err := inf.Write(1, 0, []byte("data"))
 	if err == nil {
@@ -74,7 +75,7 @@ func TestInboxFileWriteWithoutOpen(t *testing.T) {
 
 func TestInboxFileCloseWithoutOpen(t *testing.T) {
 	f := newTestFS(t)
-	inf := newInboxFile(f, fakeLib{}, t.TempDir(), "test.epub", 0644, nil)
+	inf := newInboxFile(f, fakeLib{}, "test.epub", 0644, nil)
 
 	err := inf.Close(1)
 	if err != nil {
@@ -82,15 +83,15 @@ func TestInboxFileCloseWithoutOpen(t *testing.T) {
 	}
 }
 
-func TestInboxFileIngestErrorRemovesTempFile(t *testing.T) {
+func TestInboxFileIngestErrorReturnsError(t *testing.T) {
 	f := newTestFS(t)
 	lib := fakeLib{
-		ingestFn: func(path string) (*model.Book, error) {
+		ingestFn: func(_ *library.StagedFile) (*model.Book, error) {
 			return nil, errTest
 		},
 	}
 
-	inf := newInboxFile(f, lib, t.TempDir(), "test.epub", 0644, nil)
+	inf := newInboxFile(f, lib, "test.epub", 0644, nil)
 
 	fid := uint64(1)
 	if err := inf.Open(fid, proto.Mode(0)); err != nil {
@@ -110,14 +111,14 @@ func TestInboxFileReopenAfterClose(t *testing.T) {
 	ingestCount := 0
 	f := newTestFS(t)
 	lib := fakeLib{
-		ingestFn: func(path string) (*model.Book, error) {
+		ingestFn: func(_ *library.StagedFile) (*model.Book, error) {
 			ingestCount++
 			return makeBook(int64(ingestCount), "Test", "Author"), nil
 		},
 	}
 
 	noop := func(b *model.Book) {}
-	inf := newInboxFile(f, lib, t.TempDir(), "test.epub", 0644, noop)
+	inf := newInboxFile(f, lib, "test.epub", 0644, noop)
 
 	// First open/write/close
 	fid := uint64(1)
@@ -148,13 +149,13 @@ func TestInboxFileCloseWithParentDeadlockRegression(t *testing.T) {
 	ingested := make(chan *model.Book, 1)
 	f := newTestFS(t)
 	lib := fakeLib{
-		ingestFn: func(path string) (*model.Book, error) {
+		ingestFn: func(_ *library.StagedFile) (*model.Book, error) {
 			return makeBook(42, "Test", "Author"), nil
 		},
 	}
 
 	inbox := newInboxDir(f)
-	cf := inboxCreateFile(lib, t.TempDir(), func(b *model.Book) {
+	cf := inboxCreateFile(lib, func(b *model.Book) {
 		ingested <- b
 	})
 

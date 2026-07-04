@@ -3,7 +3,6 @@ package fs
 import (
 	"errors"
 	"log"
-	"os"
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
@@ -23,14 +22,13 @@ func newInboxDir(f *fs.FS) *inboxDir {
 
 type inboxFile struct {
 	fs.BaseFile
-	inboxTemp string
-	fid       uint64
-	f         *os.File
-	lib       library.Library
-	onIngest  func(*model.Book)
+	fid      uint64
+	staged   *library.StagedFile
+	lib      library.Library
+	onIngest func(*model.Book)
 }
 
-func inboxCreateFile(lib library.Library, inboxTemp string, onIngest func(*model.Book)) createFileFunc {
+func inboxCreateFile(lib library.Library, onIngest func(*model.Book)) createFileFunc {
 	return func(f *fs.FS, parent fs.Dir, user, name string, perm uint32, mode uint8) (fs.File, error) {
 		log.Printf("inbox: create %q perm=%o mode=%d parent=%s", name, perm, mode, fs.FullPath(parent))
 		var inbox *inboxDir
@@ -41,7 +39,7 @@ func inboxCreateFile(lib library.Library, inboxTemp string, onIngest func(*model
 			return nil, errors.New("not under inbox")
 		}
 
-		file := newInboxFile(f, lib, inboxTemp, name, perm, onIngest)
+		file := newInboxFile(f, lib, name, perm, onIngest)
 		inbox.DeleteChild(name)
 		if err := inbox.AddChild(file); err != nil {
 			log.Printf("inbox: AddChild %q: %v", name, err)
@@ -51,11 +49,10 @@ func inboxCreateFile(lib library.Library, inboxTemp string, onIngest func(*model
 	}
 }
 
-func newInboxFile(f *fs.FS, lib library.Library, inboxTemp, name string, perm uint32, onIngest func(*model.Book)) *inboxFile {
+func newInboxFile(f *fs.FS, lib library.Library, name string, perm uint32, onIngest func(*model.Book)) *inboxFile {
 	return &inboxFile{
 		BaseFile:  *fs.NewBaseFile(f.NewStat(name, "glenda", "glenda", perm)),
 		lib:       lib,
-		inboxTemp: inboxTemp,
 		onIngest:  onIngest,
 	}
 }
@@ -69,12 +66,12 @@ func (i *inboxFile) Open(fid uint64, omode proto.Mode) error {
 		return errors.New("file already open")
 	}
 
-	f, err := os.CreateTemp(i.inboxTemp, "*.epub")
+	sf, err := i.lib.CreateTemp()
 	if err != nil {
 		log.Printf("inbox: open %q: %v", i.Stat().Name, err)
 		return err
 	}
-	i.f = f
+	i.staged = sf
 	i.fid = fid
 
 	return nil
@@ -83,56 +80,44 @@ func (i *inboxFile) Open(fid uint64, omode proto.Mode) error {
 func (i *inboxFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
 	i.Lock()
 	defer i.Unlock()
-	if i.f == nil || i.fid != fid {
+	if i.staged == nil || i.fid != fid {
 		log.Printf("inbox: write file was not opened")
 		return 0, errors.New("file not opened with this fid")
 	}
 
-	n, err := i.f.WriteAt(data, int64(offset))
+	n, err := i.staged.WriteAt(data, int64(offset))
 
 	return uint32(n), err
 }
 
-// teardown closes the underlying temp file and clears the fid. It runs
-// under the lock; the caller must not hold it when calling DeleteChild
-// or Ingest, since those re-enter the mutex via SetParent.
-func (i *inboxFile) teardown() (string, error) {
+// teardown releases the staged file under the lock. The caller must not
+// hold the lock when calling DeleteChild or Ingest, since those re-enter
+// the mutex via SetParent.
+func (i *inboxFile) teardown() *library.StagedFile {
 	i.Lock()
 	defer i.Unlock()
-	if i.f == nil {
-		i.fid = 0
-		return "", nil
-	}
-	p := i.f.Name()
-	i.f.Close()
-	i.f = nil
+	sf := i.staged
+	i.staged = nil
 	i.fid = 0
-	return p, nil
+	return sf
 }
 
 func (i *inboxFile) Close(fid uint64) error {
 	log.Printf("inbox: close %q fid=%d", i.Stat().Name, fid)
 
-	// Parent is set once during AddChild and never changes; read it before
-	// acquiring the lock so we can use defer without reentrancy issues.
-	parent := i.Parent()
-
-	path, err := i.teardown()
-	if err != nil {
-		return err
-	}
-	if path == "" {
+	sf := i.teardown()
+	if sf == nil {
 		return nil
 	}
 
+	parent := i.Parent()
 	if md, ok := parent.(fs.ModDir); ok {
 		md.DeleteChild(i.Stat().Name)
 	}
 
-	b, err := i.lib.Ingest(path)
+	b, err := i.lib.Ingest(sf)
 	if err != nil {
 		log.Printf("inbox: ingest %q: %v", i.Stat().Name, err)
-		os.Remove(path)
 		return err
 	}
 	i.onIngest(b)

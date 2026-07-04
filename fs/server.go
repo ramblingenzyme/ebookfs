@@ -12,9 +12,9 @@ import (
 // StartServer serves the library over 9P at listen. The caller owns composition
 // of the backend (store, index, library) and chooses the reader/ Exporter
 // (original epub vs kepub); the frontend depends only on the library facade and
-// that Exporter. inboxTemp is where uploads are staged before ingest.
-func StartServer(lib library.Library, exp library.Exporter, listen, inboxTemp string) {
-	ebookfs, _, err := setupServer(lib, exp, inboxTemp)
+// that Exporter.
+func StartServer(lib library.Library, exp library.Exporter, listen string) {
+	ebookfs, _, err := setupServer(lib, exp)
 	if err != nil {
 		log.Fatalf("setting up server: %v", err)
 	}
@@ -25,10 +25,10 @@ func StartServer(lib library.Library, exp library.Exporter, listen, inboxTemp st
 // setupServer wires the FS, registry, and views without starting the 9P
 // listener, so the wiring can be tested without blocking. It returns the FS
 // and the root directory for inspection.
-func setupServer(lib library.Library, exp library.Exporter, inboxTemp string) (*fs.FS, *fs.StaticDir, error) {
+func setupServer(lib library.Library, exp library.Exporter) (*fs.FS, *fs.StaticDir, error) {
 	ebookfs, root := newFS()
 	registry := newBookRegistry(ebookfs, lib)
-	ebookfs.CreateFile = inboxCreateFile(lib, inboxTemp, registry.Add)
+	ebookfs.CreateFile = inboxCreateFile(lib, registry.Add)
 
 	// TODO: add graceful shutdown. go9p.Serve blocks; the warmer's 4 goroutines
 	// (reader.go) leak on exit because their channel is never closed.
