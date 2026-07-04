@@ -65,7 +65,7 @@ type Library interface {
 type Exporter interface {
 	Open(*model.Book) (EpubReader, error) // bytes for reads
 	Size(*model.Book) (int64, bool)       // cheap; 9P stat length, false when cold
-	Ensure(*model.Book) error             // proactive warm hook
+	Warm(*model.Book)                     // non-blocking proactive warm hint
 	Filename(*model.Book) string          // FAT-safe export name
 	Dirname(*model.Book) string           // FAT-safe export directory name
 	Statuses() []string                   // which book statuses appear in the reader view

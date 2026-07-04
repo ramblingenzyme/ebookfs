@@ -143,7 +143,6 @@ type testExporter struct {
 	statuses   []string
 	openFn     func(*model.Book) (library.EpubReader, error)
 	sizeFn     func(*model.Book) (int64, bool)
-	ensureFn   func(*model.Book) error
 	filenameFn func(*model.Book) string
 }
 
@@ -159,12 +158,7 @@ func (e testExporter) Size(b *model.Book) (int64, bool) {
 	}
 	return 0, false
 }
-func (e testExporter) Ensure(b *model.Book) error {
-	if e.ensureFn != nil {
-		return e.ensureFn(b)
-	}
-	return nil
-}
+func (e testExporter) Warm(*model.Book) {}
 func (e testExporter) Filename(b *model.Book) string {
 	if e.filenameFn != nil {
 		return e.filenameFn(b)

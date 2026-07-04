@@ -3,7 +3,6 @@ package fs
 import (
 	"errors"
 	"io"
-	"log"
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
@@ -20,7 +19,6 @@ type readerDir struct {
 	groupingDir
 	exp      library.Exporter
 	included map[string]bool
-	warmer   *warmer
 }
 
 func newReaderDir(reg *bookRegistry, exp library.Exporter) *readerDir {
@@ -32,7 +30,6 @@ func newReaderDir(reg *bookRegistry, exp library.Exporter) *readerDir {
 		groupingDir: newGroupingDir(reg.f, "reader"),
 		exp:         exp,
 		included:    included,
-		warmer:      newWarmer(exp),
 	}
 	reg.AddView(d)
 	return d
@@ -55,7 +52,7 @@ func (d *readerDir) add(dir *bookDir) {
 	ad := d.authorDir(d.exp.Dirname(dir.Book))
 	stat := d.f.NewStat(d.exp.Filename(dir.Book), "glenda", "glenda", 0444)
 	ad.AddChild(newReaderFile(stat, d.exp, dir.Book))
-	d.warmer.warm(dir.Book)
+	d.exp.Warm(dir.Book)
 }
 
 func (d *readerDir) remove(dir *bookDir) {
@@ -134,37 +131,4 @@ func (r *readerFile) Close(fid uint64) error {
 	return nil
 }
 
-// warmer converts kepubs off the read path: when a book enters the reader set,
-// the view enqueues it here so its cache is built before the next rsync. Enqueue
-// is non-blocking because add runs under the registry lock; a full queue drops
-// the warm and the read path (Exporter.Open) converts on demand instead.
-type warmer struct {
-	exp library.Exporter
-	ch  chan *model.Book
-}
 
-func newWarmer(exp library.Exporter) *warmer {
-	// The buffer holds book pointers, so it's cheap to size generously; it mainly
-	// needs to absorb the initial-population burst (one warm per eligible book)
-	// without dropping. Beyond it, warm() falls back to the lazy read path.
-	w := &warmer{exp: exp, ch: make(chan *model.Book, 4096)}
-	for i := 0; i < 4; i++ {
-		go w.run()
-	}
-	return w
-}
-
-func (w *warmer) warm(b *model.Book) {
-	select {
-	case w.ch <- b:
-	default: // queue full: skip the proactive warm, the read path still converts
-	}
-}
-
-func (w *warmer) run() {
-	for b := range w.ch {
-		if err := w.exp.Ensure(b); err != nil {
-			log.Printf("reader: warm kepub for book %d: %v", b.Meta.ID, err)
-		}
-	}
-}

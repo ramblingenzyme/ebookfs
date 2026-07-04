@@ -7,6 +7,7 @@ package kepub
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,13 +29,21 @@ type Cache struct {
 	dir string
 	src EpubSource
 
-	mu    sync.Mutex
-	locks map[int64]*sync.Mutex // per-book conversion lock, lazily created
+	mu     sync.Mutex
+	locks  map[int64]*sync.Mutex // per-book conversion lock, lazily created
+	warmer *warmer
 }
 
 func NewCache(dir string, src EpubSource) *Cache {
-	return &Cache{dir: dir, src: src, locks: make(map[int64]*sync.Mutex)}
+	c := &Cache{dir: dir, src: src, locks: make(map[int64]*sync.Mutex)}
+	c.warmer = newWarmer(c.Ensure)
+	return c
 }
+
+// Warm is a non-blocking hint that b's kepub should be pro-actively cached.
+// It enqueues the book; a full queue drops the hint and the read path still
+// converts on demand.
+func (c *Cache) Warm(b *model.Book) { c.warmer.warm(b) }
 
 func (c *Cache) path(b *model.Book) string {
 	return filepath.Join(c.dir, fmt.Sprintf("%d.kepub.epub", b.Meta.ID))
@@ -129,4 +138,35 @@ func (c *Cache) lockFor(id int64) *sync.Mutex {
 		c.locks[id] = l
 	}
 	return l
+}
+
+// warmer converts kepubs off the read path. The exporter's Warm method enqueues
+// books here so their caches are built before the next rsync. Enqueue is
+// non-blocking; a full queue drops the warm and the read path converts on demand.
+type warmer struct {
+	ensure func(*model.Book) error
+	ch     chan *model.Book
+}
+
+func newWarmer(ensure func(*model.Book) error) *warmer {
+	w := &warmer{ensure: ensure, ch: make(chan *model.Book, 4096)}
+	for i := 0; i < 4; i++ {
+		go w.run()
+	}
+	return w
+}
+
+func (w *warmer) warm(b *model.Book) {
+	select {
+	case w.ch <- b:
+	default:
+	}
+}
+
+func (w *warmer) run() {
+	for b := range w.ch {
+		if err := w.ensure(b); err != nil {
+			log.Printf("kepub: warm book %d: %v", b.Meta.ID, err)
+		}
+	}
 }

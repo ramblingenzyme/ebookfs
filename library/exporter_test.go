@@ -108,14 +108,6 @@ func TestEpubExporter_Size_MissingFile(t *testing.T) {
 	}
 }
 
-func TestEpubExporter_Ensure(t *testing.T) {
-	exp := epubExporter{lib: testLib{}}
-	err := exp.Ensure(makeBook(1, "Test", "Author"))
-	if err != nil {
-		t.Errorf("Ensure should always return nil, got %v", err)
-	}
-}
-
 func TestEpubExporter_Filename(t *testing.T) {
 	exp := epubExporter{lib: testLib{}}
 	book := makeBook(1, "Test", "Author")
