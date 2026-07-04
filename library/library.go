@@ -73,7 +73,7 @@ type Exporter interface {
 	Statuses() []string                   // which book statuses appear in the reader view
 }
 
-func Open(cfg config.LibraryConfig) (Library, error) {
+func Open(cfg config.LibraryConfig, forceReindex bool) (Library, error) {
 	if err := os.MkdirAll(cfg.Root, 0755); err != nil {
 		return nil, fmt.Errorf("creating library root: %w", err)
 	}
@@ -92,8 +92,12 @@ func Open(cfg config.LibraryConfig) (Library, error) {
 		return nil, err
 	}
 	lib := &libraryImpl{store: store.New(cfg.Root, cfg.InboxTemp), index: idx, inboxTemp: cfg.InboxTemp}
-	if err := lib.Reindex(); err != nil {
-		return nil, fmt.Errorf("reindexing library: %w", err)
+	if forceReindex || lib.needsReindex() {
+		if err := lib.Reindex(); err != nil {
+			return nil, fmt.Errorf("reindexing library: %w", err)
+		}
+	} else {
+		log.Printf("reindex: index is clean, skipping")
 	}
 	return lib, nil
 }

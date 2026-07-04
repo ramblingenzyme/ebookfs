@@ -111,20 +111,10 @@ func (l *libraryImpl) ListAll() ([]*model.Book, error) {
 	return books, nil
 }
 
-// Reindex rebuilds the index from the store (the source of truth). Skips
-// entirely (O(1)) when the dirty flag is clear. Books that can't be read are
-// logged and skipped rather than failing the whole rebuild.
+// Reindex unconditionally rebuilds the index from the store (the source of
+// truth). Books that can't be read are logged and skipped rather than failing
+// the whole rebuild.
 func (l *libraryImpl) Reindex() error {
-	needs, err := l.index.NeedsReindex()
-	if err != nil {
-		log.Printf("reindex: could not check index state (%v), forcing rebuild", err)
-		needs = true
-	}
-	if !needs {
-		log.Printf("reindex: index is clean, skipping")
-		return nil
-	}
-
 	entries, err := l.store.Walk()
 	if err != nil {
 		return err
@@ -158,6 +148,17 @@ func (l *libraryImpl) Reindex() error {
 	}
 	log.Printf("reindex: indexed %d of %d books", len(books), len(entries))
 	return nil
+}
+
+// needsReindex reports whether the index requires a rebuild — true when the
+// dirty flag is set or the schema version is stale.
+func (l *libraryImpl) needsReindex() bool {
+	needs, err := l.index.NeedsReindex()
+	if err != nil {
+		log.Printf("reindex: could not check index state (%v), forcing rebuild", err)
+		return true
+	}
+	return needs
 }
 
 // OpenEpub returns a handle to b's epub content. The caller must close it.

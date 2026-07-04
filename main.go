@@ -14,6 +14,7 @@ import (
 
 func main() {
 	configPath := flag.String("config", "/etc/ebookfs/config.toml", "path to config file")
+	forceReindex := flag.Bool("reindex", false, "force a full index rebuild from disk")
 	flag.Parse()
 
 	cfg, err := config.Load(*configPath)
@@ -21,7 +22,7 @@ func main() {
 		log.Fatalf("loading config: %v", err)
 	}
 
-	lib, err := library.Open(cfg.Library)
+	lib, err := library.Open(cfg.Library, *forceReindex)
 	if err != nil {
 		log.Fatalf("opening library: %v", err)
 	}
