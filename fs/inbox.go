@@ -59,6 +59,7 @@ func newInboxFile(f *fs.FS, lib library.Library, name string, perm uint32, onIng
 
 func (i *inboxFile) Open(fid uint64, omode proto.Mode) error {
 	log.Printf("inbox: open %q fid=%d omode=%d", i.Stat().Name, fid, omode)
+	name := i.Stat().Name // cache before Lock — Stat() acquires RLock, deadlocking if already write-locked
 	i.Lock()
 	defer i.Unlock()
 	if i.fid != 0 {
@@ -68,7 +69,7 @@ func (i *inboxFile) Open(fid uint64, omode proto.Mode) error {
 
 	h, err := i.lib.CreateIngest()
 	if err != nil {
-		log.Printf("inbox: open %q: %v", i.Stat().Name, err)
+		log.Printf("inbox: open %q: %v", name, err)
 		return err
 	}
 	i.handle = h

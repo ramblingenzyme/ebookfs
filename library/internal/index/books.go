@@ -8,22 +8,10 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-// Filter selects a subset of books for Query. Zero-valued fields are ignored,
-// so Filter{} matches every book. String fields match by exact name.
-type Filter struct {
-	ID     int64  // a single book by id
-	Author string // books by an author's name
-	Tag    string // books carrying a tag
-	Status string // books with a reading status
-	Series string // books in a series
-	Recent bool   // order by date added (newest first) instead of sort title
-	Limit  int    // cap the result count; 0 means no limit
-}
-
 // Query returns the books matching f, each hydrated with authors, tags, and
 // identifiers. Every book-listing view (all books, by author, by tag, recent,
 // …) is expressed as a Filter rather than its own bespoke method.
-func (idx *Index) Query(f Filter) ([]*model.Book, error) {
+func (idx *Index) Query(f model.Filter) ([]*model.Book, error) {
 	// Each row is one optional predicate: include its expr/arg when `on` holds.
 	// Values are always parameterized; only the fixed expressions are literal.
 	conds := []struct {
@@ -57,14 +45,9 @@ func (idx *Index) Query(f Filter) ([]*model.Book, error) {
 	return idx.queryBooks(strings.Join(where, " AND "), args, order, f.Limit)
 }
 
-// ListAll returns all books ordered by sort_title.
-func (idx *Index) ListAll() ([]*model.Book, error) {
-	return idx.Query(Filter{})
-}
-
 // Get returns the book with the given id, or sql.ErrNoRows if it is absent.
 func (idx *Index) Get(bookID int64) (*model.Book, error) {
-	books, err := idx.Query(Filter{ID: bookID})
+	books, err := idx.Query(model.Filter{ID: bookID})
 	if err != nil {
 		return nil, err
 	}

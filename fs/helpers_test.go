@@ -46,7 +46,7 @@ type fakeLib struct {
 	extractOPFFn   func(*model.Book) ([]byte, error)
 	writeCoverFn   func(*model.Book, []byte) error
 	openEpubFn     func(*model.Book) (library.EpubReader, error)
-	listAllFn      func() ([]*model.Book, error)
+	queryFn        func(model.Filter) ([]*model.Book, error)
 	reindexFn      func() error
 	deleteFn       func(*model.Book) error
 }
@@ -98,9 +98,9 @@ func (l fakeLib) OpenEpub(b *model.Book) (library.EpubReader, error) {
 	}
 	return nil, nil
 }
-func (l fakeLib) ListAll() ([]*model.Book, error) {
-	if l.listAllFn != nil {
-		return l.listAllFn()
+func (l fakeLib) Query(f model.Filter) ([]*model.Book, error) {
+	if l.queryFn != nil {
+		return l.queryFn(f)
 	}
 	return nil, nil
 }

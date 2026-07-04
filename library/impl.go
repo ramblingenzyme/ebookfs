@@ -100,8 +100,8 @@ func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 	return b, nil
 }
 
-func (l *libraryImpl) ListAll() ([]*model.Book, error) {
-	books, err := l.index.ListAll()
+func (l *libraryImpl) Query(f model.Filter) ([]*model.Book, error) {
+	books, err := l.index.Query(f)
 	if err != nil {
 		return nil, err
 	}

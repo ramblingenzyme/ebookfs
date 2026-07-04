@@ -7,6 +7,7 @@ import (
 	"github.com/knusbaum/go9p"
 	"github.com/knusbaum/go9p/fs"
 	"github.com/ramblingenzyme/ebookfs/library"
+	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // StartServer serves the library over 9P at listen. The caller owns composition
@@ -42,7 +43,7 @@ func setupServer(lib library.Library, exp library.Exporter) (*fs.FS, *fs.StaticD
 	byStatus := newByStatusDir(registry)
 	reader := newReaderDir(registry, exp)
 
-	books, err := lib.ListAll()
+	books, err := lib.Query(model.Filter{})
 	if err != nil {
 		return nil, nil, fmt.Errorf("loading books: %w", err)
 	}

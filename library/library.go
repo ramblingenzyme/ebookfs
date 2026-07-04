@@ -51,7 +51,7 @@ type Library interface {
 	Close() error
 	CreateIngest() (*IngestHandle, error)
 	Exporter(config.ReaderConfig) (Exporter, error)
-	ListAll() ([]*model.Book, error)
+	Query(model.Filter) ([]*model.Book, error)
 	Reindex() error
 	OpenEpub(b *model.Book) (EpubReader, error)
 	ExtractCover(b *model.Book) ([]byte, error)

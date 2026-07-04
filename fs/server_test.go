@@ -8,7 +8,7 @@ import (
 
 func TestSetupServer(t *testing.T) {
 	lib := fakeLib{
-		listAllFn: func() ([]*model.Book, error) {
+		queryFn: func(_ model.Filter) ([]*model.Book, error) {
 			b1 := makeBook(1, "Book One", "Alice")
 			b1.Meta.Status = "unread"
 			b2 := makeBook(2, "Book Two", "Bob")
@@ -34,21 +34,21 @@ func TestSetupServer(t *testing.T) {
 	}
 }
 
-func TestSetupServer_ListAllError(t *testing.T) {
+func TestSetupServer_QueryError(t *testing.T) {
 	lib := fakeLib{
-		listAllFn: func() ([]*model.Book, error) {
+		queryFn: func(_ model.Filter) ([]*model.Book, error) {
 			return nil, errTest
 		},
 	}
 	_, _, err := setupServer(lib, testExporter{})
 	if err == nil {
-		t.Fatal("expected error from setupServer when ListAll fails")
+		t.Fatal("expected error from setupServer when Query fails")
 	}
 }
 
 func TestSetupServer_BooksPopulated(t *testing.T) {
 	lib := fakeLib{
-		listAllFn: func() ([]*model.Book, error) {
+		queryFn: func(_ model.Filter) ([]*model.Book, error) {
 			b := makeBook(1, "Present", "Alice")
 			b.Meta.Status = "unread"
 			return []*model.Book{b}, nil
