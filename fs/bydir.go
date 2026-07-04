@@ -57,3 +57,4 @@ func (g *groupingDir) pruneEmpty(name string) {
 		g.StaticDir.DeleteChild(name)
 	}
 }
+
