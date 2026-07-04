@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
 	"time"
 
+	"github.com/ramblingenzyme/ebookfs/library/config"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index"
 	"github.com/ramblingenzyme/ebookfs/library/internal/store"
@@ -16,9 +18,35 @@ type libraryImpl struct {
 	store     *store.Store
 	index     *index.Index
 	inboxTemp string
+	exporters []Exporter
+	expMu     sync.Mutex
+	// Dedup of exporters by config is not implemented. If needed in the
+	// future, hash/comparable-key the ReaderConfig fields and store in a map.
 }
 
-func (l *libraryImpl) Close() error { return l.index.Close() }
+type exporterCloser interface{ close() error }
+
+func (l *libraryImpl) Close() error {
+	l.expMu.Lock()
+	for _, e := range l.exporters {
+		if c, ok := e.(exporterCloser); ok {
+			c.close()
+		}
+	}
+	l.expMu.Unlock()
+	return l.index.Close()
+}
+
+func (l *libraryImpl) Exporter(cfg config.ReaderConfig) (Exporter, error) {
+	e, err := newExporter(cfg, l)
+	if err != nil {
+		return nil, err
+	}
+	l.expMu.Lock()
+	l.exporters = append(l.exporters, e)
+	l.expMu.Unlock()
+	return e, nil
+}
 
 func (l *libraryImpl) CreateIngest() (*IngestHandle, error) {
 	f, err := os.CreateTemp(l.inboxTemp, "*.epub")

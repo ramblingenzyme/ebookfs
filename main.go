@@ -26,14 +26,16 @@ func main() {
 		log.Fatalf("opening library: %v", err)
 	}
 
-	exp := library.NewExporter(cfg.Reader, lib)
+	exp, err := lib.Exporter(cfg.Reader)
+	if err != nil {
+		log.Fatalf("creating exporter: %v", err)
+	}
 
 	go func() {
 		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 		<-sig
 		log.Print("shutting down…")
-		exp.Close()
 		lib.Close()
 		os.Exit(0)
 	}()

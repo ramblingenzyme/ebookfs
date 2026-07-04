@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/library/config"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -26,8 +27,9 @@ type testLib struct {
 	openEpubFn func(*model.Book) (EpubReader, error)
 }
 
-func (l testLib) Close() error                                { return nil }
-func (l testLib) CreateIngest() (*IngestHandle, error) { return nil, nil }
+func (l testLib) Close() error                                 { return nil }
+func (l testLib) Exporter(_ config.ReaderConfig) (Exporter, error) { return nil, nil }
+func (l testLib) CreateIngest() (*IngestHandle, error)        { return nil, nil }
 func (l testLib) ListAll() ([]*model.Book, error)             { return nil, nil }
 func (l testLib) Reindex() error                              { return nil }
 func (l testLib) OpenEpub(b *model.Book) (EpubReader, error) {

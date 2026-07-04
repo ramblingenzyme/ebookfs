@@ -50,6 +50,7 @@ func (h *IngestHandle) Ingest() (*model.Book, error) {
 type Library interface {
 	Close() error
 	CreateIngest() (*IngestHandle, error)
+	Exporter(config.ReaderConfig) (Exporter, error)
 	ListAll() ([]*model.Book, error)
 	Reindex() error
 	OpenEpub(b *model.Book) (EpubReader, error)
@@ -64,7 +65,6 @@ type Library interface {
 // It is the single swap point between serving the original epub and a converted
 // kepub: the Library returns the appropriate implementation based on config.
 type Exporter interface {
-	Close() error
 	Open(*model.Book) (EpubReader, error) // bytes for reads
 	Size(*model.Book) (int64, bool)       // cheap; 9P stat length, false when cold
 	Warm(*model.Book)                     // non-blocking proactive warm hint
