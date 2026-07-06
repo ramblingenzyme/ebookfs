@@ -13,6 +13,7 @@ package fs
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"strings"
@@ -39,25 +40,25 @@ var _ library.EpubReader = (*fakeEpubReader)(nil)
 var _ io.ReaderAt = (*fakeEpubReader)(nil)
 
 type fakeLib struct {
-	editFn         func(*model.Book, model.Edits) (*model.Book, error)
+	editFn         func(int64, model.Edits) (*model.Book, error)
 	ingestFn       func(string) (*model.Book, error)
 	createIngestFn func() (*library.IngestHandle, error)
 	extractCoverFn func(*model.Book) ([]byte, error)
 	extractOPFFn   func(*model.Book) ([]byte, error)
-	writeCoverFn   func(*model.Book, []byte) error
+	writeCoverFn   func(int64, []byte) error
 	openEpubFn     func(*model.Book) (library.EpubReader, error)
 	queryFn        func(model.Filter) ([]*model.Book, error)
 	reindexFn      func() error
-	deleteFn       func(*model.Book) error
+	deleteFn       func(int64) error
 }
 
 func (l fakeLib) Close() error { return nil }
 func (l fakeLib) Exporter(_ config.ReaderConfig) (library.Exporter, error) { return nil, nil }
-func (l fakeLib) Edit(b *model.Book, e model.Edits) (*model.Book, error) {
+func (l fakeLib) Edit(id int64, e model.Edits) (*model.Book, error) {
 	if l.editFn != nil {
-		return l.editFn(b, e)
+		return l.editFn(id, e)
 	}
-	return b, nil
+	return nil, errors.New("fakeLib: no editFn")
 }
 func (l fakeLib) CreateIngest() (*library.IngestHandle, error) {
 	if l.createIngestFn != nil {
@@ -86,9 +87,9 @@ func (l fakeLib) ExtractOPF(b *model.Book) ([]byte, error) {
 	}
 	return nil, nil
 }
-func (l fakeLib) WriteCover(b *model.Book, data []byte) error {
+func (l fakeLib) WriteCover(id int64, data []byte) error {
 	if l.writeCoverFn != nil {
-		return l.writeCoverFn(b, data)
+		return l.writeCoverFn(id, data)
 	}
 	return nil
 }
@@ -110,9 +111,9 @@ func (l fakeLib) Reindex() error {
 	}
 	return nil
 }
-func (l fakeLib) Delete(b *model.Book) error {
+func (l fakeLib) Delete(id int64) error {
 	if l.deleteFn != nil {
-		return l.deleteFn(b)
+		return l.deleteFn(id)
 	}
 	return nil
 }

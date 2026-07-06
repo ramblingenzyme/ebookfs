@@ -26,6 +26,11 @@ type EpubReader interface {
 // own fields without depending on Store, Index, or the epub parser. Library
 // remains the single orchestrator for persistence and transactions; Book methods
 // are helpers for in-memory transformation and inspection.
+//
+// A Book handed across an API boundary is an immutable snapshot: once published
+// (returned by the library or stored in a frontend), it must not be modified —
+// an update is a fresh Book (see Edit), letting concurrent readers hold the old
+// value safely.
 type Book struct {
 	Location
 	Bib

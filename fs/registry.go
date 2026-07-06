@@ -104,7 +104,7 @@ func (r *bookRegistry) edit(id int64, edits model.Edits) error {
 	if !ok {
 		return fmt.Errorf("no book with id %d", id)
 	}
-	updated, err := r.lib.Edit(dir.Book(), edits)
+	updated, err := r.lib.Edit(id, edits)
 	if err != nil {
 		return err
 	}

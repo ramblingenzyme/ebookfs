@@ -11,9 +11,13 @@ import (
 
 func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 	f := newTestFS(t)
+	book := makeBook(1, "Old Title", "Alice")
+	book.Meta.Status = "unread"
+	// The real library fetches the edit base by id; the fake closes over the
+	// test's book instead.
 	lib := fakeLib{
-		editFn: func(b *model.Book, e model.Edits) (*model.Book, error) {
-			updated := *b
+		editFn: func(id int64, e model.Edits) (*model.Book, error) {
+			updated := *book
 			if e.Title != nil {
 				updated.Title = *e.Title
 			}
@@ -21,7 +25,7 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 				updated.SortTitle = *e.SortTitle
 			}
 			e.ApplyMeta(&updated.Meta)
-			updated.Meta.DateModified = b.Meta.DateModified
+			updated.Meta.DateModified = book.Meta.DateModified
 			return &updated, nil
 		},
 	}
@@ -31,8 +35,6 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 	byAuthor := newByAuthorDir(reg)
 	byID := newByIDDir(reg)
 
-	book := makeBook(1, "Old Title", "Alice")
-	book.Meta.Status = "unread"
 	reg.Add(book)
 
 	// Find the title fieldFile in the bookDir and write to it.
@@ -75,14 +77,15 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 
 func TestRegistryEditAuthorsRehomesInByAuthor(t *testing.T) {
 	f := newTestFS(t)
+	book := makeBook(1, "Test", "Alice")
 	lib := fakeLib{
-		editFn: func(b *model.Book, e model.Edits) (*model.Book, error) {
-			updated := *b
+		editFn: func(id int64, e model.Edits) (*model.Book, error) {
+			updated := *book
 			if e.Authors != nil {
 				updated.Authors = *e.Authors
 			}
 			e.ApplyMeta(&updated.Meta)
-			updated.Meta.DateModified = b.Meta.DateModified
+			updated.Meta.DateModified = book.Meta.DateModified
 			return &updated, nil
 		},
 	}
@@ -91,7 +94,6 @@ func TestRegistryEditAuthorsRehomesInByAuthor(t *testing.T) {
 	allBooks := newAllBooksDir(reg)
 	byAuthor := newByAuthorDir(reg)
 
-	book := makeBook(1, "Test", "Alice")
 	reg.Add(book)
 
 	// Change authors from Alice to Bob.
@@ -123,11 +125,14 @@ func TestRegistryEditAuthorsRehomesInByAuthor(t *testing.T) {
 
 func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 	f := newTestFS(t)
+	book := makeBook(1, "Test", "Author1")
+	book.EpubFilename = "Test.epub"
+	book.Meta.Status = "unread"
 	lib := fakeLib{
-		editFn: func(b *model.Book, e model.Edits) (*model.Book, error) {
-			updated := *b
+		editFn: func(id int64, e model.Edits) (*model.Book, error) {
+			updated := *book
 			e.ApplyMeta(&updated.Meta)
-			updated.Meta.DateModified = b.Meta.DateModified
+			updated.Meta.DateModified = book.Meta.DateModified
 			return &updated, nil
 		},
 	}
@@ -135,9 +140,6 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 	allBooks := newAllBooksDir(reg)
 	readerDir := newReaderDir(reg, testExporter{statuses: []string{"reading"}})
 
-	book := makeBook(1, "Test", "Author1")
-	book.EpubFilename = "Test.epub"
-	book.Meta.Status = "unread"
 	reg.Add(book)
 
 	// Reader view should not show the book when status is "unread".
@@ -172,13 +174,17 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 // (a name that is neither the old nor the new title).
 func TestRegistryEditConcurrentReaders(t *testing.T) {
 	f := newTestFS(t)
+	// current mimics the library's authoritative state; editFn runs under the
+	// registry mutex, so reading and replacing it is serialized.
+	current := makeBook(1, "Title A", "Alice")
 	lib := fakeLib{
-		editFn: func(b *model.Book, e model.Edits) (*model.Book, error) {
-			updated := *b
+		editFn: func(id int64, e model.Edits) (*model.Book, error) {
+			updated := *current
 			if e.Title != nil {
 				updated.Title = *e.Title
 			}
 			e.ApplyMeta(&updated.Meta)
+			current = &updated
 			return &updated, nil
 		},
 	}
@@ -186,7 +192,7 @@ func TestRegistryEditConcurrentReaders(t *testing.T) {
 	allBooks := newAllBooksDir(reg)
 	byID := newByIDDir(reg)
 
-	reg.Add(makeBook(1, "Title A", "Alice"))
+	reg.Add(current)
 	bd := allBooks.Children()["Title A"].(*bookDir)
 	titleFF := bd.Children()["title"].(*fieldFile)
 

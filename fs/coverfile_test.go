@@ -129,7 +129,7 @@ func TestCoverFileWriteClose(t *testing.T) {
 		extractCoverFn: func(b *model.Book) ([]byte, error) {
 			return []byte("original"), nil
 		},
-		writeCoverFn: func(b *model.Book, data []byte) error {
+		writeCoverFn: func(id int64, data []byte) error {
 			written = data
 			return nil
 		},
@@ -162,7 +162,7 @@ func TestCoverFileWriteEmptyDoesNotCallWriteCover(t *testing.T) {
 		extractCoverFn: func(b *model.Book) ([]byte, error) {
 			return []byte("original"), nil
 		},
-		writeCoverFn: func(b *model.Book, data []byte) error {
+		writeCoverFn: func(id int64, data []byte) error {
 			called = true
 			return nil
 		},
@@ -217,7 +217,7 @@ func TestCoverFileWriteErrorPassesThrough(t *testing.T) {
 		extractCoverFn: func(b *model.Book) ([]byte, error) {
 			return []byte("original"), nil
 		},
-		writeCoverFn: func(b *model.Book, data []byte) error {
+		writeCoverFn: func(id int64, data []byte) error {
 			return errTest
 		},
 	}

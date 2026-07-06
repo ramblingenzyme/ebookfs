@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/ramblingenzyme/ebookfs/library/config"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index"
@@ -47,6 +48,14 @@ func (h *IngestHandle) Ingest() (*model.Book, error) {
 
 // Library defines the public API for filesystem and index operations on the
 // book collection. The concrete implementation is unexported; construct via New.
+//
+// Concurrency contract: methods are safe for concurrent use. Returned
+// *model.Book values are immutable snapshots — the library never mutates a
+// Book after returning it. Reads take a snapshot ("read the version I'm
+// looking at"); mutations (Edit, WriteCover, Delete) address a book by id and
+// run as an atomic read-modify-write per book: the base state is fetched
+// fresh under a per-book lock, so callers holding stale snapshots cannot
+// revert other callers' changes.
 type Library interface {
 	Close() error
 	CreateIngest() (*IngestHandle, error)
@@ -56,9 +65,9 @@ type Library interface {
 	OpenEpub(b *model.Book) (EpubReader, error)
 	ExtractCover(b *model.Book) ([]byte, error)
 	ExtractOPF(b *model.Book) ([]byte, error)
-	Edit(b *model.Book, e model.Edits) (*model.Book, error)
-	WriteCover(b *model.Book, img []byte) error
-	Delete(b *model.Book) error
+	Edit(id int64, e model.Edits) (*model.Book, error)
+	WriteCover(id int64, img []byte) error
+	Delete(id int64) error
 }
 
 // Exporter produces the rsync-export rendition of a book for the reader/ view.
@@ -91,7 +100,12 @@ func Open(cfg config.LibraryConfig, forceReindex bool) (Library, error) {
 	if err != nil {
 		return nil, err
 	}
-	lib := &libraryImpl{store: store.New(cfg.Root, cfg.InboxTemp), index: idx, inboxTemp: cfg.InboxTemp}
+	lib := &libraryImpl{
+		store:     store.New(cfg.Root, cfg.InboxTemp),
+		index:     idx,
+		inboxTemp: cfg.InboxTemp,
+		bookMu:    make(map[int64]*sync.Mutex),
+	}
 	if forceReindex || lib.needsReindex() {
 		if err := lib.Reindex(); err != nil {
 			return nil, fmt.Errorf("reindexing library: %w", err)

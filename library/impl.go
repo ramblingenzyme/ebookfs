@@ -23,6 +23,37 @@ type libraryImpl struct {
 	expMu     sync.Mutex
 	// Dedup of exporters by config is not implemented. If needed in the
 	// future, hash/comparable-key the ReaderConfig fields and store in a map.
+
+	// bookMu serializes the operations that mutate one book's on-disk state
+	// (Edit, WriteCover, Delete), so e.g. a cover rewrite cannot interleave
+	// with an edit that is moving the book directory. Lazily created per id,
+	// mirroring kepub.Cache's conversion locks.
+	bookMuMu sync.Mutex
+	bookMu   map[int64]*sync.Mutex
+}
+
+// lockBook returns the mutex serializing on-disk mutations of book id.
+func (l *libraryImpl) lockBook(id int64) *sync.Mutex {
+	l.bookMuMu.Lock()
+	defer l.bookMuMu.Unlock()
+	m, ok := l.bookMu[id]
+	if !ok {
+		m = &sync.Mutex{}
+		l.bookMu[id] = m
+	}
+	return m
+}
+
+// get returns the current state of book id from the index, hydrated with its
+// absolute epub path. Mutations fetch their base through it under the per-book
+// lock, so they always operate on the book's authoritative current state.
+func (l *libraryImpl) get(id int64) (*model.Book, error) {
+	b, err := l.index.Get(id)
+	if err != nil {
+		return nil, fmt.Errorf("no book with id %d: %w", id, err)
+	}
+	b.EpubPath = l.store.AbsPath(b.LibraryPath, b.EpubFilename)
+	return b, nil
 }
 
 type exporterCloser interface{ close() error }
@@ -188,9 +219,21 @@ func (l *libraryImpl) ExtractOPF(b *model.Book) ([]byte, error) {
 	return epub.ExtractOPF(b.EpubPath)
 }
 
-// Edit applies edits to a book, persists everything, and returns the updated
-// book. If the title or authors change, the book directory is moved.
-func (l *libraryImpl) Edit(b *model.Book, e model.Edits) (*model.Book, error) {
+// Edit applies edits to the book with the given id, persists everything, and
+// returns the updated book. The edit base is the book's current state, fetched
+// under the per-book lock — an atomic read-modify-write, so concurrent callers
+// cannot revert each other's changes by editing from stale snapshots. If the
+// title or authors change, the book directory is moved.
+func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
+	mu := l.lockBook(id)
+	mu.Lock()
+	defer mu.Unlock()
+
+	b, err := l.get(id)
+	if err != nil {
+		return nil, err
+	}
+
 	if v := e.Validate(b); v != nil {
 		log.Printf("edit: book %d (%q): validation failed: %v", b.Meta.ID, b.Title, v)
 		return nil, v
@@ -227,9 +270,18 @@ func (l *libraryImpl) Edit(b *model.Book, e model.Edits) (*model.Book, error) {
 	return updated, nil
 }
 
-// WriteCover replaces the cover image in b's epub with img.
-func (l *libraryImpl) WriteCover(b *model.Book, img []byte) error {
-	_, err := epub.WriteCover(b.EpubPath, b.CoverPath, img)
+// WriteCover replaces the cover image in the epub of the book with the given
+// id, resolving the epub's current location under the per-book lock.
+func (l *libraryImpl) WriteCover(id int64, img []byte) error {
+	mu := l.lockBook(id)
+	mu.Lock()
+	defer mu.Unlock()
+
+	b, err := l.get(id)
+	if err != nil {
+		return err
+	}
+	_, err = epub.WriteCover(b.EpubPath, b.CoverPath, img)
 	if err != nil {
 		log.Printf("cover: book %d (%q): %v", b.Meta.ID, b.Title, err)
 	}
@@ -261,13 +313,23 @@ func bibFromEpub(src *epub.Book) model.Bib {
 	}
 }
 
-func (l *libraryImpl) Delete(b *model.Book) error {
-	// Store is authoritative; a ghost index row is cleaned up by reindex.
-	err := l.index.Delete(b.Meta.ID, func() error { return l.store.Delete(b.Location) })
+// Delete removes the book with the given id from the store and the index,
+// resolving its current location under the per-book lock.
+func (l *libraryImpl) Delete(id int64) error {
+	mu := l.lockBook(id)
+	mu.Lock()
+	defer mu.Unlock()
+
+	b, err := l.get(id)
 	if err != nil {
-		log.Printf("delete: book %d (%q): %v", b.Meta.ID, b.Title, err)
+		return err
+	}
+	// Store is authoritative; a ghost index row is cleaned up by reindex.
+	err = l.index.Delete(id, func() error { return l.store.Delete(b.Location) })
+	if err != nil {
+		log.Printf("delete: book %d (%q): %v", id, b.Title, err)
 	} else {
-		log.Printf("delete: book %d (%q): ok", b.Meta.ID, b.Title)
+		log.Printf("delete: book %d (%q): ok", id, b.Title)
 	}
 	return err
 }

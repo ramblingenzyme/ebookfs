@@ -153,7 +153,7 @@ func (c *coverFile) Close(fid uint64) error {
 	if len(data) == 0 {
 		return nil
 	}
-	return c.lib.WriteCover(c.book(), data)
+	return c.lib.WriteCover(c.book().Meta.ID, data)
 }
 
 // epubFile serves a book's epub through the library, holding one reader per fid.
