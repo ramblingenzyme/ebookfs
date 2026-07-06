@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -167,6 +168,14 @@ func rewriteEpub(srcPath string, replace map[string][]byte) (*Book, error) {
 				return err
 			}
 			_, err = w.Write(data)
+			return err
+		}
+		if strings.HasSuffix(f.Name, "/") {
+			_, err := zw.CreateHeader(&zip.FileHeader{
+				Name:     f.Name,
+				Method:   f.Method,
+				Modified: f.Modified,
+			})
 			return err
 		}
 		return zw.Copy(f) // verbatim: raw bytes, original method, no recompression

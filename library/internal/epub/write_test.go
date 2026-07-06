@@ -337,6 +337,76 @@ func TestWriteBibAllowsFontObfuscation(t *testing.T) {
 	}
 }
 
+func TestWriteBibWithDirectoryEntries(t *testing.T) {
+	entries := baseEntries(opf3,
+		entry{name: "OEBPS/", data: nil},
+		entry{name: "fonts/", data: nil},
+		entry{name: "images/", data: nil},
+		entry{name: "text/", data: nil},
+	)
+	path := writeEpub(t, entries)
+	book, err := WriteBib(path, model.Edits{Title: ptr("New Title")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if book.Title != "New Title" {
+		t.Errorf("title = %q, want New Title", book.Title)
+	}
+
+	zrc, err := zip.OpenReader(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer zrc.Close()
+	dirs := make(map[string]bool)
+	for _, f := range zrc.File {
+		if len(f.Name) > 0 && f.Name[len(f.Name)-1] == '/' {
+			dirs[f.Name] = true
+		}
+	}
+	for _, dir := range []string{"OEBPS/", "fonts/", "images/", "text/"} {
+		if !dirs[dir] {
+			t.Errorf("directory entry %q missing from rewritten epub", dir)
+		}
+	}
+}
+
+func TestWriteCoverWithDirectoryEntries(t *testing.T) {
+	entries := baseEntries(opf3,
+		entry{name: "OEBPS/", data: nil},
+		entry{name: "fonts/", data: nil},
+	)
+	path := writeEpub(t, entries)
+	newCover := tinyJPEG(t)
+	if _, err := WriteCover(path, "OEBPS/cover.jpg", newCover); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ExtractCover(path, "OEBPS/cover.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, newCover) {
+		t.Errorf("cover = %q, want the supplied JPEG bytes", got)
+	}
+
+	zrc, err := zip.OpenReader(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer zrc.Close()
+	dirs := make(map[string]bool)
+	for _, f := range zrc.File {
+		if len(f.Name) > 0 && f.Name[len(f.Name)-1] == '/' {
+			dirs[f.Name] = true
+		}
+	}
+	for _, dir := range []string{"OEBPS/", "fonts/"} {
+		if !dirs[dir] {
+			t.Errorf("directory entry %q missing from rewritten epub", dir)
+		}
+	}
+}
+
 // --- WriteCover ------------------------------------------------------------
 
 func TestWriteCoverReplaces(t *testing.T) {
