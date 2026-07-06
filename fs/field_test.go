@@ -242,17 +242,14 @@ func TestFieldFilePerFidBuffers(t *testing.T) {
 	}
 }
 
-func TestFieldFileUnopenedFidReturnsEmpty(t *testing.T) {
+func TestFieldFileUnopenedFidReturnsError(t *testing.T) {
 	f := newTestFS(t)
 	stat := f.NewStat("test", "glenda", "glenda", 0444)
 	ff := newFieldFile(stat, func() string { return "val" }, nil)
 
-	data, err := ff.Read(42, 0, 10)
-	if err != nil {
-		t.Fatalf("Read: %v", err)
-	}
-	if len(data) != 0 {
-		t.Errorf("Read(unopened) = %d bytes, want 0", len(data))
+	_, err := ff.Read(42, 0, 10)
+	if err == nil {
+		t.Error("expected error reading from unopened fid")
 	}
 }
 

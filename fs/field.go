@@ -4,7 +4,6 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
 )
 
@@ -20,20 +19,20 @@ import (
 // bytes from the old value leak through). On Close the result is sent through
 // set → edits → Validate; an error aborts the commit.
 type fieldFile struct {
-	fs.BaseFile
+	snapshotFile
 	get       func() string
 	set       func(string) error
-	reads     map[uint64][]byte
 	writes    map[uint64][]byte
 	truncated map[uint64]bool
 }
 
 func newFieldFile(stat *proto.Stat, get func() string, set func(string) error) *fieldFile {
 	return &fieldFile{
-		BaseFile:  *fs.NewBaseFile(stat),
+		snapshotFile: newSnapshotFile(stat, func() ([]byte, error) {
+			return []byte(get() + "\n"), nil
+		}),
 		get:       get,
 		set:       set,
-		reads:     make(map[uint64][]byte),
 		writes:    make(map[uint64][]byte),
 		truncated: make(map[uint64]bool),
 	}
@@ -49,23 +48,14 @@ func (f *fieldFile) Stat() proto.Stat {
 func (f *fieldFile) Open(fid uint64, omode proto.Mode) error {
 	f.Lock()
 	defer f.Unlock()
-	f.reads[fid] = []byte(f.get() + "\n")
+	data, err := f.load()
+	if err != nil {
+		return err
+	}
+	f.reads[fid] = data
 	f.writes[fid] = nil
 	f.truncated[fid] = omode&proto.Otrunc != 0
 	return nil
-}
-
-func (f *fieldFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error) {
-	f.RLock()
-	defer f.RUnlock()
-	data := f.reads[fid]
-	if offset >= uint64(len(data)) {
-		return []byte{}, nil
-	}
-	if offset+count > uint64(len(data)) {
-		count = uint64(len(data)) - offset
-	}
-	return data[offset : offset+count], nil
 }
 
 func (f *fieldFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {

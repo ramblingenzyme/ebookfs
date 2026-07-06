@@ -2,133 +2,66 @@ package fs
 
 import (
 	"errors"
-	"io"
 
-	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // opfFile serves a book's raw OPF XML, loading bytes from the epub on each open.
-// book is a getter (bookDir.Book) so every access sees the current snapshot.
 type opfFile struct {
-	fs.BaseFile
-	lib   library.Library
-	book  func() *model.Book
-	reads map[uint64][]byte
+	snapshotFile
 }
 
 func newOPFFile(stat *proto.Stat, lib library.Library, book func() *model.Book) *opfFile {
 	return &opfFile{
-		BaseFile: *fs.NewBaseFile(stat),
-		lib:      lib,
-		book:     book,
-		reads:    make(map[uint64][]byte),
+		snapshotFile: newSnapshotFile(stat, func() ([]byte, error) {
+			if lib == nil {
+				return nil, errors.New("library not available")
+			}
+			return lib.ExtractOPF(book())
+		}),
 	}
 }
 
 func (o *opfFile) Stat() proto.Stat {
 	s := o.BaseFile.Stat()
-	if o.lib != nil {
-		if data, err := o.lib.ExtractOPF(o.book()); err == nil {
-			s.Length = uint64(len(data))
-		}
+	if data, err := o.load(); err == nil {
+		s.Length = uint64(len(data))
 	}
 	return s
-}
-
-func (o *opfFile) Open(fid uint64, omode proto.Mode) error {
-	data, err := o.lib.ExtractOPF(o.book())
-	if err != nil {
-		return err
-	}
-	o.Lock()
-	o.reads[fid] = data
-	o.Unlock()
-	return nil
-}
-
-func (o *opfFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error) {
-	o.RLock()
-	defer o.RUnlock()
-	data := o.reads[fid]
-	if data == nil {
-		return nil, errors.New("not open")
-	}
-	if offset >= uint64(len(data)) {
-		return []byte{}, nil
-	}
-	if offset+count > uint64(len(data)) {
-		count = uint64(len(data)) - offset
-	}
-	return data[offset : offset+count], nil
-}
-
-func (o *opfFile) Close(fid uint64) error {
-	o.Lock()
-	defer o.Unlock()
-	delete(o.reads, fid)
-	return nil
 }
 
 // coverFile serves a book's cover image, loading bytes from the epub on each
 // open. It also supports writing new cover bytes, accumulated per fid and
 // committed when the fid is closed.
 type coverFile struct {
-	fs.BaseFile
+	snapshotFile
 	lib    library.Library
 	book   func() *model.Book
-	reads  map[uint64][]byte
 	writes map[uint64][]byte
 }
 
 func newCoverFile(stat *proto.Stat, lib library.Library, book func() *model.Book) *coverFile {
 	return &coverFile{
-		BaseFile: *fs.NewBaseFile(stat),
-		lib:      lib,
-		book:     book,
-		reads:    make(map[uint64][]byte),
-		writes:   make(map[uint64][]byte),
+		snapshotFile: newSnapshotFile(stat, func() ([]byte, error) {
+			if lib == nil {
+				return nil, errors.New("library not available")
+			}
+			return lib.ExtractCover(book())
+		}),
+		lib:    lib,
+		book:   book,
+		writes: make(map[uint64][]byte),
 	}
 }
 
 func (c *coverFile) Stat() proto.Stat {
 	s := c.BaseFile.Stat()
-	if c.lib != nil {
-		if data, err := c.lib.ExtractCover(c.book()); err == nil {
-			s.Length = uint64(len(data))
-		}
+	if data, err := c.load(); err == nil {
+		s.Length = uint64(len(data))
 	}
 	return s
-}
-
-func (c *coverFile) Open(fid uint64, omode proto.Mode) error {
-	data, err := c.lib.ExtractCover(c.book())
-	if err != nil {
-		return err
-	}
-	c.Lock()
-	c.reads[fid] = data
-	c.writes[fid] = nil
-	c.Unlock()
-	return nil
-}
-
-func (c *coverFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error) {
-	c.RLock()
-	defer c.RUnlock()
-	data := c.reads[fid]
-	if data == nil {
-		return nil, errors.New("not open")
-	}
-	if offset >= uint64(len(data)) {
-		return []byte{}, nil
-	}
-	if offset+count > uint64(len(data)) {
-		count = uint64(len(data)) - offset
-	}
-	return data[offset : offset+count], nil
 }
 
 func (c *coverFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
@@ -160,18 +93,19 @@ func (c *coverFile) Close(fid uint64) error {
 // The 9P layer never sees a filesystem path. Stat is live: it reports the
 // current EpubFilename and on-disk size on each call.
 type epubFile struct {
-	fs.BaseFile
-	lib  library.Library
+	readAtFile
 	book func() *model.Book
-	fids map[uint64]library.EpubReader
 }
 
 func newEpubFile(stat *proto.Stat, lib library.Library, book func() *model.Book) *epubFile {
 	return &epubFile{
-		BaseFile: *fs.NewBaseFile(stat),
-		lib:      lib,
-		book:     book,
-		fids:     make(map[uint64]library.EpubReader),
+		readAtFile: newReadAtFile(stat, func() (library.EpubReader, error) {
+			if lib == nil {
+				return nil, errors.New("library not available")
+			}
+			return lib.OpenEpub(book())
+		}),
+		book: book,
 	}
 }
 
@@ -186,40 +120,4 @@ func (e *epubFile) Stat() proto.Stat {
 		s.Length = uint64(fi.Size())
 	}
 	return s
-}
-
-func (e *epubFile) Open(fid uint64, omode proto.Mode) error {
-	r, err := e.lib.OpenEpub(e.book())
-	if err != nil {
-		return err
-	}
-	e.Lock()
-	e.fids[fid] = r
-	e.Unlock()
-	return nil
-}
-
-func (e *epubFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error) {
-	e.RLock()
-	defer e.RUnlock()
-	r := e.fids[fid]
-	if r == nil {
-		return nil, errors.New("not open")
-	}
-	buf := make([]byte, count)
-	n, err := r.ReadAt(buf, int64(offset))
-	if err == io.EOF {
-		err = nil
-	}
-	return buf[:n], err
-}
-
-func (e *epubFile) Close(fid uint64) error {
-	e.Lock()
-	defer e.Unlock()
-	if r, ok := e.fids[fid]; ok {
-		r.Close()
-		delete(e.fids, fid)
-	}
-	return nil
 }

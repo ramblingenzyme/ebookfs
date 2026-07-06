@@ -2,7 +2,6 @@ package fs
 
 import (
 	"errors"
-	"io"
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
@@ -72,18 +71,21 @@ func (d *readerDir) remove(dir *bookDir) {
 // reader per fid. It mirrors epubFile, but its size is reported live from the
 // exporter so a kepub's length appears once its cache is warm.
 type readerFile struct {
-	fs.BaseFile
+	readAtFile
 	exp  library.Exporter
 	book func() *model.Book
-	fids map[uint64]library.EpubReader
 }
 
 func newReaderFile(stat *proto.Stat, exp library.Exporter, book func() *model.Book) *readerFile {
 	return &readerFile{
-		BaseFile: *fs.NewBaseFile(stat),
-		exp:      exp,
-		book:     book,
-		fids:     make(map[uint64]library.EpubReader),
+		readAtFile: newReadAtFile(stat, func() (library.EpubReader, error) {
+			if exp == nil {
+				return nil, errors.New("exporter not available")
+			}
+			return exp.Open(book())
+		}),
+		exp:  exp,
+		book: book,
 	}
 }
 
@@ -95,40 +97,4 @@ func (r *readerFile) Stat() proto.Stat {
 		s.Length = uint64(size)
 	}
 	return s
-}
-
-func (r *readerFile) Open(fid uint64, omode proto.Mode) error {
-	rd, err := r.exp.Open(r.book())
-	if err != nil {
-		return err
-	}
-	r.Lock()
-	r.fids[fid] = rd
-	r.Unlock()
-	return nil
-}
-
-func (r *readerFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error) {
-	r.RLock()
-	defer r.RUnlock()
-	rd := r.fids[fid]
-	if rd == nil {
-		return nil, errors.New("not open")
-	}
-	buf := make([]byte, count)
-	n, err := rd.ReadAt(buf, int64(offset))
-	if err == io.EOF {
-		err = nil
-	}
-	return buf[:n], err
-}
-
-func (r *readerFile) Close(fid uint64) error {
-	r.Lock()
-	defer r.Unlock()
-	if rd, ok := r.fids[fid]; ok {
-		rd.Close()
-		delete(r.fids, fid)
-	}
-	return nil
 }
