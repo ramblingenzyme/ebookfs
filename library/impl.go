@@ -189,6 +189,7 @@ func (l *libraryImpl) Edit(b *model.Book, e model.Edits) (*model.Book, error) {
 		if e.HasBibEdits() {
 			re, err := epub.WriteBib(b.EpubPath, e)
 			if err != nil {
+				log.Printf("edit: book %d (%q): rewrite epub: %v", b.Meta.ID, b.Title, err)
 				return err
 			}
 			updated.Bib = bibFromEpub(re)
@@ -196,11 +197,16 @@ func (l *libraryImpl) Edit(b *model.Book, e model.Edits) (*model.Book, error) {
 		newLoc := l.store.Layout(updated.Authors, updated.Title, updated.Meta.ID)
 		if newLoc != b.Location {
 			if err := l.store.Move(b.Location, newLoc); err != nil {
+				log.Printf("edit: book %d (%q): move directory: %v", b.Meta.ID, b.Title, err)
 				return err
 			}
 			updated.Location = newLoc
 		}
-		return l.store.WriteMeta(updated.Location, &updated.Meta)
+		if err := l.store.WriteMeta(updated.Location, &updated.Meta); err != nil {
+			log.Printf("edit: book %d (%q): write meta: %v", b.Meta.ID, b.Title, err)
+			return err
+		}
+		return nil
 	}); err != nil {
 		return nil, err
 	}
