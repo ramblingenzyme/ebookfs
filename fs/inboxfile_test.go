@@ -62,6 +62,23 @@ func TestInboxFileDoubleOpenRejected(t *testing.T) {
 	}
 }
 
+func TestInboxFileOpenWithFidZero(t *testing.T) {
+	f := newTestFS(t)
+	inf := newInboxFile(f, fakeLib{}, "test.epub", 0644, nil)
+
+	// Open with fid 0 — a legal fid that used to be rejected as "already open"
+	// because the check was i.fid != 0 instead of i.handle != nil.
+	if err := inf.Open(0, proto.Mode(0)); err != nil {
+		t.Fatalf("Open with fid 0: %v", err)
+	}
+
+	// Second open with any fid must still fail.
+	err := inf.Open(1, proto.Mode(0))
+	if err == nil {
+		t.Error("expected error opening already-open inboxFile with fid 1")
+	}
+}
+
 func TestInboxFileWriteWithoutOpen(t *testing.T) {
 	f := newTestFS(t)
 	inf := newInboxFile(f, fakeLib{}, "test.epub", 0644, nil)

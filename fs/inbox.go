@@ -59,7 +59,7 @@ func (i *inboxFile) Open(fid uint64, omode proto.Mode) error {
 	name := i.Stat().Name // cache before Lock — Stat() acquires RLock, deadlocking if already write-locked
 	i.Lock()
 	defer i.Unlock()
-	if i.fid != 0 {
+	if i.handle != nil {
 		log.Printf("already open")
 		return errors.New("file already open")
 	}
