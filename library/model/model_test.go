@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"math"
 	"strings"
 	"testing"
 )
@@ -54,6 +55,9 @@ func TestValidateRating(t *testing.T) {
 		{"decimal", 4.75, false},
 		{"negative", -1, true},
 		{"too high", 6, true},
+		{"NaN", math.NaN(), true},
+		{"positive infinity", math.Inf(1), true},
+		{"negative infinity", math.Inf(-1), true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e := Edits{Rating: ptr(tc.rating)}
@@ -234,6 +238,8 @@ func TestValidateSeriesIndex(t *testing.T) {
 		{"book has series, nil in edits", &SeriesRef{Name: "Existing"}, Edits{SeriesIndex: ptr(2.5)}, false},
 		{"no series anywhere", nil, Edits{SeriesIndex: ptr(1.0)}, true},
 		{"book has series, empty series edit", &SeriesRef{Name: "Existing"}, Edits{Series: ptr(""), SeriesIndex: ptr(1.0)}, false},
+		{"NaN index", &SeriesRef{Name: "Existing"}, Edits{SeriesIndex: ptr(math.NaN())}, true},
+		{"infinite index", &SeriesRef{Name: "Existing"}, Edits{SeriesIndex: ptr(math.Inf(1))}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			book := &Book{Bib: Bib{Series: tc.bookSeries}}

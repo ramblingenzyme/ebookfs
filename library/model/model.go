@@ -4,6 +4,7 @@ package model
 import (
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -215,7 +216,10 @@ func (e Edits) Validate(b *Book) *ValidationError {
 	}
 
 	if e.Rating != nil {
-		if *e.Rating < 0 || *e.Rating > 5 {
+		// NaN compares false against both bounds, and once persisted it bricks the
+		// index (SQLite binds NaN as NULL, violating the NOT NULL rating column),
+		// so it must be rejected here.
+		if math.IsNaN(*e.Rating) || *e.Rating < 0 || *e.Rating > 5 {
 			add("rating", fmt.Sprintf("invalid rating %g: must be 0-5", *e.Rating))
 		}
 	}
@@ -256,8 +260,11 @@ func (e Edits) Validate(b *Book) *ValidationError {
 		}
 	}
 
-	if e.SeriesIndex != nil && e.Series == nil {
-		if b.Series == nil {
+	if e.SeriesIndex != nil {
+		if math.IsNaN(*e.SeriesIndex) || math.IsInf(*e.SeriesIndex, 0) {
+			add("series_index", fmt.Sprintf("invalid series index %g: must be a finite number", *e.SeriesIndex))
+		}
+		if e.Series == nil && b.Series == nil {
 			add("series_index", "book has no series to set an index on")
 		}
 	}
