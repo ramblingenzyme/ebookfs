@@ -246,9 +246,7 @@ func upsertAuthors(tx *sql.Tx, bookID int64, authors []model.Author) error {
 			return err
 		}
 	}
-	// Remove authors no longer referenced by any book.
-	_, err := tx.Exec(`DELETE FROM authors WHERE id NOT IN (SELECT author_id FROM book_authors)`)
-	return err
+	return nil
 }
 
 func upsertTags(tx *sql.Tx, bookID int64, tags []string) error {
@@ -267,9 +265,7 @@ func upsertTags(tx *sql.Tx, bookID int64, tags []string) error {
 			return err
 		}
 	}
-	// Remove tags no longer referenced by any book.
-	_, err := tx.Exec(`DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM book_tags)`)
-	return err
+	return nil
 }
 
 // Put writes b into the index, inserting or replacing the record for b.Meta.ID.
@@ -308,9 +304,7 @@ func upsertSeries(tx *sql.Tx, b *model.Book) error {
 		return err
 	}
 
-	// Remove series no longer referenced by any book.
-	_, err := tx.Exec(`DELETE FROM series WHERE id NOT IN (SELECT series_id FROM books WHERE series_id IS NOT NULL)`)
-	return err
+	return nil
 }
 
 // finishBook writes the per-book child rows after the books row exists.
@@ -336,27 +330,32 @@ func finishBook(tx *sql.Tx, b *model.Book) error {
 			return err
 		}
 	}
-	return nil
+	return cleanupOrphans(tx)
 }
 
-// insertBook inserts a new book row, failing on id conflict — used by Rebuild.
-func insertBook(tx *sql.Tx, b *model.Book) error {
+const bookColumns = `(id, title, sort_title, pubdate, description, language,
+		     library_path, epub_filename, cover_path, status, rating,
+		     date_added, date_modified)`
+
+func bookValues(b *model.Book) []any {
 	sortTitle := any(b.SortTitle)
 	if sortTitle == "" {
 		sortTitle = nil
 	}
-
-	// series_id/series_index are set by finishBook's upsertSeries.
-	if _, err := tx.Exec(
-		`INSERT INTO books
-		    (id, title, sort_title, pubdate, description, language,
-		     library_path, epub_filename, cover_path, status, rating,
-		     date_added, date_modified)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	return []any{
 		b.Meta.ID, b.Title, sortTitle, b.Pubdate, b.Description, b.Language,
 		b.LibraryPath, b.EpubFilename, b.CoverPath, b.Meta.Status, b.Meta.Rating,
 		b.Meta.DateAdded.UTC().Format(time.RFC3339),
 		b.Meta.DateModified.UTC().Format(time.RFC3339),
+	}
+}
+
+// insertBook inserts a new book row, failing on id conflict — used by Rebuild.
+func insertBook(tx *sql.Tx, b *model.Book) error {
+	// series_id/series_index are set by finishBook's upsertSeries.
+	if _, err := tx.Exec(
+		`INSERT INTO books `+bookColumns+` VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		bookValues(b)...,
 	); err != nil {
 		return err
 	}
@@ -367,28 +366,16 @@ func insertBook(tx *sql.Tx, b *model.Book) error {
 // putBook inserts or replaces b, using ON CONFLICT to update an existing row.
 // Rebuild, which must surface id collisions, uses insertBook instead.
 func putBook(tx *sql.Tx, b *model.Book) error {
-	sortTitle := any(b.SortTitle)
-	if sortTitle == "" {
-		sortTitle = nil
-	}
-
 	// series_id/series_index are set by finishBook's upsertSeries.
 	if _, err := tx.Exec(
-		`INSERT INTO books
-		    (id, title, sort_title, pubdate, description, language,
-		     library_path, epub_filename, cover_path, status, rating,
-		     date_added, date_modified)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO books `+bookColumns+` VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		     title=excluded.title, sort_title=excluded.sort_title, pubdate=excluded.pubdate,
 		     description=excluded.description, language=excluded.language,
 		     library_path=excluded.library_path, epub_filename=excluded.epub_filename,
 		     cover_path=excluded.cover_path, status=excluded.status, rating=excluded.rating,
 		     date_added=excluded.date_added, date_modified=excluded.date_modified`,
-		b.Meta.ID, b.Title, sortTitle, b.Pubdate, b.Description, b.Language,
-		b.LibraryPath, b.EpubFilename, b.CoverPath, b.Meta.Status, b.Meta.Rating,
-		b.Meta.DateAdded.UTC().Format(time.RFC3339),
-		b.Meta.DateModified.UTC().Format(time.RFC3339),
+		bookValues(b)...,
 	); err != nil {
 		return err
 	}
@@ -414,18 +401,22 @@ func deleteBook(tx *sql.Tx, id int64) error {
 	if _, err := tx.Exec(`DELETE FROM books WHERE id=?`, id); err != nil {
 		return err
 	}
+	return cleanupOrphans(tx)
+}
 
-	orphanCleanup := []string{
+// cleanupOrphans removes authors, series, and tags that are no longer
+// referenced by any book.
+func cleanupOrphans(tx *sql.Tx) error {
+	queries := []string{
 		`DELETE FROM authors WHERE id NOT IN (SELECT author_id FROM book_authors)`,
 		`DELETE FROM series  WHERE id NOT IN (SELECT series_id  FROM books WHERE series_id IS NOT NULL)`,
 		`DELETE FROM tags    WHERE id NOT IN (SELECT tag_id     FROM book_tags)`,
 	}
-	for _, q := range orphanCleanup {
+	for _, q := range queries {
 		if _, err := tx.Exec(q); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
