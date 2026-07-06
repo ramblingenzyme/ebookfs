@@ -77,10 +77,16 @@ func (idx *Index) dropAllTables() error {
 	if err := rows.Err(); err != nil {
 		return err
 	}
+	if _, err := idx.db.Exec(`PRAGMA foreign_keys=OFF`); err != nil {
+		return err
+	}
 	for _, t := range tables {
 		if _, err := idx.db.Exec(`DROP TABLE IF EXISTS ` + t); err != nil {
 			return err
 		}
+	}
+	if _, err := idx.db.Exec(`PRAGMA foreign_keys=ON`); err != nil {
+		return err
 	}
 	return nil
 }
