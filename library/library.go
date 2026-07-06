@@ -32,6 +32,9 @@ type EpubReader = model.EpubReader
 type Library interface {
 	Close() error
 	CreateIngest() (*IngestHandle, error)
+	// Exporter creates a view of the library for export (reader/ view). The
+	// returned Exporter is closed automatically by Close; callers should not
+	// close it themselves.
 	Exporter(config.ReaderConfig) (Exporter, error)
 	Query(model.Filter) ([]*model.Book, error)
 	Reindex() error
