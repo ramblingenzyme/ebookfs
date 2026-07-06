@@ -875,3 +875,49 @@ func TestByStatusDirEditStatus(t *testing.T) {
 		t.Error("'Status Change' should appear under 'read'")
 	}
 }
+
+func TestBooksDirDuplicateTitles(t *testing.T) {
+	f := newTestFS(t)
+	reg := newTestRegistry(t, f)
+	d := newAllBooksDir(reg)
+
+	b1 := makeBook(1, "Same Title", "Alice")
+	b2 := makeBook(2, "Same Title", "Bob")
+
+	reg.Add(b1)
+	if _, ok := d.Children()["Same Title"]; !ok {
+		t.Fatal("first book should appear under plain title")
+	}
+
+	reg.Add(b2)
+	if _, ok := d.Children()["Same Title"]; !ok {
+		t.Error("first book should remain at plain title")
+	}
+	if _, ok := d.Children()["Same Title (2)"]; !ok {
+		t.Error("second book should appear as 'Same Title (2)'")
+	}
+	if len(d.Children()) != 2 {
+		t.Errorf("expected 2 children, got %d", len(d.Children()))
+	}
+
+	// Removing the first book should not affect the second.
+	reg.Remove(1)
+	if _, ok := d.Children()["Same Title"]; ok {
+		t.Error("first book should be removed")
+	}
+	if _, ok := d.Children()["Same Title (2)"]; !ok {
+		t.Error("second book should remain after first is removed")
+	}
+	if len(d.Children()) != 1 {
+		t.Errorf("expected 1 child after removing first book, got %d", len(d.Children()))
+	}
+
+	// Removing the second book cleans up the disambiguated entry.
+	reg.Remove(2)
+	if _, ok := d.Children()["Same Title (2)"]; ok {
+		t.Error("second book should be removed")
+	}
+	if len(d.Children()) != 0 {
+		t.Errorf("expected 0 children after removing both, got %d", len(d.Children()))
+	}
+}

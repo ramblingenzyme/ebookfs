@@ -1,8 +1,11 @@
 package fs
 
 import (
+	"fmt"
+
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // booksDir is a flat listing of bookDirs keyed by each book's title. Embed it in
@@ -17,10 +20,30 @@ func newBooksDir(stat *proto.Stat) *booksDir {
 }
 
 func (d *booksDir) add(dir *bookDir) {
-	d.StaticDir.AddChild(dir)
+	b := dir.Book()
+	plain := b.Title
+	if child, ok := d.Children()[plain]; ok && child != dir {
+		// Plain title is taken by a different book — disambiguate with the id.
+		d.AddChild(&namedBookDir{
+			bookDir:  dir,
+			baseStat: dir.Stat(),
+			name: func(b *model.Book) string {
+				return fmt.Sprintf("%s (%d)", b.Title, b.Meta.ID)
+			},
+		})
+		return
+	}
+	d.AddChild(dir)
 }
+
 func (d *booksDir) remove(dir *bookDir) {
-	d.StaticDir.DeleteChild(dir.Stat().Name)
+	b := dir.Book()
+	plain := b.Title
+	if child, ok := d.Children()[plain]; ok && child == dir {
+		d.DeleteChild(plain)
+		return
+	}
+	d.DeleteChild(fmt.Sprintf("%s (%d)", plain, b.Meta.ID))
 }
 
 func newAllBooksDir(reg *bookRegistry) *booksDir {
