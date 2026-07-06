@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
@@ -32,8 +33,10 @@ func seriesEntryNameFunc(pad int) func(*model.Book) string {
 
 type seriesBookListDir struct {
 	fs.StaticDir
-	f     *fs.FS
-	books map[int64]*bookDir
+	f        *fs.FS
+	books    map[int64]*bookDir
+	children map[int64]*namedBookDir
+	pad      atomic.Int32
 }
 
 func newSeriesBookListDir(f *fs.FS, name string) *seriesBookListDir {
@@ -41,6 +44,7 @@ func newSeriesBookListDir(f *fs.FS, name string) *seriesBookListDir {
 		StaticDir: *fs.NewStaticDir(f.NewStat(name, "glenda", "glenda", 0555|proto.DMDIR)),
 		f:         f,
 		books:     make(map[int64]*bookDir),
+		children:  make(map[int64]*namedBookDir),
 	}
 }
 
@@ -61,20 +65,28 @@ func (s *seriesBookListDir) rebuild() {
 			maxIdx = b.Series.Index
 		}
 	}
-	pad := 0
+	s.pad.Store(0)
 	if maxIdx >= 10 {
-		pad = 2
+		s.pad.Store(2)
 	}
 
 	for name := range s.Children() {
 		s.DeleteChild(name)
 	}
 
-	nameFn := seriesEntryNameFunc(pad)
 	for _, d := range s.books {
-		name := nameFn(d.Book())
-		stat := s.f.NewStat(name, "glenda", "glenda", 0555|proto.DMDIR)
-		s.AddChild(&namedBookDir{bookDir: d, baseStat: *stat, name: nameFn})
+		id := d.Book().Meta.ID
+		n, ok := s.children[id]
+		if !ok {
+			stat := s.f.NewStat("", "glenda", "glenda", 0555|proto.DMDIR)
+			n = &namedBookDir{
+				bookDir:  d,
+				baseStat: *stat,
+				name:     func(b *model.Book) string { return seriesEntryName(b, int(s.pad.Load())) },
+			}
+			s.children[id] = n
+		}
+		s.AddChild(n)
 	}
 }
 
