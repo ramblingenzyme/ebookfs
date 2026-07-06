@@ -132,5 +132,3 @@ func (r *readerFile) Close(fid uint64) error {
 	}
 	return nil
 }
-
-

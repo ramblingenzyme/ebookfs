@@ -51,9 +51,9 @@ func inboxCreateFile(lib library.Library, onIngest func(*model.Book)) createFile
 
 func newInboxFile(f *fs.FS, lib library.Library, name string, perm uint32, onIngest func(*model.Book)) *inboxFile {
 	return &inboxFile{
-		BaseFile:  *fs.NewBaseFile(f.NewStat(name, "glenda", "glenda", perm)),
-		lib:       lib,
-		onIngest:  onIngest,
+		BaseFile: *fs.NewBaseFile(f.NewStat(name, "glenda", "glenda", perm)),
+		lib:      lib,
+		onIngest: onIngest,
 	}
 }
 

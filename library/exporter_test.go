@@ -27,19 +27,19 @@ type testLib struct {
 	openEpubFn func(*model.Book) (EpubReader, error)
 }
 
-func (l testLib) Close() error                                 { return nil }
+func (l testLib) Close() error                                     { return nil }
 func (l testLib) Exporter(_ config.ReaderConfig) (Exporter, error) { return nil, nil }
-func (l testLib) CreateIngest() (*IngestHandle, error)        { return nil, nil }
-func (l testLib) Query(_ model.Filter) ([]*model.Book, error) { return nil, nil }
-func (l testLib) Reindex() error                              { return nil }
+func (l testLib) CreateIngest() (*IngestHandle, error)             { return nil, nil }
+func (l testLib) Query(_ model.Filter) ([]*model.Book, error)      { return nil, nil }
+func (l testLib) Reindex() error                                   { return nil }
 func (l testLib) OpenEpub(b *model.Book) (EpubReader, error) {
 	if l.openEpubFn != nil {
 		return l.openEpubFn(b)
 	}
 	return nil, nil
 }
-func (l testLib) ExtractCover(b *model.Book) ([]byte, error)  { return nil, nil }
-func (l testLib) ExtractOPF(b *model.Book) ([]byte, error)    { return nil, nil }
+func (l testLib) ExtractCover(b *model.Book) ([]byte, error) { return nil, nil }
+func (l testLib) ExtractOPF(b *model.Book) ([]byte, error)   { return nil, nil }
 func (l testLib) Edit(id int64, e model.Edits) (*model.Book, error) {
 	return nil, nil
 }

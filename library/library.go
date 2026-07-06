@@ -151,5 +151,3 @@ func checkSameFilesystem(a, b string) error {
 	os.Remove(dst)
 	return nil
 }
-
-

@@ -44,7 +44,7 @@ func (d *bookDir) Stat() proto.Stat {
 }
 
 type field struct {
-	get   func(*model.Book) string
+	get func(*model.Book) string
 	// edits converts string input to typed Edits. Error return is for input
 	// parsing failures (e.g. strconv.Atoi); validation is centralized in
 	// model.Edits.Validate.
@@ -52,102 +52,102 @@ type field struct {
 }
 
 var fields = map[string]field{
-		"status": {
-			get: func(b *model.Book) string { return b.Meta.Status },
-			edits: func(b *model.Book, s string) (model.Edits, error) {
-				return model.Edits{Status: &s}, nil
-			},
+	"status": {
+		get: func(b *model.Book) string { return b.Meta.Status },
+		edits: func(b *model.Book, s string) (model.Edits, error) {
+			return model.Edits{Status: &s}, nil
 		},
-		"rating": {
-			get: func(b *model.Book) string { return strconv.FormatFloat(b.Meta.Rating, 'f', -1, 64) },
-			edits: func(b *model.Book, s string) (model.Edits, error) {
-				n, err := strconv.ParseFloat(s, 64)
-				if err != nil {
-					return model.Edits{}, fmt.Errorf("invalid rating %q", s)
+	},
+	"rating": {
+		get: func(b *model.Book) string { return strconv.FormatFloat(b.Meta.Rating, 'f', -1, 64) },
+		edits: func(b *model.Book, s string) (model.Edits, error) {
+			n, err := strconv.ParseFloat(s, 64)
+			if err != nil {
+				return model.Edits{}, fmt.Errorf("invalid rating %q", s)
+			}
+			n = math.Round(n*100) / 100
+			return model.Edits{Rating: &n}, nil
+		},
+	},
+	"tags": {
+		get: func(b *model.Book) string { return strings.Join(b.Meta.Tags, "\n") },
+		edits: func(b *model.Book, s string) (model.Edits, error) {
+			tags := strings.FieldsFunc(s, func(r rune) bool { return r == '\n' })
+			return model.Edits{Tags: &tags}, nil
+		},
+	},
+	"title": {
+		get: func(b *model.Book) string { return b.Title },
+		edits: func(b *model.Book, s string) (model.Edits, error) {
+			return model.Edits{Title: &s}, nil
+		},
+	},
+	"language": {
+		get: func(b *model.Book) string { return b.Language },
+		edits: func(b *model.Book, s string) (model.Edits, error) {
+			return model.Edits{Language: &s}, nil
+		},
+	},
+	"description": {
+		get: func(b *model.Book) string { return b.Description },
+		edits: func(b *model.Book, s string) (model.Edits, error) {
+			return model.Edits{Description: &s}, nil
+		},
+	},
+	"authors": {
+		get: func(b *model.Book) string {
+			names := make([]string, len(b.Authors))
+			for i, a := range b.Authors {
+				names[i] = a.Name
+			}
+			return strings.Join(names, "\n")
+		},
+		edits: func(b *model.Book, s string) (model.Edits, error) {
+			var names []string
+			for _, n := range strings.Split(s, "\n") {
+				if n = strings.TrimSpace(n); n != "" {
+					names = append(names, n)
 				}
-				n = math.Round(n*100) / 100
-				return model.Edits{Rating: &n}, nil
-			},
+			}
+			authors := make([]model.Author, len(names))
+			for i, n := range names {
+				authors[i] = model.Author{Name: n}
+			}
+			return model.Edits{Authors: &authors}, nil
 		},
-		"tags": {
-			get: func(b *model.Book) string { return strings.Join(b.Meta.Tags, "\n") },
-			edits: func(b *model.Book, s string) (model.Edits, error) {
-				tags := strings.FieldsFunc(s, func(r rune) bool { return r == '\n' })
-				return model.Edits{Tags: &tags}, nil
-			},
+	},
+	"series": {
+		get: func(b *model.Book) string {
+			if b.Series == nil {
+				return ""
+			}
+			return b.Series.Name
 		},
-		"title": {
-			get: func(b *model.Book) string { return b.Title },
-			edits: func(b *model.Book, s string) (model.Edits, error) {
-				return model.Edits{Title: &s}, nil
-			},
+		edits: func(b *model.Book, s string) (model.Edits, error) {
+			return model.Edits{Series: &s}, nil
 		},
-		"language": {
-			get: func(b *model.Book) string { return b.Language },
-			edits: func(b *model.Book, s string) (model.Edits, error) {
-				return model.Edits{Language: &s}, nil
-			},
+	},
+	"series_index": {
+		get: func(b *model.Book) string {
+			if b.Series == nil {
+				return ""
+			}
+			return strconv.FormatFloat(b.Series.Index, 'f', 1, 64)
 		},
-		"description": {
-			get: func(b *model.Book) string { return b.Description },
-			edits: func(b *model.Book, s string) (model.Edits, error) {
-				return model.Edits{Description: &s}, nil
-			},
+		edits: func(b *model.Book, s string) (model.Edits, error) {
+			idx, err := strconv.ParseFloat(s, 64)
+			if err != nil {
+				return model.Edits{}, fmt.Errorf("invalid series index %q", s)
+			}
+			idx = math.Round(idx*10) / 10
+			e := model.Edits{SeriesIndex: &idx}
+			if b.Series != nil {
+				e.Series = &b.Series.Name
+			}
+			return e, nil
 		},
-		"authors": {
-			get: func(b *model.Book) string {
-				names := make([]string, len(b.Authors))
-				for i, a := range b.Authors {
-					names[i] = a.Name
-				}
-				return strings.Join(names, "\n")
-			},
-			edits: func(b *model.Book, s string) (model.Edits, error) {
-				var names []string
-				for _, n := range strings.Split(s, "\n") {
-					if n = strings.TrimSpace(n); n != "" {
-						names = append(names, n)
-					}
-				}
-				authors := make([]model.Author, len(names))
-				for i, n := range names {
-					authors[i] = model.Author{Name: n}
-				}
-				return model.Edits{Authors: &authors}, nil
-			},
-		},
-		"series": {
-			get: func(b *model.Book) string {
-				if b.Series == nil {
-					return ""
-				}
-				return b.Series.Name
-			},
-			edits: func(b *model.Book, s string) (model.Edits, error) {
-				return model.Edits{Series: &s}, nil
-			},
-		},
-		"series_index": {
-			get: func(b *model.Book) string {
-				if b.Series == nil {
-					return ""
-				}
-				return strconv.FormatFloat(b.Series.Index, 'f', 1, 64)
-			},
-			edits: func(b *model.Book, s string) (model.Edits, error) {
-				idx, err := strconv.ParseFloat(s, 64)
-				if err != nil {
-					return model.Edits{}, fmt.Errorf("invalid series index %q", s)
-				}
-				idx = math.Round(idx*10) / 10
-				e := model.Edits{SeriesIndex: &idx}
-				if b.Series != nil {
-					e.Series = &b.Series.Name
-				}
-				return e, nil
-			},
-		},
-	}
+	},
+}
 
 func newBookDir(reg *bookRegistry, book *model.Book) *bookDir {
 	f, lib := reg.f, reg.lib

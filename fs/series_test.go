@@ -8,10 +8,10 @@ import (
 
 func TestSeriesEntryName(t *testing.T) {
 	tests := []struct {
-		name  string
-		book  *model.Book
-		pad   int
-		want  string
+		name string
+		book *model.Book
+		pad  int
+		want string
 	}{
 		{
 			name: "simple integer index",

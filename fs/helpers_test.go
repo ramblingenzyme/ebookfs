@@ -52,7 +52,7 @@ type fakeLib struct {
 	deleteFn       func(int64) error
 }
 
-func (l fakeLib) Close() error { return nil }
+func (l fakeLib) Close() error                                             { return nil }
 func (l fakeLib) Exporter(_ config.ReaderConfig) (library.Exporter, error) { return nil, nil }
 func (l fakeLib) Edit(id int64, e model.Edits) (*model.Book, error) {
 	if l.editFn != nil {

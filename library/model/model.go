@@ -108,7 +108,7 @@ type Meta struct {
 	ID           int64     `toml:"id"`
 	DateAdded    time.Time `toml:"date_added"`
 	DateModified time.Time `toml:"date_modified"`
-	Status       string    `toml:"status"`      // unread | reading | read | abandoned
+	Status       string    `toml:"status"` // unread | reading | read | abandoned
 	Rating       float64   `toml:"rating"`
 	Tags         []string  `toml:"custom_tags"` // toml key preserved for file compatibility
 }
