@@ -128,8 +128,9 @@ type Stats struct {
 // change. This lets a caller change exactly one field — e.g. just the title —
 // without having to supply the rest.
 //
-// A non-nil Series pointing at "" removes the series. SeriesIndex is only
-// consulted when Series is being set to a non-empty value.
+// A non-nil Series pointing at "" removes the series. SeriesIndex applied
+// without Series ("index-only" edit) updates the position of the book's
+// current series, resolved against the live snapshot under the per-book lock.
 //
 // SortTitle follows the same nil/empty rules. As a special case, changing Title
 // without supplying a SortTitle clears any existing sort title — it was derived

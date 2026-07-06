@@ -164,6 +164,12 @@ func editOPF(opfBytes []byte, e model.Edits) ([]byte, error) {
 	}
 	if e.Series != nil {
 		setSeries(pkg, md, *e.Series, e.SeriesIndex)
+	} else if e.SeriesIndex != nil {
+		// Index-only update: preserve the current series name from the OPF
+		// and rewrite it with the new position.
+		if name := currentSeriesName(md); name != "" {
+			setSeries(pkg, md, name, e.SeriesIndex)
+		}
 	}
 
 	return doc.WriteToBytes()
@@ -374,6 +380,23 @@ func refineValue(md *etree.Element, id, property string) string {
 		if m.SelectAttrValue("property", "") == property &&
 			strings.TrimPrefix(m.SelectAttrValue("refines", ""), "#") == id {
 			return m.Text()
+		}
+	}
+	return ""
+}
+
+// currentSeriesName reads the existing series name from the OPF metadata,
+// preferring EPUB 3 belongs-to-collection over EPUB 2 calibre:series.
+func currentSeriesName(md *etree.Element) string {
+	for _, m := range md.SelectElements("meta") {
+		if m.SelectAttrValue("property", "") == "belongs-to-collection" &&
+			refineValue(md, m.SelectAttrValue("id", ""), "collection-type") == "series" {
+			return strings.TrimSpace(m.Text())
+		}
+	}
+	for _, m := range md.SelectElements("meta") {
+		if m.SelectAttrValue("name", "") == "calibre:series" {
+			return strings.TrimSpace(m.SelectAttrValue("content", ""))
 		}
 	}
 	return ""

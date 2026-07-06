@@ -140,11 +140,7 @@ var fields = map[string]field{
 				return model.Edits{}, fmt.Errorf("invalid series index %q", s)
 			}
 			idx = math.Round(idx*10) / 10
-			e := model.Edits{SeriesIndex: &idx}
-			if b.Series != nil {
-				e.Series = &b.Series.Name
-			}
-			return e, nil
+			return model.Edits{SeriesIndex: &idx}, nil
 		},
 	},
 }
