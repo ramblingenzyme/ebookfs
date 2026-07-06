@@ -22,13 +22,6 @@ func (n *namedBookDir) Stat() proto.Stat {
 	return s
 }
 
-// bookLister is the common interface for subdirectories that contain book
-// entries (by-author, by-series). Both *booksDir and *seriesBookListDir satisfy it.
-type bookLister interface {
-	add(dir *bookDir)
-	remove(dir *bookDir)
-}
-
 // groupingDir is the shared base for by-x view directories. StaticDir is a
 // pointer, never a value, because fs.StaticDir embeds sync.RWMutex (via its
 // BaseFile). Copying a mutex after first use is undefined behaviour, and
@@ -69,17 +62,17 @@ func (g *groupingDir) childDir(name string, factory func(*proto.Stat) fs.FSNode)
 	return ad
 }
 
-// listerDir returns the bookLister child named name, creating it via newBooksDir
+// listerDir returns the bookView child named name, creating it via newBookListDir
 // on first use.
-func (g *groupingDir) listerDir(name string) bookLister {
-	return g.childDir(name, func(s *proto.Stat) fs.FSNode { return newBooksDir(s) }).(bookLister)
+func (g *groupingDir) listerDir(name string) bookView {
+	return g.childDir(name, func(s *proto.Stat) fs.FSNode { return newBookListDir(s) }).(bookView)
 }
 
-// removeLister looks up the bookLister child named name, removes dir from it,
+// removeLister looks up the bookView child named name, removes dir from it,
 // and prunes the child if empty.
 func (g *groupingDir) removeLister(name string, dir *bookDir) {
 	if child, ok := g.Children()[name]; ok {
-		child.(bookLister).remove(dir)
+		child.(bookView).remove(dir)
 		g.pruneEmpty(name)
 	}
 }

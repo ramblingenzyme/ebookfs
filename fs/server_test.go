@@ -59,7 +59,7 @@ func TestSetupServer_BooksPopulated(t *testing.T) {
 		t.Fatalf("setupServer: %v", err)
 	}
 
-	allBooks := root.Children()["books"].(*booksDir)
+	allBooks := root.Children()["books"].(*bookListDir)
 	if _, ok := allBooks.Children()["Present"]; !ok {
 		t.Errorf("books view should contain 'Present' after setup")
 	}

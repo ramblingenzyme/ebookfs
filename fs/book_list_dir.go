@@ -8,18 +8,18 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-// booksDir is a flat listing of bookDirs keyed by each book's title. Embed it in
+// bookListDir is a flat listing of bookDirs keyed by each book's title. Embed it in
 // views that present an unordered set of books (all books, one author's books,
 // search results).
-type booksDir struct {
+type bookListDir struct {
 	fs.StaticDir
 }
 
-func newBooksDir(stat *proto.Stat) *booksDir {
-	return &booksDir{StaticDir: *fs.NewStaticDir(stat)}
+func newBookListDir(stat *proto.Stat) *bookListDir {
+	return &bookListDir{StaticDir: *fs.NewStaticDir(stat)}
 }
 
-func (d *booksDir) add(dir *bookDir) {
+func (d *bookListDir) add(dir *bookDir) {
 	b := dir.Book()
 	plain := b.Title
 	if child, ok := d.Children()[plain]; ok && child != dir {
@@ -36,7 +36,7 @@ func (d *booksDir) add(dir *bookDir) {
 	d.AddChild(dir)
 }
 
-func (d *booksDir) remove(dir *bookDir) {
+func (d *bookListDir) remove(dir *bookDir) {
 	b := dir.Book()
 	plain := b.Title
 	if child, ok := d.Children()[plain]; ok && child == dir {
@@ -46,8 +46,8 @@ func (d *booksDir) remove(dir *bookDir) {
 	d.DeleteChild(fmt.Sprintf("%s (%d)", plain, b.Meta.ID))
 }
 
-func newAllBooksDir(reg *bookRegistry) *booksDir {
-	d := newBooksDir(reg.f.NewStat("books", "glenda", "glenda", 0555|proto.DMDIR))
+func newAllBooksDir(reg *bookRegistry) *bookListDir {
+	d := newBookListDir(reg.f.NewStat("books", "glenda", "glenda", 0555|proto.DMDIR))
 	reg.AddView(d)
 	return d
 }

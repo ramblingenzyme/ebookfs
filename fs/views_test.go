@@ -117,7 +117,7 @@ func TestByAuthorDirSingleAuthor(t *testing.T) {
 	if !ok {
 		t.Fatal("by-author should have 'Alice' subdir")
 	}
-	ald := ad.(*booksDir)
+	ald := ad.(*bookListDir)
 	if _, ok := ald.Children()["My Book"]; !ok {
 		t.Error("Alice's dir should contain 'My Book'")
 	}
@@ -136,7 +136,7 @@ func TestByAuthorDirMultiAuthor(t *testing.T) {
 		if !ok {
 			t.Fatalf("by-author should have %q subdir", name)
 		}
-		ald := ad.(*booksDir)
+		ald := ad.(*bookListDir)
 		if _, ok := ald.Children()["Joint Work"]; !ok {
 			t.Errorf("%s's dir should contain 'Joint Work'", name)
 		}
@@ -170,7 +170,7 @@ func TestByAuthorDirMultipleBooksSameAuthor(t *testing.T) {
 	if !ok {
 		t.Fatal("by-author should have 'Dana' subdir")
 	}
-	ald := ad.(*booksDir)
+	ald := ad.(*bookListDir)
 	children := dirChildNames(ald)
 	if len(children) != 2 {
 		t.Errorf("expected 2 books under Dana, got %d: %v", len(children), children)
@@ -187,7 +187,7 @@ func TestByAuthorDirRemoveOneOfTwo(t *testing.T) {
 
 	reg.Remove(2)
 
-	ad := d.Children()["Dana"].(*booksDir)
+	ad := d.Children()["Dana"].(*bookListDir)
 	if _, ok := ad.Children()["Remove"]; ok {
 		t.Error("'Remove' should be gone from Dana's dir")
 	}
@@ -571,11 +571,11 @@ func TestPruneEmptyNoOpForMissingChild(t *testing.T) {
 
 func TestPruneEmptyNoOpForNonEmptyDir(t *testing.T) {
 	g := newGroupingDir(newTestFS(t), "test")
-	child := newBooksDir(g.f.NewStat("child", "glenda", "glenda", 0555|proto.DMDIR))
+	child := newBookListDir(g.f.NewStat("child", "glenda", "glenda", 0555|proto.DMDIR))
 	g.StaticDir.AddChild(child)
 
 	// Add a grandchild so the dir is not empty.
-	grandchild := newBooksDir(g.f.NewStat("grandchild", "glenda", "glenda", 0555|proto.DMDIR))
+	grandchild := newBookListDir(g.f.NewStat("grandchild", "glenda", "glenda", 0555|proto.DMDIR))
 	child.AddChild(grandchild)
 
 	g.pruneEmpty("child")
@@ -611,7 +611,7 @@ func TestByTagDirAddBookWithTags(t *testing.T) {
 		if !ok {
 			t.Fatalf("by-tag should have %q subdir", tag)
 		}
-		bld := td.(*booksDir)
+		bld := td.(*bookListDir)
 		if _, ok := bld.Children()["Tagged Book"]; !ok {
 			t.Errorf("%s's dir should contain 'Tagged Book'", tag)
 		}
@@ -660,7 +660,7 @@ func TestByTagDirMultipleBooksSameTag(t *testing.T) {
 	reg.Add(b1)
 	reg.Add(b2)
 
-	td := d.Children()["scifi"].(*booksDir)
+	td := d.Children()["scifi"].(*bookListDir)
 	children := dirChildNames(td)
 	if len(children) != 2 {
 		t.Fatalf("expected 2 books under scifi, got %d: %v", len(children), children)
@@ -681,7 +681,7 @@ func TestByTagDirRemoveOneOfTwo(t *testing.T) {
 	reg.Add(b2)
 	reg.Remove(2)
 
-	td := d.Children()["tag"].(*booksDir)
+	td := d.Children()["tag"].(*bookListDir)
 	if _, ok := td.Children()["Remove"]; ok {
 		t.Error("'Remove' book should be gone from tag dir")
 	}
@@ -746,7 +746,7 @@ func TestByTagDirEditTags(t *testing.T) {
 	if !ok {
 		t.Fatal("by-tag should have 'newtag' subdir after retag")
 	}
-	if _, ok := td.(*booksDir).Children()["Retagged"]; !ok {
+	if _, ok := td.(*bookListDir).Children()["Retagged"]; !ok {
 		t.Error("'Retagged' should appear under 'newtag'")
 	}
 }
@@ -765,7 +765,7 @@ func TestByStatusDirAddBook(t *testing.T) {
 	if !ok {
 		t.Fatal("by-status should have 'unread' subdir")
 	}
-	bld := sd.(*booksDir)
+	bld := sd.(*bookListDir)
 	if _, ok := bld.Children()["My Book"]; !ok {
 		t.Error("unread dir should contain 'My Book'")
 	}
@@ -789,7 +789,7 @@ func TestByStatusDirDifferentStatuses(t *testing.T) {
 		if !ok {
 			t.Fatalf("by-status should have %q subdir", status)
 		}
-		bld := sd.(*booksDir)
+		bld := sd.(*bookListDir)
 		if n := len(bld.Children()); n != 1 {
 			t.Errorf("expected 1 book in %q, got %d", status, n)
 		}
@@ -819,7 +819,7 @@ func TestByStatusDirMultipleBooksSameStatus(t *testing.T) {
 	reg.Add(makeBook(1, "Book A", "Author"))
 	reg.Add(makeBook(2, "Book B", "Author"))
 
-	sd := d.Children()["unread"].(*booksDir)
+	sd := d.Children()["unread"].(*bookListDir)
 	children := dirChildNames(sd)
 	if len(children) != 2 {
 		t.Fatalf("expected 2 books under unread, got %d: %v", len(children), children)
@@ -838,7 +838,7 @@ func TestByStatusDirRemoveOneOfTwo(t *testing.T) {
 	reg.Add(b2)
 	reg.Remove(2)
 
-	sd := d.Children()["unread"].(*booksDir)
+	sd := d.Children()["unread"].(*bookListDir)
 	if _, ok := sd.Children()["Remove"]; ok {
 		t.Error("'Remove' book should be gone from status dir")
 	}
@@ -871,7 +871,7 @@ func TestByStatusDirEditStatus(t *testing.T) {
 	if !ok {
 		t.Fatal("by-status should have 'read' subdir after status change")
 	}
-	if _, ok := sd.(*booksDir).Children()["Status Change"]; !ok {
+	if _, ok := sd.(*bookListDir).Children()["Status Change"]; !ok {
 		t.Error("'Status Change' should appear under 'read'")
 	}
 }

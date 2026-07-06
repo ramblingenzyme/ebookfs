@@ -69,7 +69,7 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 	if !ok {
 		t.Fatal("by-author should still have Alice")
 	}
-	ald := ad.(*booksDir)
+	ald := ad.(*bookListDir)
 	if _, ok := ald.Children()["New Title"]; !ok {
 		t.Error("Alice's dir should contain 'New Title'")
 	}
@@ -113,7 +113,7 @@ func TestRegistryEditAuthorsRehomesInByAuthor(t *testing.T) {
 	if !ok {
 		t.Fatal("by-author should have 'Bob'")
 	}
-	ald := ad.(*booksDir)
+	ald := ad.(*bookListDir)
 	if _, ok := ald.Children()["Test"]; !ok {
 		t.Error("Bob's dir should contain 'Test'")
 	}
