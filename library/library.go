@@ -19,33 +19,6 @@ import (
 // and a close.
 type EpubReader = model.EpubReader
 
-// IngestHandle is a writable handle returned by Library.CreateIngest.
-// The frontend writes upload bytes via WriteAt, then calls Ingest to
-// finalize: the file is closed, the epub is parsed and laid down in the
-// store, and the temp file is cleaned up. NewIngestHandle is exported for
-// tests; production code uses CreateIngest.
-type IngestHandle struct {
-	file   *os.File
-	path   string
-	ingest func(string) (*model.Book, error)
-}
-
-func NewIngestHandle(f *os.File, path string, ingest func(string) (*model.Book, error)) *IngestHandle {
-	return &IngestHandle{file: f, path: path, ingest: ingest}
-}
-
-func (h *IngestHandle) WriteAt(p []byte, off int64) (int, error) { return h.file.WriteAt(p, off) }
-
-func (h *IngestHandle) Ingest() (*model.Book, error) {
-	h.file.Close()
-	if h.ingest == nil {
-		return nil, nil
-	}
-	b, err := h.ingest(h.path)
-	os.Remove(h.path)
-	return b, err
-}
-
 // Library defines the public API for filesystem and index operations on the
 // book collection. The concrete implementation is unexported; construct via New.
 //

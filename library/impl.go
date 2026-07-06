@@ -30,6 +30,11 @@ type libraryImpl struct {
 	// mirroring kepub.Cache's conversion locks.
 	bookMuMu sync.Mutex
 	bookMu   map[int64]*sync.Mutex
+
+	// ingestMu serializes the entire ingest path (Exists → NextID → Layout →
+	// Ingest → index Put) so two simultaneous uploads of the same new book
+	// cannot both pass the Exists check before either lays the book down.
+	ingestMu sync.Mutex
 }
 
 // lockBook returns the mutex serializing on-disk mutations of book id.
@@ -90,12 +95,15 @@ func (l *libraryImpl) CreateIngest() (*IngestHandle, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewIngestHandle(f, f.Name(), l.ingestPath), nil
+	return &IngestHandle{File: f, Path: f.Name(), IngestFn: l.ingestPath}, nil
 }
 
 // ingestPath parses the staged epub, lays it down in the store, and records it
 // in the index.
 func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
+	l.ingestMu.Lock()
+	defer l.ingestMu.Unlock()
+
 	book, err := epub.Parse(epubPath)
 	if err != nil {
 		return nil, err

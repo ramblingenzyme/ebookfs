@@ -168,3 +168,68 @@ func TestEditWriteCoverConcurrentSameBook(t *testing.T) {
 		}
 	}
 }
+
+func TestConcurrentDuplicateIngestRejected(t *testing.T) {
+	lib := openTestLibrary(t)
+	data := buildTestEpub(t, "Concurrent Dupe")
+
+	var (
+		wg    sync.WaitGroup
+		mu    sync.Mutex
+		count int
+		books []*model.Book
+		errs  []error
+	)
+
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			h, err := lib.CreateIngest()
+			if err != nil {
+				mu.Lock()
+				errs = append(errs, err)
+				mu.Unlock()
+				return
+			}
+			if _, err := h.WriteAt(data, 0); err != nil {
+				mu.Lock()
+				errs = append(errs, err)
+				mu.Unlock()
+				return
+			}
+			b, err := h.Ingest()
+			mu.Lock()
+			if err != nil {
+				errs = append(errs, err)
+			} else {
+				books = append(books, b)
+			}
+			count++
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+
+	if count != 3 {
+		t.Fatalf("expected 3 ingests to complete (some with errors), got %d", count)
+	}
+	if len(books) != 1 {
+		t.Fatalf("expected exactly 1 successful ingest, got %d", len(books))
+	}
+	if len(errs) < 2 {
+		t.Fatalf("expected at least 2 errors for duplicate ingests, got %d", len(errs))
+	}
+
+	// Verify exactly one book exists in the library.
+	got, err := lib.Query(model.Filter{Author: "Alice"})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 book by Alice, got %d", len(got))
+	}
+	if got[0].Title != "Concurrent Dupe" {
+		t.Errorf("book title = %q, want %q", got[0].Title, "Concurrent Dupe")
+	}
+}

@@ -68,12 +68,12 @@ func (l fakeLib) CreateIngest() (*library.IngestHandle, error) {
 	if err != nil {
 		return nil, err
 	}
-	return library.NewIngestHandle(f, f.Name(), func(path string) (*model.Book, error) {
+	return &library.IngestHandle{File: f, Path: f.Name(), IngestFn: func(path string) (*model.Book, error) {
 		if l.ingestFn != nil {
 			return l.ingestFn(path)
 		}
 		return nil, nil
-	}), nil
+	}}, nil
 }
 func (l fakeLib) ExtractCover(b *model.Book) ([]byte, error) {
 	if l.extractCoverFn != nil {
