@@ -36,12 +36,7 @@ func newReaderDir(reg *bookRegistry, exp library.Exporter) *readerDir {
 
 // authorDir returns the subdir for an author name, creating it on first use.
 func (d *readerDir) authorDir(name string) fs.ModDir {
-	if child, ok := d.Children()[name]; ok {
-		return child.(fs.ModDir)
-	}
-	ad := fs.NewStaticDir(d.f.NewStat(name, "glenda", "glenda", 0555|proto.DMDIR))
-	d.StaticDir.AddChild(ad)
-	return ad
+	return d.childDir(name, func(s *proto.Stat) fs.FSNode { return fs.NewStaticDir(s) }).(fs.ModDir)
 }
 
 func (d *readerDir) add(dir *bookDir) {

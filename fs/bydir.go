@@ -57,3 +57,29 @@ func (g *groupingDir) pruneEmpty(name string) {
 		g.StaticDir.DeleteChild(name)
 	}
 }
+
+// childDir returns the existing child with name, or creates one via factory and
+// adds it. The factory receives a stat whose name is already set.
+func (g *groupingDir) childDir(name string, factory func(*proto.Stat) fs.FSNode) fs.FSNode {
+	if child, ok := g.Children()[name]; ok {
+		return child
+	}
+	ad := factory(g.f.NewStat(name, "glenda", "glenda", 0555|proto.DMDIR))
+	g.StaticDir.AddChild(ad)
+	return ad
+}
+
+// listerDir returns the bookLister child named name, creating it via newBooksDir
+// on first use.
+func (g *groupingDir) listerDir(name string) bookLister {
+	return g.childDir(name, func(s *proto.Stat) fs.FSNode { return newBooksDir(s) }).(bookLister)
+}
+
+// removeLister looks up the bookLister child named name, removes dir from it,
+// and prunes the child if empty.
+func (g *groupingDir) removeLister(name string, dir *bookDir) {
+	if child, ok := g.Children()[name]; ok {
+		child.(bookLister).remove(dir)
+		g.pruneEmpty(name)
+	}
+}

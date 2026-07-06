@@ -1,9 +1,5 @@
 package fs
 
-import (
-	"github.com/knusbaum/go9p/proto"
-)
-
 type byAuthorDir struct{ groupingDir }
 
 func newByAuthorDir(reg *bookRegistry) *byAuthorDir {
@@ -12,27 +8,14 @@ func newByAuthorDir(reg *bookRegistry) *byAuthorDir {
 	return d
 }
 
-// authorDir returns the subdir for an author name, creating it on first use.
-func (d *byAuthorDir) authorDir(name string) bookLister {
-	if child, ok := d.Children()[name]; ok {
-		return child.(bookLister)
-	}
-	ad := newBooksDir(d.f.NewStat(name, "glenda", "glenda", 0555|proto.DMDIR))
-	d.StaticDir.AddChild(ad)
-	return ad
-}
-
 func (d *byAuthorDir) add(dir *bookDir) {
 	for _, a := range dir.Book().Authors {
-		d.authorDir(a.Name).add(dir)
+		d.listerDir(a.Name).add(dir)
 	}
 }
 
 func (d *byAuthorDir) remove(dir *bookDir) {
 	for _, a := range dir.Book().Authors {
-		if child, ok := d.Children()[a.Name]; ok {
-			child.(bookLister).remove(dir)
-			d.pruneEmpty(a.Name)
-		}
+		d.removeLister(a.Name, dir)
 	}
 }
