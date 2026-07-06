@@ -244,3 +244,35 @@ func TestCoverFileNotOpenRead(t *testing.T) {
 		t.Error("expected error reading from unopened fid")
 	}
 }
+
+func TestCoverFileWriteExceedsLimit(t *testing.T) {
+	f := newTestFS(t)
+	book := makeBook(1, "Test", "Author")
+	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), fakeLib{}, fixed(book))
+
+	fid := uint64(1)
+	if err := cf.Open(fid, proto.Mode(0)); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	_, err := cf.Write(fid, maxCoverFileSize, []byte("x"))
+	if err == nil {
+		t.Fatal("expected error writing past cover file size limit")
+	}
+}
+
+func TestCoverFileWriteAtLimitAllowed(t *testing.T) {
+	f := newTestFS(t)
+	book := makeBook(1, "Test", "Author")
+	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), fakeLib{}, fixed(book))
+
+	fid := uint64(1)
+	if err := cf.Open(fid, proto.Mode(0)); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	_, err := cf.Write(fid, maxCoverFileSize-4, []byte("test"))
+	if err != nil {
+		t.Errorf("write at limit should succeed, got: %v", err)
+	}
+}

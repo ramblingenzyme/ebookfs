@@ -2,11 +2,14 @@ package fs
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
+
+const maxCoverFileSize = 32 << 20 // 32 MiB
 
 // opfFile serves a book's raw OPF XML, loading bytes from the epub on each open.
 type opfFile struct {
@@ -65,6 +68,9 @@ func (c *coverFile) Stat() proto.Stat {
 }
 
 func (c *coverFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
+	if offset+uint64(len(data)) > maxCoverFileSize {
+		return 0, fmt.Errorf("write exceeds cover file size limit (%d bytes)", maxCoverFileSize)
+	}
 	c.Lock()
 	defer c.Unlock()
 	end := offset + uint64(len(data))

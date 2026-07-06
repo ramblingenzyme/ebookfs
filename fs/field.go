@@ -2,10 +2,13 @@ package fs
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/knusbaum/go9p/proto"
 )
+
+const maxFieldFileSize = 1 << 20 // 1 MiB
 
 // fieldFile is a readable/writable file backed by a single string-valued field.
 // Content is snapshotted per fid on Open; writes are buffered per fid and
@@ -61,6 +64,9 @@ func (f *fieldFile) Open(fid uint64, omode proto.Mode) error {
 func (f *fieldFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
 	if len(data) == 0 {
 		return 0, nil
+	}
+	if offset+uint64(len(data)) > maxFieldFileSize {
+		return 0, fmt.Errorf("write exceeds field file size limit (%d bytes)", maxFieldFileSize)
 	}
 	f.Lock()
 	defer f.Unlock()

@@ -422,3 +422,35 @@ func TestFieldFileOtruncNoWriteDoesNotCallSet(t *testing.T) {
 		t.Error("set was called even though no data was written")
 	}
 }
+
+func TestFieldFileWriteExceedsLimit(t *testing.T) {
+	f := newTestFS(t)
+	stat := f.NewStat("test", "glenda", "glenda", 0644)
+	ff := newFieldFile(stat, func() string { return "" }, nil)
+
+	fid := uint64(1)
+	if err := ff.Open(fid, proto.Mode(0)); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	_, err := ff.Write(fid, maxFieldFileSize, []byte("x"))
+	if err == nil {
+		t.Fatal("expected error writing past field file size limit")
+	}
+}
+
+func TestFieldFileWriteAtLimitAllowed(t *testing.T) {
+	f := newTestFS(t)
+	stat := f.NewStat("test", "glenda", "glenda", 0644)
+	ff := newFieldFile(stat, func() string { return "" }, nil)
+
+	fid := uint64(1)
+	if err := ff.Open(fid, proto.Mode(0)); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	_, err := ff.Write(fid, maxFieldFileSize-4, []byte("test"))
+	if err != nil {
+		t.Errorf("write at limit should succeed, got: %v", err)
+	}
+}
