@@ -85,6 +85,11 @@ type Bib struct {
 	CoverPath   string            // zip-relative path to cover image; empty if none
 }
 
+// UnknownAuthor is the fallback author name used when a book has no author
+// metadata. It is injected by ingest and may appear defensively in store path
+// and export directory computations.
+const UnknownAuthor = "Unknown"
+
 type Author struct {
 	ID       int64
 	Name     string

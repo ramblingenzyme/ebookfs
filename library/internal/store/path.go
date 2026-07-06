@@ -42,7 +42,7 @@ func epubFilename(authors []model.Author, title string) string {
 
 func authorDirName(authors []model.Author) string {
 	if len(authors) == 0 {
-		return "Unknown"
+		return model.UnknownAuthor
 	}
 	name := authors[0].SortName
 	if name == "" {

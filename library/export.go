@@ -63,7 +63,7 @@ func exportDirname(b *model.Book) string {
 			names = append(names, a.Name)
 		}
 	}
-	name := "Unknown"
+	name := model.UnknownAuthor
 	if len(names) > 0 {
 		name = strings.Join(names, " & ")
 	}

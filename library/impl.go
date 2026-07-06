@@ -114,7 +114,7 @@ func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 		return nil, fmt.Errorf("epub has no title")
 	}
 	if len(bib.Authors) == 0 {
-		bib.Authors = []model.Author{{Name: "Unknown", SortName: "Unknown"}}
+		bib.Authors = []model.Author{{Name: model.UnknownAuthor, SortName: model.UnknownAuthor}}
 	}
 	if l.store.Exists(bib.Authors, bib.Title) {
 		return nil, fmt.Errorf("book already in library: %q", bib.Title)
@@ -350,7 +350,7 @@ func formatAuthors(authors []model.Author) string {
 		}
 	}
 	if len(names) == 0 {
-		return "Unknown"
+		return model.UnknownAuthor
 	}
 	return strings.Join(names, ", ")
 }
