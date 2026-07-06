@@ -82,9 +82,9 @@ func (c *Config) validateAuth() error {
 	case "none":
 		// OK
 	case "shared-secret":
-		if c.Server.SharedSecretFile == "" {
-			return fmt.Errorf("server.shared_secret_file is required when auth = shared-secret")
-		}
+		// Reserved in the schema but not wired into the 9P server yet. Accepting
+		// it would silently serve unauthenticated, so refuse to start instead.
+		return fmt.Errorf(`server.auth = "shared-secret" is not implemented yet; use "none"`)
 	default:
 		return fmt.Errorf(`server.auth must be "none" or "shared-secret", got %q`, c.Server.Auth)
 	}

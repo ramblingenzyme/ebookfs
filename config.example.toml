@@ -16,9 +16,9 @@ cache_dir = "/var/lib/ebookfs/kepub-cache"
 
 [server]
 listen = "0.0.0.0:5640"
+# "none" is the only implemented mode; "shared-secret" is reserved and rejected
+# at startup until it is wired into the 9P server.
 auth = "none"
-# auth = "shared-secret"
-# shared_secret_file = "/etc/ebookfs/secret"
 
 [log]
 level = "info"   # debug | info | warn | error
