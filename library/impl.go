@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -45,6 +46,11 @@ func (l *libraryImpl) Exporter(cfg config.ReaderConfig) (Exporter, error) {
 	l.expMu.Lock()
 	l.exporters = append(l.exporters, e)
 	l.expMu.Unlock()
+	kind := "epub"
+	if cfg.Convert {
+		kind = "kepub"
+	}
+	log.Printf("export: %s for statuses %v", kind, cfg.Statuses)
 	return e, nil
 }
 
@@ -97,6 +103,7 @@ func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 		return nil, err
 	}
 
+	log.Printf("ingest: book %d (%q) by %s", b.Meta.ID, b.Title, formatAuthors(bib.Authors))
 	return b, nil
 }
 
@@ -163,7 +170,12 @@ func (l *libraryImpl) needsReindex() bool {
 
 // OpenEpub returns a handle to b's epub content. The caller must close it.
 func (l *libraryImpl) OpenEpub(b *model.Book) (EpubReader, error) {
-	return l.store.OpenEpub(b.Location)
+	f, err := l.store.OpenEpub(b.Location)
+	if err != nil {
+		log.Printf("open: book %d (%q): %v", b.Meta.ID, b.Title, err)
+		return nil, err
+	}
+	return f, nil
 }
 
 // ExtractCover returns the cover image bytes from b's epub.
@@ -180,6 +192,7 @@ func (l *libraryImpl) ExtractOPF(b *model.Book) ([]byte, error) {
 // book. If the title or authors change, the book directory is moved.
 func (l *libraryImpl) Edit(b *model.Book, e model.Edits) (*model.Book, error) {
 	if v := e.Validate(b); v != nil {
+		log.Printf("edit: book %d (%q): validation failed: %v", b.Meta.ID, b.Title, v)
 		return nil, v
 	}
 
@@ -217,6 +230,9 @@ func (l *libraryImpl) Edit(b *model.Book, e model.Edits) (*model.Book, error) {
 // WriteCover replaces the cover image in b's epub with img.
 func (l *libraryImpl) WriteCover(b *model.Book, img []byte) error {
 	_, err := epub.WriteCover(b.EpubPath, b.CoverPath, img)
+	if err != nil {
+		log.Printf("cover: book %d (%q): %v", b.Meta.ID, b.Title, err)
+	}
 	return err
 }
 
@@ -247,5 +263,24 @@ func bibFromEpub(src *epub.Book) model.Bib {
 
 func (l *libraryImpl) Delete(b *model.Book) error {
 	// Store is authoritative; a ghost index row is cleaned up by reindex.
-	return l.index.Delete(b.Meta.ID, func() error { return l.store.Delete(b.Location) })
+	err := l.index.Delete(b.Meta.ID, func() error { return l.store.Delete(b.Location) })
+	if err != nil {
+		log.Printf("delete: book %d (%q): %v", b.Meta.ID, b.Title, err)
+	} else {
+		log.Printf("delete: book %d (%q): ok", b.Meta.ID, b.Title)
+	}
+	return err
+}
+
+func formatAuthors(authors []model.Author) string {
+	var names []string
+	for _, a := range authors {
+		if a.Name != "" {
+			names = append(names, a.Name)
+		}
+	}
+	if len(names) == 0 {
+		return "Unknown"
+	}
+	return strings.Join(names, ", ")
 }
