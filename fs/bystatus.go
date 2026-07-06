@@ -20,11 +20,11 @@ func (d *byStatusDir) statusDir(name string) bookLister {
 }
 
 func (d *byStatusDir) add(dir *bookDir) {
-	d.statusDir(dir.Book.Meta.Status).add(dir)
+	d.statusDir(dir.Book().Meta.Status).add(dir)
 }
 
 func (d *byStatusDir) remove(dir *bookDir) {
-	name := dir.Book.Meta.Status
+	name := dir.Book().Meta.Status
 	if child, ok := d.Children()[name]; ok {
 		child.(bookLister).remove(dir)
 		d.pruneEmpty(name)

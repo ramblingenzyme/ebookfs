@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/knusbaum/go9p/fs"
@@ -162,6 +163,70 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 	if _, ok := ald.Children()["Test.epub"]; !ok {
 		t.Error("Author1's reader dir should contain 'Test.epub'")
 	}
+}
+
+// TestRegistryEditConcurrentReaders exercises the snapshot swap under the
+// concurrency go9p actually produces: handler goroutines Stat/Children/read
+// fields with no registry lock while edits commit. Run with -race to verify;
+// without it the test still asserts a reader never observes a torn snapshot
+// (a name that is neither the old nor the new title).
+func TestRegistryEditConcurrentReaders(t *testing.T) {
+	f := newTestFS(t)
+	lib := fakeLib{
+		editFn: func(b *model.Book, e model.Edits) (*model.Book, error) {
+			updated := *b
+			if e.Title != nil {
+				updated.Title = *e.Title
+			}
+			e.ApplyMeta(&updated.Meta)
+			return &updated, nil
+		},
+	}
+	reg := newBookRegistry(f, lib)
+	allBooks := newAllBooksDir(reg)
+	byID := newByIDDir(reg)
+
+	reg.Add(makeBook(1, "Title A", "Alice"))
+	bd := allBooks.Children()["Title A"].(*bookDir)
+	titleFF := bd.Children()["title"].(*fieldFile)
+
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer close(done)
+		titles := [2]string{"Title B", "Title A"}
+		for i := range 200 {
+			title := titles[i%2]
+			if err := reg.edit(1, model.Edits{Title: &title}); err != nil {
+				t.Errorf("edit: %v", err)
+				return
+			}
+		}
+	}()
+
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-done:
+					return
+				default:
+				}
+				if name := bd.Stat().Name; name != "Title A" && name != "Title B" {
+					t.Errorf("torn bookDir name: %q", name)
+					return
+				}
+				titleFF.Stat()  // field get closure reads the snapshot
+				byID.Children() // namedBookDir.Stat recomputes the entry name
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func TestRegistryEditUnknownID(t *testing.T) {

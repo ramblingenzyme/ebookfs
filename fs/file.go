@@ -11,14 +11,15 @@ import (
 )
 
 // opfFile serves a book's raw OPF XML, loading bytes from the epub on each open.
+// book is a getter (bookDir.Book) so every access sees the current snapshot.
 type opfFile struct {
 	fs.BaseFile
 	lib   library.Library
-	book  *model.Book
+	book  func() *model.Book
 	reads map[uint64][]byte
 }
 
-func newOPFFile(stat *proto.Stat, lib library.Library, book *model.Book) *opfFile {
+func newOPFFile(stat *proto.Stat, lib library.Library, book func() *model.Book) *opfFile {
 	return &opfFile{
 		BaseFile: *fs.NewBaseFile(stat),
 		lib:      lib,
@@ -30,7 +31,7 @@ func newOPFFile(stat *proto.Stat, lib library.Library, book *model.Book) *opfFil
 func (o *opfFile) Stat() proto.Stat {
 	s := o.BaseFile.Stat()
 	if o.lib != nil {
-		if data, err := o.lib.ExtractOPF(o.book); err == nil {
+		if data, err := o.lib.ExtractOPF(o.book()); err == nil {
 			s.Length = uint64(len(data))
 		}
 	}
@@ -38,7 +39,7 @@ func (o *opfFile) Stat() proto.Stat {
 }
 
 func (o *opfFile) Open(fid uint64, omode proto.Mode) error {
-	data, err := o.lib.ExtractOPF(o.book)
+	data, err := o.lib.ExtractOPF(o.book())
 	if err != nil {
 		return err
 	}
@@ -77,12 +78,12 @@ func (o *opfFile) Close(fid uint64) error {
 type coverFile struct {
 	fs.BaseFile
 	lib    library.Library
-	book   *model.Book
+	book   func() *model.Book
 	reads  map[uint64][]byte
 	writes map[uint64][]byte
 }
 
-func newCoverFile(stat *proto.Stat, lib library.Library, book *model.Book) *coverFile {
+func newCoverFile(stat *proto.Stat, lib library.Library, book func() *model.Book) *coverFile {
 	return &coverFile{
 		BaseFile: *fs.NewBaseFile(stat),
 		lib:      lib,
@@ -95,7 +96,7 @@ func newCoverFile(stat *proto.Stat, lib library.Library, book *model.Book) *cove
 func (c *coverFile) Stat() proto.Stat {
 	s := c.BaseFile.Stat()
 	if c.lib != nil {
-		if data, err := c.lib.ExtractCover(c.book); err == nil {
+		if data, err := c.lib.ExtractCover(c.book()); err == nil {
 			s.Length = uint64(len(data))
 		}
 	}
@@ -103,7 +104,7 @@ func (c *coverFile) Stat() proto.Stat {
 }
 
 func (c *coverFile) Open(fid uint64, omode proto.Mode) error {
-	data, err := c.lib.ExtractCover(c.book)
+	data, err := c.lib.ExtractCover(c.book())
 	if err != nil {
 		return err
 	}
@@ -152,7 +153,7 @@ func (c *coverFile) Close(fid uint64) error {
 	if len(data) == 0 {
 		return nil
 	}
-	return c.lib.WriteCover(c.book, data)
+	return c.lib.WriteCover(c.book(), data)
 }
 
 // epubFile serves a book's epub through the library, holding one reader per fid.
@@ -161,11 +162,11 @@ func (c *coverFile) Close(fid uint64) error {
 type epubFile struct {
 	fs.BaseFile
 	lib  library.Library
-	book *model.Book
+	book func() *model.Book
 	fids map[uint64]library.EpubReader
 }
 
-func newEpubFile(stat *proto.Stat, lib library.Library, book *model.Book) *epubFile {
+func newEpubFile(stat *proto.Stat, lib library.Library, book func() *model.Book) *epubFile {
 	return &epubFile{
 		BaseFile: *fs.NewBaseFile(stat),
 		lib:      lib,
@@ -175,19 +176,20 @@ func newEpubFile(stat *proto.Stat, lib library.Library, book *model.Book) *epubF
 }
 
 func (e *epubFile) Stat() proto.Stat {
+	b := e.book()
 	s := e.BaseFile.Stat()
-	s.Name = e.book.EpubFilename
-	// TODO: e.book.Stat() calls os.Stat on the epub path. During a rename
-	// (title/authors edit) the file is in flight between view remove and add;
-	// this Stat could get a stale path or fail.
-	if fi, err := e.book.Stat(); err == nil {
+	s.Name = b.EpubFilename
+	// TODO: b.Stat() calls os.Stat on the epub path. During a rename
+	// (title/authors edit) the file is in flight between store.Move and the
+	// registry's snapshot swap; this Stat could get a stale path or fail.
+	if fi, err := b.Stat(); err == nil {
 		s.Length = uint64(fi.Size())
 	}
 	return s
 }
 
 func (e *epubFile) Open(fid uint64, omode proto.Mode) error {
-	r, err := e.lib.OpenEpub(e.book)
+	r, err := e.lib.OpenEpub(e.book())
 	if err != nil {
 		return err
 	}

@@ -15,7 +15,7 @@ func TestCoverFileStatLength(t *testing.T) {
 		},
 	}
 	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, book)
+	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, fixed(book))
 
 	s := cf.Stat()
 	if s.Length != 16 {
@@ -26,7 +26,7 @@ func TestCoverFileStatLength(t *testing.T) {
 func TestCoverFileStatLengthNilLib(t *testing.T) {
 	f := newTestFS(t)
 	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), nil, book)
+	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), nil, fixed(book))
 
 	s := cf.Stat()
 	if s.Length != 0 {
@@ -42,7 +42,7 @@ func TestCoverFileOpenRead(t *testing.T) {
 		},
 	}
 	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, book)
+	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, fixed(book))
 
 	fid := uint64(1)
 	if err := cf.Open(fid, proto.Mode(0)); err != nil {
@@ -66,7 +66,7 @@ func TestCoverFileReadPartial(t *testing.T) {
 		},
 	}
 	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, book)
+	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, fixed(book))
 
 	fid := uint64(1)
 	if err := cf.Open(fid, proto.Mode(0)); err != nil {
@@ -90,7 +90,7 @@ func TestCoverFileReadAtEOF(t *testing.T) {
 		},
 	}
 	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, book)
+	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, fixed(book))
 
 	fid := uint64(1)
 	if err := cf.Open(fid, proto.Mode(0)); err != nil {
@@ -114,7 +114,7 @@ func TestCoverFileOpenError(t *testing.T) {
 		},
 	}
 	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, book)
+	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, fixed(book))
 
 	err := cf.Open(1, proto.Mode(0))
 	if err != errTest {
@@ -135,7 +135,7 @@ func TestCoverFileWriteClose(t *testing.T) {
 		},
 	}
 	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, book)
+	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, fixed(book))
 
 	fid := uint64(1)
 	if err := cf.Open(fid, proto.Mode(0)); err != nil {
@@ -168,7 +168,7 @@ func TestCoverFileWriteEmptyDoesNotCallWriteCover(t *testing.T) {
 		},
 	}
 	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, book)
+	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, fixed(book))
 
 	fid := uint64(1)
 	if err := cf.Open(fid, proto.Mode(0)); err != nil {
@@ -192,7 +192,7 @@ func TestCoverFilePerFidBuffers(t *testing.T) {
 		},
 	}
 	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, book)
+	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, fixed(book))
 
 	fid1, fid2 := uint64(1), uint64(2)
 	cf.Open(fid1, proto.Mode(0))
@@ -222,7 +222,7 @@ func TestCoverFileWriteErrorPassesThrough(t *testing.T) {
 		},
 	}
 	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, book)
+	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, fixed(book))
 
 	fid := uint64(1)
 	cf.Open(fid, proto.Mode(0))
@@ -237,7 +237,7 @@ func TestCoverFileWriteErrorPassesThrough(t *testing.T) {
 func TestCoverFileNotOpenRead(t *testing.T) {
 	f := newTestFS(t)
 	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), fakeLib{}, book)
+	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), fakeLib{}, fixed(book))
 
 	_, err := cf.Read(42, 0, 10)
 	if err == nil {

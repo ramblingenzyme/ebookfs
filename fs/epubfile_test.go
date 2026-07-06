@@ -18,7 +18,7 @@ func TestEpubFileOpenReadClose(t *testing.T) {
 		},
 	}
 	book := makeBook(1, "Test", "Author")
-	ef := newEpubFile(f.NewStat("test.epub", "glenda", "glenda", 0444), lib, book)
+	ef := newEpubFile(f.NewStat("test.epub", "glenda", "glenda", 0444), lib, fixed(book))
 
 	fid := uint64(1)
 	if err := ef.Open(fid, proto.Mode(0)); err != nil {
@@ -46,7 +46,7 @@ func TestEpubFileReadPartial(t *testing.T) {
 		},
 	}
 	book := makeBook(1, "Test", "Author")
-	ef := newEpubFile(f.NewStat("test.epub", "glenda", "glenda", 0444), lib, book)
+	ef := newEpubFile(f.NewStat("test.epub", "glenda", "glenda", 0444), lib, fixed(book))
 
 	fid := uint64(1)
 	if err := ef.Open(fid, proto.Mode(0)); err != nil {
@@ -70,7 +70,7 @@ func TestEpubFileReadAtEOF(t *testing.T) {
 		},
 	}
 	book := makeBook(1, "Test", "Author")
-	ef := newEpubFile(f.NewStat("test.epub", "glenda", "glenda", 0444), lib, book)
+	ef := newEpubFile(f.NewStat("test.epub", "glenda", "glenda", 0444), lib, fixed(book))
 
 	fid := uint64(1)
 	if err := ef.Open(fid, proto.Mode(0)); err != nil {
@@ -93,7 +93,7 @@ func TestEpubFileCloseReleasesReader(t *testing.T) {
 		openEpubFn: func(b *model.Book) (library.EpubReader, error) { return r, nil },
 	}
 	book := makeBook(1, "Test", "Author")
-	ef := newEpubFile(f.NewStat("test.epub", "glenda", "glenda", 0444), lib, book)
+	ef := newEpubFile(f.NewStat("test.epub", "glenda", "glenda", 0444), lib, fixed(book))
 
 	fid := uint64(1)
 	if err := ef.Open(fid, proto.Mode(0)); err != nil {
@@ -116,7 +116,7 @@ func TestEpubFileStatSize(t *testing.T) {
 	book := makeBook(1, "Test", "Author")
 	book.EpubFilename = "test.epub"
 	book.EpubPath = "/nonexistent/test.epub"
-	ef := newEpubFile(f.NewStat("test.epub", "glenda", "glenda", 0444), fakeLib{}, book)
+	ef := newEpubFile(f.NewStat("test.epub", "glenda", "glenda", 0444), fakeLib{}, fixed(book))
 
 	s := ef.Stat()
 	if s.Name != "test.epub" {
@@ -136,7 +136,7 @@ func TestEpubFileOpenError(t *testing.T) {
 		},
 	}
 	book := makeBook(1, "Test", "Author")
-	ef := newEpubFile(f.NewStat("test.epub", "glenda", "glenda", 0444), lib, book)
+	ef := newEpubFile(f.NewStat("test.epub", "glenda", "glenda", 0444), lib, fixed(book))
 
 	err := ef.Open(1, proto.Mode(0))
 	if err != errTest {
@@ -152,7 +152,7 @@ func TestEpubFileMultiFid(t *testing.T) {
 		},
 	}
 	book := makeBook(1, "Test", "Author")
-	ef := newEpubFile(f.NewStat("test.epub", "glenda", "glenda", 0444), lib, book)
+	ef := newEpubFile(f.NewStat("test.epub", "glenda", "glenda", 0444), lib, fixed(book))
 
 	fid1, fid2 := uint64(1), uint64(2)
 	ef.Open(fid1, proto.Mode(0))
@@ -174,7 +174,7 @@ func TestEpubFileMultiFid(t *testing.T) {
 func TestEpubFileNotOpenRead(t *testing.T) {
 	f := newTestFS(t)
 	book := makeBook(1, "Test", "Author")
-	ef := newEpubFile(f.NewStat("test.epub", "glenda", "glenda", 0444), fakeLib{}, book)
+	ef := newEpubFile(f.NewStat("test.epub", "glenda", "glenda", 0444), fakeLib{}, fixed(book))
 
 	_, err := ef.Read(42, 0, 10)
 	if err == nil {
@@ -194,7 +194,7 @@ func TestEpubFileStatWithRealFile(t *testing.T) {
 	book.EpubFilename = "book.epub"
 	book.EpubPath = path
 
-	ef := newEpubFile(f.NewStat("book.epub", "glenda", "glenda", 0444), fakeLib{}, book)
+	ef := newEpubFile(f.NewStat("book.epub", "glenda", "glenda", 0444), fakeLib{}, fixed(book))
 
 	s := ef.Stat()
 	if s.Name != "book.epub" {

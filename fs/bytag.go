@@ -24,7 +24,7 @@ func (d *byTagDir) tagDir(name string) bookLister {
 }
 
 func (d *byTagDir) add(dir *bookDir) {
-	for _, tag := range dir.Book.Meta.Tags {
+	for _, tag := range dir.Book().Meta.Tags {
 		if tag == "" {
 			continue
 		}
@@ -34,7 +34,7 @@ func (d *byTagDir) add(dir *bookDir) {
 }
 
 func (d *byTagDir) remove(dir *bookDir) {
-	for _, tag := range dir.Book.Meta.Tags {
+	for _, tag := range dir.Book().Meta.Tags {
 		if tag == "" {
 			continue
 		}

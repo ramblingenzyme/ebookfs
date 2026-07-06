@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
@@ -16,9 +17,21 @@ func addReadOnlyField(d *bookDir, f *fs.FS, name string, get func() string) {
 	d.StaticDir.AddChild(newFieldFile(f.NewStat(name, "glenda", "glenda", 0444), get, nil))
 }
 
+// bookDir is the stable directory identity for one book. The book's state is
+// held as an atomically swapped snapshot: 9P handlers run on many goroutines
+// with no shared lock against registry commits, so they read an immutable
+// *model.Book via Book() rather than fields mutated in place. Snapshots must
+// never be modified after they are stored — an edit produces a fresh Book
+// (library.Edit already does) and the registry swaps the pointer.
 type bookDir struct {
 	fs.StaticDir
-	*model.Book
+	book atomic.Pointer[model.Book]
+}
+
+// Book returns the current snapshot. Callers needing a consistent view across
+// several fields should call it once and read from the returned value.
+func (d *bookDir) Book() *model.Book {
+	return d.book.Load()
 }
 
 // Stat reports the book's title as the entry name, recomputed live so a title
@@ -26,7 +39,7 @@ type bookDir struct {
 // Qid stays fixed, so a client with the epub open keeps its handle across a rename.
 func (d *bookDir) Stat() proto.Stat {
 	s := d.StaticDir.Stat()
-	s.Name = d.Book.Title
+	s.Name = d.Book().Title
 	return s
 }
 
@@ -140,50 +153,53 @@ func newBookDir(reg *bookRegistry, book *model.Book) *bookDir {
 	f, lib := reg.f, reg.lib
 	d := &bookDir{
 		StaticDir: *fs.NewStaticDir(f.NewStat(book.Title, "glenda", "glenda", 0755|proto.DMDIR)),
-		Book:      book,
 	}
+	d.book.Store(book)
 
 	d.StaticDir.AddChild(fs.NewStaticFile(
 		f.NewStat("id", "glenda", "glenda", 0444),
 		fmt.Appendf(nil, "%d\n", book.Meta.ID),
 	))
 
+	// Child files read through d.Book so they always see the current snapshot,
+	// not the one captured at construction.
 	d.StaticDir.AddChild(newEpubFile(
 		f.NewStat(book.EpubFilename, "glenda", "glenda", 0444),
 		lib,
-		book,
+		d.Book,
 	))
 
 	d.StaticDir.AddChild(newOPFFile(
 		f.NewStat("opf", "glenda", "glenda", 0444),
 		lib,
-		book,
+		d.Book,
 	))
 
 	// Editable fields route through the registry so the change is validated,
 	// persisted, and bracketed by view remove/add (rehoming if the grouping or
 	// name changed). get reads the live book; set constructs Edits for the field.
 	for name, fld := range fields {
-		get := func() string { return fld.get(d.Book) }
+		get := func() string { return fld.get(d.Book()) }
 		set := func(s string) error {
-			edits, err := fld.edits(d.Book, s)
+			book := d.Book()
+			edits, err := fld.edits(book, s)
 			if err != nil {
 				return err
 			}
-			return reg.edit(d.Book.Meta.ID, edits)
+			return reg.edit(book.Meta.ID, edits)
 		}
 		d.StaticDir.AddChild(newFieldFile(f.NewStat(name, "glenda", "glenda", 0644), get, set))
 	}
 
 	// Read-only bib fields.
-	addReadOnlyField(d, f, "pubdate", func() string { return book.Pubdate })
+	addReadOnlyField(d, f, "pubdate", func() string { return d.Book().Pubdate })
 
 	// Cover image — only present when the epub declares one.
 	if book.CoverPath != "" {
 		d.StaticDir.AddChild(newCoverFile(
 			f.NewStat("cover"+filepath.Ext(book.CoverPath), "glenda", "glenda", 0644),
 			lib,
-			book,
+			d.Book,
 		))
 	}
 

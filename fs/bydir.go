@@ -18,7 +18,7 @@ type namedBookDir struct {
 
 func (n *namedBookDir) Stat() proto.Stat {
 	s := n.baseStat
-	s.Name = n.name(n.bookDir.Book)
+	s.Name = n.name(n.bookDir.Book())
 	return s
 }
 

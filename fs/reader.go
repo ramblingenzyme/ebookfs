@@ -46,22 +46,24 @@ func (d *readerDir) authorDir(name string) fs.ModDir {
 }
 
 func (d *readerDir) add(dir *bookDir) {
-	if !d.included[dir.Book.Meta.Status] {
+	b := dir.Book()
+	if !d.included[b.Meta.Status] {
 		return
 	}
-	ad := d.authorDir(d.exp.Dirname(dir.Book))
-	stat := d.f.NewStat(d.exp.Filename(dir.Book), "glenda", "glenda", 0444)
+	ad := d.authorDir(d.exp.Dirname(b))
+	stat := d.f.NewStat(d.exp.Filename(b), "glenda", "glenda", 0444)
 	ad.AddChild(newReaderFile(stat, d.exp, dir.Book))
-	d.exp.Warm(dir.Book)
+	d.exp.Warm(b)
 }
 
 func (d *readerDir) remove(dir *bookDir) {
-	if !d.included[dir.Book.Meta.Status] {
+	b := dir.Book()
+	if !d.included[b.Meta.Status] {
 		return
 	}
-	name := d.exp.Dirname(dir.Book)
+	name := d.exp.Dirname(b)
 	if child, ok := d.Children()[name]; ok {
-		child.(fs.ModDir).DeleteChild(d.exp.Filename(dir.Book))
+		child.(fs.ModDir).DeleteChild(d.exp.Filename(b))
 		d.pruneEmpty(name)
 	}
 }
@@ -72,11 +74,11 @@ func (d *readerDir) remove(dir *bookDir) {
 type readerFile struct {
 	fs.BaseFile
 	exp  library.Exporter
-	book *model.Book
+	book func() *model.Book
 	fids map[uint64]library.EpubReader
 }
 
-func newReaderFile(stat *proto.Stat, exp library.Exporter, book *model.Book) *readerFile {
+func newReaderFile(stat *proto.Stat, exp library.Exporter, book func() *model.Book) *readerFile {
 	return &readerFile{
 		BaseFile: *fs.NewBaseFile(stat),
 		exp:      exp,
@@ -89,14 +91,14 @@ func newReaderFile(stat *proto.Stat, exp library.Exporter, book *model.Book) *re
 // so a cold kepub lists as length 0 until its cache is warm.
 func (r *readerFile) Stat() proto.Stat {
 	s := r.BaseFile.Stat()
-	if size, ok := r.exp.Size(r.book); ok {
+	if size, ok := r.exp.Size(r.book()); ok {
 		s.Length = uint64(size)
 	}
 	return s
 }
 
 func (r *readerFile) Open(fid uint64, omode proto.Mode) error {
-	rd, err := r.exp.Open(r.book)
+	rd, err := r.exp.Open(r.book())
 	if err != nil {
 		return err
 	}

@@ -9,12 +9,12 @@ import (
 func TestNewBookDirCreatesCoverChild(t *testing.T) {
 	f := newTestFS(t)
 	reg := newTestRegistry(t, f)
-	d := newBookDir(reg, makeBook(1, "Has Cover", "Author"))
-	d.Book.CoverPath = "OEBPS/cover.jpg"
+	book := makeBook(1, "Has Cover", "Author")
+	book.CoverPath = "OEBPS/cover.jpg"
 
-	d2 := newBookDir(reg, d.Book)
+	d := newBookDir(reg, book)
 
-	if _, ok := d2.Children()["cover.jpg"]; !ok {
+	if _, ok := d.Children()["cover.jpg"]; !ok {
 		t.Error("bookDir should contain 'cover.jpg' when CoverPath is set")
 	}
 }

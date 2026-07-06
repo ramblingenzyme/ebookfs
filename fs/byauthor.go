@@ -23,13 +23,13 @@ func (d *byAuthorDir) authorDir(name string) bookLister {
 }
 
 func (d *byAuthorDir) add(dir *bookDir) {
-	for _, a := range dir.Book.Authors {
+	for _, a := range dir.Book().Authors {
 		d.authorDir(a.Name).add(dir)
 	}
 }
 
 func (d *byAuthorDir) remove(dir *bookDir) {
-	for _, a := range dir.Book.Authors {
+	for _, a := range dir.Book().Authors {
 		if child, ok := d.Children()[a.Name]; ok {
 			child.(bookLister).remove(dir)
 			d.pruneEmpty(a.Name)

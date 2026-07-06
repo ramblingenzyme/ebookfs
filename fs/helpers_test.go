@@ -119,6 +119,12 @@ func (l fakeLib) Delete(b *model.Book) error {
 
 var _ library.Library = (fakeLib{})
 
+// fixed returns a book getter that always yields b, standing in for
+// bookDir.Book in tests that construct child files directly.
+func fixed(b *model.Book) func() *model.Book {
+	return func() *model.Book { return b }
+}
+
 func makeBook(id int64, title string, authors ...string) *model.Book {
 	auths := make([]model.Author, len(authors))
 	for i, name := range authors {

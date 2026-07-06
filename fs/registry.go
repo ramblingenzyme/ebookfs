@@ -19,8 +19,10 @@ type bookView interface {
 }
 
 // bookRegistry is the single authority on id → *bookDir and the orchestrator of
-// every change to the served tree. bookDirs are mutated in place rather than
-// replaced, so the map identity and any open fids stay stable across edits.
+// every change to the served tree. bookDirs are stable identities — the map
+// entry and any open fids survive edits — while the book state inside each is
+// an atomically swapped snapshot (see bookDir), because 9P handlers read it
+// from many goroutines without taking r.mu.
 type bookRegistry struct {
 	mu    sync.RWMutex
 	books map[int64]*bookDir
@@ -54,15 +56,16 @@ func (r *bookRegistry) dirLocked(book *model.Book) *bookDir {
 	return d
 }
 
-// commit brackets an in-place mutation with view removal and re-addition, so
-// every view drops the book from its old slot and re-files it under the new one.
-// Callers hold r.mu and must persist before calling, so a failed write never
-// reaches the tree. This is the shared primitive for meta and (future) bib edits.
-func (r *bookRegistry) commit(dir *bookDir, apply func()) {
+// commit brackets a snapshot swap with view removal and re-addition, so every
+// view drops the book from its old slot (reading the old snapshot) and re-files
+// it under the new one (reading the new snapshot). Callers hold r.mu and must
+// persist before calling, so a failed write never reaches the tree. This is the
+// shared primitive for meta and (future) bib edits.
+func (r *bookRegistry) commit(dir *bookDir, updated *model.Book) {
 	for _, v := range r.views {
 		v.remove(dir)
 	}
-	apply()
+	dir.book.Store(updated)
 	for _, v := range r.views {
 		v.add(dir)
 	}
@@ -101,10 +104,10 @@ func (r *bookRegistry) edit(id int64, edits model.Edits) error {
 	if !ok {
 		return fmt.Errorf("no book with id %d", id)
 	}
-	updated, err := r.lib.Edit(dir.Book, edits)
+	updated, err := r.lib.Edit(dir.Book(), edits)
 	if err != nil {
 		return err
 	}
-	r.commit(dir, func() { *dir.Book = *updated })
+	r.commit(dir, updated)
 	return nil
 }

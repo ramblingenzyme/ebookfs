@@ -17,7 +17,7 @@ func testReaderFile(t *testing.T, exp library.Exporter) *readerFile {
 	f := newTestFS(t)
 	book := makeBook(1, "Test", "Author")
 	book.EpubFilename = "test.epub"
-	return newReaderFile(f.NewStat("test.epub", "glenda", "glenda", 0444), exp, book)
+	return newReaderFile(f.NewStat("test.epub", "glenda", "glenda", 0444), exp, fixed(book))
 }
 
 func TestReaderFileOpenReadClose(t *testing.T) {

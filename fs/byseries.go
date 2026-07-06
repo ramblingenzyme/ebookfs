@@ -45,20 +45,20 @@ func newSeriesBookListDir(f *fs.FS, name string) *seriesBookListDir {
 }
 
 func (s *seriesBookListDir) add(dir *bookDir) {
-	s.books[dir.Book.Meta.ID] = dir
+	s.books[dir.Book().Meta.ID] = dir
 	s.rebuild()
 }
 
 func (s *seriesBookListDir) remove(dir *bookDir) {
-	delete(s.books, dir.Book.Meta.ID)
+	delete(s.books, dir.Book().Meta.ID)
 	s.rebuild()
 }
 
 func (s *seriesBookListDir) rebuild() {
 	var maxIdx float64
 	for _, d := range s.books {
-		if d.Book.Series != nil && d.Book.Series.Index > maxIdx {
-			maxIdx = d.Book.Series.Index
+		if b := d.Book(); b.Series != nil && b.Series.Index > maxIdx {
+			maxIdx = b.Series.Index
 		}
 	}
 	pad := 0
@@ -72,7 +72,7 @@ func (s *seriesBookListDir) rebuild() {
 
 	nameFn := seriesEntryNameFunc(pad)
 	for _, d := range s.books {
-		name := nameFn(d.Book)
+		name := nameFn(d.Book())
 		stat := s.f.NewStat(name, "glenda", "glenda", 0555|proto.DMDIR)
 		s.AddChild(&namedBookDir{bookDir: d, baseStat: *stat, name: nameFn})
 	}
@@ -97,18 +97,20 @@ func (d *bySeriesDir) seriesDir(name string) bookLister {
 }
 
 func (d *bySeriesDir) add(dir *bookDir) {
-	if dir.Book.Series == nil {
+	b := dir.Book()
+	if b.Series == nil {
 		return
 	}
-	d.seriesDir(dir.Book.Series.Name).add(dir)
+	d.seriesDir(b.Series.Name).add(dir)
 }
 
 func (d *bySeriesDir) remove(dir *bookDir) {
-	if dir.Book.Series == nil {
+	b := dir.Book()
+	if b.Series == nil {
 		return
 	}
-	if child, ok := d.Children()[dir.Book.Series.Name]; ok {
+	if child, ok := d.Children()[b.Series.Name]; ok {
 		child.(bookLister).remove(dir)
-		d.pruneEmpty(dir.Book.Series.Name)
+		d.pruneEmpty(b.Series.Name)
 	}
 }
