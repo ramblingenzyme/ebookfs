@@ -6,23 +6,19 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-/*
-	 --- container.xml ---
-		 This is the entry to the epub. It has rootfile elements which point to real .opf files
-		 An epub may have multiple .opf files.
-*/
-type Container struct {
-	Rootfiles []*Rootfile `xml:"rootfiles>rootfile"`
+// --- container.xml ---
+// This is the entry to the epub. It has rootfile elements which point to real
+// .opf files. An epub may have multiple .opf files.
+type container struct {
+	Rootfiles []*rootfile `xml:"rootfiles>rootfile"`
 }
 
-type Rootfile struct {
+type rootfile struct {
 	FullPath  string `xml:"full-path,attr"`
 	MediaType string `xml:"media-type,attr"`
 }
 
-/*
---- .opf files ---
-*/
+// --- .opf files ---
 type opfPackage struct {
 	BasePath string
 	XMLName  xml.Name          `xml:"package"`

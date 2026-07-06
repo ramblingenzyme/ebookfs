@@ -16,9 +16,9 @@ const (
 )
 
 var (
-	ErrMetadata        = errors.New("no metadata file in container")
+	ErrNoRootfile      = errors.New("no package rootfile declared in container")
 	ErrContainer       = errors.New("no container file found")
-	ErrMetadataMissing = errors.New("could not find metadata file")
+	ErrRootfileMissing = errors.New("declared package rootfile not found in archive")
 	ErrNotEpub         = errors.New("not a valid epub")
 )
 
@@ -55,7 +55,7 @@ func checkMimetype(filemap map[string]*zip.File) error {
 // Some Kobo epubs declare multiple <rootfile> entries where only one actually
 // exists in the zip. Mirroring calibre, the first package rootfile that exists
 // is chosen and missing ones are skipped. If a package rootfile is declared but
-// none of them exist, ErrMetadataMissing is returned (distinct from ErrMetadata,
+// none of them exist, ErrRootfileMissing is returned (distinct from ErrNoRootfile,
 // which means no package rootfile was declared at all).
 func getMetadataPath(f *zip.File, exists func(string) bool) (string, error) {
 	r, err := f.Open()
@@ -64,16 +64,16 @@ func getMetadataPath(f *zip.File, exists func(string) bool) (string, error) {
 	}
 	defer r.Close()
 
-	var container Container
+	var c container
 
 	d := xml.NewDecoder(r)
-	err = d.Decode(&container)
+	err = d.Decode(&c)
 	if err != nil {
 		return "", err
 	}
 
 	var declared string
-	for _, rf := range container.Rootfiles {
+	for _, rf := range c.Rootfiles {
 		if rf.MediaType != metadataType {
 			continue
 		}
@@ -86,9 +86,10 @@ func getMetadataPath(f *zip.File, exists func(string) bool) (string, error) {
 	}
 
 	if declared != "" {
-		return "", ErrMetadataMissing
+		return "", ErrRootfileMissing
 	}
-	return "", ErrMetadata
+
+	return "", ErrNoRootfile
 }
 
 func parsePackage(f *zip.File) (*opfPackage, error) {
@@ -143,7 +144,7 @@ func Parse(bpath string) (*Book, error) {
 
 	mfile := filemap[mpath]
 	if mfile == nil {
-		return nil, ErrMetadataMissing
+		return nil, ErrRootfileMissing
 	}
 
 	pkg, err := parsePackage(mfile)
