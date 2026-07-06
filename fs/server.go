@@ -20,7 +20,9 @@ func StartServer(lib library.Library, exp library.Exporter, listen string) {
 		log.Fatalf("setting up server: %v", err)
 	}
 	log.Printf("serving 9P on %s", listen)
-	go9p.Serve(listen, ebookfs.Server())
+	if err := go9p.Serve(listen, ebookfs.Server()); err != nil {
+		log.Fatalf("9P server: %v", err)
+	}
 }
 
 // setupServer wires the FS, registry, and views without starting the 9P
