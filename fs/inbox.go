@@ -31,11 +31,8 @@ type inboxFile struct {
 func inboxCreateFile(lib library.Library, onIngest func(*model.Book)) createFileFunc {
 	return func(f *fs.FS, parent fs.Dir, user, name string, perm uint32, mode uint8) (fs.File, error) {
 		log.Printf("inbox: create %q perm=%o mode=%d parent=%s", name, perm, mode, fs.FullPath(parent))
-		var inbox *inboxDir
-		switch p := parent.(type) {
-		case *inboxDir:
-			inbox = p
-		default:
+		inbox, ok := parent.(*inboxDir)
+		if !ok {
 			return nil, errors.New("not under inbox")
 		}
 

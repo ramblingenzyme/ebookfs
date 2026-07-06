@@ -41,7 +41,8 @@ func newFieldFile(stat *proto.Stat, get func() string, set func(string) error) *
 
 func (f *fieldFile) Stat() proto.Stat {
 	s := f.BaseFile.Stat()
-	s.Length = uint64(len(f.get() + "\n"))
+	// +1 for the trailing newline that Read and Open always append.
+	s.Length = uint64(len(f.get()) + 1)
 	return s
 }
 

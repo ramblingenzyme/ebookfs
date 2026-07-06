@@ -150,6 +150,11 @@ func (c *Cache) lockFor(id int64) *sync.Mutex {
 	return l
 }
 
+const (
+	warmerGoroutines = 4                       // concurrent conversions
+	warmerQueueSize  = 4096                    // max backlog before drops
+)
+
 // warmer converts kepubs off the read path. The exporter's Warm method enqueues
 // books here so their caches are built before the next rsync. Enqueue is
 // non-blocking; a full queue drops the warm and the read path converts on demand.
@@ -160,9 +165,9 @@ type warmer struct {
 }
 
 func newWarmer(ensure func(*model.Book) error) *warmer {
-	w := &warmer{ensure: ensure, ch: make(chan *model.Book, 4096)}
-	w.wg.Add(4)
-	for i := 0; i < 4; i++ {
+	w := &warmer{ensure: ensure, ch: make(chan *model.Book, warmerQueueSize)}
+	w.wg.Add(warmerGoroutines)
+	for i := 0; i < warmerGoroutines; i++ {
 		go w.run()
 	}
 	return w

@@ -135,6 +135,9 @@ func cleanInboxTemp(dir string) error {
 	return nil
 }
 
+// checkSameFilesystem verifies that a and b are on the same mount, which ingest
+// relies on: the frontend writes to a temp file inside inboxTemp then atomically
+// renames it into the library root, and rename only works within a filesystem.
 func checkSameFilesystem(a, b string) error {
 	tmp, err := os.CreateTemp(a, ".fschk-*")
 	if err != nil {

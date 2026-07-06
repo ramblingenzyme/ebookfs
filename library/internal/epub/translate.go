@@ -261,22 +261,23 @@ func translateCover(pkg *opfPackage, b *Book) {
 		}
 	}
 
+	// Exact match by coverID. This is the calibre/convention path.
 	for _, item := range pkg.Manifest {
-		if item.ID == coverID {
-			if isRasterCoverType(item.MediaType) {
-				b.CoverPath = coverUrl(pkg.BasePath, item.Href)
-				return
-			}
-			continue
-		}
-
-		var (
-			img   bool = strings.HasPrefix(item.MediaType, "image")
-			cover bool = strings.Contains(strings.ToLower(item.ID), "cover")
-		)
-
-		if coverID == "" && cover && img {
+		if item.ID == coverID && isRasterCoverType(item.MediaType) {
 			b.CoverPath = coverUrl(pkg.BasePath, item.Href)
+			return
+		}
+	}
+
+	// Heuristic fallback: last image item whose id contains "cover". This is
+	// last-match-wins, unlike calibre's first-wins, but the path is rare and
+	// the simpler scan is preferred.
+	if coverID == "" {
+		for _, item := range pkg.Manifest {
+			if strings.HasPrefix(item.MediaType, "image") &&
+				strings.Contains(strings.ToLower(item.ID), "cover") {
+				b.CoverPath = coverUrl(pkg.BasePath, item.Href)
+			}
 		}
 	}
 }

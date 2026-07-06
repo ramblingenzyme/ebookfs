@@ -29,15 +29,18 @@ func Open(path string) (*Index, error) {
 	db.SetMaxOpenConns(1)
 
 	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
+		db.Close()
 		return nil, err
 	}
 
 	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
+		db.Close()
 		return nil, err
 	}
 
 	var v int64
 	if err := db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
+		db.Close()
 		return nil, err
 	}
 

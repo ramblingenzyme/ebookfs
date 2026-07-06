@@ -51,7 +51,7 @@ func ForFAT(s string) (string, error) {
 			b.WriteRune(r)
 		}
 	}
-	out := strings.TrimRight(strings.Trim(b.String(), ". \t"), " .")
+	out := strings.Trim(b.String(), ". \t")
 	if out == "" {
 		return "", errors.New("sanitized string is empty")
 	}

@@ -60,7 +60,7 @@ func (r *bookRegistry) dirLocked(book *model.Book) *bookDir {
 // view drops the book from its old slot (reading the old snapshot) and re-files
 // it under the new one (reading the new snapshot). Callers hold r.mu and must
 // persist before calling, so a failed write never reaches the tree. This is the
-// shared primitive for meta and (future) bib edits.
+// shared primitive for meta and bib edits.
 func (r *bookRegistry) commit(dir *bookDir, updated *model.Book) {
 	for _, v := range r.views {
 		v.remove(dir)

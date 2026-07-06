@@ -147,11 +147,10 @@ func Parse(bpath string) (*Book, error) {
 	}
 
 	pkg, err := parsePackage(mfile)
-	pkg.BasePath = path.Dir(mpath)
-
 	if err != nil {
 		return nil, err
 	}
+	pkg.BasePath = path.Dir(mpath)
 
 	return translate(pkg)
 }
