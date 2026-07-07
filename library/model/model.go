@@ -82,10 +82,10 @@ type Bib struct {
 	Pubdate     string
 	Description string
 	Identifiers map[string]string
-	CoverPath   string  // zip-relative path to cover image; empty if none
-	OpfSize     int64   // OPF uncompressed size from zip central directory; 0 if unavailable
-	CoverSize   int64   // cover uncompressed size from zip central directory; 0 if unavailable
-	EpubSize    int64   // on-disk epub file size; 0 if unavailable (pre-v6 index)
+	CoverPath   string // zip-relative path to cover image; empty if none
+	OpfSize     int64  // OPF uncompressed size from zip central directory; 0 if unavailable
+	CoverSize   int64  // cover uncompressed size from zip central directory; 0 if unavailable
+	EpubSize    int64  // on-disk epub file size; 0 if unavailable (pre-v6 index)
 }
 
 // UnknownAuthor is the fallback author name used when a book has no author

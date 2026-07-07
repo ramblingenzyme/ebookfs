@@ -155,8 +155,8 @@ func (c *Cache) lockFor(id int64) *sync.Mutex {
 }
 
 const (
-	warmerGoroutines = 4                       // concurrent conversions
-	warmerQueueSize  = 4096                    // max backlog before drops
+	warmerGoroutines = 4    // concurrent conversions
+	warmerQueueSize  = 4096 // max backlog before drops
 )
 
 // warmer converts kepubs off the read path. The exporter's Warm method enqueues
