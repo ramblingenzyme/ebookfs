@@ -1,8 +1,10 @@
 package index
 
 import (
+	"crypto/rand"
 	"database/sql"
 	_ "embed"
+	"encoding/hex"
 	"fmt"
 
 	_ "modernc.org/sqlite"
@@ -17,7 +19,7 @@ type Index struct {
 	db *sql.DB
 }
 
-const schemaVersion = 6
+const schemaVersion = 7
 
 // Open opens or creates the index at path.
 func Open(path string) (*Index, error) {
@@ -45,14 +47,13 @@ func Open(path string) (*Index, error) {
 	}
 
 	if v == 0 {
-		// Fresh database: apply the current schema and stamp the version.
+		// Fresh database: apply the schema but leave user_version at 0 so
+		// NeedsReindex forces the first reindex. An empty pending_ops table is
+		// the normal clean state and cannot distinguish a fresh index from a
+		// completed one, so Rebuild is left as the sole version-stamper.
 		if _, err := db.Exec(schema); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("applying schema: %w", err)
-		}
-		if _, err := db.Exec(fmt.Sprintf("PRAGMA user_version=%d", schemaVersion)); err != nil {
-			db.Close()
-			return nil, err
 		}
 	}
 
@@ -103,29 +104,21 @@ func (idx *Index) NextID() (int64, error) {
 	return id, err
 }
 
-// setDirty marks the index as potentially inconsistent, forcing a reindex
-// on the next startup if a crash occurs before withTx clears the flag.
-func (idx *Index) setDirty() error {
-	_, err := idx.db.Exec("UPDATE library_meta SET dirty = 1")
-	return err
+// newOpID returns a random hex string used as a unique pending-op identifier.
+func newOpID() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	return hex.EncodeToString(b[:])
 }
 
-// withTx sets the dirty flag, runs fn in a transaction, then clears the flag
-// on commit. setDirty runs via idx.db (outside the tx), so a crash before
-// tx.Commit leaves the flag set and forces a reindex.
+// withTx runs fn inside a SQLite transaction, committing on success and
+// rolling back on error.
 func (idx *Index) withTx(fn func(*sql.Tx) error) error {
-	if err := idx.setDirty(); err != nil {
-		return err
-	}
 	tx, err := idx.db.Begin()
 	if err != nil {
 		return err
 	}
 	if err := fn(tx); err != nil {
-		tx.Rollback()
-		return err
-	}
-	if _, err := tx.Exec("UPDATE library_meta SET dirty = 0"); err != nil {
 		tx.Rollback()
 		return err
 	}

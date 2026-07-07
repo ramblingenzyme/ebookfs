@@ -58,12 +58,12 @@ CREATE TABLE identifiers (
 
 CREATE TABLE book_id_seq (id INTEGER PRIMARY KEY AUTOINCREMENT);
 
--- Single-row table tracking whether the index might be inconsistent with the
--- filesystem. Set to 1 (dirty) before any store write; cleared to 0 by withTx
--- on successful commit. On startup, a clean (0) flag means the last write
--- completed and the index can be trusted without re-parsing epubs.
-CREATE TABLE library_meta (
-    dirty INTEGER NOT NULL DEFAULT 1
+-- Each mutation inserts its own row (autocommit, outside the SQL transaction)
+-- before touching the store, and deletes it inside the commit transaction.
+-- On startup, a non-empty table means an operation may not have completed.
+CREATE TABLE pending_ops (
+    op_id      TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE INDEX idx_books_status     ON books(status);

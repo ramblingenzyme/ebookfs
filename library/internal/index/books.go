@@ -271,16 +271,24 @@ func upsertTags(tx *sql.Tx, bookID int64, tags []string) error {
 }
 
 // Put writes b into the index, inserting or replacing the record for b.Meta.ID.
-// The optional storeWrite runs between setDirty and the index write so a crash
-// during the store write forces a reindex on the next startup.
+// The optional storeWrite runs between the pending-op insert and the index write
+// so a crash during the store write forces a reindex on the next startup.
 func (idx *Index) Put(b *model.Book, storeWrite func() error) error {
+	opID := newOpID()
+	if _, err := idx.db.Exec("INSERT INTO pending_ops (op_id) VALUES (?)", opID); err != nil {
+		return err
+	}
 	return idx.withTx(func(tx *sql.Tx) error {
 		if storeWrite != nil {
 			if err := storeWrite(); err != nil {
 				return err
 			}
 		}
-		return putBook(tx, b)
+		if err := putBook(tx, b); err != nil {
+			return err
+		}
+		_, err := tx.Exec("DELETE FROM pending_ops WHERE op_id = ?", opID)
+		return err
 	})
 }
 
@@ -388,15 +396,23 @@ func putBook(tx *sql.Tx, b *model.Book) error {
 }
 
 // Delete removes all index rows for bookID. The optional storeWrite runs
-// between setDirty and the index delete (see Put).
+// between the pending-op insert and the index delete (see Put).
 func (idx *Index) Delete(bookID int64, storeWrite func() error) error {
+	opID := newOpID()
+	if _, err := idx.db.Exec("INSERT INTO pending_ops (op_id) VALUES (?)", opID); err != nil {
+		return err
+	}
 	return idx.withTx(func(tx *sql.Tx) error {
 		if storeWrite != nil {
 			if err := storeWrite(); err != nil {
 				return err
 			}
 		}
-		return deleteBook(tx, bookID)
+		if err := deleteBook(tx, bookID); err != nil {
+			return err
+		}
+		_, err := tx.Exec("DELETE FROM pending_ops WHERE op_id = ?", opID)
+		return err
 	})
 }
 

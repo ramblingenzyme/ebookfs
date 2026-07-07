@@ -196,8 +196,8 @@ func (l *libraryImpl) Reindex() error {
 	return nil
 }
 
-// needsReindex reports whether the index requires a rebuild — true when the
-// dirty flag is set or the schema version is stale.
+// needsReindex reports whether the index requires a rebuild — true when there
+// are pending operations or the schema version is stale.
 func (l *libraryImpl) needsReindex() bool {
 	needs, err := l.index.NeedsReindex()
 	if err != nil {
