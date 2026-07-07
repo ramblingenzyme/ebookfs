@@ -64,7 +64,8 @@ func (idx *Index) queryBooks(where string, args []any, order string, limit int) 
 		SELECT b.id, b.title, b.sort_title, COALESCE(b.pubdate, ''), b.description, b.language,
 		       b.library_path, b.epub_filename, b.cover_path,
 		       b.status, b.rating, b.date_added, b.date_modified,
-		       s.id, s.name, b.series_index
+		       s.id, s.name, b.series_index,
+		       b.opf_size, b.cover_size, b.epub_size
 		FROM books b
 		LEFT JOIN series s ON s.id = b.series_id`
 	if where != "" {
@@ -96,6 +97,7 @@ func (idx *Index) queryBooks(where string, args []any, order string, limit int) 
 			&b.LibraryPath, &b.EpubFilename, &b.CoverPath,
 			&b.Meta.Status, &b.Meta.Rating, &dateAdded, &dateModified,
 			&seriesID, &seriesName, &seriesIndex,
+			&b.OpfSize, &b.CoverSize, &b.EpubSize,
 		); err != nil {
 			return nil, err
 		}
@@ -335,7 +337,7 @@ func finishBook(tx *sql.Tx, b *model.Book) error {
 
 const bookColumns = `(id, title, sort_title, pubdate, description, language,
 		     library_path, epub_filename, cover_path, status, rating,
-		     date_added, date_modified)`
+		     date_added, date_modified, opf_size, cover_size, epub_size)`
 
 func bookValues(b *model.Book) []any {
 	sortTitle := any(b.SortTitle)
@@ -347,6 +349,7 @@ func bookValues(b *model.Book) []any {
 		b.LibraryPath, b.EpubFilename, b.CoverPath, b.Meta.Status, b.Meta.Rating,
 		b.Meta.DateAdded.UTC().Format(time.RFC3339),
 		b.Meta.DateModified.UTC().Format(time.RFC3339),
+		b.OpfSize, b.CoverSize, b.EpubSize,
 	}
 }
 
@@ -354,7 +357,7 @@ func bookValues(b *model.Book) []any {
 func insertBook(tx *sql.Tx, b *model.Book) error {
 	// series_id/series_index are set by finishBook's upsertSeries.
 	if _, err := tx.Exec(
-		`INSERT INTO books `+bookColumns+` VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO books `+bookColumns+` VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		bookValues(b)...,
 	); err != nil {
 		return err
@@ -368,13 +371,14 @@ func insertBook(tx *sql.Tx, b *model.Book) error {
 func putBook(tx *sql.Tx, b *model.Book) error {
 	// series_id/series_index are set by finishBook's upsertSeries.
 	if _, err := tx.Exec(
-		`INSERT INTO books `+bookColumns+` VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO books `+bookColumns+` VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		     title=excluded.title, sort_title=excluded.sort_title, pubdate=excluded.pubdate,
 		     description=excluded.description, language=excluded.language,
 		     library_path=excluded.library_path, epub_filename=excluded.epub_filename,
 		     cover_path=excluded.cover_path, status=excluded.status, rating=excluded.rating,
-		     date_added=excluded.date_added, date_modified=excluded.date_modified`,
+		     date_added=excluded.date_added, date_modified=excluded.date_modified,
+		     opf_size=excluded.opf_size, cover_size=excluded.cover_size, epub_size=excluded.epub_size`,
 		bookValues(b)...,
 	); err != nil {
 		return err

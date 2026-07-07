@@ -44,11 +44,7 @@ func (e epubExporter) Open(b *model.Book) (EpubReader, error) {
 }
 
 func (e epubExporter) Size(b *model.Book) (int64, bool) {
-	fi, err := b.Stat()
-	if err != nil {
-		return 0, false
-	}
-	return fi.Size(), true
+	return b.EpubSize, b.EpubSize > 0
 }
 
 func (e epubExporter) Warm(*model.Book)              {}

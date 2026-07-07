@@ -25,10 +25,10 @@ type EpubReader = model.EpubReader
 // Concurrency contract: methods are safe for concurrent use. Returned
 // *model.Book values are immutable snapshots — the library never mutates a
 // Book after returning it. Reads take a snapshot ("read the version I'm
-// looking at"); mutations (Edit, WriteCover, Delete) address a book by id and
-// run as an atomic read-modify-write per book: the base state is fetched
-// fresh under a per-book lock, so callers holding stale snapshots cannot
-// revert other callers' changes.
+// looking at"); mutations (Edit, WriteCover, Delete) address a book by id and run as an
+// atomic read-modify-write per book: the base state is fetched fresh under a
+// per-book lock, so callers holding stale snapshots cannot revert other
+// callers' changes.
 type Library interface {
 	Close() error
 	CreateIngest() (*IngestHandle, error)

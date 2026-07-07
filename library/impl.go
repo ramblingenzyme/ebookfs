@@ -258,8 +258,9 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 			}
 			updated.Bib = bibFromEpub(re)
 		}
+
 		newLoc := l.store.Layout(updated.Authors, updated.Title, updated.Meta.ID)
-		if newLoc != b.Location {
+		if newLoc.LibraryPath != b.Location.LibraryPath || newLoc.EpubFilename != b.Location.EpubFilename {
 			if err := l.store.Move(b.Location, newLoc); err != nil {
 				log.Printf("edit: book %d (%q): move directory: %v", b.Meta.ID, b.Title, err)
 				return err
@@ -318,6 +319,9 @@ func bibFromEpub(src *epub.Book) model.Bib {
 		Description: src.Description,
 		Identifiers: identifiers,
 		CoverPath:   src.CoverPath,
+		OpfSize:     src.OpfSize,
+		CoverSize:   src.CoverSize,
+		EpubSize:    src.EpubSize,
 	}
 }
 

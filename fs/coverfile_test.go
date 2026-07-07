@@ -15,6 +15,7 @@ func TestCoverFileStatLength(t *testing.T) {
 		},
 	}
 	book := makeBook(1, "Test", "Author")
+	book.CoverSize = 16
 	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, fixed(book))
 
 	s := cf.Stat()

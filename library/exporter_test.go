@@ -44,7 +44,7 @@ func (l testLib) Edit(id int64, e model.Edits) (*model.Book, error) {
 	return nil, nil
 }
 func (l testLib) WriteCover(id int64, img []byte) error { return nil }
-func (l testLib) Delete(id int64) error                 { return nil }
+func (l testLib) Delete(id int64) error                  { return nil }
 
 func makeBook(id int64, title string, authors ...string) *model.Book {
 	auths := make([]model.Author, len(authors))
@@ -86,6 +86,7 @@ func TestEpubExporter_Size_Success(t *testing.T) {
 
 	book := makeBook(1, "Test", "Author")
 	book.EpubPath = path
+	book.EpubSize = int64(len(content))
 
 	exp := epubExporter{lib: testLib{}}
 	size, ok := exp.Size(book)

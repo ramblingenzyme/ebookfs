@@ -182,6 +182,19 @@ func TestEpubFileNotOpenRead(t *testing.T) {
 	}
 }
 
+func TestEpubFileStatNilBook(t *testing.T) {
+	f := newTestFS(t)
+	ef := newEpubFile(f.NewStat("test.epub", "glenda", "glenda", 0444), fakeLib{}, func() *model.Book { return nil })
+
+	s := ef.Stat()
+	if s.Name != "test.epub" {
+		t.Errorf("Stat.Name = %q, want %q", s.Name, "test.epub")
+	}
+	if s.Length != 0 {
+		t.Errorf("Stat.Length = %d, want 0", s.Length)
+	}
+}
+
 func TestEpubFileStatWithRealFile(t *testing.T) {
 	f := newTestFS(t)
 	content := []byte("fake epub content")
@@ -193,6 +206,7 @@ func TestEpubFileStatWithRealFile(t *testing.T) {
 	book := makeBook(1, "Test", "Author")
 	book.EpubFilename = "book.epub"
 	book.EpubPath = path
+	book.EpubSize = int64(len(content))
 
 	ef := newEpubFile(f.NewStat("book.epub", "glenda", "glenda", 0444), fakeLib{}, fixed(book))
 

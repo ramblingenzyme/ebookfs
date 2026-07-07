@@ -102,7 +102,11 @@ func (c *Cache) ensureLocked(b *model.Book) error {
 	}
 	defer src.Close()
 
-	sfi, err := b.Stat()
+	f, ok := src.(*os.File)
+	if !ok {
+		return fmt.Errorf("unexpected EpubReader type %T", src)
+	}
+	sfi, err := f.Stat()
 	if err != nil {
 		return err
 	}

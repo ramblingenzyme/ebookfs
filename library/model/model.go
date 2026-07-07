@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"os"
 	"strings"
 	"time"
 
@@ -22,8 +21,8 @@ type EpubReader interface {
 // and Bib are embedded so their fields read flat (b.Title, b.LibraryPath); Meta
 // stays named so sidecar state is explicitly addressed as b.Meta.
 //
-// Book may carry self-contained methods (Stat, Edit, etc.) that operate on its
-// own fields without depending on Store, Index, or the epub parser. Library
+// Book may carry self-contained methods (Edit, etc.) that operate on its own
+// fields without depending on Store, Index, or the epub parser. Library
 // remains the single orchestrator for persistence and transactions; Book methods
 // are helpers for in-memory transformation and inspection.
 //
@@ -63,26 +62,29 @@ func NewBook(bib Bib, meta Meta, loc Location) *Book {
 	return &Book{Location: loc, Bib: bib, Meta: meta}
 }
 
-// Stat returns the FileInfo for the book's epub file. EpubPath must be
-// populated, which it always is when NewBook created the Book.
-func (b *Book) Stat() (os.FileInfo, error) {
-	return os.Stat(b.EpubPath)
-}
-
 // Bib holds the bibliographic data parsed from the epub — the "what the book
 // is" half, distinct from the mutable Meta sidecar. It is replaced wholesale
 // (re-parse → new Bib) when bib fields are edited through the write path,
 // while Location and Meta remain intact.
+//
+// OpfSize, CoverSize, and EpubSize are all captured during epub.Parse (from
+// the zip central directory and a single os.Stat), propagated through
+// bibFromEpub, and persisted in the index. They let the 9P Stat path report
+// file lengths without touching the disk (no zip decompression on directory
+// listings).
 type Bib struct {
 	Title       string
 	SortTitle   string
 	Authors     []Author
-	Series      *SeriesRef // nil if the book has no series
+	Series      *SeriesRef
 	Language    string
-	Pubdate     string // ISO 8601, may be partial
+	Pubdate     string
 	Description string
-	Identifiers map[string]string // scheme → value, e.g. "isbn" → "978-..."
-	CoverPath   string            // zip-relative path to cover image; empty if none
+	Identifiers map[string]string
+	CoverPath   string  // zip-relative path to cover image; empty if none
+	OpfSize     int64   // OPF uncompressed size from zip central directory; 0 if unavailable
+	CoverSize   int64   // cover uncompressed size from zip central directory; 0 if unavailable
+	EpubSize    int64   // on-disk epub file size; 0 if unavailable (pre-v6 index)
 }
 
 // UnknownAuthor is the fallback author name used when a book has no author
@@ -102,6 +104,9 @@ type SeriesRef struct {
 	Index float64
 }
 
+// Location identifies where a book lives on disk. EpubSize was historically
+// here but moved to Bib so all three file sizes (Opf, Cover, Epub)
+// are set together during epub.Parse and flow through bibFromEpub as a unit.
 type Location struct {
 	LibraryPath  string
 	EpubFilename string

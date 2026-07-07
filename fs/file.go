@@ -14,6 +14,7 @@ const maxCoverFileSize = 32 << 20 // 32 MiB
 // opfFile serves a book's raw OPF XML, loading bytes from the epub on each open.
 type opfFile struct {
 	snapshotFile
+	book func() *model.Book
 }
 
 func newOPFFile(stat *proto.Stat, lib library.Library, book func() *model.Book) *opfFile {
@@ -24,13 +25,14 @@ func newOPFFile(stat *proto.Stat, lib library.Library, book func() *model.Book) 
 			}
 			return lib.ExtractOPF(book())
 		}),
+		book: book,
 	}
 }
 
 func (o *opfFile) Stat() proto.Stat {
 	s := o.BaseFile.Stat()
-	if data, err := o.load(); err == nil {
-		s.Length = uint64(len(data))
+	if b := o.book(); b != nil {
+		s.Length = uint64(b.OpfSize)
 	}
 	return s
 }
@@ -61,8 +63,8 @@ func newCoverFile(stat *proto.Stat, lib library.Library, book func() *model.Book
 
 func (c *coverFile) Stat() proto.Stat {
 	s := c.BaseFile.Stat()
-	if data, err := c.load(); err == nil {
-		s.Length = uint64(len(data))
+	if b := c.book(); b != nil {
+		s.Length = uint64(b.CoverSize)
 	}
 	return s
 }
@@ -96,8 +98,8 @@ func (c *coverFile) Close(fid uint64) error {
 }
 
 // epubFile serves a book's epub through the library, holding one reader per fid.
-// The 9P layer never sees a filesystem path. Stat is live: it reports the
-// current EpubFilename and on-disk size on each call.
+// The 9P layer never sees a filesystem path. Size and name are read from the
+// book snapshot (set during parse), so Stat never touches the disk.
 type epubFile struct {
 	readAtFile
 	book func() *model.Book
@@ -116,14 +118,10 @@ func newEpubFile(stat *proto.Stat, lib library.Library, book func() *model.Book)
 }
 
 func (e *epubFile) Stat() proto.Stat {
-	b := e.book()
 	s := e.BaseFile.Stat()
-	s.Name = b.EpubFilename
-	// TODO: b.Stat() calls os.Stat on the epub path. During a rename
-	// (title/authors edit) the file is in flight between store.Move and the
-	// registry's snapshot swap; this Stat could get a stale path or fail.
-	if fi, err := b.Stat(); err == nil {
-		s.Length = uint64(fi.Size())
+	if b := e.book(); b != nil {
+		s.Name = b.EpubFilename
+		s.Length = uint64(b.EpubSize)
 	}
 	return s
 }

@@ -13,7 +13,10 @@ CREATE TABLE books (
     date_added    TEXT    NOT NULL,
     date_modified TEXT    NOT NULL,
     series_id     INTEGER REFERENCES series(id),
-    series_index  REAL
+    series_index  REAL,
+    opf_size      INTEGER NOT NULL DEFAULT 0,
+    cover_size    INTEGER NOT NULL DEFAULT 0,
+    epub_size     INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE authors (
