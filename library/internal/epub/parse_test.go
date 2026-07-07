@@ -277,9 +277,9 @@ func TestMultipleRootfilesKobo(t *testing.T) {
 		t.Errorf("title = %q, want Original Title", book.Title)
 	}
 
-	edited, err := WriteBib(path, model.Edits{Title: ptr("Edited Title")})
+	edited, err := writeBib(path, model.Edits{Title: ptr("Edited Title")})
 	if err != nil {
-		t.Fatalf("WriteBib failed on Kobo multi-rootfile epub: %v", err)
+		t.Fatalf("writeBib failed on Kobo multi-rootfile epub: %v", err)
 	}
 	if edited.Title != "Edited Title" {
 		t.Errorf("edited title = %q, want Edited Title", edited.Title)

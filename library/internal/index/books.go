@@ -2,6 +2,7 @@ package index
 
 import (
 	"database/sql"
+	"errors"
 	"strings"
 	"time"
 
@@ -271,25 +272,25 @@ func upsertTags(tx *sql.Tx, bookID int64, tags []string) error {
 }
 
 // Put writes b into the index, inserting or replacing the record for b.Meta.ID.
-// The optional storeWrite runs between the pending-op insert and the index write
-// so a crash during the store write forces a reindex on the next startup.
-func (idx *Index) Put(b *model.Book, storeWrite func() error) error {
-	opID := newOpID()
-	if _, err := idx.db.Exec("INSERT INTO pending_ops (op_id) VALUES (?)", opID); err != nil {
+// MarkPending must be called before Put so a pending row protects the preceding
+// store writes. The pending row is atomically deleted inside the same transaction.
+func (o *Op) Put(b *model.Book) error {
+	if o.opID == "" {
+		return errors.New("MarkPending must be called before Put")
+	}
+	tx, err := o.idx.db.Begin()
+	if err != nil {
 		return err
 	}
-	return idx.withTx(func(tx *sql.Tx) error {
-		if storeWrite != nil {
-			if err := storeWrite(); err != nil {
-				return err
-			}
-		}
-		if err := putBook(tx, b); err != nil {
-			return err
-		}
-		_, err := tx.Exec("DELETE FROM pending_ops WHERE op_id = ?", opID)
+	if err := putBook(tx, b); err != nil {
+		tx.Rollback()
 		return err
-	})
+	}
+	if _, err := tx.Exec("DELETE FROM pending_ops WHERE op_id = ?", o.opID); err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit()
 }
 
 // upsertSeries points the book at its series or clears series_id, then removes
@@ -395,25 +396,26 @@ func putBook(tx *sql.Tx, b *model.Book) error {
 	return finishBook(tx, b)
 }
 
-// Delete removes all index rows for bookID. The optional storeWrite runs
-// between the pending-op insert and the index delete (see Put).
-func (idx *Index) Delete(bookID int64, storeWrite func() error) error {
-	opID := newOpID()
-	if _, err := idx.db.Exec("INSERT INTO pending_ops (op_id) VALUES (?)", opID); err != nil {
+// Delete removes all index rows for book. MarkPending must be called before
+// Delete so a pending row protects the preceding store writes. The pending row
+// is atomically deleted inside the same transaction.
+func (o *Op) Delete(bookID int64) error {
+	if o.opID == "" {
+		return errors.New("MarkPending must be called before Delete")
+	}
+	tx, err := o.idx.db.Begin()
+	if err != nil {
 		return err
 	}
-	return idx.withTx(func(tx *sql.Tx) error {
-		if storeWrite != nil {
-			if err := storeWrite(); err != nil {
-				return err
-			}
-		}
-		if err := deleteBook(tx, bookID); err != nil {
-			return err
-		}
-		_, err := tx.Exec("DELETE FROM pending_ops WHERE op_id = ?", opID)
+	if err := deleteBook(tx, bookID); err != nil {
+		tx.Rollback()
 		return err
-	})
+	}
+	if _, err := tx.Exec("DELETE FROM pending_ops WHERE op_id = ?", o.opID); err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit()
 }
 
 func deleteBook(tx *sql.Tx, id int64) error {

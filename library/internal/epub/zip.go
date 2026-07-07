@@ -119,10 +119,11 @@ func opfPath(zr *zip.Reader) (string, error) {
 	})
 }
 
-// rewriteEpub produces a new epub at srcPath whose entries named in replace are
-// swapped for the given bytes and whose every other entry is copied verbatim,
-// then re-parses the result and only on success atomically replaces the
-// original. On any failure the original file is left untouched.
+// prepareEpub produces a new epub at a temp file whose entries named in replace
+// are swapped for the given bytes and whose every other entry is copied
+// verbatim, then re-parses the result to validate it and returns a Commit that
+// can apply the change atomically. On any failure the original file is left
+// untouched.
 //
 // Faithfulness rules (matching the OCF container requirements calibre's
 // safe_replace also honours):
@@ -133,7 +134,7 @@ func opfPath(zr *zip.Reader) (string, error) {
 //     modtime, and method;
 //   - every key in replace must match an existing entry, so a mistargeted edit
 //     fails loudly instead of silently dropping.
-func rewriteEpub(srcPath string, replace map[string][]byte) (*Book, error) {
+func prepareEpub(srcPath string, replace map[string][]byte) (*Commit, error) {
 	zrc, err := zip.OpenReader(srcPath)
 	if err != nil {
 		return nil, err
@@ -146,11 +147,14 @@ func rewriteEpub(srcPath string, replace map[string][]byte) (*Book, error) {
 		return nil, err
 	}
 	tmpPath := tmp.Name()
-	// Best-effort cleanup; on the success path the temp is renamed away first so
-	// this becomes a no-op.
+	// Explicit cleanup on error paths only; on success the temp is passed to
+	// Commit and the caller is responsible for calling Commit or Discard.
+	discard := true
 	defer func() {
-		tmp.Close()
-		os.Remove(tmpPath)
+		if discard {
+			tmp.Close()
+			os.Remove(tmpPath)
+		}
 	}()
 
 	zw := zip.NewWriter(tmp)
@@ -219,8 +223,38 @@ func rewriteEpub(srcPath string, replace map[string][]byte) (*Book, error) {
 		return nil, fmt.Errorf("rewritten epub failed validation: %w", err)
 	}
 
-	if err := os.Rename(tmpPath, srcPath); err != nil {
-		return nil, err
+	discard = false // temp survives — Commit or Discard manages it
+	return &Commit{srcPath: srcPath, tmpPath: tmpPath, book: book}, nil
+}
+
+// Commit is a prepared epub rewrite that can be applied atomically or discarded.
+// A no-op Commit (created when no edits are requested) has Commit and Discard as
+// no-ops and Book returns nil.
+type Commit struct {
+	srcPath string
+	tmpPath string
+	book    *Book
+	noop    bool
+}
+
+// Book returns the reparsed book from the prepared epub, or nil for a no-op
+// commit.
+func (c *Commit) Book() *Book { return c.book }
+
+// Commit applies the rewrite by atomically replacing the original with the
+// prepared file. For a no-op commit this is a no-op.
+func (c *Commit) Commit() error {
+	if c.noop {
+		return nil
 	}
-	return book, nil
+	return os.Rename(c.tmpPath, c.srcPath)
+}
+
+// Discard removes the temporary file without touching the original. For a
+// no-op commit this is a no-op.
+func (c *Commit) Discard() {
+	if c.noop {
+		return
+	}
+	os.Remove(c.tmpPath)
 }

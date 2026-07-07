@@ -124,3 +124,33 @@ func (idx *Index) withTx(fn func(*sql.Tx) error) error {
 	}
 	return tx.Commit()
 }
+
+// Op represents a single mutation operation. The caller calls BeginOp to
+// obtain one, optionally calls MarkPending before touching disk, performs the
+// store writes, then calls Op.Put or Op.Delete to commit the index write and
+// atomically clear the pending row.
+type Op struct {
+	idx  *Index
+	opID string
+}
+
+// BeginOp starts a new mutation operation.
+func (idx *Index) BeginOp() *Op {
+	return &Op{idx: idx}
+}
+
+// MarkPending inserts a row into pending_ops via autocommit (so it survives a
+// crash) and is idempotent — at most one row per operation. Call it before
+// the first real disk mutation. If the operation fails after MarkPending the
+// row stays behind, forcing a healing reindex on the next startup.
+func (o *Op) MarkPending() error {
+	if o.opID != "" {
+		return nil
+	}
+	id := newOpID()
+	if _, err := o.idx.db.Exec("INSERT INTO pending_ops (op_id) VALUES (?)", id); err != nil {
+		return err
+	}
+	o.opID = id
+	return nil
+}

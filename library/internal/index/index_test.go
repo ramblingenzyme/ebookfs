@@ -60,7 +60,9 @@ func mustNeedReindex(t *testing.T, idx *Index, want bool) {
 func TestPutSuccessLeavesClean(t *testing.T) {
 	idx := openTestIndex(t)
 
-	if err := idx.Put(newBook(1, "Clean"), func() error { return nil }); err != nil {
+	op := idx.BeginOp()
+	op.MarkPending()
+	if err := op.Put(newBook(1, "Clean")); err != nil {
 		t.Fatalf("put: %v", err)
 	}
 
@@ -73,20 +75,65 @@ func TestPutSuccessLeavesClean(t *testing.T) {
 	}
 }
 
+// Put without MarkPending must be rejected — without a pending row the
+// preceding store writes have no crash protection.
+func TestPutWithoutMarkPendingErrors(t *testing.T) {
+	idx := openTestIndex(t)
+	op := idx.BeginOp()
+	if err := op.Put(newBook(1, "Oops")); err == nil {
+		t.Fatal("expected error when Put is called without MarkPending")
+	}
+}
+
+// Delete without MarkPending must be rejected.
+func TestDeleteWithoutMarkPendingErrors(t *testing.T) {
+	idx := openTestIndex(t)
+	op := idx.BeginOp()
+	if err := op.Delete(1); err == nil {
+		t.Fatal("expected error when Delete is called without MarkPending")
+	}
+}
+
 // Defect (c): a store write that fails after starting leaves a pending row so
 // the next startup reindexes and heals any partial on-disk divergence.
 func TestStoreFailureKeepsPending(t *testing.T) {
 	idx := openTestIndex(t)
 
-	boom := errors.New("store write failed")
-	if err := idx.Put(newBook(1, "Doomed"), func() error { return boom }); !errors.Is(err, boom) {
-		t.Fatalf("put err = %v, want %v", err, boom)
-	}
+	op := idx.BeginOp()
+	op.MarkPending()
+	// Simulate a store failure after marking pending — Put is never called.
 
 	if n := pendingCount(t, idx); n != 1 {
 		t.Fatalf("pending_ops = %d, want 1", n)
 	}
 	mustNeedReindex(t, idx, true)
+}
+
+// Defect (a): a mutation refused before it touches disk (it never calls
+// markPending) leaves no row, so it forces no needless reindex.
+func TestPreStoreRefusalKeepsNoRow(t *testing.T) {
+	idx := openTestIndex(t)
+
+	_ = idx.BeginOp()
+	// Never call MarkPending — simulates a refusal before any disk mutation.
+
+	if n := pendingCount(t, idx); n != 0 {
+		t.Fatalf("pending_ops = %d, want 0 (a pre-disk refusal must not mark pending)", n)
+	}
+	mustNeedReindex(t, idx, false)
+}
+
+// markPending is idempotent: calling it more than once inserts a single row.
+func TestMarkPendingIdempotent(t *testing.T) {
+	idx := openTestIndex(t)
+
+	op := idx.BeginOp()
+	op.MarkPending()
+	op.MarkPending() // second call must not insert a second row
+
+	if n := pendingCount(t, idx); n != 1 {
+		t.Fatalf("pending_ops = %d, want 1 (markPending must insert at most one row)", n)
+	}
 }
 
 // Defect (b): each operation owns its own pending row, so a concurrent success
@@ -95,13 +142,14 @@ func TestStoreFailureKeepsPending(t *testing.T) {
 func TestPerOpIndependence(t *testing.T) {
 	idx := openTestIndex(t)
 
-	// Op A fails after inserting its row.
-	boom := errors.New("boom")
-	if err := idx.Put(newBook(1, "A"), func() error { return boom }); !errors.Is(err, boom) {
-		t.Fatalf("op A err = %v, want %v", err, boom)
-	}
-	// Op B succeeds and must delete only its own row.
-	if err := idx.Put(newBook(2, "B"), func() error { return nil }); err != nil {
+	// Op A: MarkPending but never call Put — simulate a failed store write.
+	opA := idx.BeginOp()
+	opA.MarkPending()
+
+	// Op B: MarkPending and complete successfully.
+	opB := idx.BeginOp()
+	opB.MarkPending()
+	if err := opB.Put(newBook(2, "B")); err != nil {
 		t.Fatalf("op B: %v", err)
 	}
 
@@ -118,10 +166,15 @@ func TestPerOpIndependence(t *testing.T) {
 func TestDeleteSuccessLeavesClean(t *testing.T) {
 	idx := openTestIndex(t)
 
-	if err := idx.Put(newBook(1, "Gone"), func() error { return nil }); err != nil {
+	op1 := idx.BeginOp()
+	op1.MarkPending()
+	if err := op1.Put(newBook(1, "Gone")); err != nil {
 		t.Fatalf("put: %v", err)
 	}
-	if err := idx.Delete(1, func() error { return nil }); err != nil {
+
+	op2 := idx.BeginOp()
+	op2.MarkPending()
+	if err := op2.Delete(1); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
 

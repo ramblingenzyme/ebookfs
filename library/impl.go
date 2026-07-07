@@ -25,8 +25,8 @@ type libraryImpl struct {
 	// future, hash/comparable-key the ReaderConfig fields and store in a map.
 
 	// bookMu serializes the operations that mutate one book's on-disk state
-	// (Edit, WriteCover, Delete), so e.g. a cover rewrite cannot interleave
-	// with an edit that is moving the book directory. Lazily created per id,
+	// (Edit, Delete), so e.g. a cover rewrite cannot interleave with an edit
+	// that is moving the book directory. Lazily created per id,
 	// mirroring kepub.Cache's conversion locks.
 	bookMuMu sync.Mutex
 	bookMu   map[int64]*sync.Mutex
@@ -134,10 +134,17 @@ func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 	loc := l.store.Layout(bib.Authors, bib.Title, id)
 	b := model.NewBook(bib, meta, loc)
 
-	if err := l.index.Put(b, func() error {
-		return l.store.Ingest(epubPath, b.Location, &b.Meta)
-	}); err != nil {
-		// Index write failed after the store wrote; clean up so a retry starts fresh.
+	op := l.index.BeginOp()
+	if err := op.MarkPending(); err != nil {
+		return nil, err
+	}
+	if err := l.store.Ingest(epubPath, b.Location, &b.Meta); err != nil {
+		// Ingest failed; the pending row stays (forcing a healing reindex) and
+		// we clean up the store so a retry starts fresh.
+		_ = l.store.Delete(b.Location)
+		return nil, err
+	}
+	if err := op.Put(b); err != nil {
 		_ = l.store.Delete(b.Location)
 		return nil, err
 	}
@@ -256,57 +263,44 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 		return nil, err
 	}
 
-	if v := e.Validate(b); v != nil {
-		log.Printf("edit: book %d (%q): validation failed: %v", b.Meta.ID, b.Title, v)
-		return nil, v
-	}
-
-	// Assemble the updated book from the meta edits; bib fields are derived
-	// below from the epub re-parse.
 	updated := applyMeta(b, e)
 
-	if err := l.index.Put(updated, func() error {
-		var reparsed *epub.Book
+	op := l.index.BeginOp()
 
-		if e.HasCoverEdit() {
-			re, err := epub.WriteCover(b.EpubPath, b.CoverPath, *e.Cover)
-			if err != nil {
-				log.Printf("edit: book %d (%q): replace cover: %v", b.Meta.ID, b.Title, err)
-				return err
-			}
-			reparsed = re
-		}
+	c, err := epub.Prepare(b, e)
+	if err != nil {
+		log.Printf("edit: book %d (%q): prepare rewrite: %v", b.Meta.ID, b.Title, err)
+		return nil, err
+	}
+	if err := op.MarkPending(); err != nil {
+		c.Discard()
+		return nil, err
+	}
+	if err := c.Commit(); err != nil {
+		c.Discard()
+		log.Printf("edit: book %d (%q): commit rewrite: %v", b.Meta.ID, b.Title, err)
+		return nil, err
+	}
+	if book := c.Book(); book != nil {
+		updated.Bib = bibFromEpub(book)
+	}
 
-		if e.HasBibEdits() {
-			re, err := epub.WriteBib(b.EpubPath, e)
-			if err != nil {
-				log.Printf("edit: book %d (%q): rewrite epub: %v", b.Meta.ID, b.Title, err)
-				return err
-			}
-			reparsed = re
+	newLoc := l.store.Layout(updated.Authors, updated.Title, updated.Meta.ID)
+	if newLoc.LibraryPath != b.Location.LibraryPath || newLoc.EpubFilename != b.Location.EpubFilename {
+		if err := l.store.Move(b.Location, newLoc); err != nil {
+			log.Printf("edit: book %d (%q): move directory: %v", b.Meta.ID, b.Title, err)
+			return nil, err
 		}
-
-		if reparsed != nil {
-			updated.Bib = bibFromEpub(reparsed)
-		}
-
-		newLoc := l.store.Layout(updated.Authors, updated.Title, updated.Meta.ID)
-		if newLoc.LibraryPath != b.Location.LibraryPath || newLoc.EpubFilename != b.Location.EpubFilename {
-			if err := l.store.Move(b.Location, newLoc); err != nil {
-				log.Printf("edit: book %d (%q): move directory: %v", b.Meta.ID, b.Title, err)
-				return err
-			}
-			updated.Location = newLoc
-		}
-		if err := l.store.WriteMeta(updated.Location, &updated.Meta); err != nil {
-			log.Printf("edit: book %d (%q): write meta: %v", b.Meta.ID, b.Title, err)
-			return err
-		}
-		return nil
-	}); err != nil {
+		updated.Location = newLoc
+	}
+	if err := l.store.WriteMeta(updated.Location, &updated.Meta); err != nil {
+		log.Printf("edit: book %d (%q): write meta: %v", b.Meta.ID, b.Title, err)
 		return nil, err
 	}
 
+	if err := op.Put(updated); err != nil {
+		return nil, err
+	}
 	return updated, nil
 }
 
@@ -367,14 +361,22 @@ func (l *libraryImpl) Delete(id int64) error {
 	if err != nil {
 		return err
 	}
+	op := l.index.BeginOp()
+	if err := op.MarkPending(); err != nil {
+		return err
+	}
 	// Store is authoritative; a ghost index row is cleaned up by reindex.
-	err = l.index.Delete(id, func() error { return l.store.Delete(b.Location) })
+	err = l.store.Delete(b.Location)
 	if err != nil {
 		log.Printf("delete: book %d (%q): %v", id, b.Title, err)
-	} else {
-		log.Printf("delete: book %d (%q): ok", id, b.Title)
+		return err
 	}
-	return err
+	if err := op.Delete(id); err != nil {
+		log.Printf("delete: book %d (%q): %v", id, b.Title, err)
+		return err
+	}
+	log.Printf("delete: book %d (%q): ok", id, b.Title)
+	return nil
 }
 
 func formatAuthors(authors []model.Author) string {

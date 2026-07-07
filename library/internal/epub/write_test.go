@@ -66,7 +66,7 @@ func TestWriteBibSimpleFields(t *testing.T) {
 	}{{"epub3", opf3}, {"epub2", opf2}} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEpub(t, baseEntries(tc.opf))
-			book, err := WriteBib(path, model.Edits{
+			book, err := writeBib(path, model.Edits{
 				Title:       ptr("New Title"),
 				Description: ptr("New description."),
 				Language:    ptr("fr"),
@@ -97,7 +97,7 @@ func TestWriteBibSimpleFields(t *testing.T) {
 
 func TestWriteBibPreservesContainerLayout(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
-	if _, err := WriteBib(path, model.Edits{Title: ptr("Another Title")}); err != nil {
+	if _, err := writeBib(path, model.Edits{Title: ptr("Another Title")}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -136,7 +136,7 @@ func TestWriteBibAuthorsRoundTrip(t *testing.T) {
 				{Name: "Alice Smith", SortName: "Smith, Alice"},
 				{Name: "Bob Jones", SortName: "Jones, Bob"},
 			}
-			book, err := WriteBib(path, model.Edits{Authors: &authors})
+			book, err := writeBib(path, model.Edits{Authors: &authors})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -161,7 +161,7 @@ func TestWriteBibSeriesRoundTrip(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEpub(t, baseEntries(tc.opf))
 			// A fractional index (e.g. a 1.5 novella) must round-trip, not truncate.
-			book, err := WriteBib(path, model.Edits{Series: ptr("The Saga"), SeriesIndex: ptr(1.5)})
+			book, err := writeBib(path, model.Edits{Series: ptr("The Saga"), SeriesIndex: ptr(1.5)})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -173,7 +173,7 @@ func TestWriteBibSeriesRoundTrip(t *testing.T) {
 			}
 
 			// Clearing it removes the series.
-			book, err = WriteBib(path, model.Edits{Series: ptr("")})
+			book, err = writeBib(path, model.Edits{Series: ptr("")})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -186,7 +186,7 @@ func TestWriteBibSeriesRoundTrip(t *testing.T) {
 
 func TestWriteBibSetsSortTitle(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
-	book, err := WriteBib(path, model.Edits{
+	book, err := writeBib(path, model.Edits{
 		Title:     ptr("New Title"),
 		SortTitle: ptr("New Title, A"),
 	})
@@ -216,7 +216,7 @@ func TestWriteBibSetsSortTitle(t *testing.T) {
 func TestWriteBibSortTitleAloneLeavesTitle(t *testing.T) {
 	// Setting only the sort title must not disturb the title.
 	path := writeEpub(t, baseEntries(opf3))
-	book, err := WriteBib(path, model.Edits{SortTitle: ptr("Sorted, Just")})
+	book, err := writeBib(path, model.Edits{SortTitle: ptr("Sorted, Just")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func TestWriteBibTitleChangeClearsStaleSortTitle(t *testing.T) {
 		t.Fatalf("precondition: sort title = %q, want Title, Original", before.SortTitle)
 	}
 
-	book, err := WriteBib(path, model.Edits{Title: ptr("Wuthering Heights")})
+	book, err := writeBib(path, model.Edits{Title: ptr("Wuthering Heights")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +254,7 @@ func TestWriteBibSortTitleIgnoredForEpub2(t *testing.T) {
 	// Sort titles are an EPUB 3 feature; setting one on an EPUB 2 file is a no-op
 	// and must not introduce a file-as refine or a calibre:title_sort meta.
 	path := writeEpub(t, baseEntries(opf2))
-	book, err := WriteBib(path, model.Edits{SortTitle: ptr("Ignored, This")})
+	book, err := writeBib(path, model.Edits{SortTitle: ptr("Ignored, This")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,7 +278,7 @@ func TestWriteBibAcceptsValidLanguageVerbatim(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
 	// A recognised tag is accepted and written through verbatim — validated, not
 	// canonicalised (calibre would rewrite "pt-BR" to a 3-letter code).
-	book, err := WriteBib(path, model.Edits{Language: ptr("pt-BR")})
+	book, err := writeBib(path, model.Edits{Language: ptr("pt-BR")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +289,7 @@ func TestWriteBibAcceptsValidLanguageVerbatim(t *testing.T) {
 
 func TestWriteBibBlankTitleRejected(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
-	if _, err := WriteBib(path, model.Edits{Title: ptr("   ")}); err == nil {
+	if _, err := writeBib(path, model.Edits{Title: ptr("   ")}); err == nil {
 		t.Fatal("expected error blanking title, got nil")
 	}
 	// Original must be untouched and still valid.
@@ -310,7 +310,7 @@ func TestWriteBibRefusesEncryptedOPF(t *testing.T) {
   </enc:EncryptedData>
 </encryption>`
 	path := writeEpub(t, baseEntries(opf3, entry{name: "META-INF/encryption.xml", data: []byte(enc)}))
-	if _, err := WriteBib(path, model.Edits{Title: ptr("Hack")}); err == nil {
+	if _, err := writeBib(path, model.Edits{Title: ptr("Hack")}); err == nil {
 		t.Fatal("expected refusal on encrypted OPF, got nil")
 	}
 }
@@ -328,7 +328,7 @@ func TestWriteBibAllowsFontObfuscation(t *testing.T) {
 		entry{name: "OEBPS/fonts/x.otf", data: []byte("obfuscated-font")},
 	)
 	path := writeEpub(t, entries)
-	book, err := WriteBib(path, model.Edits{Title: ptr("Obfuscated OK")})
+	book, err := writeBib(path, model.Edits{Title: ptr("Obfuscated OK")})
 	if err != nil {
 		t.Fatalf("font obfuscation should not block edits: %v", err)
 	}
@@ -345,7 +345,7 @@ func TestWriteBibWithDirectoryEntries(t *testing.T) {
 		entry{name: "text/", data: nil},
 	)
 	path := writeEpub(t, entries)
-	book, err := WriteBib(path, model.Edits{Title: ptr("New Title")})
+	book, err := writeBib(path, model.Edits{Title: ptr("New Title")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -378,7 +378,7 @@ func TestWriteCoverWithDirectoryEntries(t *testing.T) {
 	)
 	path := writeEpub(t, entries)
 	newCover := tinyJPEG(t)
-	if _, err := WriteCover(path, "OEBPS/cover.jpg", newCover); err != nil {
+	if _, err := writeCover(path, "OEBPS/cover.jpg", newCover); err != nil {
 		t.Fatal(err)
 	}
 	got, err := ExtractCover(path, "OEBPS/cover.jpg")
@@ -412,7 +412,7 @@ func TestWriteCoverWithDirectoryEntries(t *testing.T) {
 func TestWriteCoverReplaces(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
 	newCover := tinyJPEG(t)
-	if _, err := WriteCover(path, "OEBPS/cover.jpg", newCover); err != nil {
+	if _, err := writeCover(path, "OEBPS/cover.jpg", newCover); err != nil {
 		t.Fatal(err)
 	}
 	got, err := ExtractCover(path, "OEBPS/cover.jpg")
@@ -437,21 +437,21 @@ func TestWriteCoverRefusesEncrypted(t *testing.T) {
   </enc:EncryptedData>
 </encryption>`
 	path := writeEpub(t, baseEntries(opf3, entry{name: "META-INF/encryption.xml", data: []byte(enc)}))
-	if _, err := WriteCover(path, "OEBPS/cover.jpg", tinyJPEG(t)); err == nil {
+	if _, err := writeCover(path, "OEBPS/cover.jpg", tinyJPEG(t)); err == nil {
 		t.Fatal("expected refusal on encrypted cover, got nil")
 	}
 }
 
 func TestWriteCoverRefusesNonRaster(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
-	if _, err := WriteCover(path, "OEBPS/cover.svg", []byte("<svg/>")); err == nil {
+	if _, err := writeCover(path, "OEBPS/cover.svg", []byte("<svg/>")); err == nil {
 		t.Fatal("expected refusal on non-raster cover format, got nil")
 	}
 }
 
 func TestWriteCoverRejectsNonImage(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
-	if _, err := WriteCover(path, "OEBPS/cover.jpg", []byte("definitely not an image")); err == nil {
+	if _, err := writeCover(path, "OEBPS/cover.jpg", []byte("definitely not an image")); err == nil {
 		t.Fatal("expected rejection of non-image cover data, got nil")
 	}
 }
@@ -459,7 +459,7 @@ func TestWriteCoverRejectsNonImage(t *testing.T) {
 func TestWriteCoverRejectsFormatMismatch(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
 	// PNG bytes into a .jpg cover entry must be rejected — we do not transcode.
-	if _, err := WriteCover(path, "OEBPS/cover.jpg", tinyPNG(t)); err == nil {
+	if _, err := writeCover(path, "OEBPS/cover.jpg", tinyPNG(t)); err == nil {
 		t.Fatal("expected rejection of PNG bytes into a .jpg cover entry, got nil")
 	}
 }

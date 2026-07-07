@@ -19,91 +19,101 @@ import (
 
 const opfNamespace = "http://www.idpf.org/2007/opf"
 
-// WriteBib applies edits to the package document of the epub at epubPath and
-// rewrites the file in place. The OPF is edited surgically — only the targeted
-// <metadata> nodes change, every other zip entry is preserved byte-for-byte —
-// and the result is validated by re-parsing before the original is replaced.
-// The re-parsed Book is returned so the caller sees exactly what is now on disk.
-func WriteBib(epubPath string, e model.Edits) (*Book, error) {
-	zrc, err := zip.OpenReader(epubPath)
+// Prepare creates a temporary epub with the requested changes from e applied
+// to the epub at b.EpubPath. Every refusal check runs before the temp file is
+// written — the original is never touched on error. The returned Commit can be
+// applied atomically via Commit() or discarded via Discard().
+func Prepare(b *model.Book, e model.Edits) (*Commit, error) {
+	if !e.HasCoverEdit() && !e.HasBibEdits() {
+		return &Commit{noop: true}, nil
+	}
+
+	if v := e.Validate(b); v != nil {
+		return nil, v
+	}
+
+	replace := make(map[string][]byte)
+
+	zrc, err := zip.OpenReader(b.EpubPath)
 	if err != nil {
 		return nil, err
 	}
-	opf, err := opfPath(&zrc.Reader)
-	if err != nil {
-		zrc.Close()
-		return nil, err
-	}
+	defer zrc.Close()
+
 	enc, err := readEncryption(&zrc.Reader)
 	if err != nil {
-		zrc.Close()
-		return nil, err
-	}
-	if enc.isEncrypted(opf) {
-		zrc.Close()
-		return nil, fmt.Errorf("refusing to edit: package document %q is encrypted", opf)
-	}
-	opfBytes, err := readEntry(&zrc.Reader, opf)
-	zrc.Close()
-	if err != nil {
 		return nil, err
 	}
 
-	newOPF, err := editOPF(opfBytes, e)
-	if err != nil {
-		return nil, err
+	if e.HasCoverEdit() {
+		want := coverFormat(b.CoverPath)
+		if want == "" {
+			return nil, fmt.Errorf("cover format not replaceable in place: %s", b.CoverPath)
+		}
+		_, got, err := image.DecodeConfig(bytes.NewReader(*e.Cover))
+		if err != nil {
+			return nil, fmt.Errorf("cover data is not a valid PNG or JPEG image: %w", err)
+		}
+		if got != want {
+			return nil, fmt.Errorf("cover image is %s but the epub's cover entry %q is %s; a matching format is required (no transcoding)", got, b.CoverPath, want)
+		}
+		if findEntry(&zrc.Reader, b.CoverPath) == nil {
+			return nil, fmt.Errorf("cover not found in epub: %s", b.CoverPath)
+		}
+		if enc.isEncrypted(b.CoverPath) {
+			return nil, fmt.Errorf("refusing to replace encrypted cover: %s", b.CoverPath)
+		}
+		replace[b.CoverPath] = *e.Cover
 	}
 
-	return rewriteEpub(epubPath, map[string][]byte{opf: newOPF})
+	if e.HasBibEdits() {
+		opf, err := opfPath(&zrc.Reader)
+		if err != nil {
+			return nil, err
+		}
+		if enc.isEncrypted(opf) {
+			return nil, fmt.Errorf("refusing to edit: package document %q is encrypted", opf)
+		}
+		opfBytes, err := readEntry(&zrc.Reader, opf)
+		if err != nil {
+			return nil, err
+		}
+		newOPF, err := editOPF(opfBytes, e)
+		if err != nil {
+			return nil, err
+		}
+		replace[opf] = newOPF
+	}
+
+	return prepareEpub(b.EpubPath, replace)
 }
 
-// WriteCover replaces the cover image entry (coverPath, as resolved by Parse
-// into Book.CoverPath / model.Bib.CoverPath) with img and rewrites the file in
-// place. Mirroring calibre's guards, it refuses when the cover entry is
-// encrypted and only replaces in-place raster covers (PNG/JPEG); the bytes are
-// written verbatim — we do not transcode (no image dependency) — so img must
-// already be a valid image whose format matches the existing cover entry.
-func WriteCover(epubPath, coverPath string, img []byte) (*Book, error) {
-	if coverPath == "" {
-		return nil, errors.New("book has no cover to replace")
-	}
-	want := coverFormat(coverPath)
-	if want == "" {
-		return nil, fmt.Errorf("cover format not replaceable in place: %s", coverPath)
-	}
-	// Validate the input is a real image and matches the entry being replaced.
-	// Without transcoding, writing e.g. PNG bytes into a cover.jpg entry (whose
-	// manifest media-type is image/jpeg) would produce a mismatched epub, and the
-	// verify-by-reparse step does not decode the cover to catch it.
-	_, got, err := image.DecodeConfig(bytes.NewReader(img))
-	if err != nil {
-		return nil, fmt.Errorf("cover data is not a valid PNG or JPEG image: %w", err)
-	}
-	if got != want {
-		return nil, fmt.Errorf("cover image is %s but the epub's cover entry %q is %s; a matching format is required (no transcoding)", got, coverPath, want)
-	}
-
-	zrc, err := zip.OpenReader(epubPath)
+// writeBib applies edits to the package document of the epub at epubPath,
+// rewrites the file in place, and returns the re-parsed Book.
+func writeBib(epubPath string, e model.Edits) (*Book, error) {
+	c, err := Prepare(&model.Book{Location: model.Location{EpubPath: epubPath}}, e)
 	if err != nil {
 		return nil, err
 	}
-	enc, err := readEncryption(&zrc.Reader)
-	if err != nil {
-		zrc.Close()
+	if err := c.Commit(); err != nil {
+		c.Discard()
 		return nil, err
 	}
-	exists := findEntry(&zrc.Reader, coverPath) != nil
-	encrypted := enc.isEncrypted(coverPath)
-	zrc.Close()
+	return c.Book(), nil
+}
 
-	if !exists {
-		return nil, fmt.Errorf("cover not found in epub: %s", coverPath)
+// writeCover replaces the cover image entry (coverPath, as resolved by Parse)
+// with img, rewrites the file in place, and returns the re-parsed Book.
+func writeCover(epubPath, coverPath string, img []byte) (*Book, error) {
+	c, err := Prepare(&model.Book{Location: model.Location{EpubPath: epubPath}, Bib: model.Bib{CoverPath: coverPath}}, model.Edits{Cover: &img})
+	if err != nil {
+		return nil, err
 	}
-	if encrypted {
-		return nil, fmt.Errorf("refusing to replace encrypted cover: %s", coverPath)
+	if err := c.Commit(); err != nil {
+		c.Discard()
+		return nil, err
 	}
-
-	return rewriteEpub(epubPath, map[string][]byte{coverPath: img})
+	return c.Book(), nil
 }
 
 // coverFormat maps a cover entry's path to the image format name (as reported by

@@ -62,8 +62,7 @@ CREATE TABLE book_id_seq (id INTEGER PRIMARY KEY AUTOINCREMENT);
 -- before touching the store, and deletes it inside the commit transaction.
 -- On startup, a non-empty table means an operation may not have completed.
 CREATE TABLE pending_ops (
-    op_id      TEXT PRIMARY KEY,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    op_id TEXT PRIMARY KEY
 );
 
 CREATE INDEX idx_books_status     ON books(status);
