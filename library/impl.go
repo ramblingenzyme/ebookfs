@@ -90,12 +90,12 @@ func (l *libraryImpl) Exporter(cfg config.ReaderConfig) (Exporter, error) {
 	return e, nil
 }
 
-func (l *libraryImpl) CreateIngest() (*IngestHandle, error) {
+func (l *libraryImpl) CreateIngest() (IngestHandle, error) {
 	f, err := os.CreateTemp(l.inboxTemp, "*.epub")
 	if err != nil {
 		return nil, err
 	}
-	return &IngestHandle{File: f, Path: f.Name(), IngestFn: l.ingestPath}, nil
+	return &ingestHandle{file: f, path: f.Name(), ingestFn: l.ingestPath}, nil
 }
 
 // ingestPath parses the staged epub, lays it down in the store, and records it

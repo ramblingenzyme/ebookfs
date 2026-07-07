@@ -61,7 +61,7 @@ func TestInboxCreateFile_WrongParent(t *testing.T) {
 func TestInboxFileOpenCreateIngestError(t *testing.T) {
 	f := newTestFS(t)
 	lib := fakeLib{
-		createIngestFn: func() (*library.IngestHandle, error) {
+		createIngestFn: func() (library.IngestHandle, error) {
 			return nil, errors.New("CreateIngest failed")
 		},
 	}

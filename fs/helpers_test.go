@@ -15,7 +15,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"os"
 	"strings"
 	"testing"
 
@@ -42,10 +41,10 @@ var _ io.ReaderAt = (*fakeEpubReader)(nil)
 type fakeLib struct {
 	editFn         func(int64, model.Edits) (*model.Book, error)
 	ingestFn       func(string) (*model.Book, error)
-	createIngestFn func() (*library.IngestHandle, error)
-	extractCoverFn func(*model.Book) ([]byte, error)
-	extractOPFFn   func(*model.Book) ([]byte, error)
-	openEpubFn     func(*model.Book) (library.EpubReader, error)
+	createIngestFn func() (library.IngestHandle, error)
+	extractCoverFn func(int64) ([]byte, error)
+	extractOPFFn   func(int64) ([]byte, error)
+	openEpubFn     func(int64) (library.EpubReader, error)
 	queryFn        func(model.Filter) ([]*model.Book, error)
 	reindexFn      func() error
 	deleteFn       func(int64) error
@@ -59,38 +58,44 @@ func (l fakeLib) Edit(id int64, e model.Edits) (*model.Book, error) {
 	}
 	return nil, errors.New("fakeLib: no editFn")
 }
-func (l fakeLib) CreateIngest() (*library.IngestHandle, error) {
+func (l fakeLib) CreateIngest() (library.IngestHandle, error) {
 	if l.createIngestFn != nil {
 		return l.createIngestFn()
 	}
-	f, err := os.CreateTemp("", "*.epub")
-	if err != nil {
-		return nil, err
-	}
-	return &library.IngestHandle{File: f, Path: f.Name(), IngestFn: func(path string) (*model.Book, error) {
-		if l.ingestFn != nil {
-			return l.ingestFn(path)
-		}
-		return nil, nil
-	}}, nil
+	return fakeIngestHandle{ingestFn: l.ingestFn}, nil
 }
-func (l fakeLib) ExtractCover(b *model.Book) ([]byte, error) {
+func (l fakeLib) ExtractCover(id int64) ([]byte, error) {
 	if l.extractCoverFn != nil {
-		return l.extractCoverFn(b)
+		return l.extractCoverFn(id)
 	}
 	return nil, nil
 }
-func (l fakeLib) ExtractOPF(b *model.Book) ([]byte, error) {
+func (l fakeLib) ExtractOPF(id int64) ([]byte, error) {
 	if l.extractOPFFn != nil {
-		return l.extractOPFFn(b)
+		return l.extractOPFFn(id)
 	}
 	return nil, nil
 }
-func (l fakeLib) OpenEpub(b *model.Book) (library.EpubReader, error) {
+func (l fakeLib) OpenEpub(id int64) (library.EpubReader, error) {
 	if l.openEpubFn != nil {
-		return l.openEpubFn(b)
+		return l.openEpubFn(id)
 	}
 	return nil, nil
+}
+
+// fakeIngestHandle is a test implementation of library.IngestHandle. Inbox tests
+// never read back written bytes, so WriteAt is a no-op that reports acceptance;
+// Ingest delegates to the injected ingestFn (nil ingestFn yields a nil book).
+type fakeIngestHandle struct {
+	ingestFn func(string) (*model.Book, error)
+}
+
+func (h fakeIngestHandle) WriteAt(p []byte, _ int64) (int, error) { return len(p), nil }
+func (h fakeIngestHandle) Ingest() (*model.Book, error) {
+	if h.ingestFn == nil {
+		return nil, nil
+	}
+	return h.ingestFn("")
 }
 func (l fakeLib) Query(f model.Filter) ([]*model.Book, error) {
 	if l.queryFn != nil {

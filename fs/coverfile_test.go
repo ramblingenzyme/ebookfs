@@ -10,7 +10,7 @@ import (
 func TestCoverFileStatLength(t *testing.T) {
 	f := newTestFS(t)
 	lib := fakeLib{
-		extractCoverFn: func(b *model.Book) ([]byte, error) {
+		extractCoverFn: func(_ int64) ([]byte, error) {
 			return []byte("cover image data"), nil
 		},
 	}
@@ -38,7 +38,7 @@ func TestCoverFileStatLengthNilLib(t *testing.T) {
 func TestCoverFileOpenRead(t *testing.T) {
 	f := newTestFS(t)
 	lib := fakeLib{
-		extractCoverFn: func(b *model.Book) ([]byte, error) {
+		extractCoverFn: func(_ int64) ([]byte, error) {
 			return []byte("cover image data"), nil
 		},
 	}
@@ -62,7 +62,7 @@ func TestCoverFileOpenRead(t *testing.T) {
 func TestCoverFileReadPartial(t *testing.T) {
 	f := newTestFS(t)
 	lib := fakeLib{
-		extractCoverFn: func(b *model.Book) ([]byte, error) {
+		extractCoverFn: func(_ int64) ([]byte, error) {
 			return []byte("cover image data"), nil
 		},
 	}
@@ -86,7 +86,7 @@ func TestCoverFileReadPartial(t *testing.T) {
 func TestCoverFileReadAtEOF(t *testing.T) {
 	f := newTestFS(t)
 	lib := fakeLib{
-		extractCoverFn: func(b *model.Book) ([]byte, error) {
+		extractCoverFn: func(_ int64) ([]byte, error) {
 			return []byte("hi"), nil
 		},
 	}
@@ -110,7 +110,7 @@ func TestCoverFileReadAtEOF(t *testing.T) {
 func TestCoverFileOpenError(t *testing.T) {
 	f := newTestFS(t)
 	lib := fakeLib{
-		extractCoverFn: func(b *model.Book) ([]byte, error) {
+		extractCoverFn: func(_ int64) ([]byte, error) {
 			return nil, errTest
 		},
 	}
@@ -127,7 +127,7 @@ func TestCoverFileWriteClose(t *testing.T) {
 	var written *[]byte
 	f := newTestFS(t)
 	lib := fakeLib{
-		extractCoverFn: func(b *model.Book) ([]byte, error) {
+		extractCoverFn: func(_ int64) ([]byte, error) {
 			return []byte("original"), nil
 		},
 	}
@@ -160,7 +160,7 @@ func TestCoverFileWriteEmptyDoesNotCallEdit(t *testing.T) {
 	called := false
 	f := newTestFS(t)
 	lib := fakeLib{
-		extractCoverFn: func(b *model.Book) ([]byte, error) {
+		extractCoverFn: func(_ int64) ([]byte, error) {
 			return []byte("original"), nil
 		},
 	}
@@ -188,7 +188,7 @@ func TestCoverFileWriteEmptyDoesNotCallEdit(t *testing.T) {
 func TestCoverFilePerFidBuffers(t *testing.T) {
 	f := newTestFS(t)
 	lib := fakeLib{
-		extractCoverFn: func(b *model.Book) ([]byte, error) {
+		extractCoverFn: func(_ int64) ([]byte, error) {
 			return []byte("shared"), nil
 		},
 	}
@@ -215,7 +215,7 @@ func TestCoverFilePerFidBuffers(t *testing.T) {
 func TestCoverFileWriteErrorPassesThrough(t *testing.T) {
 	f := newTestFS(t)
 	lib := fakeLib{
-		extractCoverFn: func(b *model.Book) ([]byte, error) {
+		extractCoverFn: func(_ int64) ([]byte, error) {
 			return []byte("original"), nil
 		},
 	}

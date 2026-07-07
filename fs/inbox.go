@@ -23,7 +23,7 @@ func newInboxDir(f *fs.FS) *inboxDir {
 type inboxFile struct {
 	fs.BaseFile
 	fid      uint64
-	handle   *library.IngestHandle
+	handle   library.IngestHandle
 	lib      library.Library
 	onIngest func(*model.Book)
 }
@@ -91,7 +91,7 @@ func (i *inboxFile) Write(fid uint64, offset uint64, data []byte) (uint32, error
 // teardown releases the ingest handle under the lock. The caller must not
 // hold the lock when calling DeleteChild or Ingest, since those re-enter
 // the mutex via SetParent.
-func (i *inboxFile) teardown() *library.IngestHandle {
+func (i *inboxFile) teardown() library.IngestHandle {
 	i.Lock()
 	defer i.Unlock()
 	h := i.handle

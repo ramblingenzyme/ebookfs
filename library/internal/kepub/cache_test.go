@@ -16,7 +16,7 @@ func TestCacheClose(t *testing.T) {
 
 type noopSource struct{}
 
-func (noopSource) OpenEpub(*model.Book) (model.EpubReader, error) {
+func (noopSource) OpenEpub(int64) (model.EpubReader, error) {
 	return nil, errors.New("not used in this test")
 }
 

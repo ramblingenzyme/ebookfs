@@ -31,7 +31,7 @@ type EpubReader = model.EpubReader
 // per book under a per-book lock, so callers cannot revert other callers' changes.
 type Library interface {
 	Close() error
-	CreateIngest() (*IngestHandle, error)
+	CreateIngest() (IngestHandle, error)
 	// Exporter creates a view of the library for export (reader/ view). The
 	// returned Exporter is closed automatically by Close; callers should not
 	// close it themselves.

@@ -13,7 +13,7 @@ import (
 func TestEpubFileOpenReadClose(t *testing.T) {
 	f := newTestFS(t)
 	lib := fakeLib{
-		openEpubFn: func(b *model.Book) (library.EpubReader, error) {
+		openEpubFn: func(_ int64) (library.EpubReader, error) {
 			return &fakeEpubReader{Reader: bytes.NewReader([]byte("epub content"))}, nil
 		},
 	}
@@ -41,7 +41,7 @@ func TestEpubFileOpenReadClose(t *testing.T) {
 func TestEpubFileReadPartial(t *testing.T) {
 	f := newTestFS(t)
 	lib := fakeLib{
-		openEpubFn: func(b *model.Book) (library.EpubReader, error) {
+		openEpubFn: func(_ int64) (library.EpubReader, error) {
 			return &fakeEpubReader{Reader: bytes.NewReader([]byte("epub content"))}, nil
 		},
 	}
@@ -65,7 +65,7 @@ func TestEpubFileReadPartial(t *testing.T) {
 func TestEpubFileReadAtEOF(t *testing.T) {
 	f := newTestFS(t)
 	lib := fakeLib{
-		openEpubFn: func(b *model.Book) (library.EpubReader, error) {
+		openEpubFn: func(_ int64) (library.EpubReader, error) {
 			return &fakeEpubReader{Reader: bytes.NewReader([]byte("hi"))}, nil
 		},
 	}
@@ -90,7 +90,7 @@ func TestEpubFileCloseReleasesReader(t *testing.T) {
 	f := newTestFS(t)
 	r := &fakeEpubReader{Reader: bytes.NewReader([]byte("data"))}
 	lib := fakeLib{
-		openEpubFn: func(b *model.Book) (library.EpubReader, error) { return r, nil },
+		openEpubFn: func(_ int64) (library.EpubReader, error) { return r, nil },
 	}
 	book := makeBook(1, "Test", "Author")
 	ef := newEpubFile(f.NewStat("test.epub", "glenda", "glenda", 0444), lib, fixed(book))
@@ -131,7 +131,7 @@ func TestEpubFileStatSize(t *testing.T) {
 func TestEpubFileOpenError(t *testing.T) {
 	f := newTestFS(t)
 	lib := fakeLib{
-		openEpubFn: func(b *model.Book) (library.EpubReader, error) {
+		openEpubFn: func(_ int64) (library.EpubReader, error) {
 			return nil, errTest
 		},
 	}
@@ -147,7 +147,7 @@ func TestEpubFileOpenError(t *testing.T) {
 func TestEpubFileMultiFid(t *testing.T) {
 	f := newTestFS(t)
 	lib := fakeLib{
-		openEpubFn: func(b *model.Book) (library.EpubReader, error) {
+		openEpubFn: func(_ int64) (library.EpubReader, error) {
 			return &fakeEpubReader{Reader: bytes.NewReader([]byte("content"))}, nil
 		},
 	}

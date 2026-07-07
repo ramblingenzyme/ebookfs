@@ -24,22 +24,22 @@ var _ EpubReader = (*fakeEpubReader)(nil)
 var _ io.ReaderAt = (*fakeEpubReader)(nil)
 
 type testLib struct {
-	openEpubFn func(*model.Book) (EpubReader, error)
+	openEpubFn func(int64) (EpubReader, error)
 }
 
 func (l testLib) Close() error                                     { return nil }
 func (l testLib) Exporter(_ config.ReaderConfig) (Exporter, error) { return nil, nil }
-func (l testLib) CreateIngest() (*IngestHandle, error)             { return nil, nil }
+func (l testLib) CreateIngest() (IngestHandle, error)              { return nil, nil }
 func (l testLib) Query(_ model.Filter) ([]*model.Book, error)      { return nil, nil }
 func (l testLib) Reindex() error                                   { return nil }
-func (l testLib) OpenEpub(b *model.Book) (EpubReader, error) {
+func (l testLib) OpenEpub(id int64) (EpubReader, error) {
 	if l.openEpubFn != nil {
-		return l.openEpubFn(b)
+		return l.openEpubFn(id)
 	}
 	return nil, nil
 }
-func (l testLib) ExtractCover(b *model.Book) ([]byte, error) { return nil, nil }
-func (l testLib) ExtractOPF(b *model.Book) ([]byte, error)   { return nil, nil }
+func (l testLib) ExtractCover(id int64) ([]byte, error) { return nil, nil }
+func (l testLib) ExtractOPF(id int64) ([]byte, error)   { return nil, nil }
 func (l testLib) Edit(id int64, e model.Edits) (*model.Book, error) {
 	return nil, nil
 }
@@ -59,7 +59,7 @@ func makeBook(id int64, title string, authors ...string) *model.Book {
 
 func TestEpubExporter_Open(t *testing.T) {
 	lib := testLib{
-		openEpubFn: func(b *model.Book) (EpubReader, error) {
+		openEpubFn: func(_ int64) (EpubReader, error) {
 			return &fakeEpubReader{Reader: bytes.NewReader([]byte("data"))}, nil
 		},
 	}
