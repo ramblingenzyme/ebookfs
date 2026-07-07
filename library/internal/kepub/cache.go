@@ -19,7 +19,7 @@ import (
 // EpubSource provides read access to a book's source epub. library.Library
 // satisfies it via OpenEpub, which is the cache's only inbound dependency.
 type EpubSource interface {
-	OpenEpub(*model.Book) (model.EpubReader, error)
+	OpenEpub(int64) (model.EpubReader, error)
 }
 
 // Cache builds kepub renditions on demand and stores them on disk, so repeat
@@ -96,7 +96,7 @@ func (c *Cache) Open(b *model.Book) (model.EpubReader, error) {
 }
 
 func (c *Cache) ensureLocked(b *model.Book) error {
-	src, err := c.src.OpenEpub(b)
+	src, err := c.src.OpenEpub(b.Meta.ID)
 	if err != nil {
 		return err
 	}

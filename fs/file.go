@@ -23,7 +23,7 @@ func newOPFFile(stat *proto.Stat, lib library.Library, book func() *model.Book) 
 			if lib == nil {
 				return nil, errors.New("library not available")
 			}
-			return lib.ExtractOPF(book())
+			return lib.ExtractOPF(book().Meta.ID)
 		}),
 		book: book,
 	}
@@ -53,7 +53,7 @@ func newCoverFile(stat *proto.Stat, lib library.Library, edit func(int64, model.
 			if lib == nil {
 				return nil, errors.New("library not available")
 			}
-			return lib.ExtractCover(book())
+			return lib.ExtractCover(book().Meta.ID)
 		}),
 		edit:   edit,
 		book:   book,
@@ -111,7 +111,7 @@ func newEpubFile(stat *proto.Stat, lib library.Library, book func() *model.Book)
 			if lib == nil {
 				return nil, errors.New("library not available")
 			}
-			return lib.OpenEpub(book())
+			return lib.OpenEpub(book().Meta.ID)
 		}),
 		book: book,
 	}

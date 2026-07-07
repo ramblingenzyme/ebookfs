@@ -22,13 +22,13 @@ type EpubReader = model.EpubReader
 // Library defines the public API for filesystem and index operations on the
 // book collection. The concrete implementation is unexported; construct via New.
 //
-// Concurrency contract: methods are safe for concurrent use. Returned
-// *model.Book values are immutable snapshots — the library never mutates a
-// Book after returning it. Reads take a snapshot ("read the version I'm
-// looking at"); mutations (Edit, Delete) address a book by id and run as an
-// atomic read-modify-write per book: the base state is fetched fresh under a
-// per-book lock, so callers holding stale snapshots cannot revert other
-// callers' changes.
+// Concurrency contract: methods are safe for concurrent use. Query returns
+// *model.Book values that are immutable snapshots — the library never mutates a
+// Book after returning it. Every other operation addresses a book by id and
+// resolves its current state fresh, so callers never pass stale snapshots back
+// in: content reads (OpenEpub, ExtractCover, ExtractOPF) open the book's live
+// on-disk file, and mutations (Edit, Delete) run as an atomic read-modify-write
+// per book under a per-book lock, so callers cannot revert other callers' changes.
 type Library interface {
 	Close() error
 	CreateIngest() (*IngestHandle, error)
@@ -38,9 +38,9 @@ type Library interface {
 	Exporter(config.ReaderConfig) (Exporter, error)
 	Query(model.Filter) ([]*model.Book, error)
 	Reindex() error
-	OpenEpub(b *model.Book) (EpubReader, error)
-	ExtractCover(b *model.Book) ([]byte, error)
-	ExtractOPF(b *model.Book) ([]byte, error)
+	OpenEpub(id int64) (EpubReader, error)
+	ExtractCover(id int64) ([]byte, error)
+	ExtractOPF(id int64) ([]byte, error)
 	Edit(id int64, e model.Edits) (*model.Book, error)
 	Delete(id int64) error
 }

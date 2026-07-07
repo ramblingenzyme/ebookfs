@@ -40,7 +40,7 @@ type epubExporter struct {
 }
 
 func (e epubExporter) Open(b *model.Book) (EpubReader, error) {
-	return e.lib.OpenEpub(b)
+	return e.lib.OpenEpub(b.Meta.ID)
 }
 
 func (e epubExporter) Size(b *model.Book) (int64, bool) {
