@@ -156,6 +156,13 @@ type Edits struct {
 	Series      *string
 	SeriesIndex *float64
 
+	// Cover replaces the cover image in the epub. It is applied before any bib
+	// edits so that a combined Cover + OPF edit produces a single final epub
+	// rewrite. Cover replaces the old Library.WriteCover method: all mutations
+	// now flow through Edit, keeping the registry snapshot self-consistent.
+
+	Cover *[]byte
+
 	// Meta fields (written to the meta.toml sidecar).
 	Status *string
 	Rating *float64
@@ -167,6 +174,9 @@ func (e Edits) HasBibEdits() bool {
 	return e.Title != nil || e.SortTitle != nil || e.Description != nil ||
 		e.Language != nil || e.Authors != nil || e.Series != nil || e.SeriesIndex != nil
 }
+
+// HasCoverEdit reports whether a cover image replacement is requested.
+func (e Edits) HasCoverEdit() bool { return e.Cover != nil }
 
 // ApplyMeta applies the meta fields in e to m. Fields set to nil are left untouched.
 func (e Edits) ApplyMeta(m *Meta) {
@@ -273,6 +283,15 @@ func (e Edits) Validate(b *Book) *ValidationError {
 			if _, err := language.Parse(v); err != nil {
 				add("language", fmt.Sprintf("language %q is not a recognised BCP 47 / ISO 639 code", *e.Language))
 			}
+		}
+	}
+
+	if e.Cover != nil {
+		if len(*e.Cover) == 0 {
+			add("cover", "cover image must not be empty")
+		}
+		if b.CoverPath == "" {
+			add("cover", "book has no cover to replace")
 		}
 	}
 

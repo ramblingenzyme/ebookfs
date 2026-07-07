@@ -43,8 +43,7 @@ func (l testLib) ExtractOPF(b *model.Book) ([]byte, error)   { return nil, nil }
 func (l testLib) Edit(id int64, e model.Edits) (*model.Book, error) {
 	return nil, nil
 }
-func (l testLib) WriteCover(id int64, img []byte) error { return nil }
-func (l testLib) Delete(id int64) error                  { return nil }
+func (l testLib) Delete(id int64) error { return nil }
 
 func makeBook(id int64, title string, authors ...string) *model.Book {
 	auths := make([]model.Author, len(authors))

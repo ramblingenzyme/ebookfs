@@ -45,7 +45,6 @@ type fakeLib struct {
 	createIngestFn func() (*library.IngestHandle, error)
 	extractCoverFn func(*model.Book) ([]byte, error)
 	extractOPFFn   func(*model.Book) ([]byte, error)
-	writeCoverFn   func(int64, []byte) error
 	openEpubFn     func(*model.Book) (library.EpubReader, error)
 	queryFn        func(model.Filter) ([]*model.Book, error)
 	reindexFn      func() error
@@ -86,12 +85,6 @@ func (l fakeLib) ExtractOPF(b *model.Book) ([]byte, error) {
 		return l.extractOPFFn(b)
 	}
 	return nil, nil
-}
-func (l fakeLib) WriteCover(id int64, data []byte) error {
-	if l.writeCoverFn != nil {
-		return l.writeCoverFn(id, data)
-	}
-	return nil
 }
 func (l fakeLib) OpenEpub(b *model.Book) (library.EpubReader, error) {
 	if l.openEpubFn != nil {

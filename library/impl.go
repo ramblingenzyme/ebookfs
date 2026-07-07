@@ -250,13 +250,28 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 	updated := b.Edit(e)
 
 	if err := l.index.Put(updated, func() error {
+		var reparsed *epub.Book
+
+		if e.HasCoverEdit() {
+			re, err := epub.WriteCover(b.EpubPath, b.CoverPath, *e.Cover)
+			if err != nil {
+				log.Printf("edit: book %d (%q): replace cover: %v", b.Meta.ID, b.Title, err)
+				return err
+			}
+			reparsed = re
+		}
+
 		if e.HasBibEdits() {
 			re, err := epub.WriteBib(b.EpubPath, e)
 			if err != nil {
 				log.Printf("edit: book %d (%q): rewrite epub: %v", b.Meta.ID, b.Title, err)
 				return err
 			}
-			updated.Bib = bibFromEpub(re)
+			reparsed = re
+		}
+
+		if reparsed != nil {
+			updated.Bib = bibFromEpub(reparsed)
 		}
 
 		newLoc := l.store.Layout(updated.Authors, updated.Title, updated.Meta.ID)
@@ -277,24 +292,6 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 	}
 
 	return updated, nil
-}
-
-// WriteCover replaces the cover image in the epub of the book with the given
-// id, resolving the epub's current location under the per-book lock.
-func (l *libraryImpl) WriteCover(id int64, img []byte) error {
-	mu := l.lockBook(id)
-	mu.Lock()
-	defer mu.Unlock()
-
-	b, err := l.get(id)
-	if err != nil {
-		return err
-	}
-	_, err = epub.WriteCover(b.EpubPath, b.CoverPath, img)
-	if err != nil {
-		log.Printf("cover: book %d (%q): %v", b.Meta.ID, b.Title, err)
-	}
-	return err
 }
 
 // bibFromEpub converts a parsed epub.Book into a model.Bib.

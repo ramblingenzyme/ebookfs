@@ -195,6 +195,7 @@ func newBookDir(reg *bookRegistry, book *model.Book) *bookDir {
 		d.StaticDir.AddChild(newCoverFile(
 			f.NewStat("cover"+filepath.Ext(book.CoverPath), "glenda", "glenda", 0644),
 			lib,
+			func(id int64, edits model.Edits) error { return reg.edit(id, edits) },
 			d.Book,
 		))
 	}
