@@ -439,6 +439,24 @@ func TestFieldFileWriteExceedsLimit(t *testing.T) {
 	}
 }
 
+// A near-maxuint64 offset must be rejected, not wrap past the cap check and
+// panic on the out-of-range slice index.
+func TestFieldFileWriteOffsetOverflowRejected(t *testing.T) {
+	f := newTestFS(t)
+	stat := f.NewStat("test", "glenda", "glenda", 0644)
+	ff := newFieldFile(stat, func() string { return "" }, nil)
+
+	fid := uint64(1)
+	if err := ff.Open(fid, proto.Mode(0)); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	_, err := ff.Write(fid, ^uint64(0)-3, []byte("overflow"))
+	if err == nil {
+		t.Fatal("expected error on overflowing write offset")
+	}
+}
+
 func TestFieldFileWriteAtLimitAllowed(t *testing.T) {
 	f := newTestFS(t)
 	stat := f.NewStat("test", "glenda", "glenda", 0644)

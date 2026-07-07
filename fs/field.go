@@ -65,7 +65,9 @@ func (f *fieldFile) Write(fid uint64, offset uint64, data []byte) (uint32, error
 	if len(data) == 0 {
 		return 0, nil
 	}
-	if offset+uint64(len(data)) > maxFieldFileSize {
+	// Overflow-safe cap: offset is a client-controlled uint64, so offset+len can
+	// wrap past the check. Bound each term against the cap instead of the sum.
+	if offset > maxFieldFileSize || uint64(len(data)) > maxFieldFileSize-offset {
 		return 0, fmt.Errorf("write exceeds field file size limit (%d bytes)", maxFieldFileSize)
 	}
 	f.Lock()

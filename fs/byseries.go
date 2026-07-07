@@ -54,7 +54,11 @@ func (s *seriesBookListDir) add(dir *bookDir) {
 }
 
 func (s *seriesBookListDir) remove(dir *bookDir) {
-	delete(s.books, dir.Book().Meta.ID)
+	id := dir.Book().Meta.ID
+	delete(s.books, id)
+	// Drop the cached wrapper too, so a book removed from this series doesn't
+	// linger in the cache for the life of the dir.
+	delete(s.children, id)
 	s.rebuild()
 }
 

@@ -70,7 +70,9 @@ func (c *coverFile) Stat() proto.Stat {
 }
 
 func (c *coverFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
-	if offset+uint64(len(data)) > maxCoverFileSize {
+	// Overflow-safe cap: offset is a client-controlled uint64, so offset+len can
+	// wrap past the check. Bound each term against the cap instead of the sum.
+	if offset > maxCoverFileSize || uint64(len(data)) > maxCoverFileSize-offset {
 		return 0, fmt.Errorf("write exceeds cover file size limit (%d bytes)", maxCoverFileSize)
 	}
 	c.Lock()

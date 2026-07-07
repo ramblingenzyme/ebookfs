@@ -260,6 +260,24 @@ func TestCoverFileWriteExceedsLimit(t *testing.T) {
 	}
 }
 
+// A near-maxuint64 offset must be rejected, not wrap past the cap check and
+// panic on the out-of-range slice index.
+func TestCoverFileWriteOffsetOverflowRejected(t *testing.T) {
+	f := newTestFS(t)
+	book := makeBook(1, "Test", "Author")
+	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), fakeLib{}, func(int64, model.Edits) error { return nil }, fixed(book))
+
+	fid := uint64(1)
+	if err := cf.Open(fid, proto.Mode(0)); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	_, err := cf.Write(fid, ^uint64(0)-3, []byte("overflow"))
+	if err == nil {
+		t.Fatal("expected error on overflowing write offset")
+	}
+}
+
 func TestCoverFileWriteAtLimitAllowed(t *testing.T) {
 	f := newTestFS(t)
 	book := makeBook(1, "Test", "Author")
