@@ -247,7 +247,9 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 		return nil, v
 	}
 
-	updated := b.Edit(e)
+	// Assemble the updated book from the meta edits; bib fields are derived
+	// below from the epub re-parse.
+	updated := applyMeta(b, e)
 
 	if err := l.index.Put(updated, func() error {
 		var reparsed *epub.Book
@@ -292,6 +294,24 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 	}
 
 	return updated, nil
+}
+
+// applyMeta returns a copy of b with the meta edits in e applied and the
+// modified time stamped. Fields left nil in e are untouched. Bib fields are not
+// applied here — Edit derives them from the epub re-parse.
+func applyMeta(b *model.Book, e model.Edits) *model.Book {
+	cp := *b
+	if e.Status != nil {
+		cp.Meta.Status = *e.Status
+	}
+	if e.Rating != nil {
+		cp.Meta.Rating = *e.Rating
+	}
+	if e.Tags != nil {
+		cp.Meta.Tags = *e.Tags
+	}
+	cp.Meta.DateModified = time.Now()
+	return &cp
 }
 
 // bibFromEpub converts a parsed epub.Book into a model.Bib.

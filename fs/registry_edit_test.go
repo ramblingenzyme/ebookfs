@@ -24,7 +24,6 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 			if e.SortTitle != nil {
 				updated.SortTitle = *e.SortTitle
 			}
-			e.ApplyMeta(&updated.Meta)
 			updated.Meta.DateModified = book.Meta.DateModified
 			return &updated, nil
 		},
@@ -84,7 +83,6 @@ func TestRegistryEditAuthorsRehomesInByAuthor(t *testing.T) {
 			if e.Authors != nil {
 				updated.Authors = *e.Authors
 			}
-			e.ApplyMeta(&updated.Meta)
 			updated.Meta.DateModified = book.Meta.DateModified
 			return &updated, nil
 		},
@@ -131,7 +129,9 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 	lib := fakeLib{
 		editFn: func(id int64, e model.Edits) (*model.Book, error) {
 			updated := *book
-			e.ApplyMeta(&updated.Meta)
+			if e.Status != nil {
+				updated.Meta.Status = *e.Status
+			}
 			updated.Meta.DateModified = book.Meta.DateModified
 			return &updated, nil
 		},
@@ -183,7 +183,6 @@ func TestRegistryEditConcurrentReaders(t *testing.T) {
 			if e.Title != nil {
 				updated.Title = *e.Title
 			}
-			e.ApplyMeta(&updated.Meta)
 			current = &updated
 			return &updated, nil
 		},

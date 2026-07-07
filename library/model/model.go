@@ -21,10 +21,11 @@ type EpubReader interface {
 // and Bib are embedded so their fields read flat (b.Title, b.LibraryPath); Meta
 // stays named so sidecar state is explicitly addressed as b.Meta.
 //
-// Book may carry self-contained methods (Edit, etc.) that operate on its own
-// fields without depending on Store, Index, or the epub parser. Library
-// remains the single orchestrator for persistence and transactions; Book methods
-// are helpers for in-memory transformation and inspection.
+// Book is a plain data record. It does not carry transform methods: applying an
+// Edits is not a pure in-memory operation (bib fields are derived from an epub
+// re-parse and the location from store.Layout), so Library is the single place
+// an updated Book is assembled, as well as the sole orchestrator for persistence
+// and transactions.
 //
 // A Book handed across an API boundary is an immutable snapshot: once published
 // (returned by the library or stored in a frontend), it must not be modified —
@@ -178,19 +179,6 @@ func (e Edits) HasBibEdits() bool {
 // HasCoverEdit reports whether a cover image replacement is requested.
 func (e Edits) HasCoverEdit() bool { return e.Cover != nil }
 
-// ApplyMeta applies the meta fields in e to m. Fields set to nil are left untouched.
-func (e Edits) ApplyMeta(m *Meta) {
-	if e.Status != nil {
-		m.Status = *e.Status
-	}
-	if e.Rating != nil {
-		m.Rating = *e.Rating
-	}
-	if e.Tags != nil {
-		m.Tags = *e.Tags
-	}
-}
-
 // FieldError pairs a field name with a human-readable validation error message,
 // so frontends can display feedback next to the relevant field.
 type FieldError struct {
@@ -308,15 +296,4 @@ func (e Edits) Validate(b *Book) *ValidationError {
 		return nil
 	}
 	return &ve
-}
-
-// Edit returns a shallow copy of b with the meta fields in e applied and
-// DateModified set to now. It is a pure in-memory operation; it does not touch
-// the epub file or the sidecar. For bib edits the caller must re-parse the epub
-// and overwrite b.Bib from the result (see Library.Edit).
-func (b *Book) Edit(e Edits) *Book {
-	updated := *b
-	e.ApplyMeta(&updated.Meta)
-	updated.Meta.DateModified = time.Now()
-	return &updated
 }
