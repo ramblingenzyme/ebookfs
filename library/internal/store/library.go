@@ -58,6 +58,19 @@ func (s *Store) OpenEpub(loc model.Location) (*os.File, error) {
 // the directory if its filename differs. The caller decides the destination
 // (see Layout); the store just performs the move.
 func (s *Store) Move(from, to model.Location) error {
+	oldPath := filepath.Join(s.root, from.LibraryPath)
+
+	// Same directory, only the epub filename changed (e.g. re-sanitized on a
+	// later edit): nothing to move, and the "destination" directory below
+	// would just be the book's own current one — skip straight to the
+	// in-place rename.
+	if to.LibraryPath == from.LibraryPath {
+		if to.EpubFilename == from.EpubFilename {
+			return nil
+		}
+		return os.Rename(filepath.Join(oldPath, from.EpubFilename), filepath.Join(oldPath, to.EpubFilename))
+	}
+
 	apath := filepath.Join(s.root, to.LibraryPath)
 	if _, err := os.Stat(apath); err == nil {
 		return fmt.Errorf("destination already exists: %s", to.LibraryPath)
@@ -69,7 +82,6 @@ func (s *Store) Move(from, to model.Location) error {
 		return err
 	}
 
-	oldPath := filepath.Join(s.root, from.LibraryPath)
 	if err := os.Rename(oldPath, apath); err != nil {
 		return err
 	}
