@@ -93,6 +93,12 @@ func (s *Store) Move(from, to model.Location) error {
 		}
 	}
 
+	oldParent := filepath.Dir(oldPath)
+	// Try to delete the old author directory; ignore ENOTEMPTY (other books remain) and ENOENT (already gone).
+	if err := os.Remove(oldParent); err != nil && !errors.Is(err, syscall.ENOTEMPTY) && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
 	return nil
 }
 
