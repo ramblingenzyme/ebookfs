@@ -43,10 +43,7 @@ func NewCache(dir string, src EpubSource) *Cache {
 
 // Close stops the warmer goroutines and blocks until they finish.
 func (c *Cache) Close() error {
-	c.closeOnce.Do(func() {
-		close(c.warmer.ch)
-		c.warmer.wg.Wait()
-	})
+	c.closeOnce.Do(c.warmer.stop)
 	return nil
 }
 
@@ -166,6 +163,13 @@ type warmer struct {
 	ensure func(*model.Book) error
 	ch     chan *model.Book
 	wg     sync.WaitGroup
+
+	// mu guards closed and, crucially, brackets the channel send in warm so it
+	// can never race stop's close(ch) — a send on a closed channel panics even
+	// inside a select. An atomic flag would not suffice: the check and the send
+	// must be one critical section against the close.
+	mu     sync.Mutex
+	closed bool
 }
 
 func newWarmer(ensure func(*model.Book) error) *warmer {
@@ -178,10 +182,26 @@ func newWarmer(ensure func(*model.Book) error) *warmer {
 }
 
 func (w *warmer) warm(b *model.Book) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.closed {
+		return // stopped; drop the hint
+	}
 	select {
 	case w.ch <- b:
-	default:
+	default: // full; drop the hint
 	}
+}
+
+// stop closes the queue and blocks until the warmer goroutines drain it and
+// exit. After stop returns (or once closed is set), warm drops hints instead of
+// sending, so it never touches the closed channel.
+func (w *warmer) stop() {
+	w.mu.Lock()
+	w.closed = true
+	close(w.ch)
+	w.mu.Unlock()
+	w.wg.Wait()
 }
 
 func (w *warmer) run() {

@@ -86,6 +86,35 @@ func TestWarmerErrorDoesNotPanic(t *testing.T) {
 	}
 }
 
+// warm after stop must drop the hint, not send on the closed channel (which
+// would panic). This is the shutdown-window race: the 9P server can call Warm
+// while Cache.Close is tearing the warmer down.
+func TestWarmAfterStopNoPanic(t *testing.T) {
+	w := newWarmer(func(*model.Book) error { return nil })
+	w.stop()
+	w.warm(makeBook(1, "Test", "Author")) // must not panic
+}
+
+// Warm called concurrently with stop must never panic. Run under -race.
+func TestWarmConcurrentWithStopNoPanic(t *testing.T) {
+	w := newWarmer(func(*model.Book) error { return nil })
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			b := makeBook(1, "Test", "Author")
+			for j := 0; j < 1000; j++ {
+				w.warm(b)
+			}
+		}()
+	}
+
+	w.stop()
+	wg.Wait()
+}
+
 var errTest = errors.New("test error")
 
 func waitForWarm(t *testing.T, f func() bool) bool {
