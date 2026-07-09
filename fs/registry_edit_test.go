@@ -9,6 +9,23 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
+// writeField drives a field edit the way a 9P client would: open the named
+// fieldFile with Otrunc, write the new value, and close to commit.
+func writeField(t *testing.T, bd *bookDir, name, value string) {
+	t.Helper()
+	ff := bd.Children()[name].(*fieldFile)
+	fid := uint64(1)
+	if err := ff.Open(fid, proto.Otrunc); err != nil {
+		t.Fatalf("Open %s field: %v", name, err)
+	}
+	if _, err := ff.Write(fid, 0, []byte(value)); err != nil {
+		t.Fatalf("Write %s field: %v", name, err)
+	}
+	if err := ff.Close(fid); err != nil {
+		t.Fatalf("Close %s field: %v", name, err)
+	}
+}
+
 func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 	f := newTestFS(t)
 	book := makeBook(1, "Old Title", "Alice")
@@ -36,20 +53,9 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 
 	reg.Add(book)
 
-	// Find the title fieldFile in the bookDir and write to it.
+	// Edit the title via its fieldFile.
 	bd := allBooks.Children()["Old Title"].(*bookDir)
-	titleFF := bd.Children()["title"].(*fieldFile)
-
-	fid := uint64(1)
-	if err := titleFF.Open(fid, proto.Otrunc); err != nil {
-		t.Fatalf("Open title field: %v", err)
-	}
-	if _, err := titleFF.Write(fid, 0, []byte("New Title")); err != nil {
-		t.Fatalf("Write title: %v", err)
-	}
-	if err := titleFF.Close(fid); err != nil {
-		t.Fatalf("Close title: %v", err)
-	}
+	writeField(t, bd, "title", "New Title")
 
 	// All views should reflect the new title.
 	if _, ok := allBooks.Children()["New Title"]; !ok {
@@ -96,12 +102,7 @@ func TestRegistryEditAuthorsRehomesInByAuthor(t *testing.T) {
 
 	// Change authors from Alice to Bob.
 	bd := allBooks.Children()["Test"].(*bookDir)
-	authorsFF := bd.Children()["authors"].(*fieldFile)
-
-	fid := uint64(1)
-	authorsFF.Open(fid, proto.Otrunc)
-	authorsFF.Write(fid, 0, []byte("Bob"))
-	authorsFF.Close(fid)
+	writeField(t, bd, "authors", "Bob")
 
 	// Author should now be Bob, Alice pruned.
 	if _, ok := byAuthor.Children()["Bob"]; !ok {
@@ -149,12 +150,7 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 
 	// Change status to "reading" via the field file.
 	bd := allBooks.Children()["Test"].(*bookDir)
-	statusFF := bd.Children()["status"].(*fieldFile)
-
-	fid := uint64(1)
-	statusFF.Open(fid, proto.Otrunc)
-	statusFF.Write(fid, 0, []byte("reading"))
-	statusFF.Close(fid)
+	writeField(t, bd, "status", "reading")
 
 	// Now the reader view should reflect the change.
 	ad, ok := readerDir.Children()["Author1"]

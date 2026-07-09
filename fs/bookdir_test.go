@@ -7,8 +7,7 @@ import (
 )
 
 func TestNewBookDirCreatesCoverChild(t *testing.T) {
-	f := newTestFS(t)
-	reg := newTestRegistry(t, f)
+	reg := newTestRegistry(t)
 	book := makeBook(1, "Has Cover", "Author")
 	book.CoverPath = "OEBPS/cover.jpg"
 
@@ -20,8 +19,7 @@ func TestNewBookDirCreatesCoverChild(t *testing.T) {
 }
 
 func TestNewBookDirNoCoverWhenEmpty(t *testing.T) {
-	f := newTestFS(t)
-	reg := newTestRegistry(t, f)
+	reg := newTestRegistry(t)
 	book := makeBook(1, "No Cover", "Author")
 	book.CoverPath = ""
 
@@ -33,7 +31,7 @@ func TestNewBookDirNoCoverWhenEmpty(t *testing.T) {
 }
 
 func TestBookDirStatReportsTitle(t *testing.T) {
-	d := newBookDir(newTestRegistry(t, newTestFS(t)), makeBook(1, "My Title", "Author"))
+	d := newBookDir(newTestRegistry(t), makeBook(1, "My Title", "Author"))
 
 	s := d.Stat()
 	if s.Name != "My Title" {
@@ -42,7 +40,7 @@ func TestBookDirStatReportsTitle(t *testing.T) {
 }
 
 func TestBookDirHasIDChild(t *testing.T) {
-	d := newBookDir(newTestRegistry(t, newTestFS(t)), makeBook(1, "Test", "Author"))
+	d := newBookDir(newTestRegistry(t), makeBook(1, "Test", "Author"))
 
 	child := d.Children()["id"]
 	if child == nil {

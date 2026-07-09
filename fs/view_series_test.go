@@ -72,8 +72,7 @@ func TestSeriesEntryNameFunc(t *testing.T) {
 }
 
 func TestSeriesEntryName_PadTriggeredByMaxIndex(t *testing.T) {
-	f := newTestFS(t)
-	reg := newTestRegistry(t, f)
+	reg := newTestRegistry(t)
 	d := newBySeriesDir(reg)
 
 	b1 := makeBook(1, "First", "Author")

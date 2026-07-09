@@ -48,7 +48,7 @@ func TestInboxCreateFile_WrongParent(t *testing.T) {
 	cf := inboxCreateFile(lib, nil)
 
 	// Pass a plain StaticDir as parent instead of *inboxDir.
-	parent := fs.NewStaticDir(f.NewStat("wrong", "glenda", "glenda", 0755|proto.DMDIR))
+	parent := fs.NewStaticDir(newStat(f, "wrong", 0755|proto.DMDIR))
 	_, err := cf(f, parent, "glenda", "test.epub", 0644, 0)
 	if err == nil {
 		t.Fatal("expected error for non-inboxDir parent")

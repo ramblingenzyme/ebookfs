@@ -9,6 +9,35 @@ import (
 
 func ptr[T any](v T) *T { return &v }
 
+// assertSingleFieldError asserts err is a *ValidationError carrying exactly one
+// entry, on the named field.
+func assertSingleFieldError(t *testing.T, err error, field string) {
+	t.Helper()
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("error is not *ValidationError: %T", err)
+	}
+	if len(*ve) != 1 || (*ve)[0].Field != field {
+		t.Errorf("expected a single %q field error, got %v", field, *ve)
+	}
+}
+
+// assertHasFieldError asserts err is a *ValidationError with at least one entry
+// on the named field whose message contains msgSubstr (empty matches any).
+func assertHasFieldError(t *testing.T, err error, field, msgSubstr string) {
+	t.Helper()
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("error is not *ValidationError: %T", err)
+	}
+	for _, fe := range *ve {
+		if fe.Field == field && strings.Contains(fe.Message, msgSubstr) {
+			return
+		}
+	}
+	t.Errorf("expected an error on field %q containing %q, got %v", field, msgSubstr, *ve)
+}
+
 func TestValidateStatus(t *testing.T) {
 	book := &Book{}
 	for _, tc := range []struct {
@@ -30,13 +59,7 @@ func TestValidateStatus(t *testing.T) {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
 			if err != nil {
-				var ve *ValidationError
-				if !errors.As(err, &ve) {
-					t.Fatalf("error is not *ValidationError: %T", err)
-				}
-				if len(*ve) != 1 || (*ve)[0].Field != "status" {
-					t.Errorf("expected status field error, got %v", *ve)
-				}
+				assertSingleFieldError(t, err, "status")
 			}
 		})
 	}
@@ -66,13 +89,7 @@ func TestValidateRating(t *testing.T) {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
 			if err != nil {
-				var ve *ValidationError
-				if !errors.As(err, &ve) {
-					t.Fatalf("error is not *ValidationError: %T", err)
-				}
-				if len(*ve) != 1 || (*ve)[0].Field != "rating" {
-					t.Errorf("expected rating field error, got %v", *ve)
-				}
+				assertSingleFieldError(t, err, "rating")
 			}
 		})
 	}
@@ -97,13 +114,7 @@ func TestValidateTitle(t *testing.T) {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
 			if err != nil {
-				var ve *ValidationError
-				if !errors.As(err, &ve) {
-					t.Fatalf("error is not *ValidationError: %T", err)
-				}
-				if len(*ve) != 1 || (*ve)[0].Field != "title" {
-					t.Errorf("expected title field error, got %v", *ve)
-				}
+				assertSingleFieldError(t, err, "title")
 			}
 		})
 	}
@@ -132,20 +143,7 @@ func TestValidateAuthors(t *testing.T) {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
 			if err != nil && tc.errMsg != "" {
-				var ve *ValidationError
-				if !errors.As(err, &ve) {
-					t.Fatalf("error is not *ValidationError: %T", err)
-				}
-				found := false
-				for _, fe := range *ve {
-					if fe.Field == "authors" && strings.Contains(fe.Message, tc.errMsg) {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("expected authors error containing %q, got %v", tc.errMsg, *ve)
-				}
+				assertHasFieldError(t, err, "authors", tc.errMsg)
 			}
 		})
 	}
@@ -173,13 +171,7 @@ func TestValidateLanguage(t *testing.T) {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
 			if err != nil {
-				var ve *ValidationError
-				if !errors.As(err, &ve) {
-					t.Fatalf("error is not *ValidationError: %T", err)
-				}
-				if len(*ve) != 1 || (*ve)[0].Field != "language" {
-					t.Errorf("expected language field error, got %v", *ve)
-				}
+				assertSingleFieldError(t, err, "language")
 			}
 		})
 	}
@@ -207,20 +199,7 @@ func TestValidateTags(t *testing.T) {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
 			if err != nil {
-				var ve *ValidationError
-				if !errors.As(err, &ve) {
-					t.Fatalf("error is not *ValidationError: %T", err)
-				}
-				found := false
-				for _, fe := range *ve {
-					if fe.Field == "tags" {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("expected tags field error, got %v", *ve)
-				}
+				assertHasFieldError(t, err, "tags", "")
 			}
 		})
 	}
@@ -248,20 +227,7 @@ func TestValidateSeriesIndex(t *testing.T) {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
 			if err != nil {
-				var ve *ValidationError
-				if !errors.As(err, &ve) {
-					t.Fatalf("error is not *ValidationError: %T", err)
-				}
-				found := false
-				for _, fe := range *ve {
-					if fe.Field == "series_index" {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("expected series_index error, got %v", *ve)
-				}
+				assertHasFieldError(t, err, "series_index", "")
 			}
 		})
 	}
@@ -362,13 +328,7 @@ func TestValidateCoverNoCoverPath(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error: book has no cover to replace")
 	}
-	var ve *ValidationError
-	if !errors.As(err, &ve) {
-		t.Fatalf("error is not *ValidationError: %T", err)
-	}
-	if len(*ve) != 1 || (*ve)[0].Field != "cover" {
-		t.Errorf("expected cover field error, got %v", *ve)
-	}
+	assertSingleFieldError(t, err, "cover")
 }
 
 func TestValidateCoverEmptyBytes(t *testing.T) {

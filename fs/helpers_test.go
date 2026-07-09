@@ -133,9 +133,11 @@ func newTestFS(t *testing.T) *fs.FS {
 	return f
 }
 
-func newTestRegistry(t *testing.T, f *fs.FS) *bookRegistry {
+// newTestRegistry builds a registry over a fresh in-memory FS with no backing
+// library. Tests that also need the FS directly can reach it via reg.f.
+func newTestRegistry(t *testing.T) *bookRegistry {
 	t.Helper()
-	return newBookRegistry(f, nil)
+	return newBookRegistry(newTestFS(t), nil)
 }
 
 type testExporter struct {
