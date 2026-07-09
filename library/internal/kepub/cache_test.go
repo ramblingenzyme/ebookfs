@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -326,14 +327,4 @@ func waitForWarm(t *testing.T, f func() bool) bool {
 	}
 }
 
-func makeBook(id int64, title string, authors ...string) *model.Book {
-	auths := make([]model.Author, len(authors))
-	for i, name := range authors {
-		auths[i] = model.Author{Name: name}
-	}
-	return model.NewBook(
-		model.Bib{Title: title, Authors: auths},
-		model.Meta{ID: id},
-		model.Location{},
-	)
-}
+var makeBook = testutil.MakeBook
