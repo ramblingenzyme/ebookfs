@@ -1,9 +1,11 @@
-package fs
+package vfile
 
 import (
 	"testing"
 
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -12,15 +14,15 @@ import (
 // These tests cover coverFile's own surface: Stat length from CoverSize, and the
 // per-fid write buffer committed to Edit on Close.
 
-func newTestCoverFile(t *testing.T, lib fakeLib, edit func(int64, model.Edits) error) *coverFile {
+func newTestCoverFile(t *testing.T, lib libfake.Lib, edit func(int64, model.Edits) error) *CoverFile {
 	t.Helper()
-	book := makeBook(1, "Test", "Author")
+	book := testutil.MakeBook(1, "Test", "Author")
 	book.CoverSize = 16
-	return newCoverFile(newStat(newTestFS(t), "cover.jpg", 0644), lib, edit, fixed(book))
+	return NewCoverFile(NewStat(testutil.NewTestFS(t), "cover.jpg", 0644), lib, edit, testutil.Fixed(book))
 }
 
 func TestCoverFileStatLength(t *testing.T) {
-	cf := newTestCoverFile(t, fakeLib{}, func(int64, model.Edits) error { return nil })
+	cf := newTestCoverFile(t, libfake.Lib{}, func(int64, model.Edits) error { return nil })
 
 	if s := cf.Stat(); s.Length != 16 {
 		t.Errorf("Stat().Length = %d, want 16", s.Length)
@@ -28,9 +30,9 @@ func TestCoverFileStatLength(t *testing.T) {
 }
 
 func TestCoverFileStatLengthNilLib(t *testing.T) {
-	f := newTestFS(t)
-	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(newStat(f, "cover.jpg", 0644), nil, func(int64, model.Edits) error { return nil }, fixed(book))
+	f := testutil.NewTestFS(t)
+	book := testutil.MakeBook(1, "Test", "Author")
+	cf := NewCoverFile(NewStat(f, "cover.jpg", 0644), nil, func(int64, model.Edits) error { return nil }, testutil.Fixed(book))
 
 	if s := cf.Stat(); s.Length != 0 {
 		t.Errorf("Stat().Length with nil lib = %d, want 0", s.Length)
@@ -38,8 +40,8 @@ func TestCoverFileStatLengthNilLib(t *testing.T) {
 }
 
 func TestCoverFileOpenRead(t *testing.T) {
-	lib := fakeLib{
-		extractCoverFn: func(_ int64) ([]byte, error) { return []byte("cover image data"), nil },
+	lib := libfake.Lib{
+		ExtractCoverFn: func(_ int64) ([]byte, error) { return []byte("cover image data"), nil },
 	}
 	cf := newTestCoverFile(t, lib, func(int64, model.Edits) error { return nil })
 
@@ -58,8 +60,8 @@ func TestCoverFileOpenRead(t *testing.T) {
 
 func TestCoverFileWriteClose(t *testing.T) {
 	var written *[]byte
-	lib := fakeLib{
-		extractCoverFn: func(_ int64) ([]byte, error) { return []byte("original"), nil },
+	lib := libfake.Lib{
+		ExtractCoverFn: func(_ int64) ([]byte, error) { return []byte("original"), nil },
 	}
 	cf := newTestCoverFile(t, lib, func(id int64, edits model.Edits) error {
 		written = edits.Cover
@@ -84,8 +86,8 @@ func TestCoverFileWriteClose(t *testing.T) {
 
 func TestCoverFileWriteEmptyDoesNotCallEdit(t *testing.T) {
 	called := false
-	lib := fakeLib{
-		extractCoverFn: func(_ int64) ([]byte, error) { return []byte("original"), nil },
+	lib := libfake.Lib{
+		ExtractCoverFn: func(_ int64) ([]byte, error) { return []byte("original"), nil },
 	}
 	cf := newTestCoverFile(t, lib, func(int64, model.Edits) error {
 		called = true
@@ -106,8 +108,8 @@ func TestCoverFileWriteEmptyDoesNotCallEdit(t *testing.T) {
 }
 
 func TestCoverFilePerFidBuffers(t *testing.T) {
-	lib := fakeLib{
-		extractCoverFn: func(_ int64) ([]byte, error) { return []byte("shared"), nil },
+	lib := libfake.Lib{
+		ExtractCoverFn: func(_ int64) ([]byte, error) { return []byte("shared"), nil },
 	}
 	cf := newTestCoverFile(t, lib, func(int64, model.Edits) error { return nil })
 
@@ -126,16 +128,16 @@ func TestCoverFilePerFidBuffers(t *testing.T) {
 }
 
 func TestCoverFileWriteErrorPassesThrough(t *testing.T) {
-	lib := fakeLib{
-		extractCoverFn: func(_ int64) ([]byte, error) { return []byte("original"), nil },
+	lib := libfake.Lib{
+		ExtractCoverFn: func(_ int64) ([]byte, error) { return []byte("original"), nil },
 	}
-	cf := newTestCoverFile(t, lib, func(int64, model.Edits) error { return errTest })
+	cf := newTestCoverFile(t, lib, func(int64, model.Edits) error { return testutil.ErrTest })
 
 	fid := uint64(1)
 	cf.Open(fid, proto.Mode(0))
 	cf.Write(fid, 0, []byte("data"))
 
-	if err := cf.Close(fid); err != errTest {
-		t.Errorf("Close error = %v, want %v", err, errTest)
+	if err := cf.Close(fid); err != testutil.ErrTest {
+		t.Errorf("Close error = %v, want %v", err, testutil.ErrTest)
 	}
 }

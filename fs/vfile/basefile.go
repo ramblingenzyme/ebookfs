@@ -1,4 +1,9 @@
-package fs
+// Package vfile holds the leaf 9P file primitives that serve book data through
+// the library facade: generic snapshot/read-at bases and the concrete
+// cover/opf/epub/field/reader files. They depend only on the library
+// interfaces and plain-function callbacks, never on the registry or the book
+// directory tree, so the compiler enforces that this layer stays a leaf.
+package vfile
 
 import (
 	"errors"

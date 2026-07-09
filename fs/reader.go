@@ -1,12 +1,10 @@
 package fs
 
 import (
-	"errors"
-
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/library"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // readerDir is the reader/ export view: the books whose status is in the
@@ -46,7 +44,7 @@ func (d *readerDir) add(dir *bookDir) {
 	}
 	ad := d.authorDir(d.exp.Dirname(b))
 	stat := newStat(d.f, d.exp.Filename(b), 0444)
-	ad.AddChild(newReaderFile(stat, d.exp, dir.Book))
+	ad.AddChild(vfile.NewReaderFile(stat, d.exp, dir.Book))
 	d.exp.Warm(b)
 }
 
@@ -60,36 +58,4 @@ func (d *readerDir) remove(dir *bookDir) {
 		child.(fs.ModDir).DeleteChild(d.exp.Filename(b))
 		d.pruneEmpty(name)
 	}
-}
-
-// readerFile serves a book's export rendition through the Exporter, holding one
-// reader per fid. It mirrors epubFile, but its size is reported live from the
-// exporter so a kepub's length appears once its cache is warm.
-type readerFile struct {
-	readAtFile
-	exp  library.Exporter
-	book func() *model.Book
-}
-
-func newReaderFile(stat *proto.Stat, exp library.Exporter, book func() *model.Book) *readerFile {
-	return &readerFile{
-		readAtFile: newReadAtFile(stat, func() (library.EpubReader, error) {
-			if exp == nil {
-				return nil, errors.New("exporter not available")
-			}
-			return exp.Open(book())
-		}),
-		exp:  exp,
-		book: book,
-	}
-}
-
-// Stat reports the export size when known (cheap; never triggers a conversion),
-// so a cold kepub lists as length 0 until its cache is warm.
-func (r *readerFile) Stat() proto.Stat {
-	s := r.BaseFile.Stat()
-	if size, ok := r.exp.Size(r.book()); ok {
-		s.Length = uint64(size)
-	}
-	return s
 }

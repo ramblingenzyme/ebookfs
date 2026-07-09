@@ -10,11 +10,12 @@ import (
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 func addReadOnlyField(d *bookDir, f *fs.FS, name string, get func() string) {
-	d.StaticDir.AddChild(newFieldFile(newStat(f, name, 0444), get, nil))
+	d.StaticDir.AddChild(vfile.NewFieldFile(newStat(f, name, 0444), get, nil))
 }
 
 // bookDir is the stable directory identity for one book. The book's state is
@@ -159,13 +160,13 @@ func newBookDir(reg *bookRegistry, book *model.Book) *bookDir {
 
 	// Child files read through d.Book so they always see the current snapshot,
 	// not the one captured at construction.
-	d.StaticDir.AddChild(newEpubFile(
+	d.StaticDir.AddChild(vfile.NewEpubFile(
 		newStat(f, book.EpubFilename, 0444),
 		lib,
 		d.Book,
 	))
 
-	d.StaticDir.AddChild(newOPFFile(
+	d.StaticDir.AddChild(vfile.NewOPFFile(
 		newStat(f, "opf", 0444),
 		lib,
 		d.Book,
@@ -184,7 +185,7 @@ func newBookDir(reg *bookRegistry, book *model.Book) *bookDir {
 			}
 			return reg.edit(book.Meta.ID, edits)
 		}
-		d.StaticDir.AddChild(newFieldFile(newStat(f, name, 0644), get, set))
+		d.StaticDir.AddChild(vfile.NewFieldFile(newStat(f, name, 0644), get, set))
 	}
 
 	// Read-only bib fields.
@@ -192,7 +193,7 @@ func newBookDir(reg *bookRegistry, book *model.Book) *bookDir {
 
 	// Cover image — only present when the epub declares one.
 	if book.CoverPath != "" {
-		d.StaticDir.AddChild(newCoverFile(
+		d.StaticDir.AddChild(vfile.NewCoverFile(
 			newStat(f, "cover"+filepath.Ext(book.CoverPath), 0644),
 			lib,
 			func(id int64, edits model.Edits) error { return reg.edit(id, edits) },

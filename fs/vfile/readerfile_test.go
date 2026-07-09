@@ -1,23 +1,22 @@
-package fs
+package vfile
 
 import (
 	"bytes"
-	"errors"
 	"testing"
 
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-var errTest = errors.New("test error")
-
-func testReaderFile(t *testing.T, exp library.Exporter) *readerFile {
+func testReaderFile(t *testing.T, exp library.Exporter) *ReaderFile {
 	t.Helper()
-	f := newTestFS(t)
-	book := makeBook(1, "Test", "Author")
+	f := testutil.NewTestFS(t)
+	book := testutil.MakeBook(1, "Test", "Author")
 	book.EpubFilename = "test.epub"
-	return newReaderFile(newStat(f, "test.epub", 0444), exp, fixed(book))
+	return NewReaderFile(NewStat(f, "test.epub", 0444), exp, testutil.Fixed(book))
 }
 
 // Read/open/close semantics are covered by the readAtFile base tests in
@@ -25,9 +24,9 @@ func testReaderFile(t *testing.T, exp library.Exporter) *readerFile {
 // the Exporter for reads and reports the export size live from Stat.
 
 func TestReaderFileOpenRead(t *testing.T) {
-	rf := testReaderFile(t, testExporter{
-		openFn: func(b *model.Book) (library.EpubReader, error) {
-			return &fakeEpubReader{Reader: bytes.NewReader([]byte("hello epub"))}, nil
+	rf := testReaderFile(t, libfake.Exporter{
+		OpenFn: func(b *model.Book) (library.EpubReader, error) {
+			return &libfake.EpubReader{Reader: bytes.NewReader([]byte("hello epub"))}, nil
 		},
 	})
 
@@ -48,8 +47,8 @@ func TestReaderFileOpenRead(t *testing.T) {
 }
 
 func TestReaderFileStatReportsSize(t *testing.T) {
-	rf := testReaderFile(t, testExporter{
-		sizeFn: func(b *model.Book) (int64, bool) { return 42, true },
+	rf := testReaderFile(t, libfake.Exporter{
+		SizeFn: func(b *model.Book) (int64, bool) { return 42, true },
 	})
 
 	s := rf.Stat()
@@ -59,8 +58,8 @@ func TestReaderFileStatReportsSize(t *testing.T) {
 }
 
 func TestReaderFileStatFallbackToZero(t *testing.T) {
-	rf := testReaderFile(t, testExporter{
-		sizeFn: func(b *model.Book) (int64, bool) { return 0, false },
+	rf := testReaderFile(t, libfake.Exporter{
+		SizeFn: func(b *model.Book) (int64, bool) { return 0, false },
 	})
 
 	s := rf.Stat()

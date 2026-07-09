@@ -1,0 +1,174 @@
+// Package libfake provides test doubles for the library facade interfaces
+// (library.Library, IngestHandle, EpubReader, Exporter), shared by the fs
+// frontend package tests.
+//
+// It is kept apart from internal/testutil because it imports library: several
+// of library's own internal packages have white-box tests that import
+// testutil, so pulling library into testutil would create a test-time import
+// cycle. Packages under fs/ already depend on library, so importing libfake
+// from their tests is cycle-free.
+package libfake
+
+import (
+	"bytes"
+	"errors"
+	"io"
+	"strings"
+
+	"github.com/ramblingenzyme/ebookfs/library"
+	"github.com/ramblingenzyme/ebookfs/library/config"
+	"github.com/ramblingenzyme/ebookfs/library/model"
+)
+
+// EpubReader is a fake library.EpubReader over an in-memory buffer. Closed
+// records whether Close has been called.
+type EpubReader struct {
+	*bytes.Reader
+	Closed bool
+}
+
+func (r *EpubReader) Close() error {
+	r.Closed = true
+	return nil
+}
+
+var _ library.EpubReader = (*EpubReader)(nil)
+var _ io.ReaderAt = (*EpubReader)(nil)
+
+// Lib is a fake library.Library whose behavior is injected per method; a nil
+// hook yields a benign zero result (except Edit, which errors to catch
+// unstubbed edit paths).
+type Lib struct {
+	EditFn         func(int64, model.Edits) (*model.Book, error)
+	IngestFn       func(string) (*model.Book, error)
+	CreateIngestFn func() (library.IngestHandle, error)
+	ExtractCoverFn func(int64) ([]byte, error)
+	ExtractOPFFn   func(int64) ([]byte, error)
+	OpenEpubFn     func(int64) (library.EpubReader, error)
+	QueryFn        func(model.Filter) ([]*model.Book, error)
+	ReindexFn      func() error
+	DeleteFn       func(int64) error
+}
+
+var _ library.Library = (Lib{})
+
+func (l Lib) Close() error                                             { return nil }
+func (l Lib) Exporter(_ config.ReaderConfig) (library.Exporter, error) { return nil, nil }
+
+func (l Lib) Edit(id int64, e model.Edits) (*model.Book, error) {
+	if l.EditFn != nil {
+		return l.EditFn(id, e)
+	}
+	return nil, errors.New("libfake.Lib: no EditFn")
+}
+
+func (l Lib) CreateIngest() (library.IngestHandle, error) {
+	if l.CreateIngestFn != nil {
+		return l.CreateIngestFn()
+	}
+	return IngestHandle{IngestFn: l.IngestFn}, nil
+}
+
+func (l Lib) ExtractCover(id int64) ([]byte, error) {
+	if l.ExtractCoverFn != nil {
+		return l.ExtractCoverFn(id)
+	}
+	return nil, nil
+}
+
+func (l Lib) ExtractOPF(id int64) ([]byte, error) {
+	if l.ExtractOPFFn != nil {
+		return l.ExtractOPFFn(id)
+	}
+	return nil, nil
+}
+
+func (l Lib) OpenEpub(id int64) (library.EpubReader, error) {
+	if l.OpenEpubFn != nil {
+		return l.OpenEpubFn(id)
+	}
+	return nil, nil
+}
+
+func (l Lib) Query(f model.Filter) ([]*model.Book, error) {
+	if l.QueryFn != nil {
+		return l.QueryFn(f)
+	}
+	return nil, nil
+}
+
+func (l Lib) Reindex() error {
+	if l.ReindexFn != nil {
+		return l.ReindexFn()
+	}
+	return nil
+}
+
+func (l Lib) Delete(id int64) error {
+	if l.DeleteFn != nil {
+		return l.DeleteFn(id)
+	}
+	return nil
+}
+
+// IngestHandle is a fake library.IngestHandle. WriteAt accepts and discards
+// bytes (tests never read them back); Ingest delegates to IngestFn, with a nil
+// hook yielding a nil book.
+type IngestHandle struct {
+	IngestFn func(string) (*model.Book, error)
+}
+
+func (h IngestHandle) WriteAt(p []byte, _ int64) (int, error) { return len(p), nil }
+func (h IngestHandle) Ingest() (*model.Book, error) {
+	if h.IngestFn == nil {
+		return nil, nil
+	}
+	return h.IngestFn("")
+}
+
+// Exporter is a fake library.Exporter with injectable behavior. StatusList is
+// returned by Statuses (named to avoid colliding with the method).
+type Exporter struct {
+	StatusList []string
+	OpenFn     func(*model.Book) (library.EpubReader, error)
+	SizeFn     func(*model.Book) (int64, bool)
+	FilenameFn func(*model.Book) string
+}
+
+func (e Exporter) Open(b *model.Book) (library.EpubReader, error) {
+	if e.OpenFn != nil {
+		return e.OpenFn(b)
+	}
+	return nil, nil
+}
+
+func (e Exporter) Size(b *model.Book) (int64, bool) {
+	if e.SizeFn != nil {
+		return e.SizeFn(b)
+	}
+	return 0, false
+}
+
+func (e Exporter) Warm(*model.Book) {}
+
+func (e Exporter) Filename(b *model.Book) string {
+	if e.FilenameFn != nil {
+		return e.FilenameFn(b)
+	}
+	return b.EpubFilename
+}
+
+func (e Exporter) Dirname(b *model.Book) string {
+	var names []string
+	for _, a := range b.Authors {
+		if a.Name != "" {
+			names = append(names, a.Name)
+		}
+	}
+	if len(names) == 0 {
+		return "Unknown"
+	}
+	return strings.Join(names, " & ")
+}
+
+func (e Exporter) Statuses() []string { return e.StatusList }

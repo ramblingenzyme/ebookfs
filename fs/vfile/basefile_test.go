@@ -1,10 +1,12 @@
-package fs
+package vfile
 
 import (
 	"bytes"
 	"testing"
 
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
@@ -18,7 +20,7 @@ import (
 
 func newTestSnapshotFile(t *testing.T, data []byte) *snapshotFile {
 	t.Helper()
-	stat := newStat(newTestFS(t), "snap", 0444)
+	stat := NewStat(testutil.NewTestFS(t), "snap", 0444)
 	sf := newSnapshotFile(stat, func() ([]byte, error) { return data, nil })
 	return &sf
 }
@@ -62,10 +64,10 @@ func TestSnapshotFileReadUnopenedErrors(t *testing.T) {
 }
 
 func TestSnapshotFileOpenPropagatesLoadError(t *testing.T) {
-	stat := newStat(newTestFS(t), "snap", 0444)
-	sf := newSnapshotFile(stat, func() ([]byte, error) { return nil, errTest })
-	if err := sf.Open(1, proto.Mode(0)); err != errTest {
-		t.Errorf("Open error = %v, want %v", err, errTest)
+	stat := NewStat(testutil.NewTestFS(t), "snap", 0444)
+	sf := newSnapshotFile(stat, func() ([]byte, error) { return nil, testutil.ErrTest })
+	if err := sf.Open(1, proto.Mode(0)); err != testutil.ErrTest {
+		t.Errorf("Open error = %v, want %v", err, testutil.ErrTest)
 	}
 }
 
@@ -94,9 +96,9 @@ func TestSnapshotFilePerFidIsolation(t *testing.T) {
 
 func newTestReadAtFile(t *testing.T, data string) *readAtFile {
 	t.Helper()
-	stat := newStat(newTestFS(t), "reader", 0444)
+	stat := NewStat(testutil.NewTestFS(t), "reader", 0444)
 	raf := newReadAtFile(stat, func() (library.EpubReader, error) {
-		return &fakeEpubReader{Reader: bytes.NewReader([]byte(data))}, nil
+		return &libfake.EpubReader{Reader: bytes.NewReader([]byte(data))}, nil
 	})
 	return &raf
 }
@@ -133,10 +135,10 @@ func TestReadAtFileReadUnopenedErrors(t *testing.T) {
 }
 
 func TestReadAtFileOpenPropagatesError(t *testing.T) {
-	stat := newStat(newTestFS(t), "reader", 0444)
-	raf := newReadAtFile(stat, func() (library.EpubReader, error) { return nil, errTest })
-	if err := raf.Open(1, proto.Mode(0)); err != errTest {
-		t.Errorf("Open error = %v, want %v", err, errTest)
+	stat := NewStat(testutil.NewTestFS(t), "reader", 0444)
+	raf := newReadAtFile(stat, func() (library.EpubReader, error) { return nil, testutil.ErrTest })
+	if err := raf.Open(1, proto.Mode(0)); err != testutil.ErrTest {
+		t.Errorf("Open error = %v, want %v", err, testutil.ErrTest)
 	}
 }
 
@@ -158,20 +160,20 @@ func TestReadAtFilePerFidIsolation(t *testing.T) {
 }
 
 func TestReadAtFileCloseReleasesReader(t *testing.T) {
-	r := &fakeEpubReader{Reader: bytes.NewReader([]byte("data"))}
-	stat := newStat(newTestFS(t), "reader", 0444)
+	r := &libfake.EpubReader{Reader: bytes.NewReader([]byte("data"))}
+	stat := NewStat(testutil.NewTestFS(t), "reader", 0444)
 	raf := newReadAtFile(stat, func() (library.EpubReader, error) { return r, nil })
 
 	if err := raf.Open(1, proto.Mode(0)); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	if r.closed {
+	if r.Closed {
 		t.Fatal("reader should not be closed before Close")
 	}
 	if err := raf.Close(1); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
-	if !r.closed {
+	if !r.Closed {
 		t.Error("reader should be closed after Close")
 	}
 }
@@ -195,11 +197,11 @@ func TestWriteFileSizeLimits(t *testing.T) {
 		open  func(t *testing.T) limitedWriteFile
 	}{
 		{"coverFile", maxCoverFileSize, func(t *testing.T) limitedWriteFile {
-			book := makeBook(1, "Test", "Author")
-			return newCoverFile(newStat(newTestFS(t), "cover.jpg", 0644), fakeLib{}, func(int64, model.Edits) error { return nil }, fixed(book))
+			book := testutil.MakeBook(1, "Test", "Author")
+			return NewCoverFile(NewStat(testutil.NewTestFS(t), "cover.jpg", 0644), libfake.Lib{}, func(int64, model.Edits) error { return nil }, testutil.Fixed(book))
 		}},
 		{"fieldFile", maxFieldFileSize, func(t *testing.T) limitedWriteFile {
-			return newFieldFile(newStat(newTestFS(t), "field", 0644), func() string { return "" }, nil)
+			return NewFieldFile(NewStat(testutil.NewTestFS(t), "field", 0644), func() string { return "" }, nil)
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

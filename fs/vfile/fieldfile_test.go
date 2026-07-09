@@ -1,14 +1,15 @@
-package fs
+package vfile
 
 import (
 	"testing"
 
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 )
 
 func TestFieldFileRead(t *testing.T) {
-	stat := newStat(newTestFS(t), "test", 0444)
-	ff := newFieldFile(stat, func() string { return "hello" }, nil)
+	stat := NewStat(testutil.NewTestFS(t), "test", 0444)
+	ff := NewFieldFile(stat, func() string { return "hello" }, nil)
 
 	fid := uint64(1)
 	if err := ff.Open(fid, proto.Mode(0)); err != nil {
@@ -29,8 +30,8 @@ func TestFieldFileRead(t *testing.T) {
 // The reads kept here exercise fieldFile's own load wrapping (the trailing "\n").
 
 func TestFieldFileReadEmpty(t *testing.T) {
-	stat := newStat(newTestFS(t), "test", 0444)
-	ff := newFieldFile(stat, func() string { return "" }, nil)
+	stat := NewStat(testutil.NewTestFS(t), "test", 0444)
+	ff := NewFieldFile(stat, func() string { return "" }, nil)
 
 	fid := uint64(1)
 	if err := ff.Open(fid, proto.Mode(0)); err != nil {
@@ -47,10 +48,10 @@ func TestFieldFileReadEmpty(t *testing.T) {
 }
 
 func TestFieldFileWriteClose(t *testing.T) {
-	stat := newStat(newTestFS(t), "test", 0644)
+	stat := NewStat(testutil.NewTestFS(t), "test", 0644)
 
 	var got string
-	ff := newFieldFile(stat, func() string { return "" }, func(s string) error {
+	ff := NewFieldFile(stat, func() string { return "" }, func(s string) error {
 		got = s
 		return nil
 	})
@@ -74,10 +75,10 @@ func TestFieldFileWriteClose(t *testing.T) {
 }
 
 func TestFieldFileWriteTrailingNewlineTrimmed(t *testing.T) {
-	stat := newStat(newTestFS(t), "test", 0644)
+	stat := NewStat(testutil.NewTestFS(t), "test", 0644)
 
 	var got string
-	ff := newFieldFile(stat, func() string { return "" }, func(s string) error {
+	ff := NewFieldFile(stat, func() string { return "" }, func(s string) error {
 		got = s
 		return nil
 	})
@@ -101,10 +102,10 @@ func TestFieldFileWriteTrailingNewlineTrimmed(t *testing.T) {
 }
 
 func TestFieldFileNoWriteDoesNotCallSet(t *testing.T) {
-	stat := newStat(newTestFS(t), "test", 0644)
+	stat := NewStat(testutil.NewTestFS(t), "test", 0644)
 
 	called := false
-	ff := newFieldFile(stat, func() string { return "" }, func(s string) error {
+	ff := NewFieldFile(stat, func() string { return "" }, func(s string) error {
 		called = true
 		return nil
 	})
@@ -124,8 +125,8 @@ func TestFieldFileNoWriteDoesNotCallSet(t *testing.T) {
 }
 
 func TestFieldFileWriteReadOnly(t *testing.T) {
-	stat := newStat(newTestFS(t), "test", 0444)
-	ff := newFieldFile(stat, func() string { return "val" }, nil)
+	stat := NewStat(testutil.NewTestFS(t), "test", 0444)
+	ff := NewFieldFile(stat, func() string { return "val" }, nil)
 
 	fid := uint64(1)
 	if err := ff.Open(fid, proto.Mode(0)); err != nil {
@@ -146,8 +147,8 @@ func TestFieldFileWriteReadOnly(t *testing.T) {
 }
 
 func TestFieldFileStatLength(t *testing.T) {
-	stat := newStat(newTestFS(t), "test", 0444)
-	ff := newFieldFile(stat, func() string { return "hello" }, nil)
+	stat := NewStat(testutil.NewTestFS(t), "test", 0444)
+	ff := NewFieldFile(stat, func() string { return "hello" }, nil)
 
 	s := ff.Stat()
 	if s.Length != 6 {
@@ -156,8 +157,8 @@ func TestFieldFileStatLength(t *testing.T) {
 }
 
 func TestFieldFileStatLengthEmpty(t *testing.T) {
-	stat := newStat(newTestFS(t), "test", 0444)
-	ff := newFieldFile(stat, func() string { return "" }, nil)
+	stat := NewStat(testutil.NewTestFS(t), "test", 0444)
+	ff := NewFieldFile(stat, func() string { return "" }, nil)
 
 	s := ff.Stat()
 	if s.Length != 1 {
@@ -166,8 +167,8 @@ func TestFieldFileStatLengthEmpty(t *testing.T) {
 }
 
 func TestFieldFilePerFidBuffers(t *testing.T) {
-	stat := newStat(newTestFS(t), "test", 0644)
-	ff := newFieldFile(stat, func() string { return "original" }, nil)
+	stat := NewStat(testutil.NewTestFS(t), "test", 0644)
+	ff := NewFieldFile(stat, func() string { return "original" }, nil)
 
 	fid1, fid2 := uint64(1), uint64(2)
 	if err := ff.Open(fid1, proto.Mode(0)); err != nil {
@@ -200,10 +201,10 @@ func TestFieldFilePerFidBuffers(t *testing.T) {
 }
 
 func TestFieldFileGetUpdatesOnReopen(t *testing.T) {
-	stat := newStat(newTestFS(t), "test", 0444)
+	stat := NewStat(testutil.NewTestFS(t), "test", 0444)
 
 	value := "first"
-	ff := newFieldFile(stat, func() string { return value }, nil)
+	ff := NewFieldFile(stat, func() string { return value }, nil)
 
 	fid := uint64(1)
 	if err := ff.Open(fid, proto.Mode(0)); err != nil {
@@ -229,10 +230,10 @@ func TestFieldFileGetUpdatesOnReopen(t *testing.T) {
 }
 
 func TestFieldFileOtruncOverwrite(t *testing.T) {
-	stat := newStat(newTestFS(t), "test", 0644)
+	stat := NewStat(testutil.NewTestFS(t), "test", 0644)
 
 	var got string
-	ff := newFieldFile(stat, func() string { return "oldvalue" }, func(s string) error {
+	ff := NewFieldFile(stat, func() string { return "oldvalue" }, func(s string) error {
 		got = s
 		return nil
 	})
@@ -256,10 +257,10 @@ func TestFieldFileOtruncOverwrite(t *testing.T) {
 }
 
 func TestFieldFileAppendWithoutOtrunc(t *testing.T) {
-	stat := newStat(newTestFS(t), "test", 0644)
+	stat := NewStat(testutil.NewTestFS(t), "test", 0644)
 
 	var got string
-	ff := newFieldFile(stat, func() string { return "old" }, func(s string) error {
+	ff := NewFieldFile(stat, func() string { return "old" }, func(s string) error {
 		got = s
 		return nil
 	})
@@ -284,10 +285,10 @@ func TestFieldFileAppendWithoutOtrunc(t *testing.T) {
 }
 
 func TestFieldFilePartialOverwriteWithoutOtrunc(t *testing.T) {
-	stat := newStat(newTestFS(t), "test", 0644)
+	stat := NewStat(testutil.NewTestFS(t), "test", 0644)
 
 	var got string
-	ff := newFieldFile(stat, func() string { return "hello world" }, func(s string) error {
+	ff := NewFieldFile(stat, func() string { return "hello world" }, func(s string) error {
 		got = s
 		return nil
 	})
@@ -312,10 +313,10 @@ func TestFieldFilePartialOverwriteWithoutOtrunc(t *testing.T) {
 }
 
 func TestFieldFileShorterOverwriteWithoutOtrunc(t *testing.T) {
-	stat := newStat(newTestFS(t), "test", 0644)
+	stat := NewStat(testutil.NewTestFS(t), "test", 0644)
 
 	var got string
-	ff := newFieldFile(stat, func() string { return "reading" }, func(s string) error {
+	ff := NewFieldFile(stat, func() string { return "reading" }, func(s string) error {
 		got = s
 		return nil
 	})
@@ -341,10 +342,10 @@ func TestFieldFileShorterOverwriteWithoutOtrunc(t *testing.T) {
 }
 
 func TestFieldFileOtruncNoWriteDoesNotCallSet(t *testing.T) {
-	stat := newStat(newTestFS(t), "test", 0644)
+	stat := NewStat(testutil.NewTestFS(t), "test", 0644)
 
 	called := false
-	ff := newFieldFile(stat, func() string { return "old" }, func(s string) error {
+	ff := NewFieldFile(stat, func() string { return "old" }, func(s string) error {
 		called = true
 		return nil
 	})

@@ -1,4 +1,4 @@
-package fs
+package vfile
 
 import (
 	"errors"
@@ -10,7 +10,7 @@ import (
 
 const maxFieldFileSize = 1 << 20 // 1 MiB
 
-// fieldFile is a readable/writable file backed by a single string-valued field.
+// FieldFile is a readable/writable file backed by a single string-valued field.
 // Content is snapshotted per fid on Open; writes are buffered per fid and
 // committed (trimmed of trailing newline) when the fid is closed.
 //
@@ -21,7 +21,7 @@ const maxFieldFileSize = 1 << 20 // 1 MiB
 // that is shorter than the current value replaces it entirely (no trailing
 // bytes from the old value leak through). On Close the result is sent through
 // set → edits → Validate; an error aborts the commit.
-type fieldFile struct {
+type FieldFile struct {
 	snapshotFile
 	get       func() string
 	set       func(string) error
@@ -29,8 +29,8 @@ type fieldFile struct {
 	truncated map[uint64]bool
 }
 
-func newFieldFile(stat *proto.Stat, get func() string, set func(string) error) *fieldFile {
-	return &fieldFile{
+func NewFieldFile(stat *proto.Stat, get func() string, set func(string) error) *FieldFile {
+	return &FieldFile{
 		snapshotFile: newSnapshotFile(stat, func() ([]byte, error) {
 			return []byte(get() + "\n"), nil
 		}),
@@ -41,14 +41,14 @@ func newFieldFile(stat *proto.Stat, get func() string, set func(string) error) *
 	}
 }
 
-func (f *fieldFile) Stat() proto.Stat {
+func (f *FieldFile) Stat() proto.Stat {
 	s := f.BaseFile.Stat()
 	// +1 for the trailing newline that Read and Open always append.
 	s.Length = uint64(len(f.get()) + 1)
 	return s
 }
 
-func (f *fieldFile) Open(fid uint64, omode proto.Mode) error {
+func (f *FieldFile) Open(fid uint64, omode proto.Mode) error {
 	f.Lock()
 	defer f.Unlock()
 	data, err := f.load()
@@ -61,7 +61,7 @@ func (f *fieldFile) Open(fid uint64, omode proto.Mode) error {
 	return nil
 }
 
-func (f *fieldFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
+func (f *FieldFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
 	if len(data) == 0 {
 		return 0, nil
 	}
@@ -102,7 +102,7 @@ func (f *fieldFile) Write(fid uint64, offset uint64, data []byte) (uint32, error
 	return uint32(len(data)), nil
 }
 
-func (f *fieldFile) Close(fid uint64) error {
+func (f *FieldFile) Close(fid uint64) error {
 	f.Lock()
 	defer f.Unlock()
 	data := f.writes[fid]

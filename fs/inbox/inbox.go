@@ -1,4 +1,9 @@
-package fs
+// Package inbox implements the write-only inbox/ directory of the served tree:
+// a client creating and writing a file there streams it through the library's
+// ingest handle, and on close the book is ingested and handed to the registry.
+// It depends only on the library facade and the vfile stat convention, not on
+// the book directory tree, so it is a leaf of the frontend.
+package inbox
 
 import (
 	"errors"
@@ -6,21 +11,22 @@ import (
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-type inboxDir struct {
+type InboxDir struct {
 	fs.StaticDir
 }
 
-func newInboxDir(f *fs.FS) *inboxDir {
-	return &inboxDir{
-		StaticDir: *fs.NewStaticDir(newStat(f, "inbox", 0755|proto.DMDIR)),
+func NewInboxDir(f *fs.FS) *InboxDir {
+	return &InboxDir{
+		StaticDir: *fs.NewStaticDir(vfile.NewStat(f, "inbox", 0755|proto.DMDIR)),
 	}
 }
 
-type inboxFile struct {
+type InboxFile struct {
 	fs.BaseFile
 	fid      uint64
 	handle   library.IngestHandle
@@ -28,15 +34,18 @@ type inboxFile struct {
 	onIngest func(*model.Book)
 }
 
-func inboxCreateFile(lib library.Library, onIngest func(*model.Book)) createFileFunc {
+// InboxCreateFile returns a go9p CreateFile handler: a file created under an
+// InboxDir is backed by a fresh InboxFile wired to lib and onIngest. The
+// returned func matches the fs.FS.CreateFile field signature.
+func InboxCreateFile(lib library.Library, onIngest func(*model.Book)) func(*fs.FS, fs.Dir, string, string, uint32, uint8) (fs.File, error) {
 	return func(f *fs.FS, parent fs.Dir, user, name string, perm uint32, mode uint8) (fs.File, error) {
 		log.Printf("inbox: create %q perm=%o mode=%d parent=%s", name, perm, mode, fs.FullPath(parent))
-		inbox, ok := parent.(*inboxDir)
+		inbox, ok := parent.(*InboxDir)
 		if !ok {
 			return nil, errors.New("not under inbox")
 		}
 
-		file := newInboxFile(f, lib, name, perm, onIngest)
+		file := NewInboxFile(f, lib, name, perm, onIngest)
 		inbox.DeleteChild(name)
 		if err := inbox.AddChild(file); err != nil {
 			log.Printf("inbox: AddChild %q: %v", name, err)
@@ -46,15 +55,15 @@ func inboxCreateFile(lib library.Library, onIngest func(*model.Book)) createFile
 	}
 }
 
-func newInboxFile(f *fs.FS, lib library.Library, name string, perm uint32, onIngest func(*model.Book)) *inboxFile {
-	return &inboxFile{
-		BaseFile: *fs.NewBaseFile(newStat(f, name, perm)),
+func NewInboxFile(f *fs.FS, lib library.Library, name string, perm uint32, onIngest func(*model.Book)) *InboxFile {
+	return &InboxFile{
+		BaseFile: *fs.NewBaseFile(vfile.NewStat(f, name, perm)),
 		lib:      lib,
 		onIngest: onIngest,
 	}
 }
 
-func (i *inboxFile) Open(fid uint64, omode proto.Mode) error {
+func (i *InboxFile) Open(fid uint64, omode proto.Mode) error {
 	log.Printf("inbox: open %q fid=%d omode=%d", i.Stat().Name, fid, omode)
 	name := i.Stat().Name // cache before Lock — Stat() acquires RLock, deadlocking if already write-locked
 	i.Lock()
@@ -75,7 +84,7 @@ func (i *inboxFile) Open(fid uint64, omode proto.Mode) error {
 	return nil
 }
 
-func (i *inboxFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
+func (i *InboxFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
 	i.Lock()
 	defer i.Unlock()
 	if i.handle == nil || i.fid != fid {
@@ -91,7 +100,7 @@ func (i *inboxFile) Write(fid uint64, offset uint64, data []byte) (uint32, error
 // teardown releases the ingest handle under the lock. The caller must not
 // hold the lock when calling DeleteChild or Ingest, since those re-enter
 // the mutex via SetParent.
-func (i *inboxFile) teardown() library.IngestHandle {
+func (i *InboxFile) teardown() library.IngestHandle {
 	i.Lock()
 	defer i.Unlock()
 	h := i.handle
@@ -100,7 +109,7 @@ func (i *inboxFile) teardown() library.IngestHandle {
 	return h
 }
 
-func (i *inboxFile) Close(fid uint64) error {
+func (i *InboxFile) Close(fid uint64) error {
 	log.Printf("inbox: close %q fid=%d", i.Stat().Name, fid)
 
 	h := i.teardown()

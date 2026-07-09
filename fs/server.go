@@ -6,6 +6,7 @@ import (
 
 	"github.com/knusbaum/go9p"
 	"github.com/knusbaum/go9p/fs"
+	"github.com/ramblingenzyme/ebookfs/fs/inbox"
 	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
@@ -31,7 +32,7 @@ func StartServer(lib library.Library, exp library.Exporter, listen string) {
 func setupServer(lib library.Library, exp library.Exporter) (*fs.FS, *fs.StaticDir, error) {
 	ebookfs, root := newFS()
 	registry := newBookRegistry(ebookfs, lib)
-	ebookfs.CreateFile = inboxCreateFile(lib, registry.Add)
+	ebookfs.CreateFile = inbox.InboxCreateFile(lib, registry.Add)
 
 	// TODO: add graceful shutdown. go9p.Serve blocks; the warmer's 4 goroutines
 	// (reader.go) leak on exit because their channel is never closed.
@@ -53,7 +54,7 @@ func setupServer(lib library.Library, exp library.Exporter) (*fs.FS, *fs.StaticD
 		registry.Add(b)
 	}
 
-	root.AddChild(newInboxDir(ebookfs))
+	root.AddChild(inbox.NewInboxDir(ebookfs))
 	root.AddChild(allBooks)
 	root.AddChild(byAuthor)
 	root.AddChild(byID)

@@ -6,6 +6,8 @@ import (
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/fs/vfile"
+	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -13,7 +15,7 @@ import (
 // fieldFile with Otrunc, write the new value, and close to commit.
 func writeField(t *testing.T, bd *bookDir, name, value string) {
 	t.Helper()
-	ff := bd.Children()[name].(*fieldFile)
+	ff := bd.Children()[name].(*vfile.FieldFile)
 	fid := uint64(1)
 	if err := ff.Open(fid, proto.Otrunc); err != nil {
 		t.Fatalf("Open %s field: %v", name, err)
@@ -32,8 +34,8 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 	book.Meta.Status = "unread"
 	// The real library fetches the edit base by id; the fake closes over the
 	// test's book instead.
-	lib := fakeLib{
-		editFn: func(id int64, e model.Edits) (*model.Book, error) {
+	lib := libfake.Lib{
+		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
 			updated := *book
 			if e.Title != nil {
 				updated.Title = *e.Title
@@ -83,8 +85,8 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 func TestRegistryEditAuthorsRehomesInByAuthor(t *testing.T) {
 	f := newTestFS(t)
 	book := makeBook(1, "Test", "Alice")
-	lib := fakeLib{
-		editFn: func(id int64, e model.Edits) (*model.Book, error) {
+	lib := libfake.Lib{
+		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
 			updated := *book
 			if e.Authors != nil {
 				updated.Authors = *e.Authors
@@ -127,8 +129,8 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 	book := makeBook(1, "Test", "Author1")
 	book.EpubFilename = "Test.epub"
 	book.Meta.Status = "unread"
-	lib := fakeLib{
-		editFn: func(id int64, e model.Edits) (*model.Book, error) {
+	lib := libfake.Lib{
+		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
 			updated := *book
 			if e.Status != nil {
 				updated.Meta.Status = *e.Status
@@ -139,7 +141,7 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 	}
 	reg := newBookRegistry(f, lib)
 	allBooks := newAllBooksDir(reg)
-	readerDir := newReaderDir(reg, testExporter{statuses: []string{"reading"}})
+	readerDir := newReaderDir(reg, libfake.Exporter{StatusList: []string{"reading"}})
 
 	reg.Add(book)
 
@@ -173,8 +175,8 @@ func TestRegistryEditConcurrentReaders(t *testing.T) {
 	// current mimics the library's authoritative state; editFn runs under the
 	// registry mutex, so reading and replacing it is serialized.
 	current := makeBook(1, "Title A", "Alice")
-	lib := fakeLib{
-		editFn: func(id int64, e model.Edits) (*model.Book, error) {
+	lib := libfake.Lib{
+		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
 			updated := *current
 			if e.Title != nil {
 				updated.Title = *e.Title
@@ -189,7 +191,7 @@ func TestRegistryEditConcurrentReaders(t *testing.T) {
 
 	reg.Add(current)
 	bd := allBooks.Children()["Title A"].(*bookDir)
-	titleFF := bd.Children()["title"].(*fieldFile)
+	titleFF := bd.Children()["title"].(*vfile.FieldFile)
 
 	done := make(chan struct{})
 	var wg sync.WaitGroup
@@ -231,7 +233,7 @@ func TestRegistryEditConcurrentReaders(t *testing.T) {
 }
 
 func TestRegistryEditUnknownID(t *testing.T) {
-	reg := newBookRegistry(newTestFS(t), fakeLib{})
+	reg := newBookRegistry(newTestFS(t), libfake.Lib{})
 
 	status := "read"
 	err := reg.edit(999, model.Edits{Status: &status})

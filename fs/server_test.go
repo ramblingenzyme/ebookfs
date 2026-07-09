@@ -3,12 +3,13 @@ package fs
 import (
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 func TestSetupServer(t *testing.T) {
-	lib := fakeLib{
-		queryFn: func(_ model.Filter) ([]*model.Book, error) {
+	lib := libfake.Lib{
+		QueryFn: func(_ model.Filter) ([]*model.Book, error) {
 			b1 := makeBook(1, "Book One", "Alice")
 			b1.Meta.Status = "unread"
 			b2 := makeBook(2, "Book Two", "Bob")
@@ -16,7 +17,7 @@ func TestSetupServer(t *testing.T) {
 			return []*model.Book{b1, b2}, nil
 		},
 	}
-	exp := testExporter{statuses: []string{"unread"}}
+	exp := libfake.Exporter{StatusList: []string{"unread"}}
 
 	_, root, err := setupServer(lib, exp)
 	if err != nil {
@@ -35,26 +36,26 @@ func TestSetupServer(t *testing.T) {
 }
 
 func TestSetupServer_QueryError(t *testing.T) {
-	lib := fakeLib{
-		queryFn: func(_ model.Filter) ([]*model.Book, error) {
+	lib := libfake.Lib{
+		QueryFn: func(_ model.Filter) ([]*model.Book, error) {
 			return nil, errTest
 		},
 	}
-	_, _, err := setupServer(lib, testExporter{})
+	_, _, err := setupServer(lib, libfake.Exporter{})
 	if err == nil {
 		t.Fatal("expected error from setupServer when Query fails")
 	}
 }
 
 func TestSetupServer_BooksPopulated(t *testing.T) {
-	lib := fakeLib{
-		queryFn: func(_ model.Filter) ([]*model.Book, error) {
+	lib := libfake.Lib{
+		QueryFn: func(_ model.Filter) ([]*model.Book, error) {
 			b := makeBook(1, "Present", "Alice")
 			b.Meta.Status = "unread"
 			return []*model.Book{b}, nil
 		},
 	}
-	_, root, err := setupServer(lib, testExporter{})
+	_, root, err := setupServer(lib, libfake.Exporter{})
 	if err != nil {
 		t.Fatalf("setupServer: %v", err)
 	}
