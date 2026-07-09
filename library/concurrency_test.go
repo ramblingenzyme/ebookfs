@@ -1,7 +1,6 @@
 package library
 
 import (
-	"archive/zip"
 	"bytes"
 	"image"
 	"image/jpeg"
@@ -10,88 +9,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ramblingenzyme/ebookfs/library/config"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
-
-// buildTestEpub writes a minimal valid EPUB 3 with a cover entry and returns
-// its bytes. The mimetype entry is STORED first per OCF.
-func buildTestEpub(t *testing.T, title string) []byte {
-	t.Helper()
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
-
-	mt, err := zw.CreateHeader(&zip.FileHeader{Name: "mimetype", Method: zip.Store})
-	if err != nil {
-		t.Fatal(err)
-	}
-	mt.Write([]byte("application/epub+zip"))
-
-	files := map[string]string{
-		"META-INF/container.xml": `<?xml version="1.0"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-  <rootfiles>
-    <rootfile full-path="content.opf" media-type="application/oebps-package+xml"/>
-  </rootfiles>
-</container>`,
-		"content.opf": `<?xml version="1.0"?>
-<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
-  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:identifier id="id">ebookfs-test-1</dc:identifier>
-    <dc:title>` + title + `</dc:title>
-    <dc:creator id="c1">Alice</dc:creator>
-    <dc:language>en</dc:language>
-  </metadata>
-  <manifest>
-    <item id="cover" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
-  </manifest>
-</package>`,
-		"cover.jpg": "placeholder-cover-bytes",
-	}
-	for name, content := range files {
-		w, err := zw.Create(name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		w.Write([]byte(content))
-	}
-	if err := zw.Close(); err != nil {
-		t.Fatal(err)
-	}
-	return buf.Bytes()
-}
-
-func openTestLibrary(t *testing.T) Library {
-	t.Helper()
-	dir := t.TempDir()
-	lib, err := Open(config.LibraryConfig{
-		Root:      filepath.Join(dir, "root"),
-		InboxTemp: filepath.Join(dir, "inbox-tmp"),
-		IndexPath: filepath.Join(dir, "index.db"),
-	}, false)
-	if err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-	t.Cleanup(func() { lib.Close() })
-	return lib
-}
-
-func ingestTestEpub(t *testing.T, lib Library, data []byte) *model.Book {
-	t.Helper()
-	h, err := lib.CreateIngest()
-	if err != nil {
-		t.Fatalf("CreateIngest: %v", err)
-	}
-	if _, err := h.WriteAt(data, 0); err != nil {
-		t.Fatalf("WriteAt: %v", err)
-	}
-	b, err := h.Ingest()
-	if err != nil {
-		t.Fatalf("Ingest: %v", err)
-	}
-	return b
-}
 
 // TestEditWriteCoverConcurrentSameBook races an Edit that moves the book
 // directory (title change) against a WriteCover on the same book. Both address
