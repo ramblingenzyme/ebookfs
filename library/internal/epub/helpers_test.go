@@ -5,10 +5,42 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // Shared test fixtures and the epub builder used by both parse_test.go and
 // write_test.go.
+
+// writeBib applies edits to the package document of the epub at epubPath,
+// rewrites the file in place, and returns the re-parsed Book. A test-only
+// convenience over Prepare/Commit; production code drives that flow through
+// library.Edit.
+func writeBib(epubPath string, e model.Edits) (*Book, error) {
+	c, err := Prepare(&model.Book{Location: model.Location{EpubPath: epubPath}}, e)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.Commit(); err != nil {
+		c.Discard()
+		return nil, err
+	}
+	return c.Book(), nil
+}
+
+// writeCover replaces the cover image entry (coverPath, as resolved by Parse)
+// with img, rewrites the file in place, and returns the re-parsed Book.
+func writeCover(epubPath, coverPath string, img []byte) (*Book, error) {
+	c, err := Prepare(&model.Book{Location: model.Location{EpubPath: epubPath}, Bib: model.Bib{CoverPath: coverPath}}, model.Edits{Cover: &img})
+	if err != nil {
+		return nil, err
+	}
+	if err := c.Commit(); err != nil {
+		c.Discard()
+		return nil, err
+	}
+	return c.Book(), nil
+}
 
 type entry struct {
 	name  string

@@ -82,34 +82,6 @@ func Prepare(b *model.Book, e model.Edits) (*Commit, error) {
 	return prepareEpub(b.EpubPath, replace)
 }
 
-// writeBib applies edits to the package document of the epub at epubPath,
-// rewrites the file in place, and returns the re-parsed Book.
-func writeBib(epubPath string, e model.Edits) (*Book, error) {
-	c, err := Prepare(&model.Book{Location: model.Location{EpubPath: epubPath}}, e)
-	if err != nil {
-		return nil, err
-	}
-	if err := c.Commit(); err != nil {
-		c.Discard()
-		return nil, err
-	}
-	return c.Book(), nil
-}
-
-// writeCover replaces the cover image entry (coverPath, as resolved by Parse)
-// with img, rewrites the file in place, and returns the re-parsed Book.
-func writeCover(epubPath, coverPath string, img []byte) (*Book, error) {
-	c, err := Prepare(&model.Book{Location: model.Location{EpubPath: epubPath}, Bib: model.Bib{CoverPath: coverPath}}, model.Edits{Cover: &img})
-	if err != nil {
-		return nil, err
-	}
-	if err := c.Commit(); err != nil {
-		c.Discard()
-		return nil, err
-	}
-	return c.Book(), nil
-}
-
 // coverFormat maps a cover entry's path to the image format name (as reported by
 // image.DecodeConfig) that may replace it in place, or "" if the extension is
 // not an in-place-replaceable raster cover (matching calibre's png/jpg/jpeg
