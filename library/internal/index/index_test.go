@@ -241,3 +241,273 @@ func TestRebuildClearsLeakedRows(t *testing.T) {
 	}
 	mustNeedReindex(t, idx, false)
 }
+
+// storeInIndex inserts a book into a clean index via Put, failing on error.
+func storeInIndex(t *testing.T, idx *Index, b *model.Book) {
+	t.Helper()
+	op := idx.BeginOp()
+	if err := op.MarkPending(); err != nil {
+		t.Fatalf("MarkPending: %v", err)
+	}
+	if err := op.Put(b); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+}
+
+func TestQueryAllReturnsAllBooks(t *testing.T) {
+	idx := openTestIndex(t)
+	storeInIndex(t, idx, newBook(1, "Alpha"))
+	storeInIndex(t, idx, newBook(2, "Beta"))
+	storeInIndex(t, idx, newBook(3, "Gamma"))
+
+	books, err := idx.Query(model.Filter{})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(books) != 3 {
+		t.Fatalf("len = %d, want 3", len(books))
+	}
+}
+
+func TestQueryByID(t *testing.T) {
+	idx := openTestIndex(t)
+	storeInIndex(t, idx, newBook(1, "One"))
+	storeInIndex(t, idx, newBook(2, "Two"))
+
+	got, err := idx.Query(model.Filter{ID: 2})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1", len(got))
+	}
+	if got[0].Meta.ID != 2 {
+		t.Errorf("ID = %d, want 2", got[0].Meta.ID)
+	}
+}
+
+func TestQueryByAuthor(t *testing.T) {
+	idx := openTestIndex(t)
+
+	bob := model.NewBook(
+		model.Bib{Title: "Bob's Book", Authors: []model.Author{{Name: "Bob", SortName: "Bob"}}},
+		model.Meta{ID: 1},
+		model.Location{LibraryPath: "Bob/Bob's Book (1)", EpubFilename: "book.epub"},
+	)
+	aliceBook := model.NewBook(
+		model.Bib{Title: "Alice's Book", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		model.Meta{ID: 2},
+		model.Location{LibraryPath: "Alice/Alice's Book (2)", EpubFilename: "book.epub"},
+	)
+
+	storeInIndex(t, idx, bob)
+	storeInIndex(t, idx, aliceBook)
+
+	got, err := idx.Query(model.Filter{Author: "Bob"})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1", len(got))
+	}
+	if got[0].Title != "Bob's Book" {
+		t.Errorf("Title = %q, want %q", got[0].Title, "Bob's Book")
+	}
+}
+
+func TestQueryByStatus(t *testing.T) {
+	idx := openTestIndex(t)
+
+	readBook := model.NewBook(
+		model.Bib{Title: "Read Book", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		model.Meta{ID: 1, Status: "read"},
+		model.Location{LibraryPath: "A/Read Book (1)", EpubFilename: "book.epub"},
+	)
+	unreadBook := model.NewBook(
+		model.Bib{Title: "Unread Book", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		model.Meta{ID: 2, Status: "unread"},
+		model.Location{LibraryPath: "A/Unread Book (2)", EpubFilename: "book.epub"},
+	)
+
+	storeInIndex(t, idx, readBook)
+	storeInIndex(t, idx, unreadBook)
+
+	got, err := idx.Query(model.Filter{Status: "read"})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1", len(got))
+	}
+	if got[0].Meta.ID != 1 {
+		t.Errorf("returned book id = %d, want 1", got[0].Meta.ID)
+	}
+}
+
+func TestQueryByTag(t *testing.T) {
+	idx := openTestIndex(t)
+
+	tagged := model.NewBook(
+		model.Bib{Title: "Tagged", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		model.Meta{ID: 1, Tags: []string{"sci-fi"}},
+		model.Location{LibraryPath: "A/Tagged (1)", EpubFilename: "book.epub"},
+	)
+	untagged := model.NewBook(
+		model.Bib{Title: "Plain", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		model.Meta{ID: 2},
+		model.Location{LibraryPath: "A/Plain (2)", EpubFilename: "book.epub"},
+	)
+
+	storeInIndex(t, idx, tagged)
+	storeInIndex(t, idx, untagged)
+
+	got, err := idx.Query(model.Filter{Tag: "sci-fi"})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1", len(got))
+	}
+	if got[0].Meta.ID != 1 {
+		t.Errorf("returned book id = %d, want 1", got[0].Meta.ID)
+	}
+}
+
+func TestQueryBySeries(t *testing.T) {
+	idx := openTestIndex(t)
+
+	seriesBook := model.NewBook(
+		model.Bib{
+			Title: "Series Book", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}},
+			Series: &model.SeriesRef{Name: "My Series", Index: 1},
+		},
+		model.Meta{ID: 1},
+		model.Location{LibraryPath: "A/Series Book (1)", EpubFilename: "book.epub"},
+	)
+	standalone := model.NewBook(
+		model.Bib{Title: "Standalone", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		model.Meta{ID: 2},
+		model.Location{LibraryPath: "A/Standalone (2)", EpubFilename: "book.epub"},
+	)
+
+	storeInIndex(t, idx, seriesBook)
+	storeInIndex(t, idx, standalone)
+
+	got, err := idx.Query(model.Filter{Series: "My Series"})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1", len(got))
+	}
+	if got[0].Title != "Series Book" {
+		t.Errorf("Title = %q, want %q", got[0].Title, "Series Book")
+	}
+}
+
+func TestQueryMultipleFilters(t *testing.T) {
+	idx := openTestIndex(t)
+
+	bobRead := model.NewBook(
+		model.Bib{Title: "Bob Read", Authors: []model.Author{{Name: "Bob", SortName: "Bob"}}},
+		model.Meta{ID: 1, Status: "read"},
+		model.Location{LibraryPath: "B/Bob Read (1)", EpubFilename: "book.epub"},
+	)
+	bobUnread := model.NewBook(
+		model.Bib{Title: "Bob Unread", Authors: []model.Author{{Name: "Bob", SortName: "Bob"}}},
+		model.Meta{ID: 2, Status: "unread"},
+		model.Location{LibraryPath: "B/Bob Unread (2)", EpubFilename: "book.epub"},
+	)
+	aliceRead := model.NewBook(
+		model.Bib{Title: "Alice Read", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		model.Meta{ID: 3, Status: "read"},
+		model.Location{LibraryPath: "A/Alice Read (3)", EpubFilename: "book.epub"},
+	)
+
+	storeInIndex(t, idx, bobRead)
+	storeInIndex(t, idx, bobUnread)
+	storeInIndex(t, idx, aliceRead)
+
+	// Filter by Bob AND read.
+	got, err := idx.Query(model.Filter{Author: "Bob", Status: "read"})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1", len(got))
+	}
+	if got[0].Title != "Bob Read" {
+		t.Errorf("Title = %q, want %q", got[0].Title, "Bob Read")
+	}
+}
+
+func TestQueryLimit(t *testing.T) {
+	idx := openTestIndex(t)
+	storeInIndex(t, idx, newBook(1, "Aardvark"))
+	storeInIndex(t, idx, newBook(2, "Beetle"))
+	storeInIndex(t, idx, newBook(3, "Cougar"))
+
+	got, err := idx.Query(model.Filter{Limit: 2})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len = %d, want 2", len(got))
+	}
+}
+
+func TestQueryRecentOrder(t *testing.T) {
+	idx := openTestIndex(t)
+
+	old := model.NewBook(
+		model.Bib{Title: "Old", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		model.Meta{ID: 1},
+		model.Location{LibraryPath: "A/Old (1)", EpubFilename: "book.epub"},
+	)
+	new := model.NewBook(
+		model.Bib{Title: "New", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		model.Meta{ID: 2},
+		model.Location{LibraryPath: "A/New (2)", EpubFilename: "book.epub"},
+	)
+
+	storeInIndex(t, idx, old)
+	storeInIndex(t, idx, new)
+
+	got, err := idx.Query(model.Filter{Recent: true})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len = %d, want 2", len(got))
+	}
+	// Recent means date_added DESC — the most recently inserted should be first.
+	if got[0].Meta.ID != 2 {
+		t.Errorf("first book id = %d, want 2 (most recently added)", got[0].Meta.ID)
+	}
+}
+
+func TestQueryEmptyResult(t *testing.T) {
+	idx := openTestIndex(t)
+	storeInIndex(t, idx, newBook(1, "Only Book"))
+
+	got, err := idx.Query(model.Filter{Status: "abandoned"})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("len = %d, want 0", len(got))
+	}
+}
+
+func TestQueryIDNotFound(t *testing.T) {
+	idx := openTestIndex(t)
+	storeInIndex(t, idx, newBook(1, "Only"))
+
+	got, err := idx.Query(model.Filter{ID: 999})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("len = %d, want 0", len(got))
+	}
+}
