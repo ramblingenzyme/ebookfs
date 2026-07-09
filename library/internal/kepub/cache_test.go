@@ -2,6 +2,8 @@ package kepub
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -113,6 +115,56 @@ func TestWarmConcurrentWithStopNoPanic(t *testing.T) {
 
 	w.stop()
 	wg.Wait()
+}
+
+func TestCacheFilename(t *testing.T) {
+	c := NewCache(t.TempDir(), noopSource{})
+
+	tests := []struct {
+		name     string
+		epubName string
+		want     string
+	}{
+		{"basic", "Book.epub", "Book.kepub.epub"},
+		{"multiple dots", "My.Book.v2.epub", "My.Book.v2.kepub.epub"},
+		{"no suffix", "Book", "Book.kepub.epub"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := makeBook(1, "Test", "Alice")
+			b.EpubFilename = tt.epubName
+			got := c.Filename(b)
+			if got != tt.want {
+				t.Errorf("Filename = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCacheSize(t *testing.T) {
+	dir := t.TempDir()
+	c := NewCache(dir, noopSource{})
+	b := makeBook(1, "Test", "Alice")
+
+	// No cache file yet — should report cold.
+	_, ok := c.Size(b)
+	if ok {
+		t.Error("Size should report cold for missing cache file")
+	}
+
+	// Create a cache file.
+	cachePath := filepath.Join(dir, "1.kepub.epub")
+	if err := os.WriteFile(cachePath, []byte("kepub-data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	size, ok := c.Size(b)
+	if !ok {
+		t.Fatal("Size should report hot after cache file created")
+	}
+	if size != 10 { // len("kepub-data")
+		t.Errorf("Size = %d, want 10", size)
+	}
 }
 
 var errTest = errors.New("test error")

@@ -3,6 +3,7 @@ package store
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/library/model"
@@ -406,5 +407,105 @@ func TestWalkEmptyLibrary(t *testing.T) {
 	}
 	if len(results) != 0 {
 		t.Errorf("Walk returned %d entries, want 0", len(results))
+	}
+}
+
+func TestOpenEpub(t *testing.T) {
+	root := t.TempDir()
+	s := New(root, filepath.Join(root, ".inbox-tmp"))
+
+	bookDir := filepath.Join(root, "Author, A", "Test (1)")
+	if err := os.MkdirAll(bookDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	epubPath := filepath.Join(bookDir, "test.epub")
+	if err := os.WriteFile(epubPath, []byte("epub-content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	loc := model.Location{LibraryPath: "Author, A/Test (1)", EpubFilename: "test.epub"}
+	f, err := s.OpenEpub(loc)
+	if err != nil {
+		t.Fatalf("OpenEpub: %v", err)
+	}
+	defer f.Close()
+
+	buf := make([]byte, 12)
+	n, err := f.Read(buf)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if string(buf[:n]) != "epub-content" {
+		t.Errorf("content = %q, want %q", string(buf[:n]), "epub-content")
+	}
+}
+
+func TestReadMetaRoundTrip(t *testing.T) {
+	root := t.TempDir()
+	s := New(root, filepath.Join(root, ".inbox-tmp"))
+
+	bookDir := filepath.Join(root, "Author, A", "Test (1)")
+	if err := os.MkdirAll(bookDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	loc := model.Location{LibraryPath: "Author, A/Test (1)", EpubFilename: "test.epub"}
+	original := &model.Meta{
+		ID:     42,
+		Status: "reading",
+		Rating: 3.5,
+		Tags:   []string{"sci-fi", "classic"},
+	}
+
+	if err := s.WriteMeta(loc, original); err != nil {
+		t.Fatalf("WriteMeta: %v", err)
+	}
+
+	got, err := s.ReadMeta(loc)
+	if err != nil {
+		t.Fatalf("ReadMeta: %v", err)
+	}
+
+	if got.ID != original.ID {
+		t.Errorf("ID = %d, want %d", got.ID, original.ID)
+	}
+	if got.Status != original.Status {
+		t.Errorf("Status = %q, want %q", got.Status, original.Status)
+	}
+	if got.Rating != original.Rating {
+		t.Errorf("Rating = %g, want %g", got.Rating, original.Rating)
+	}
+	if len(got.Tags) != len(original.Tags) || got.Tags[0] != original.Tags[0] {
+		t.Errorf("Tags = %v, want %v", got.Tags, original.Tags)
+	}
+}
+
+func TestMoveDestinationAlreadyExistsError(t *testing.T) {
+	root := t.TempDir()
+	s := New(root, filepath.Join(root, ".inbox-tmp"))
+
+	// Two authors, each with one book directory.
+	aliceDir := filepath.Join(root, "Alice", "Book (1)")
+	if err := os.MkdirAll(aliceDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(aliceDir, "Book - Alice.epub"), []byte("data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	bobDir := filepath.Join(root, "Bob", "Book (1)")
+	if err := os.MkdirAll(bobDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	from := model.Location{LibraryPath: "Alice/Book (1)", EpubFilename: "Book - Alice.epub"}
+	to := model.Location{LibraryPath: "Bob/Book (1)", EpubFilename: "Book - Bob.epub"}
+
+	err := s.Move(from, to)
+	if err == nil {
+		t.Fatal("expected error: destination already exists")
+	}
+	if !strings.Contains(err.Error(), "destination already exists") {
+		t.Errorf("error = %q, want 'destination already exists'", err)
 	}
 }
