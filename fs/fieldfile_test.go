@@ -25,24 +25,9 @@ func TestFieldFileRead(t *testing.T) {
 	}
 }
 
-func TestFieldFilePartialRead(t *testing.T) {
-	f := newTestFS(t)
-	stat := f.NewStat("test", "glenda", "glenda", 0444)
-	ff := newFieldFile(stat, func() string { return "abcdefghij" }, nil)
-
-	fid := uint64(1)
-	if err := ff.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
-	data, err := ff.Read(fid, 3, 5)
-	if err != nil {
-		t.Fatalf("Read: %v", err)
-	}
-	if string(data) != "defgh" {
-		t.Errorf("Read(offset=3, count=5) = %q, want %q", data, "defgh")
-	}
-}
+// Note: read clamping, past-end, and unopened-fid behavior come from the
+// embedded snapshotFile and are covered by TestSnapshotFile* in basefile_test.go.
+// The reads kept here exercise fieldFile's own load wrapping (the trailing "\n").
 
 func TestFieldFileReadEmpty(t *testing.T) {
 	f := newTestFS(t)
@@ -60,25 +45,6 @@ func TestFieldFileReadEmpty(t *testing.T) {
 	}
 	if string(data) != "\n" {
 		t.Errorf("Read(empty field) = %q, want %q", data, "\n")
-	}
-}
-
-func TestFieldFileReadPastEnd(t *testing.T) {
-	f := newTestFS(t)
-	stat := f.NewStat("test", "glenda", "glenda", 0444)
-	ff := newFieldFile(stat, func() string { return "hi" }, nil)
-
-	fid := uint64(1)
-	if err := ff.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
-	data, err := ff.Read(fid, 100, 5)
-	if err != nil {
-		t.Fatalf("Read: %v", err)
-	}
-	if len(data) != 0 {
-		t.Errorf("Read(past end) = %d bytes, want 0", len(data))
 	}
 }
 
@@ -239,17 +205,6 @@ func TestFieldFilePerFidBuffers(t *testing.T) {
 		if string(data) != tc.want {
 			t.Errorf("Read fid %d = %q, want %q", tc.fid, data, tc.want)
 		}
-	}
-}
-
-func TestFieldFileUnopenedFidReturnsError(t *testing.T) {
-	f := newTestFS(t)
-	stat := f.NewStat("test", "glenda", "glenda", 0444)
-	ff := newFieldFile(stat, func() string { return "val" }, nil)
-
-	_, err := ff.Read(42, 0, 10)
-	if err == nil {
-		t.Error("expected error reading from unopened fid")
 	}
 }
 
@@ -423,52 +378,5 @@ func TestFieldFileOtruncNoWriteDoesNotCallSet(t *testing.T) {
 	}
 }
 
-func TestFieldFileWriteExceedsLimit(t *testing.T) {
-	f := newTestFS(t)
-	stat := f.NewStat("test", "glenda", "glenda", 0644)
-	ff := newFieldFile(stat, func() string { return "" }, nil)
-
-	fid := uint64(1)
-	if err := ff.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
-	_, err := ff.Write(fid, maxFieldFileSize, []byte("x"))
-	if err == nil {
-		t.Fatal("expected error writing past field file size limit")
-	}
-}
-
-// A near-maxuint64 offset must be rejected, not wrap past the cap check and
-// panic on the out-of-range slice index.
-func TestFieldFileWriteOffsetOverflowRejected(t *testing.T) {
-	f := newTestFS(t)
-	stat := f.NewStat("test", "glenda", "glenda", 0644)
-	ff := newFieldFile(stat, func() string { return "" }, nil)
-
-	fid := uint64(1)
-	if err := ff.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
-	_, err := ff.Write(fid, ^uint64(0)-3, []byte("overflow"))
-	if err == nil {
-		t.Fatal("expected error on overflowing write offset")
-	}
-}
-
-func TestFieldFileWriteAtLimitAllowed(t *testing.T) {
-	f := newTestFS(t)
-	stat := f.NewStat("test", "glenda", "glenda", 0644)
-	ff := newFieldFile(stat, func() string { return "" }, nil)
-
-	fid := uint64(1)
-	if err := ff.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
-	_, err := ff.Write(fid, maxFieldFileSize-4, []byte("test"))
-	if err != nil {
-		t.Errorf("write at limit should succeed, got: %v", err)
-	}
-}
+// Write size-limit behavior (cap, overflow, at-limit) is covered together with
+// coverFile by TestWriteFileSizeLimits in basefile_test.go.

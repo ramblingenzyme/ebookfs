@@ -20,6 +20,7 @@ import (
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/config"
 	"github.com/ramblingenzyme/ebookfs/library/model"
@@ -124,17 +125,7 @@ func fixed(b *model.Book) func() *model.Book {
 	return func() *model.Book { return b }
 }
 
-func makeBook(id int64, title string, authors ...string) *model.Book {
-	auths := make([]model.Author, len(authors))
-	for i, name := range authors {
-		auths[i] = model.Author{Name: name}
-	}
-	return model.NewBook(
-		model.Bib{Title: title, Authors: auths},
-		model.Meta{ID: id},
-		model.Location{},
-	)
-}
+var makeBook = testutil.MakeBook
 
 func newTestFS(t *testing.T) *fs.FS {
 	t.Helper()

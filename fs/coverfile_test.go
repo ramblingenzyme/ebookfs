@@ -7,19 +7,22 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-func TestCoverFileStatLength(t *testing.T) {
-	f := newTestFS(t)
-	lib := fakeLib{
-		extractCoverFn: func(_ int64) ([]byte, error) {
-			return []byte("cover image data"), nil
-		},
-	}
+// Read/open/close semantics are covered by the snapshotFile base tests, and the
+// write size-limit behavior by TestWriteFileSizeLimits, both in basefile_test.go.
+// These tests cover coverFile's own surface: Stat length from CoverSize, and the
+// per-fid write buffer committed to Edit on Close.
+
+func newTestCoverFile(t *testing.T, lib fakeLib, edit func(int64, model.Edits) error) *coverFile {
+	t.Helper()
 	book := makeBook(1, "Test", "Author")
 	book.CoverSize = 16
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, func(int64, model.Edits) error { return nil }, fixed(book))
+	return newCoverFile(newStat(newTestFS(t), "cover.jpg", 0644), lib, edit, fixed(book))
+}
 
-	s := cf.Stat()
-	if s.Length != 16 {
+func TestCoverFileStatLength(t *testing.T) {
+	cf := newTestCoverFile(t, fakeLib{}, func(int64, model.Edits) error { return nil })
+
+	if s := cf.Stat(); s.Length != 16 {
 		t.Errorf("Stat().Length = %d, want 16", s.Length)
 	}
 }
@@ -27,29 +30,23 @@ func TestCoverFileStatLength(t *testing.T) {
 func TestCoverFileStatLengthNilLib(t *testing.T) {
 	f := newTestFS(t)
 	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), nil, func(int64, model.Edits) error { return nil }, fixed(book))
+	cf := newCoverFile(newStat(f, "cover.jpg", 0644), nil, func(int64, model.Edits) error { return nil }, fixed(book))
 
-	s := cf.Stat()
-	if s.Length != 0 {
+	if s := cf.Stat(); s.Length != 0 {
 		t.Errorf("Stat().Length with nil lib = %d, want 0", s.Length)
 	}
 }
 
 func TestCoverFileOpenRead(t *testing.T) {
-	f := newTestFS(t)
 	lib := fakeLib{
-		extractCoverFn: func(_ int64) ([]byte, error) {
-			return []byte("cover image data"), nil
-		},
+		extractCoverFn: func(_ int64) ([]byte, error) { return []byte("cover image data"), nil },
 	}
-	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, func(int64, model.Edits) error { return nil }, fixed(book))
+	cf := newTestCoverFile(t, lib, func(int64, model.Edits) error { return nil })
 
 	fid := uint64(1)
 	if err := cf.Open(fid, proto.Mode(0)); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-
 	data, err := cf.Read(fid, 0, 50)
 	if err != nil {
 		t.Fatalf("Read: %v", err)
@@ -59,94 +56,23 @@ func TestCoverFileOpenRead(t *testing.T) {
 	}
 }
 
-func TestCoverFileReadPartial(t *testing.T) {
-	f := newTestFS(t)
-	lib := fakeLib{
-		extractCoverFn: func(_ int64) ([]byte, error) {
-			return []byte("cover image data"), nil
-		},
-	}
-	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, func(int64, model.Edits) error { return nil }, fixed(book))
-
-	fid := uint64(1)
-	if err := cf.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
-	data, err := cf.Read(fid, 6, 5)
-	if err != nil {
-		t.Fatalf("Read: %v", err)
-	}
-	if string(data) != "image" {
-		t.Errorf("Read(6,5) = %q, want %q", data, "image")
-	}
-}
-
-func TestCoverFileReadAtEOF(t *testing.T) {
-	f := newTestFS(t)
-	lib := fakeLib{
-		extractCoverFn: func(_ int64) ([]byte, error) {
-			return []byte("hi"), nil
-		},
-	}
-	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, func(int64, model.Edits) error { return nil }, fixed(book))
-
-	fid := uint64(1)
-	if err := cf.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
-	data, err := cf.Read(fid, 10, 5)
-	if err != nil {
-		t.Fatalf("Read: %v", err)
-	}
-	if len(data) != 0 {
-		t.Errorf("Read at EOF = %d bytes, want 0", len(data))
-	}
-}
-
-func TestCoverFileOpenError(t *testing.T) {
-	f := newTestFS(t)
-	lib := fakeLib{
-		extractCoverFn: func(_ int64) ([]byte, error) {
-			return nil, errTest
-		},
-	}
-	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, func(int64, model.Edits) error { return nil }, fixed(book))
-
-	err := cf.Open(1, proto.Mode(0))
-	if err != errTest {
-		t.Errorf("Open error = %v, want %v", err, errTest)
-	}
-}
-
 func TestCoverFileWriteClose(t *testing.T) {
 	var written *[]byte
-	f := newTestFS(t)
 	lib := fakeLib{
-		extractCoverFn: func(_ int64) ([]byte, error) {
-			return []byte("original"), nil
-		},
+		extractCoverFn: func(_ int64) ([]byte, error) { return []byte("original"), nil },
 	}
-	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib,
-		func(id int64, edits model.Edits) error {
-			written = edits.Cover
-			return nil
-		}, fixed(book))
+	cf := newTestCoverFile(t, lib, func(id int64, edits model.Edits) error {
+		written = edits.Cover
+		return nil
+	})
 
 	fid := uint64(1)
 	if err := cf.Open(fid, proto.Mode(0)); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-
 	if _, err := cf.Write(fid, 0, []byte("new cover")); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
-
 	if err := cf.Close(fid); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
@@ -158,24 +84,18 @@ func TestCoverFileWriteClose(t *testing.T) {
 
 func TestCoverFileWriteEmptyDoesNotCallEdit(t *testing.T) {
 	called := false
-	f := newTestFS(t)
 	lib := fakeLib{
-		extractCoverFn: func(_ int64) ([]byte, error) {
-			return []byte("original"), nil
-		},
+		extractCoverFn: func(_ int64) ([]byte, error) { return []byte("original"), nil },
 	}
-	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib,
-		func(id int64, edits model.Edits) error {
-			called = true
-			return nil
-		}, fixed(book))
+	cf := newTestCoverFile(t, lib, func(int64, model.Edits) error {
+		called = true
+		return nil
+	})
 
 	fid := uint64(1)
 	if err := cf.Open(fid, proto.Mode(0)); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-
 	if err := cf.Close(fid); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
@@ -186,14 +106,10 @@ func TestCoverFileWriteEmptyDoesNotCallEdit(t *testing.T) {
 }
 
 func TestCoverFilePerFidBuffers(t *testing.T) {
-	f := newTestFS(t)
 	lib := fakeLib{
-		extractCoverFn: func(_ int64) ([]byte, error) {
-			return []byte("shared"), nil
-		},
+		extractCoverFn: func(_ int64) ([]byte, error) { return []byte("shared"), nil },
 	}
-	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib, func(int64, model.Edits) error { return nil }, fixed(book))
+	cf := newTestCoverFile(t, lib, func(int64, model.Edits) error { return nil })
 
 	fid1, fid2 := uint64(1), uint64(2)
 	cf.Open(fid1, proto.Mode(0))
@@ -201,95 +117,25 @@ func TestCoverFilePerFidBuffers(t *testing.T) {
 
 	cf.Write(fid1, 0, []byte("fid1 data"))
 
-	// Reads return the Open snapshot regardless of writes.
+	// Reads return the Open snapshot regardless of writes to any fid.
 	data1, _ := cf.Read(fid1, 0, 20)
 	data2, _ := cf.Read(fid2, 0, 20)
-	if string(data1) != "shared" {
-		t.Errorf("fid1 read = %q, want %q", data1, "shared")
-	}
-	if string(data2) != "shared" {
-		t.Errorf("fid2 read = %q, want %q", data2, "shared")
+	if string(data1) != "shared" || string(data2) != "shared" {
+		t.Errorf("reads = %q/%q, want both %q", data1, data2, "shared")
 	}
 }
 
 func TestCoverFileWriteErrorPassesThrough(t *testing.T) {
-	f := newTestFS(t)
 	lib := fakeLib{
-		extractCoverFn: func(_ int64) ([]byte, error) {
-			return []byte("original"), nil
-		},
+		extractCoverFn: func(_ int64) ([]byte, error) { return []byte("original"), nil },
 	}
-	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), lib,
-		func(id int64, edits model.Edits) error { return errTest }, fixed(book))
+	cf := newTestCoverFile(t, lib, func(int64, model.Edits) error { return errTest })
 
 	fid := uint64(1)
 	cf.Open(fid, proto.Mode(0))
 	cf.Write(fid, 0, []byte("data"))
 
-	err := cf.Close(fid)
-	if err != errTest {
+	if err := cf.Close(fid); err != errTest {
 		t.Errorf("Close error = %v, want %v", err, errTest)
-	}
-}
-
-func TestCoverFileNotOpenRead(t *testing.T) {
-	f := newTestFS(t)
-	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), fakeLib{}, func(int64, model.Edits) error { return nil }, fixed(book))
-
-	_, err := cf.Read(42, 0, 10)
-	if err == nil {
-		t.Error("expected error reading from unopened fid")
-	}
-}
-
-func TestCoverFileWriteExceedsLimit(t *testing.T) {
-	f := newTestFS(t)
-	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), fakeLib{}, func(int64, model.Edits) error { return nil }, fixed(book))
-
-	fid := uint64(1)
-	if err := cf.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
-	_, err := cf.Write(fid, maxCoverFileSize, []byte("x"))
-	if err == nil {
-		t.Fatal("expected error writing past cover file size limit")
-	}
-}
-
-// A near-maxuint64 offset must be rejected, not wrap past the cap check and
-// panic on the out-of-range slice index.
-func TestCoverFileWriteOffsetOverflowRejected(t *testing.T) {
-	f := newTestFS(t)
-	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), fakeLib{}, func(int64, model.Edits) error { return nil }, fixed(book))
-
-	fid := uint64(1)
-	if err := cf.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
-	_, err := cf.Write(fid, ^uint64(0)-3, []byte("overflow"))
-	if err == nil {
-		t.Fatal("expected error on overflowing write offset")
-	}
-}
-
-func TestCoverFileWriteAtLimitAllowed(t *testing.T) {
-	f := newTestFS(t)
-	book := makeBook(1, "Test", "Author")
-	cf := newCoverFile(f.NewStat("cover.jpg", "glenda", "glenda", 0644), fakeLib{}, func(int64, model.Edits) error { return nil }, fixed(book))
-
-	fid := uint64(1)
-	if err := cf.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
-	_, err := cf.Write(fid, maxCoverFileSize-4, []byte("test"))
-	if err != nil {
-		t.Errorf("write at limit should succeed, got: %v", err)
 	}
 }
