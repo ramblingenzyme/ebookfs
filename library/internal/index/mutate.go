@@ -60,48 +60,30 @@ func putBook(tx *sql.Tx, b *model.Book) error {
 	return finishBook(tx, b)
 }
 
-// Put writes b into the index, inserting or replacing the record for b.Meta.ID.
-// MarkPending must be called before Put so a pending row protects the preceding
-// store writes. The pending row is atomically deleted inside the same transaction.
-func (o *Op) Put(b *model.Book) error {
+// finish runs fn and clears the pending row in one transaction. MarkPending
+// must have been called first so a pending row protects the preceding store
+// writes; the row is atomically deleted inside the same transaction.
+func (o *Op) finish(fn func(*sql.Tx) error) error {
 	if o.opID == "" {
-		return errors.New("MarkPending must be called before Put")
+		return errors.New("MarkPending must be called before commit")
 	}
-	tx, err := o.idx.db.Begin()
-	if err != nil {
+	return o.idx.withTx(func(tx *sql.Tx) error {
+		if err := fn(tx); err != nil {
+			return err
+		}
+		_, err := tx.Exec("DELETE FROM pending_ops WHERE op_id = ?", o.opID)
 		return err
-	}
-	if err := putBook(tx, b); err != nil {
-		tx.Rollback()
-		return err
-	}
-	if _, err := tx.Exec("DELETE FROM pending_ops WHERE op_id = ?", o.opID); err != nil {
-		tx.Rollback()
-		return err
-	}
-	return tx.Commit()
+	})
 }
 
-// Delete removes all index rows for book. MarkPending must be called before
-// Delete so a pending row protects the preceding store writes. The pending row
-// is atomically deleted inside the same transaction.
+// Put writes b into the index, inserting or replacing the record for b.Meta.ID.
+func (o *Op) Put(b *model.Book) error {
+	return o.finish(func(tx *sql.Tx) error { return putBook(tx, b) })
+}
+
+// Delete removes all index rows for book.
 func (o *Op) Delete(bookID int64) error {
-	if o.opID == "" {
-		return errors.New("MarkPending must be called before Delete")
-	}
-	tx, err := o.idx.db.Begin()
-	if err != nil {
-		return err
-	}
-	if err := deleteBook(tx, bookID); err != nil {
-		tx.Rollback()
-		return err
-	}
-	if _, err := tx.Exec("DELETE FROM pending_ops WHERE op_id = ?", o.opID); err != nil {
-		tx.Rollback()
-		return err
-	}
-	return tx.Commit()
+	return o.finish(func(tx *sql.Tx) error { return deleteBook(tx, bookID) })
 }
 
 func finishBook(tx *sql.Tx, b *model.Book) error {
