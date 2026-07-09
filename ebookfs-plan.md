@@ -366,17 +366,19 @@ ebookfs/
 │   │       ├── fs.go               # newFS helper
 │   │       ├── server.go           # StartServer, setupServer
 │   │       ├── registry.go         # bookRegistry: id → bookDir, view management
-│   │       ├── book.go             # per-book directory + field map
-│   │       ├── field.go            # generic read/write 9P file for string values
-│   │       ├── file.go             # epubFile, coverFile
-│   │       ├── books.go            # all-books flat listing
-│   │       ├── byauthor.go         # by-author grouped view
-│   │       ├── byseries.go         # by-series grouped view
-│   │       ├── byid.go             # by-id flat listing
-│   │       ├── bydir.go            # shared groupingDir base, namedBookDir
+│   │       ├── bookdir.go          # per-book directory + field map
+│   │       ├── fieldfile.go        # generic read/write 9P file for string values
+│   │       ├── bookfiles.go        # epubFile, coverFile
+│   │       ├── booklist.go         # all-books flat listing
+│   │       ├── view_author.go      # by-author grouped view
+│   │       ├── view_series.go      # by-series grouped view
+│   │       ├── view_id.go          # by-id flat listing
+│   │       ├── viewbase.go         # shared groupingDir base, namedBookDir
 │   │       ├── reader.go           # reader/ export view, warmer
 │   │       ├── inbox.go            # synthetic inbox directory + file
-│   │       └── series.go           # series entry name formatting
+│   │       └── view_tag.go         # by-tag grouped view
+│   │       ├── view_status.go      # by-status grouped view
+│   │       └── basefile.go         # snapshotFile, readAtFile
 │   └── shared/
 │       └── model/                  # shared types
 │           └── model.go            # Book, Bib, Meta, Edits, Location, Author, …
