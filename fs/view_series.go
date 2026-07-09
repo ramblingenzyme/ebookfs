@@ -41,7 +41,7 @@ type seriesBookListDir struct {
 
 func newSeriesBookListDir(f *fs.FS, name string) *seriesBookListDir {
 	return &seriesBookListDir{
-		StaticDir: *fs.NewStaticDir(f.NewStat(name, "glenda", "glenda", 0555|proto.DMDIR)),
+		StaticDir: *fs.NewStaticDir(newStat(f, name, 0555|proto.DMDIR)),
 		f:         f,
 		books:     make(map[int64]*bookDir),
 		children:  make(map[int64]*namedBookDir),
@@ -82,7 +82,7 @@ func (s *seriesBookListDir) rebuild() {
 		id := d.Book().Meta.ID
 		n, ok := s.children[id]
 		if !ok {
-			stat := s.f.NewStat("", "glenda", "glenda", 0555|proto.DMDIR)
+			stat := newStat(s.f, "", 0555|proto.DMDIR)
 			n = &namedBookDir{
 				bookDir:  d,
 				baseStat: *stat,

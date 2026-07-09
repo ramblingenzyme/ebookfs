@@ -47,7 +47,7 @@ func (d *bookListDir) remove(dir *bookDir) {
 }
 
 func newAllBooksDir(reg *bookRegistry) *bookListDir {
-	d := newBookListDir(reg.f.NewStat("books", "glenda", "glenda", 0555|proto.DMDIR))
+	d := newBookListDir(newStat(reg.f, "books", 0555|proto.DMDIR))
 	reg.AddView(d)
 	return d
 }

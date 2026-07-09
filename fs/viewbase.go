@@ -34,7 +34,7 @@ type groupingDir struct {
 
 func newGroupingDir(f *fs.FS, name string) groupingDir {
 	return groupingDir{
-		StaticDir: fs.NewStaticDir(f.NewStat(name, "glenda", "glenda", 0555|proto.DMDIR)),
+		StaticDir: fs.NewStaticDir(newStat(f, name, 0555|proto.DMDIR)),
 		f:         f,
 	}
 }
@@ -57,7 +57,7 @@ func (g *groupingDir) childDir(name string, factory func(*proto.Stat) fs.FSNode)
 	if child, ok := g.Children()[name]; ok {
 		return child
 	}
-	ad := factory(g.f.NewStat(name, "glenda", "glenda", 0555|proto.DMDIR))
+	ad := factory(newStat(g.f, name, 0555|proto.DMDIR))
 	g.StaticDir.AddChild(ad)
 	return ad
 }

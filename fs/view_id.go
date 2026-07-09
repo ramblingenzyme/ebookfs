@@ -20,7 +20,7 @@ func idEntryName(b *model.Book) string {
 }
 
 func (d *byIDDir) add(dir *bookDir) {
-	stat := d.f.NewStat(idEntryName(dir.Book()), "glenda", "glenda", 0555|proto.DMDIR)
+	stat := newStat(d.f, idEntryName(dir.Book()), 0555|proto.DMDIR)
 	d.StaticDir.AddChild(&namedBookDir{bookDir: dir, baseStat: *stat, name: idEntryName})
 }
 

@@ -45,7 +45,7 @@ func (d *readerDir) add(dir *bookDir) {
 		return
 	}
 	ad := d.authorDir(d.exp.Dirname(b))
-	stat := d.f.NewStat(d.exp.Filename(b), "glenda", "glenda", 0444)
+	stat := newStat(d.f, d.exp.Filename(b), 0444)
 	ad.AddChild(newReaderFile(stat, d.exp, dir.Book))
 	d.exp.Warm(b)
 }

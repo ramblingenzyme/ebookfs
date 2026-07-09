@@ -14,7 +14,7 @@ import (
 )
 
 func addReadOnlyField(d *bookDir, f *fs.FS, name string, get func() string) {
-	d.StaticDir.AddChild(newFieldFile(f.NewStat(name, "glenda", "glenda", 0444), get, nil))
+	d.StaticDir.AddChild(newFieldFile(newStat(f, name, 0444), get, nil))
 }
 
 // bookDir is the stable directory identity for one book. The book's state is
@@ -148,25 +148,25 @@ var fields = map[string]field{
 func newBookDir(reg *bookRegistry, book *model.Book) *bookDir {
 	f, lib := reg.f, reg.lib
 	d := &bookDir{
-		StaticDir: *fs.NewStaticDir(f.NewStat(book.Title, "glenda", "glenda", 0755|proto.DMDIR)),
+		StaticDir: *fs.NewStaticDir(newStat(f, book.Title, 0755|proto.DMDIR)),
 	}
 	d.book.Store(book)
 
 	d.StaticDir.AddChild(fs.NewStaticFile(
-		f.NewStat("id", "glenda", "glenda", 0444),
+		newStat(f, "id", 0444),
 		fmt.Appendf(nil, "%d\n", book.Meta.ID),
 	))
 
 	// Child files read through d.Book so they always see the current snapshot,
 	// not the one captured at construction.
 	d.StaticDir.AddChild(newEpubFile(
-		f.NewStat(book.EpubFilename, "glenda", "glenda", 0444),
+		newStat(f, book.EpubFilename, 0444),
 		lib,
 		d.Book,
 	))
 
 	d.StaticDir.AddChild(newOPFFile(
-		f.NewStat("opf", "glenda", "glenda", 0444),
+		newStat(f, "opf", 0444),
 		lib,
 		d.Book,
 	))
@@ -184,7 +184,7 @@ func newBookDir(reg *bookRegistry, book *model.Book) *bookDir {
 			}
 			return reg.edit(book.Meta.ID, edits)
 		}
-		d.StaticDir.AddChild(newFieldFile(f.NewStat(name, "glenda", "glenda", 0644), get, set))
+		d.StaticDir.AddChild(newFieldFile(newStat(f, name, 0644), get, set))
 	}
 
 	// Read-only bib fields.
@@ -193,7 +193,7 @@ func newBookDir(reg *bookRegistry, book *model.Book) *bookDir {
 	// Cover image — only present when the epub declares one.
 	if book.CoverPath != "" {
 		d.StaticDir.AddChild(newCoverFile(
-			f.NewStat("cover"+filepath.Ext(book.CoverPath), "glenda", "glenda", 0644),
+			newStat(f, "cover"+filepath.Ext(book.CoverPath), 0644),
 			lib,
 			func(id int64, edits model.Edits) error { return reg.edit(id, edits) },
 			d.Book,

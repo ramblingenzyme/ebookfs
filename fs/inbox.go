@@ -16,7 +16,7 @@ type inboxDir struct {
 
 func newInboxDir(f *fs.FS) *inboxDir {
 	return &inboxDir{
-		StaticDir: *fs.NewStaticDir(f.NewStat("inbox", "glenda", "glenda", 0755|proto.DMDIR)),
+		StaticDir: *fs.NewStaticDir(newStat(f, "inbox", 0755|proto.DMDIR)),
 	}
 }
 
@@ -48,7 +48,7 @@ func inboxCreateFile(lib library.Library, onIngest func(*model.Book)) createFile
 
 func newInboxFile(f *fs.FS, lib library.Library, name string, perm uint32, onIngest func(*model.Book)) *inboxFile {
 	return &inboxFile{
-		BaseFile: *fs.NewBaseFile(f.NewStat(name, "glenda", "glenda", perm)),
+		BaseFile: *fs.NewBaseFile(newStat(f, name, perm)),
 		lib:      lib,
 		onIngest: onIngest,
 	}
