@@ -511,3 +511,408 @@ func TestQueryIDNotFound(t *testing.T) {
 		t.Errorf("len = %d, want 0", len(got))
 	}
 }
+
+func TestQueryLoadsIdentifiers(t *testing.T) {
+	idx := openTestIndex(t)
+
+	b := model.NewBook(
+		model.Bib{
+			Title:       "Identified",
+			Authors:     []model.Author{{Name: "Alice", SortName: "Alice"}},
+			Identifiers: map[string]string{"isbn": "978-3-16-148410-0", "uuid": "abc-def"},
+		},
+		model.Meta{ID: 1},
+		model.Location{LibraryPath: "A/Identified (1)", EpubFilename: "book.epub"},
+	)
+	storeInIndex(t, idx, b)
+
+	books, err := idx.Query(model.Filter{ID: 1})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(books) != 1 {
+		t.Fatalf("len = %d, want 1", len(books))
+	}
+	if books[0].Identifiers["isbn"] != "978-3-16-148410-0" {
+		t.Errorf("Identifier isbn = %q", books[0].Identifiers["isbn"])
+	}
+	if books[0].Identifiers["uuid"] != "abc-def" {
+		t.Errorf("Identifier uuid = %q", books[0].Identifiers["uuid"])
+	}
+}
+
+func TestGetReturnsIdentifiers(t *testing.T) {
+	idx := openTestIndex(t)
+
+	b := model.NewBook(
+		model.Bib{
+			Title:       "Getter",
+			Authors:     []model.Author{{Name: "Alice", SortName: "Alice"}},
+			Identifiers: map[string]string{"isbn": "978-1-234-56789-0"},
+		},
+		model.Meta{ID: 1},
+		model.Location{LibraryPath: "A/Getter (1)", EpubFilename: "book.epub"},
+	)
+	storeInIndex(t, idx, b)
+
+	got, err := idx.Get(1)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Identifiers["isbn"] != "978-1-234-56789-0" {
+		t.Errorf("Identifier isbn = %q", got.Identifiers["isbn"])
+	}
+}
+
+func TestNextID(t *testing.T) {
+	idx := openTestIndex(t)
+	id1, err := idx.NextID()
+	if err != nil {
+		t.Fatalf("NextID: %v", err)
+	}
+	id2, err := idx.NextID()
+	if err != nil {
+		t.Fatalf("NextID: %v", err)
+	}
+	if id2 != id1+1 {
+		t.Errorf("NextID returned %d then %d, want incrementing by 1", id1, id2)
+	}
+}
+
+func TestListAuthorsPanics(t *testing.T) {
+	idx := openTestIndex(t)
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic from ListAuthors")
+		}
+	}()
+	idx.ListAuthors()
+}
+
+func TestStatsPanics(t *testing.T) {
+	idx := openTestIndex(t)
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic from Stats")
+		}
+	}()
+	idx.Stats()
+}
+
+func TestSearchPanics(t *testing.T) {
+	idx := openTestIndex(t)
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic from Search")
+		}
+	}()
+	idx.Search("query")
+}
+
+func TestPutAuthorsWithExistingName(t *testing.T) {
+	idx := openTestIndex(t)
+
+	authors := []model.Author{{Name: "Alice", SortName: "Smith, Alice"}}
+	b1 := model.NewBook(
+		model.Bib{Title: "First", Authors: authors},
+		model.Meta{ID: 1},
+		model.Location{LibraryPath: "A/First (1)", EpubFilename: "book.epub"},
+	)
+	storeInIndex(t, idx, b1)
+
+	// Second book with same author name — triggers ON CONFLICT upsert.
+	b2 := model.NewBook(
+		model.Bib{Title: "Second", Authors: authors},
+		model.Meta{ID: 2},
+		model.Location{LibraryPath: "A/Second (2)", EpubFilename: "book.epub"},
+	)
+	storeInIndex(t, idx, b2)
+
+	got, err := idx.Query(model.Filter{})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len = %d, want 2", len(got))
+	}
+}
+
+func TestPutBookWithSeriesAndTags(t *testing.T) {
+	idx := openTestIndex(t)
+
+	b := model.NewBook(
+		model.Bib{
+			Title:   "Series Book",
+			Authors: []model.Author{{Name: "Alice", SortName: "Alice"}},
+			Series:  &model.SeriesRef{Name: "EPIC", Index: 1},
+		},
+		model.Meta{ID: 1, Tags: []string{"sci-fi", "space"}},
+		model.Location{LibraryPath: "A/Series Book (1)", EpubFilename: "book.epub"},
+	)
+	storeInIndex(t, idx, b)
+
+	got, err := idx.Get(1)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Series == nil || got.Series.Name != "EPIC" {
+		t.Errorf("series = %+v", got.Series)
+	}
+	if len(got.Meta.Tags) != 2 {
+		t.Errorf("tags = %v", got.Meta.Tags)
+	}
+}
+
+func TestNextIDClosedDB(t *testing.T) {
+	idx := openTestIndex(t)
+	idx.Close()
+	_, err := idx.NextID()
+	if err == nil {
+		t.Fatal("expected error from NextID after db closed")
+	}
+}
+
+func TestMarkPendingClosedDB(t *testing.T) {
+	idx := openTestIndex(t)
+	op := idx.BeginOp()
+	idx.Close()
+	err := op.MarkPending()
+	if err == nil {
+		t.Fatal("expected error from MarkPending after db closed")
+	}
+}
+
+func TestPutClosedDB(t *testing.T) {
+	idx := openTestIndex(t)
+	op := idx.BeginOp()
+	op.MarkPending()
+	idx.Close()
+	err := op.Put(newBook(1, "T"))
+	if err == nil {
+		t.Fatal("expected error from Put after db closed")
+	}
+}
+
+func TestDeleteClosedDB(t *testing.T) {
+	idx := openTestIndex(t)
+
+	op1 := idx.BeginOp()
+	op1.MarkPending()
+	if err := op1.Put(newBook(1, "T")); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	op2 := idx.BeginOp()
+	op2.MarkPending()
+	idx.Close()
+	err := op2.Delete(1)
+	if err == nil {
+		t.Fatal("expected error from Delete after db closed")
+	}
+}
+
+func TestRebuildClosedDB(t *testing.T) {
+	idx := openTestIndex(t)
+	idx.Close()
+	err := idx.Rebuild(nil, 0)
+	if err == nil {
+		t.Fatal("expected error from Rebuild after db closed")
+	}
+}
+
+func TestNeedsReindexClosedDB(t *testing.T) {
+	idx := openTestIndex(t)
+	idx.Close()
+	_, err := idx.NeedsReindex()
+	if err == nil {
+		t.Fatal("expected error from NeedsReindex after db closed")
+	}
+}
+
+// rolledBackTx returns a *sql.Tx that has been rolled back, so any subsequent
+// operation on it returns sql.ErrTxDone. Tests tx-level error branches.
+func rolledBackTX(t *testing.T, idx *Index) *sql.Tx {
+	t.Helper()
+	tx, err := idx.db.Begin()
+	if err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	tx.Rollback()
+	return tx
+}
+
+func TestFinishBookRolledBackTx(t *testing.T) {
+	idx := openTestIndex(t)
+	tx := rolledBackTX(t, idx)
+	err := finishBook(tx, newBook(1, "Test"))
+	if err == nil {
+		t.Fatal("expected error from finishBook on rolled-back tx")
+	}
+}
+
+func TestUpsertAuthorsRolledBackTx(t *testing.T) {
+	idx := openTestIndex(t)
+	tx := rolledBackTX(t, idx)
+	err := upsertAuthors(tx, 1, []model.Author{{Name: "Alice", SortName: "Alice"}})
+	if err == nil {
+		t.Fatal("expected error from upsertAuthors on rolled-back tx")
+	}
+}
+
+func TestUpsertTagsRolledBackTx(t *testing.T) {
+	idx := openTestIndex(t)
+	tx := rolledBackTX(t, idx)
+	err := upsertTags(tx, 1, []string{"sci-fi"})
+	if err == nil {
+		t.Fatal("expected error from upsertTags on rolled-back tx")
+	}
+}
+
+func TestUpsertSeriesRolledBackTx(t *testing.T) {
+	idx := openTestIndex(t)
+	tx := rolledBackTX(t, idx)
+	b := newBook(1, "Test")
+	b.Series = &model.SeriesRef{Name: "S", Index: 1}
+	err := upsertSeries(tx, b)
+	if err == nil {
+		t.Fatal("expected error from upsertSeries on rolled-back tx")
+	}
+}
+
+func TestPutBookRolledBackTx(t *testing.T) {
+	idx := openTestIndex(t)
+	tx := rolledBackTX(t, idx)
+	err := putBook(tx, newBook(1, "Test"))
+	if err == nil {
+		t.Fatal("expected error from putBook on rolled-back tx")
+	}
+}
+
+func TestInsertBookRolledBackTx(t *testing.T) {
+	idx := openTestIndex(t)
+	tx := rolledBackTX(t, idx)
+	err := insertBook(tx, newBook(1, "Test"))
+	if err == nil {
+		t.Fatal("expected error from insertBook on rolled-back tx")
+	}
+}
+
+func TestDeleteBookRolledBackTx(t *testing.T) {
+	idx := openTestIndex(t)
+	tx := rolledBackTX(t, idx)
+	err := deleteBook(tx, 1)
+	if err == nil {
+		t.Fatal("expected error from deleteBook on rolled-back tx")
+	}
+}
+
+func TestCleanupOrphansRolledBackTx(t *testing.T) {
+	idx := openTestIndex(t)
+	tx := rolledBackTX(t, idx)
+	err := cleanupOrphans(tx)
+	if err == nil {
+		t.Fatal("expected error from cleanupOrphans on rolled-back tx")
+	}
+}
+
+func TestDropAllTablesClosedDB(t *testing.T) {
+	idx := openTestIndex(t)
+	idx.Close()
+	err := idx.dropAllTables()
+	if err == nil {
+		t.Fatal("expected error from dropAllTables after db closed")
+	}
+}
+
+func TestOpenDirectoryPath(t *testing.T) {
+	dir := t.TempDir()
+	_, err := Open(dir)
+	if err == nil {
+		t.Fatal("expected error opening a directory as a database")
+	}
+}
+
+// TestRebuildClearsLeakedRowsAndInsertsBooks verifies that Rebuild both
+// clears leaked rows and inserts the given books, exercising the full
+// Rebuild path through dropAllTables → insertBook → version stamp.
+func TestRebuildClearsLeakedRowsAndInsertsBooks(t *testing.T) {
+	idx := openTestIndex(t)
+
+	// Inject a leaked pending row and a stale book.
+	if _, err := idx.db.Exec("INSERT INTO pending_ops (op_id) VALUES ('leak-1')"); err != nil {
+		t.Fatalf("inject pending: %v", err)
+	}
+	op := idx.BeginOp()
+	op.MarkPending()
+	if err := op.Put(newBook(1, "Stale")); err != nil {
+		t.Fatalf("Put stale: %v", err)
+	}
+	mustNeedReindex(t, idx, true)
+
+	// Rebuild with fresh books.
+	fresh := []*model.Book{
+		newBook(10, "Fresh A"),
+		newBook(20, "Fresh B"),
+	}
+	if err := idx.Rebuild(fresh, 20); err != nil {
+		t.Fatalf("Rebuild: %v", err)
+	}
+
+	mustNeedReindex(t, idx, false)
+
+	// Only the fresh books should exist.
+	all, err := idx.Query(model.Filter{})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("len = %d, want 2", len(all))
+	}
+	if n := pendingCount(t, idx); n != 0 {
+		t.Fatalf("pending_ops = %d, want 0", n)
+	}
+}
+
+func TestRebuildWithMultipleBooks(t *testing.T) {
+	idx := openTestIndex(t)
+
+	books := []*model.Book{
+		model.NewBook(
+			model.Bib{Title: "First", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+			model.Meta{ID: 1},
+			model.Location{LibraryPath: "A/First (1)", EpubFilename: "book.epub"},
+		),
+		model.NewBook(
+			model.Bib{
+				Title:   "Second",
+				Authors: []model.Author{{Name: "Bob", SortName: "Bob"}},
+				Series:  &model.SeriesRef{Name: "Series A", Index: 2},
+			},
+			model.Meta{ID: 2},
+			model.Location{LibraryPath: "B/Second (2)", EpubFilename: "book.epub"},
+		),
+	}
+
+	if err := idx.Rebuild(books, 2); err != nil {
+		t.Fatalf("Rebuild: %v", err)
+	}
+
+	all, err := idx.Query(model.Filter{})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("len = %d, want 2", len(all))
+	}
+	if all[0].Meta.ID != 1 || all[1].Meta.ID != 2 {
+		t.Errorf("books should be in sort order (by sort_title: %q, %q)", all[0].Title, all[1].Title)
+	}
+
+	got, err := idx.Get(2)
+	if err != nil {
+		t.Fatalf("Get(2): %v", err)
+	}
+	if got.Series == nil || got.Series.Name != "Series A" {
+		t.Errorf("book 2 series = %+v", got.Series)
+	}
+}

@@ -2,11 +2,13 @@ package library
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/library/config"
+	"github.com/ramblingenzyme/ebookfs/library/internal/kepub"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -119,5 +121,102 @@ func TestEpubExporter_Filename(t *testing.T) {
 	name := exp.Filename(book)
 	if name != "mybook.epub" {
 		t.Errorf("Filename = %q, want %q", name, "mybook.epub")
+	}
+}
+
+func TestEpubExporter_Warm(t *testing.T) {
+	exp := epubExporter{}
+	exp.Warm(nil) // no-op, must not panic
+}
+
+func TestEpubExporter_Statuses(t *testing.T) {
+	exp := epubExporter{statuses: []string{"unread", "reading"}}
+	got := exp.Statuses()
+	if len(got) != 2 || got[0] != "unread" || got[1] != "reading" {
+		t.Errorf("Statuses = %v, want [unread reading]", got)
+	}
+}
+
+type dummyKepubSource struct{}
+
+func (dummyKepubSource) OpenEpub(int64) (model.EpubReader, error) {
+	return nil, errors.New("dummy source: no epub")
+}
+
+func TestKepubCacheDelegates(t *testing.T) {
+	dir := t.TempDir()
+	kc := &kepubCache{
+		statuses: []string{"reading"},
+		c:        kepub.NewCache(dir, dummyKepubSource{}),
+	}
+
+	b := makeBook(1, "Test", "Alice")
+	b.EpubFilename = "mybook.epub"
+
+	// Statuses returns the configured slice.
+	if s := kc.Statuses(); len(s) != 1 || s[0] != "reading" {
+		t.Errorf("Statuses = %v, want [reading]", s)
+	}
+
+	// Filename delegates to k.c.Filename.
+	if fn := kc.Filename(b); fn != "mybook.kepub.epub" {
+		t.Errorf("Filename = %q, want %q", fn, "mybook.kepub.epub")
+	}
+
+	// Dirname delegates to exportDirname.
+	if dn := kc.Dirname(b); dn != "Alice" {
+		t.Errorf("Dirname = %q, want %q", dn, "Alice")
+	}
+
+	// Size reports cold when no cache file exists.
+	_, ok := kc.Size(b)
+	if ok {
+		t.Error("Size should report cold for missing cache file")
+	}
+
+	// Warm must not panic.
+	kc.Warm(b)
+
+	// Open returns an error because the dummy source returns nil.
+	_, err := kc.Open(b)
+	if err == nil {
+		t.Error("expected error from Open with dummy source")
+	}
+
+	// Close stops the warmer without error.
+	if err := kc.close(); err != nil {
+		t.Errorf("close: %v", err)
+	}
+}
+
+func TestEpubExporter_Dirname(t *testing.T) {
+	tests := []struct {
+		name     string
+		authorFn func() []model.Author
+		want     string
+	}{
+		{"single author", func() []model.Author { return []model.Author{{Name: "Alice"}} }, "Alice"},
+		{"two authors", func() []model.Author { return []model.Author{{Name: "Alice"}, {Name: "Bob"}} }, "Alice & Bob"},
+		{"multiple authors", func() []model.Author { return []model.Author{{Name: "Alice"}, {Name: "Bob"}, {Name: "Carol"}} }, "Alice & Bob & Carol"},
+		{"empty author name", func() []model.Author { return []model.Author{{Name: ""}} }, model.UnknownAuthor},
+		{"mixed empty and valid", func() []model.Author { return []model.Author{{Name: ""}, {Name: "Alice"}} }, "Alice"},
+		{"no authors", func() []model.Author { return nil }, model.UnknownAuthor},
+		{"colon in name", func() []model.Author { return []model.Author{{Name: "Title: Sub"}} }, "Title- Sub"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exp := epubExporter{}
+			authors := tt.authorFn()
+			names := make([]string, len(authors))
+			for i, a := range authors {
+				names[i] = a.Name
+			}
+			b := makeBook(1, "Test", names...)
+			b.Authors = authors
+			got := exp.Dirname(b)
+			if got != tt.want {
+				t.Errorf("Dirname = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

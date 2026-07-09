@@ -509,3 +509,92 @@ func TestMoveDestinationAlreadyExistsError(t *testing.T) {
 		t.Errorf("error = %q, want 'destination already exists'", err)
 	}
 }
+
+func TestReadMetaNotExist(t *testing.T) {
+	_, err := readMeta("/nonexistent/path/meta.toml")
+	if err == nil {
+		t.Error("expected error reading non-existent meta.toml")
+	}
+}
+
+func TestReadMetaInvalidTOML(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "meta.toml")
+	if err := os.WriteFile(path, []byte("invalid toml {{{"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := readMeta(path)
+	if err == nil {
+		t.Error("expected error for invalid TOML in meta.toml")
+	}
+}
+
+func TestWriteMetaReadOnlyDir(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0444); err != nil {
+		t.Skip("cannot chmod temp dir:", err)
+	}
+	path := filepath.Join(dir, "meta.toml")
+	err := writeMeta(path, &model.Meta{ID: 1})
+	if err == nil {
+		t.Error("expected error writing meta.toml to read-only directory")
+	}
+}
+
+func TestDeleteRemovesBookDir(t *testing.T) {
+	root := t.TempDir()
+	s := New(root, filepath.Join(root, ".inbox-tmp"))
+
+	dir := filepath.Join(root, "Author, A", "Test (1)")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "test.epub"), []byte("data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	loc := model.Location{LibraryPath: "Author, A/Test (1)", EpubFilename: "test.epub"}
+	if err := s.Delete(loc); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Errorf("book directory should be removed after delete")
+	}
+	if _, err := os.Stat(filepath.Join(root, "Author, A")); !os.IsNotExist(err) {
+		t.Errorf("empty author directory should also be removed after last book is deleted")
+	}
+}
+
+func TestEpubFilenameForFFallback(t *testing.T) {
+	// A title that is only dots triggers ForFAT to return an error (trimmed to empty),
+	// exercising the fallback to the raw title.
+	got := epubFilename([]model.Author{{Name: "Alice"}}, ".")
+	if got != ". - Alice.epub" {
+		t.Errorf("epubFilename = %q, want %q", got, ". - Alice.epub")
+	}
+}
+
+func TestDeleteWithReadOnlyDirError(t *testing.T) {
+	root := t.TempDir()
+	s := New(root, filepath.Join(root, ".inbox-tmp"))
+
+	dir := filepath.Join(root, "Author, A", "Test (1)")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "test.epub"), []byte("data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Chmod(dir, 0444); err != nil {
+		t.Skip("cannot chmod book dir:", err)
+	}
+	// Restore permissions so TempDir cleanup succeeds.
+	t.Cleanup(func() { os.Chmod(dir, 0755) })
+
+	loc := model.Location{LibraryPath: "Author, A/Test (1)", EpubFilename: "test.epub"}
+	err := s.Delete(loc)
+	if err == nil {
+		t.Error("expected error deleting a read-only book directory")
+	}
+}

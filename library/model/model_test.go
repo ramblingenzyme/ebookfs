@@ -312,3 +312,96 @@ func TestValidateNoErrors(t *testing.T) {
 		t.Errorf("expected no error, got %v", err)
 	}
 }
+
+func TestFieldError(t *testing.T) {
+	fe := FieldError{Field: "title", Message: "too short"}
+	got := fe.Error()
+	want := "title: too short"
+	if got != want {
+		t.Errorf("FieldError.Error() = %q, want %q", got, want)
+	}
+}
+
+func TestValidationErrorEmpty(t *testing.T) {
+	var ve ValidationError
+	got := ve.Error()
+	if got != "" {
+		t.Errorf("ValidationError.Error() with 0 errors = %q, want empty", got)
+	}
+}
+
+func TestValidationErrorSingle(t *testing.T) {
+	ve := ValidationError{{Field: "title", Message: "too short"}}
+	got := ve.Error()
+	want := "title: too short"
+	if got != want {
+		t.Errorf("ValidationError.Error() with 1 error = %q, want %q", got, want)
+	}
+}
+
+func TestValidationErrorMultiple(t *testing.T) {
+	ve := ValidationError{
+		{Field: "title", Message: "too short"},
+		{Field: "rating", Message: "too high"},
+	}
+	got := ve.Error()
+	for _, fe := range ve {
+		if !strings.Contains(got, fe.Field+": "+fe.Message) {
+			t.Errorf("ValidationError.Error() should contain %q", fe.Field+": "+fe.Message)
+		}
+	}
+	if !strings.Contains(got, "; ") {
+		t.Errorf("ValidationError.Error() with multiple errors should join with '; '")
+	}
+}
+
+func TestValidateCoverNoCoverPath(t *testing.T) {
+	book := &Book{}
+	e := Edits{Cover: ptr([]byte("image-data"))}
+	err := e.Validate(book)
+	if err == nil {
+		t.Fatal("expected error: book has no cover to replace")
+	}
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("error is not *ValidationError: %T", err)
+	}
+	if len(*ve) != 1 || (*ve)[0].Field != "cover" {
+		t.Errorf("expected cover field error, got %v", *ve)
+	}
+}
+
+func TestValidateCoverEmptyBytes(t *testing.T) {
+	book := &Book{Bib: Bib{CoverPath: "cover.jpg"}}
+	e := Edits{Cover: ptr([]byte{})}
+	err := e.Validate(book)
+	if err == nil {
+		t.Fatal("expected error: empty cover bytes")
+	}
+}
+
+func TestHasBibEdits(t *testing.T) {
+	var empty Edits
+	if empty.HasBibEdits() {
+		t.Error("HasBibEdits should be false for empty Edits")
+	}
+	title := "x"
+	if !(&Edits{Title: &title}).HasBibEdits() {
+		t.Error("HasBibEdits should be true when Title is set")
+	}
+	series := "S"
+	if !(&Edits{Series: &series}).HasBibEdits() {
+		t.Error("HasBibEdits should be true when Series is set")
+	}
+}
+
+func TestHasCoverEdit(t *testing.T) {
+	var empty Edits
+	if empty.HasCoverEdit() {
+		t.Error("HasCoverEdit should be false for empty Edits")
+	}
+	cover := []byte{}
+	if !(&Edits{Cover: &cover}).HasCoverEdit() {
+		t.Error("HasCoverEdit should be true when Cover is set")
+	}
+}

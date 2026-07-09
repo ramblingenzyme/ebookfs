@@ -124,5 +124,3 @@ func coverFormat(coverPath string) string {
 		return ""
 	}
 }
-
-

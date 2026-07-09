@@ -1,7 +1,9 @@
 package kepub
 
 import (
+	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -164,6 +166,146 @@ func TestCacheSize(t *testing.T) {
 	}
 	if size != 10 { // len("kepub-data")
 		t.Errorf("Size = %d, want 10", size)
+	}
+}
+
+// fakeSource returns a temp file filled with the given data.
+type fakeSource struct {
+	t   *testing.T
+	dir string
+}
+
+func (s fakeSource) OpenEpub(_ int64) (model.EpubReader, error) {
+	path := filepath.Join(s.dir, "source.epub")
+	return os.Open(path)
+}
+
+func TestCacheEnsureCreatesFile(t *testing.T) {
+	dir := t.TempDir()
+	src := fakeSource{t: t, dir: dir}
+	c := NewCache(dir, src)
+	c.convertFn = func(_ context.Context, w io.Writer, _ io.ReaderAt, _ int64) error {
+		_, err := w.Write([]byte("fake-kepub"))
+		return err
+	}
+
+	srcPath := filepath.Join(dir, "source.epub")
+	if err := os.WriteFile(srcPath, []byte("epub-data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Set DateModified in the future so the cache will be considered stale.
+	b := makeBook(1, "Test", "Alice")
+	b.Meta.DateModified = time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)
+	b.EpubSize = int64(len("epub-data"))
+
+	if err := c.Ensure(b); err != nil {
+		t.Fatalf("Ensure: %v", err)
+	}
+
+	cachePath := filepath.Join(dir, "1.kepub.epub")
+	data, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatalf("cache file not created: %v", err)
+	}
+	if string(data) != "fake-kepub" {
+		t.Errorf("cache content = %q, want %q", string(data), "fake-kepub")
+	}
+}
+
+func TestCacheEnsureFreshIsNoop(t *testing.T) {
+	dir := t.TempDir()
+	src := fakeSource{t: t, dir: dir}
+	c := NewCache(dir, src)
+	var convertCalls int
+	c.convertFn = func(_ context.Context, w io.Writer, _ io.ReaderAt, _ int64) error {
+		convertCalls++
+		_, err := w.Write([]byte("modified"))
+		return err
+	}
+
+	srcPath := filepath.Join(dir, "source.epub")
+	if err := os.WriteFile(srcPath, []byte("epub-data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cachePath := filepath.Join(dir, "1.kepub.epub")
+	if err := os.WriteFile(cachePath, []byte("fresh-cache"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Set DateModified in the past so the cache (just created) is clearly fresher.
+	b := makeBook(1, "Test", "Alice")
+	b.Meta.DateModified = time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	b.EpubSize = 9
+
+	if err := c.Ensure(b); err != nil {
+		t.Fatalf("Ensure: %v", err)
+	}
+	if convertCalls != 0 {
+		t.Error("Ensure should not convert when cache is fresh")
+	}
+	data, _ := os.ReadFile(cachePath)
+	if string(data) != "fresh-cache" {
+		t.Errorf("cache content changed to %q, want %q", string(data), "fresh-cache")
+	}
+}
+
+func TestCacheOpenReturnsReader(t *testing.T) {
+	dir := t.TempDir()
+	src := fakeSource{t: t, dir: dir}
+	c := NewCache(dir, src)
+	c.convertFn = func(_ context.Context, w io.Writer, _ io.ReaderAt, _ int64) error {
+		_, err := w.Write([]byte("kepub-content"))
+		return err
+	}
+
+	srcPath := filepath.Join(dir, "source.epub")
+	if err := os.WriteFile(srcPath, []byte("epub-data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	b := makeBook(1, "Test", "Alice")
+	b.EpubSize = 9
+
+	r, err := c.Open(b)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer r.Close()
+
+	data, err := io.ReadAll(io.NewSectionReader(r, 0, 1<<20))
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if string(data) != "kepub-content" {
+		t.Errorf("Open content = %q, want %q", string(data), "kepub-content")
+	}
+}
+
+func TestCacheWarmProducesFile(t *testing.T) {
+	dir := t.TempDir()
+	src := fakeSource{t: t, dir: dir}
+	c := NewCache(dir, src)
+	c.convertFn = func(_ context.Context, w io.Writer, _ io.ReaderAt, _ int64) error {
+		_, err := w.Write([]byte("warm-content"))
+		return err
+	}
+
+	srcPath := filepath.Join(dir, "source.epub")
+	if err := os.WriteFile(srcPath, []byte("epub-data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	b := makeBook(1, "Warm", "Author")
+	b.EpubSize = 9
+
+	c.Warm(b)
+	c.Close()
+
+	cachePath := filepath.Join(dir, "1.kepub.epub")
+	if _, err := os.Stat(cachePath); err != nil {
+		t.Errorf("cache file not created after warm: %v", err)
 	}
 }
 

@@ -7,6 +7,7 @@ package kepub
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -33,10 +34,19 @@ type Cache struct {
 	closeOnce sync.Once
 	locks     map[int64]*sync.Mutex // per-book conversion lock, lazily created
 	warmer    *warmer
+
+	// convertFn is the epub-to-kepub converter. Defaults to convert;
+	// overridable in tests to avoid the kepubify dependency.
+	convertFn func(context.Context, io.Writer, io.ReaderAt, int64) error
 }
 
 func NewCache(dir string, src EpubSource) *Cache {
-	c := &Cache{dir: dir, src: src, locks: make(map[int64]*sync.Mutex)}
+	c := &Cache{
+		dir:       dir,
+		src:       src,
+		locks:     make(map[int64]*sync.Mutex),
+		convertFn: convert,
+	}
 	c.warmer = newWarmer(c.Ensure)
 	return c
 }
@@ -93,27 +103,20 @@ func (c *Cache) Open(b *model.Book) (model.EpubReader, error) {
 }
 
 func (c *Cache) ensureLocked(b *model.Book) error {
+	// Fresh iff the cache exists and is no older than the book's last
+	// modification time. An in-place epub rewrite updates DateModified,
+	// which invalidates the cached rendition.
+	if cfi, err := os.Stat(c.path(b)); err == nil && !cfi.ModTime().Before(b.Meta.DateModified) {
+		return nil
+	}
+
 	src, err := c.src.OpenEpub(b.Meta.ID)
 	if err != nil {
 		return err
 	}
 	defer src.Close()
 
-	f, ok := src.(*os.File)
-	if !ok {
-		return fmt.Errorf("unexpected EpubReader type %T", src)
-	}
-	sfi, err := f.Stat()
-	if err != nil {
-		return err
-	}
-	// Fresh iff the cache exists and is no older than the source epub. Keying on
-	// the source mtime means an in-place epub rewrite invalidates the kepub.
-	if cfi, err := os.Stat(c.path(b)); err == nil && !cfi.ModTime().Before(sfi.ModTime()) {
-		return nil
-	}
-
-	return c.write(b, src, sfi.Size())
+	return c.write(b, src, b.EpubSize)
 }
 
 // write converts src into a temp file in the cache dir, then atomically renames
@@ -126,7 +129,7 @@ func (c *Cache) write(b *model.Book, src model.EpubReader, size int64) error {
 	tmpName := tmp.Name()
 	defer os.Remove(tmpName) // no-op once renamed; cleans up on any error path
 
-	if err := convert(context.Background(), tmp, src, size); err != nil {
+	if err := c.convertFn(context.Background(), tmp, src, size); err != nil {
 		tmp.Close()
 		return err
 	}
