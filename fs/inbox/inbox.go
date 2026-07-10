@@ -16,13 +16,17 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
+// newStat is the package-local shorthand for vfile.NewStat, the single
+// definition of the glenda/glenda owner convention every node uses.
+var newStat = vfile.NewStat
+
 type InboxDir struct {
 	fs.StaticDir
 }
 
 func NewInboxDir(f *fs.FS) *InboxDir {
 	return &InboxDir{
-		StaticDir: *fs.NewStaticDir(vfile.NewStat(f, "inbox", 0755|proto.DMDIR)),
+		StaticDir: *fs.NewStaticDir(newStat(f, "inbox", 0755|proto.DMDIR)),
 	}
 }
 
@@ -57,7 +61,7 @@ func InboxCreateFile(lib library.Library, onIngest func(*model.Book)) func(*fs.F
 
 func NewInboxFile(f *fs.FS, lib library.Library, name string, perm uint32, onIngest func(*model.Book)) *InboxFile {
 	return &InboxFile{
-		BaseFile: *fs.NewBaseFile(vfile.NewStat(f, name, perm)),
+		BaseFile: *fs.NewBaseFile(newStat(f, name, perm)),
 		lib:      lib,
 		onIngest: onIngest,
 	}

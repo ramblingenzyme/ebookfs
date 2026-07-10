@@ -1,4 +1,4 @@
-package fs
+package views
 
 import (
 	"testing"
@@ -73,7 +73,7 @@ func TestSeriesEntryNameFunc(t *testing.T) {
 
 func TestSeriesEntryName_PadTriggeredByMaxIndex(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newBySeriesDir(reg)
+	d := NewBySeriesDir(reg)
 
 	b1 := makeBook(1, "First", "Author")
 	b1.Series = &model.SeriesRef{Name: "S", Index: 1.0}

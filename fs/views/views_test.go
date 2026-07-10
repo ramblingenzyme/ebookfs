@@ -1,10 +1,11 @@
-package fs
+package views
 
 import (
 	"testing"
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/fs/book"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
@@ -13,7 +14,7 @@ import (
 
 func TestRegistryAddAndRemove(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newAllBooksDir(reg)
+	d := NewAllBooksDir(reg)
 
 	b := makeBook(1, "Test Book", "Author")
 	reg.Add(b)
@@ -31,14 +32,14 @@ func TestRegistryAddAndRemove(t *testing.T) {
 
 func TestRegistryRemoveUnknownID(t *testing.T) {
 	reg := newTestRegistry(t)
-	newAllBooksDir(reg)
+	NewAllBooksDir(reg)
 
 	reg.Remove(999) // should not panic
 }
 
 func TestRegistryAddSameIDTwiceUsesSameDir(t *testing.T) {
 	reg := newTestRegistry(t)
-	allBooks := newAllBooksDir(reg)
+	allBooks := NewAllBooksDir(reg)
 
 	b1 := makeBook(1, "First Title", "Author")
 	b2 := makeBook(1, "Second Title", "Author")
@@ -61,7 +62,7 @@ func TestRegistryAddSameIDTwiceUsesSameDir(t *testing.T) {
 
 func TestBooksDirMultipleBooks(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newAllBooksDir(reg)
+	d := NewAllBooksDir(reg)
 
 	reg.Add(makeBook(1, "Alpha", "Author"))
 	reg.Add(makeBook(2, "Beta", "Author"))
@@ -74,7 +75,7 @@ func TestBooksDirMultipleBooks(t *testing.T) {
 
 func TestBooksDirRemoveOnlyOne(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newAllBooksDir(reg)
+	d := NewAllBooksDir(reg)
 
 	reg.Add(makeBook(1, "Keep", "Author"))
 	reg.Add(makeBook(2, "Remove", "Author"))
@@ -91,7 +92,7 @@ func TestBooksDirRemoveOnlyOne(t *testing.T) {
 
 func TestBooksDirEmptyNilMap(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newAllBooksDir(reg)
+	d := NewAllBooksDir(reg)
 
 	if n := len(d.Children()); n != 0 {
 		t.Errorf("new books dir should be empty, got %d children", n)
@@ -102,7 +103,7 @@ func TestBooksDirEmptyNilMap(t *testing.T) {
 
 func TestByAuthorDirSingleAuthor(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByAuthorDir(reg)
+	d := NewByAuthorDir(reg)
 
 	b := makeBook(1, "My Book", "Alice")
 	reg.Add(b)
@@ -119,7 +120,7 @@ func TestByAuthorDirSingleAuthor(t *testing.T) {
 
 func TestByAuthorDirMultiAuthor(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByAuthorDir(reg)
+	d := NewByAuthorDir(reg)
 
 	b := makeBook(1, "Joint Work", "Alice", "Bob")
 	reg.Add(b)
@@ -138,7 +139,7 @@ func TestByAuthorDirMultiAuthor(t *testing.T) {
 
 func TestByAuthorDirRemoveLastBookPrunesDir(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByAuthorDir(reg)
+	d := NewByAuthorDir(reg)
 
 	b := makeBook(1, "Only Book", "Charlie")
 	reg.Add(b)
@@ -152,7 +153,7 @@ func TestByAuthorDirRemoveLastBookPrunesDir(t *testing.T) {
 
 func TestByAuthorDirMultipleBooksSameAuthor(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByAuthorDir(reg)
+	d := NewByAuthorDir(reg)
 
 	reg.Add(makeBook(1, "Book A", "Dana"))
 	reg.Add(makeBook(2, "Book B", "Dana"))
@@ -170,7 +171,7 @@ func TestByAuthorDirMultipleBooksSameAuthor(t *testing.T) {
 
 func TestByAuthorDirRemoveOneOfTwo(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByAuthorDir(reg)
+	d := NewByAuthorDir(reg)
 
 	reg.Add(makeBook(1, "Keep", "Dana"))
 	reg.Add(makeBook(2, "Remove", "Dana"))
@@ -188,7 +189,7 @@ func TestByAuthorDirRemoveOneOfTwo(t *testing.T) {
 
 func TestByAuthorDirBookNoAuthors(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByAuthorDir(reg)
+	d := NewByAuthorDir(reg)
 
 	b := makeBook(1, "No Author")
 	b.Authors = nil // force nil authors
@@ -201,7 +202,7 @@ func TestByAuthorDirBookNoAuthors(t *testing.T) {
 
 func TestByAuthorDirRemoveAuthorlessBook(t *testing.T) {
 	reg := newTestRegistry(t)
-	newByAuthorDir(reg)
+	NewByAuthorDir(reg)
 
 	b := makeBook(1, "No Author")
 	b.Authors = nil
@@ -213,7 +214,7 @@ func TestByAuthorDirRemoveAuthorlessBook(t *testing.T) {
 
 func TestBySeriesDirAddWithSeries(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newBySeriesDir(reg)
+	d := NewBySeriesDir(reg)
 
 	b := makeBook(1, "The Hobbit", "Tolkien")
 	b.Series = &model.SeriesRef{Name: "Middle-earth", Index: 1.0}
@@ -233,7 +234,7 @@ func TestBySeriesDirAddWithSeries(t *testing.T) {
 
 func TestBySeriesDirNoSeries(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newBySeriesDir(reg)
+	d := NewBySeriesDir(reg)
 
 	b := makeBook(1, "Standalone", "Author")
 	reg.Add(b)
@@ -245,7 +246,7 @@ func TestBySeriesDirNoSeries(t *testing.T) {
 
 func TestBySeriesDirRemoveLastBookPrunesDir(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newBySeriesDir(reg)
+	d := NewBySeriesDir(reg)
 
 	b := makeBook(1, "Only in Series", "Author")
 	b.Series = &model.SeriesRef{Name: "S", Index: 1.0}
@@ -260,7 +261,7 @@ func TestBySeriesDirRemoveLastBookPrunesDir(t *testing.T) {
 
 func TestBySeriesDirMultipleBooksSameSeries(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newBySeriesDir(reg)
+	d := NewBySeriesDir(reg)
 
 	b1 := makeBook(1, "Book One", "Author")
 	b1.Series = &model.SeriesRef{Name: "Saga", Index: 1.0}
@@ -279,7 +280,7 @@ func TestBySeriesDirMultipleBooksSameSeries(t *testing.T) {
 
 func TestBySeriesDirRemoveOneOfTwo(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newBySeriesDir(reg)
+	d := NewBySeriesDir(reg)
 
 	b1 := makeBook(1, "Keep", "Author")
 	b1.Series = &model.SeriesRef{Name: "S", Index: 1.0}
@@ -298,7 +299,7 @@ func TestBySeriesDirRemoveOneOfTwo(t *testing.T) {
 
 func TestBySeriesDirNilSeriesNotAdded(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newBySeriesDir(reg)
+	d := NewBySeriesDir(reg)
 
 	b1 := makeBook(1, "Has Series", "Author")
 	b1.Series = &model.SeriesRef{Name: "S", Index: 1.0}
@@ -314,7 +315,7 @@ func TestBySeriesDirNilSeriesNotAdded(t *testing.T) {
 
 func TestBySeriesDirReaddAfterRemove(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newBySeriesDir(reg)
+	d := NewBySeriesDir(reg)
 
 	b := makeBook(1, "Back and Forth", "Author")
 	b.Series = &model.SeriesRef{Name: "S", Index: 1.0}
@@ -335,7 +336,7 @@ func TestBySeriesDirReaddAfterRemove(t *testing.T) {
 
 func TestByIDDirAdd(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByIDDir(reg)
+	d := NewByIDDir(reg)
 
 	b := makeBook(1, "Test", "Author")
 	reg.Add(b)
@@ -347,7 +348,7 @@ func TestByIDDirAdd(t *testing.T) {
 
 func TestByIDDirRemove(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByIDDir(reg)
+	d := NewByIDDir(reg)
 
 	b := makeBook(1, "Test", "Author")
 	reg.Add(b)
@@ -360,7 +361,7 @@ func TestByIDDirRemove(t *testing.T) {
 
 func TestByIDDirMultipleBooks(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByIDDir(reg)
+	d := NewByIDDir(reg)
 
 	reg.Add(makeBook(1, "Alpha", "Author"))
 	reg.Add(makeBook(2, "Beta", "Author"))
@@ -373,14 +374,14 @@ func TestByIDDirMultipleBooks(t *testing.T) {
 
 func TestByIDDirRemoveUnknown(t *testing.T) {
 	reg := newTestRegistry(t)
-	newByIDDir(reg)
+	NewByIDDir(reg)
 
 	reg.Remove(999) // should not panic
 }
 
 func TestByIDDirTitleChangeReflected(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByIDDir(reg)
+	d := NewByIDDir(reg)
 
 	b := makeBook(1, "Original", "Author")
 	reg.Add(b)
@@ -406,7 +407,7 @@ func TestByIDDirTitleChangeReflected(t *testing.T) {
 
 func TestReaderDirAddIncludedStatus(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
+	d := NewReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
 
 	b := makeBook(1, "To Read", "Author1")
 	b.EpubFilename = "To Read.epub"
@@ -425,7 +426,7 @@ func TestReaderDirAddIncludedStatus(t *testing.T) {
 
 func TestReaderDirSkipExcludedStatus(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
+	d := NewReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
 
 	b := makeBook(1, "Finished", "Author2")
 	b.Meta.Status = "read"
@@ -438,7 +439,7 @@ func TestReaderDirSkipExcludedStatus(t *testing.T) {
 
 func TestReaderDirRemoveLastPrunesDir(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
+	d := NewReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
 
 	b := makeBook(1, "Only", "Author3")
 	b.EpubFilename = "Only.epub"
@@ -453,7 +454,7 @@ func TestReaderDirRemoveLastPrunesDir(t *testing.T) {
 
 func TestReaderDirCoAuthorSingleDir(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
+	d := NewReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
 
 	b := makeBook(1, "Joint", "Alice", "Bob")
 	b.EpubFilename = "Joint.epub"
@@ -473,7 +474,7 @@ func TestReaderDirCoAuthorSingleDir(t *testing.T) {
 
 func TestReaderDirCoAuthorRemove(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
+	d := NewReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
 
 	b := makeBook(1, "Joint", "Alice", "Bob")
 	b.EpubFilename = "Joint.epub"
@@ -488,7 +489,7 @@ func TestReaderDirCoAuthorRemove(t *testing.T) {
 
 func TestReaderDirMultipleBooksSameAuthor(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
+	d := NewReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
 
 	b1 := makeBook(1, "Book A", "SameAuthor")
 	b1.EpubFilename = "A.epub"
@@ -514,7 +515,7 @@ func TestReaderDirMultipleBooksSameAuthor(t *testing.T) {
 
 func TestReaderDirWithConvertEnabled(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
+	d := NewReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
 
 	b := makeBook(1, "Convert Me", "AuthorX")
 	b.EpubFilename = "Convert.epub"
@@ -555,19 +556,19 @@ func TestPruneEmptyNoOpForNonEmptyDir(t *testing.T) {
 
 func TestBySeriesDirRemoveNilSeriesNoOp(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newBySeriesDir(reg)
+	d := NewBySeriesDir(reg)
 
-	book := makeBook(1, "No Series", "Author")
-	bd := newBookDir(reg, book)
+	b := makeBook(1, "No Series", "Author")
+	bd := book.NewBookDir(newTestFS(t), libfake.Lib{}, func(int64, model.Edits) error { return nil }, b)
 
-	d.remove(bd) // Should not panic — early return when Series is nil
+	d.Remove(bd) // Should not panic — early return when Series is nil
 }
 
 // ---- ByTagDir ----
 
 func TestByTagDirAddBookWithTags(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByTagDir(reg)
+	d := NewByTagDir(reg)
 
 	b := makeBook(1, "Tagged Book", "Author")
 	b.Meta.Tags = []string{"fiction", "fantasy"}
@@ -587,7 +588,7 @@ func TestByTagDirAddBookWithTags(t *testing.T) {
 
 func TestByTagDirNoTags(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByTagDir(reg)
+	d := NewByTagDir(reg)
 
 	b := makeBook(1, "Untagged", "Author")
 	b.Meta.Tags = nil
@@ -600,7 +601,7 @@ func TestByTagDirNoTags(t *testing.T) {
 
 func TestByTagDirRemoveLastPrunesDir(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByTagDir(reg)
+	d := NewByTagDir(reg)
 
 	b := makeBook(1, "Only Tagged", "Author")
 	b.Meta.Tags = []string{"ephemeral"}
@@ -614,7 +615,7 @@ func TestByTagDirRemoveLastPrunesDir(t *testing.T) {
 
 func TestByTagDirMultipleBooksSameTag(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByTagDir(reg)
+	d := NewByTagDir(reg)
 
 	b1 := makeBook(1, "Book A", "Author")
 	b1.Meta.Tags = []string{"scifi"}
@@ -633,7 +634,7 @@ func TestByTagDirMultipleBooksSameTag(t *testing.T) {
 
 func TestByTagDirRemoveOneOfTwo(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByTagDir(reg)
+	d := NewByTagDir(reg)
 
 	b1 := makeBook(1, "Keep", "Author")
 	b1.Meta.Tags = []string{"tag"}
@@ -655,7 +656,7 @@ func TestByTagDirRemoveOneOfTwo(t *testing.T) {
 
 func TestByTagDirTagWithSlash(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByTagDir(reg)
+	d := NewByTagDir(reg)
 
 	b := makeBook(1, "Slash Tag", "Author")
 	b.Meta.Tags = []string{"a/b"}
@@ -671,7 +672,7 @@ func TestByTagDirTagWithSlash(t *testing.T) {
 
 func TestByTagDirRemoveWithSlashTag(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByTagDir(reg)
+	d := NewByTagDir(reg)
 
 	b := makeBook(1, "Slash Tag", "Author")
 	b.Meta.Tags = []string{"x/y"}
@@ -685,7 +686,7 @@ func TestByTagDirRemoveWithSlashTag(t *testing.T) {
 
 func TestByTagDirEditTags(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByTagDir(reg)
+	d := NewByTagDir(reg)
 
 	b := makeBook(1, "Retagged", "Author")
 	b.Meta.Tags = []string{"oldtag"}
@@ -715,7 +716,7 @@ func TestByTagDirEditTags(t *testing.T) {
 
 func TestByStatusDirAddBook(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByStatusDir(reg)
+	d := NewByStatusDir(reg)
 
 	b := makeBook(1, "My Book", "Author")
 	reg.Add(b)
@@ -732,7 +733,7 @@ func TestByStatusDirAddBook(t *testing.T) {
 
 func TestByStatusDirDifferentStatuses(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByStatusDir(reg)
+	d := NewByStatusDir(reg)
 
 	b1 := makeBook(1, "Unread Book", "Author")
 	b1.Meta.Status = "unread"
@@ -756,7 +757,7 @@ func TestByStatusDirDifferentStatuses(t *testing.T) {
 
 func TestByStatusDirRemoveLastPrunesDir(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByStatusDir(reg)
+	d := NewByStatusDir(reg)
 
 	b := makeBook(1, "Only", "Author")
 	b.Meta.Status = "reading"
@@ -770,7 +771,7 @@ func TestByStatusDirRemoveLastPrunesDir(t *testing.T) {
 
 func TestByStatusDirMultipleBooksSameStatus(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByStatusDir(reg)
+	d := NewByStatusDir(reg)
 
 	reg.Add(makeBook(1, "Book A", "Author"))
 	reg.Add(makeBook(2, "Book B", "Author"))
@@ -784,7 +785,7 @@ func TestByStatusDirMultipleBooksSameStatus(t *testing.T) {
 
 func TestByStatusDirRemoveOneOfTwo(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByStatusDir(reg)
+	d := NewByStatusDir(reg)
 
 	b1 := makeBook(1, "Keep", "Author")
 	b2 := makeBook(2, "Remove", "Author")
@@ -804,7 +805,7 @@ func TestByStatusDirRemoveOneOfTwo(t *testing.T) {
 
 func TestByStatusDirEditStatus(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newByStatusDir(reg)
+	d := NewByStatusDir(reg)
 
 	b := makeBook(1, "Status Change", "Author")
 	b.Meta.Status = "unread"
@@ -832,7 +833,7 @@ func TestByStatusDirEditStatus(t *testing.T) {
 
 func TestBooksDirDuplicateTitles(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := newAllBooksDir(reg)
+	d := NewAllBooksDir(reg)
 
 	b1 := makeBook(1, "Same Title", "Alice")
 	b2 := makeBook(2, "Same Title", "Bob")

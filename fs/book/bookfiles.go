@@ -1,25 +1,30 @@
-package vfile
+package book
 
 import (
 	"errors"
 	"fmt"
 
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
+// newStat is the package-local shorthand for vfile.NewStat, the single
+// definition of the glenda/glenda owner convention every node uses.
+var newStat = vfile.NewStat
+
 const maxCoverFileSize = 32 << 20 // 32 MiB
 
-// OPFFile serves a book's raw OPF XML, loading bytes from the epub on each open.
-type OPFFile struct {
-	snapshotFile
+// opfFile serves a book's raw OPF XML, loading bytes from the epub on each open.
+type opfFile struct {
+	vfile.SnapshotFile
 	book func() *model.Book
 }
 
-func NewOPFFile(stat *proto.Stat, lib library.Library, book func() *model.Book) *OPFFile {
-	return &OPFFile{
-		snapshotFile: newSnapshotFile(stat, func() ([]byte, error) {
+func newOPFFile(stat *proto.Stat, lib library.Library, book func() *model.Book) *opfFile {
+	return &opfFile{
+		SnapshotFile: vfile.NewSnapshotFile(stat, func() ([]byte, error) {
 			if lib == nil {
 				return nil, errors.New("library not available")
 			}
@@ -29,7 +34,7 @@ func NewOPFFile(stat *proto.Stat, lib library.Library, book func() *model.Book) 
 	}
 }
 
-func (o *OPFFile) Stat() proto.Stat {
+func (o *opfFile) Stat() proto.Stat {
 	s := o.BaseFile.Stat()
 	if b := o.book(); b != nil {
 		s.Length = uint64(b.OpfSize)
@@ -37,19 +42,19 @@ func (o *OPFFile) Stat() proto.Stat {
 	return s
 }
 
-// CoverFile serves a book's cover image, loading bytes from the epub on each
+// coverFile serves a book's cover image, loading bytes from the epub on each
 // open. It also supports writing new cover bytes, accumulated per fid and
 // committed when the fid is closed.
-type CoverFile struct {
-	snapshotFile
+type coverFile struct {
+	vfile.SnapshotFile
 	edit   func(int64, model.Edits) error
 	book   func() *model.Book
 	writes map[uint64][]byte
 }
 
-func NewCoverFile(stat *proto.Stat, lib library.Library, edit func(int64, model.Edits) error, book func() *model.Book) *CoverFile {
-	return &CoverFile{
-		snapshotFile: newSnapshotFile(stat, func() ([]byte, error) {
+func newCoverFile(stat *proto.Stat, lib library.Library, edit func(int64, model.Edits) error, book func() *model.Book) *coverFile {
+	return &coverFile{
+		SnapshotFile: vfile.NewSnapshotFile(stat, func() ([]byte, error) {
 			if lib == nil {
 				return nil, errors.New("library not available")
 			}
@@ -61,7 +66,7 @@ func NewCoverFile(stat *proto.Stat, lib library.Library, edit func(int64, model.
 	}
 }
 
-func (c *CoverFile) Stat() proto.Stat {
+func (c *coverFile) Stat() proto.Stat {
 	s := c.BaseFile.Stat()
 	if b := c.book(); b != nil {
 		s.Length = uint64(b.CoverSize)
@@ -69,7 +74,7 @@ func (c *CoverFile) Stat() proto.Stat {
 	return s
 }
 
-func (c *CoverFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
+func (c *coverFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
 	// Overflow-safe cap: offset is a client-controlled uint64, so offset+len can
 	// wrap past the check. Bound each term against the cap instead of the sum.
 	if offset > maxCoverFileSize || uint64(len(data)) > maxCoverFileSize-offset {
@@ -87,29 +92,31 @@ func (c *CoverFile) Write(fid uint64, offset uint64, data []byte) (uint32, error
 	return uint32(len(data)), nil
 }
 
-func (c *CoverFile) Close(fid uint64) error {
+func (c *coverFile) Close(fid uint64) error {
 	c.Lock()
-	defer c.Unlock()
 	data := c.writes[fid]
-	delete(c.reads, fid)
 	delete(c.writes, fid)
+	c.Unlock()
+	// Forget the per-fid snapshot via the base, after releasing our own lock
+	// (the base method takes the same mutex).
+	c.SnapshotFile.Close(fid)
 	if len(data) == 0 {
 		return nil
 	}
 	return c.edit(c.book().Meta.ID, model.Edits{Cover: &data})
 }
 
-// EpubFile serves a book's epub through the library, holding one reader per fid.
+// epubFile serves a book's epub through the library, holding one reader per fid.
 // The 9P layer never sees a filesystem path. Size and name are read from the
 // book snapshot (set during parse), so Stat never touches the disk.
-type EpubFile struct {
-	readAtFile
+type epubFile struct {
+	vfile.ReadAtFile
 	book func() *model.Book
 }
 
-func NewEpubFile(stat *proto.Stat, lib library.Library, book func() *model.Book) *EpubFile {
-	return &EpubFile{
-		readAtFile: newReadAtFile(stat, func() (library.EpubReader, error) {
+func newEpubFile(stat *proto.Stat, lib library.Library, book func() *model.Book) *epubFile {
+	return &epubFile{
+		ReadAtFile: vfile.NewReadAtFile(stat, func() (library.EpubReader, error) {
 			if lib == nil {
 				return nil, errors.New("library not available")
 			}
@@ -119,7 +126,7 @@ func NewEpubFile(stat *proto.Stat, lib library.Library, book func() *model.Book)
 	}
 }
 
-func (e *EpubFile) Stat() proto.Stat {
+func (e *epubFile) Stat() proto.Stat {
 	s := e.BaseFile.Stat()
 	if b := e.book(); b != nil {
 		s.Name = b.EpubFilename

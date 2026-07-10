@@ -1,4 +1,4 @@
-package vfile
+package book
 
 import (
 	"errors"
@@ -6,11 +6,12 @@ import (
 	"strings"
 
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/fs/vfile"
 )
 
 const maxFieldFileSize = 1 << 20 // 1 MiB
 
-// FieldFile is a readable/writable file backed by a single string-valued field.
+// fieldFile is a readable/writable file backed by a single string-valued field.
 // Content is snapshotted per fid on Open; writes are buffered per fid and
 // committed (trimmed of trailing newline) when the fid is closed.
 //
@@ -21,17 +22,17 @@ const maxFieldFileSize = 1 << 20 // 1 MiB
 // that is shorter than the current value replaces it entirely (no trailing
 // bytes from the old value leak through). On Close the result is sent through
 // set → edits → Validate; an error aborts the commit.
-type FieldFile struct {
-	snapshotFile
+type fieldFile struct {
+	vfile.SnapshotFile
 	get       func() string
 	set       func(string) error
 	writes    map[uint64][]byte
 	truncated map[uint64]bool
 }
 
-func NewFieldFile(stat *proto.Stat, get func() string, set func(string) error) *FieldFile {
-	return &FieldFile{
-		snapshotFile: newSnapshotFile(stat, func() ([]byte, error) {
+func newFieldFile(stat *proto.Stat, get func() string, set func(string) error) *fieldFile {
+	return &fieldFile{
+		SnapshotFile: vfile.NewSnapshotFile(stat, func() ([]byte, error) {
 			return []byte(get() + "\n"), nil
 		}),
 		get:       get,
@@ -41,27 +42,27 @@ func NewFieldFile(stat *proto.Stat, get func() string, set func(string) error) *
 	}
 }
 
-func (f *FieldFile) Stat() proto.Stat {
+func (f *fieldFile) Stat() proto.Stat {
 	s := f.BaseFile.Stat()
 	// +1 for the trailing newline that Read and Open always append.
 	s.Length = uint64(len(f.get()) + 1)
 	return s
 }
 
-func (f *FieldFile) Open(fid uint64, omode proto.Mode) error {
-	f.Lock()
-	defer f.Unlock()
-	data, err := f.load()
-	if err != nil {
+func (f *fieldFile) Open(fid uint64, omode proto.Mode) error {
+	// The base loads and caches the per-fid snapshot (and self-locks); we then
+	// initialize our own write-tracking state.
+	if err := f.SnapshotFile.Open(fid, omode); err != nil {
 		return err
 	}
-	f.reads[fid] = data
+	f.Lock()
 	f.writes[fid] = nil
 	f.truncated[fid] = omode&proto.Otrunc != 0
+	f.Unlock()
 	return nil
 }
 
-func (f *FieldFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
+func (f *fieldFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
 	if len(data) == 0 {
 		return 0, nil
 	}
@@ -70,13 +71,16 @@ func (f *FieldFile) Write(fid uint64, offset uint64, data []byte) (uint32, error
 	if offset > maxFieldFileSize || uint64(len(data)) > maxFieldFileSize-offset {
 		return 0, fmt.Errorf("write exceeds field file size limit (%d bytes)", maxFieldFileSize)
 	}
+	// Fetch the snapshot via the base before taking our own lock (the base
+	// method self-locks the shared mutex).
+	snapshot, hasSnapshot := f.Snapshot(fid)
 	f.Lock()
 	defer f.Unlock()
 	buf := f.writes[fid]
 	if buf == nil {
 		if f.truncated[fid] {
 			buf = []byte{}
-		} else if snapshot, ok := f.reads[fid]; ok {
+		} else if hasSnapshot {
 			buf = append([]byte(nil), snapshot...)
 		} else {
 			buf = []byte{}
@@ -102,13 +106,14 @@ func (f *FieldFile) Write(fid uint64, offset uint64, data []byte) (uint32, error
 	return uint32(len(data)), nil
 }
 
-func (f *FieldFile) Close(fid uint64) error {
+func (f *fieldFile) Close(fid uint64) error {
 	f.Lock()
-	defer f.Unlock()
 	data := f.writes[fid]
-	delete(f.reads, fid)
 	delete(f.writes, fid)
 	delete(f.truncated, fid)
+	f.Unlock()
+	// Forget the per-fid snapshot via the base, after releasing our own lock.
+	f.SnapshotFile.Close(fid)
 	if len(data) == 0 {
 		return nil
 	}

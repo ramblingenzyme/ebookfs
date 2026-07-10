@@ -1,4 +1,8 @@
-package fs
+// Package book holds the per-book 9P directory (BookDir) and the concrete files
+// it assembles from the vfile primitives (cover/opf/epub/field, and the exported
+// ReaderFile used by the reader view). It decouples from the registry via an
+// injected edit callback, so it never imports registry or views.
+package book
 
 import (
 	"fmt"
@@ -10,35 +14,42 @@ import (
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
-	"github.com/ramblingenzyme/ebookfs/fs/vfile"
+	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-func addReadOnlyField(d *bookDir, f *fs.FS, name string, get func() string) {
-	d.StaticDir.AddChild(vfile.NewFieldFile(newStat(f, name, 0444), get, nil))
+func addReadOnlyField(d *BookDir, f *fs.FS, name string, get func() string) {
+	d.StaticDir.AddChild(newFieldFile(newStat(f, name, 0444), get, nil))
 }
 
-// bookDir is the stable directory identity for one book. The book's state is
+// BookDir is the stable directory identity for one book. The book's state is
 // held as an atomically swapped snapshot: 9P handlers run on many goroutines
 // with no shared lock against registry commits, so they read an immutable
 // *model.Book via Book() rather than fields mutated in place. Snapshots must
 // never be modified after they are stored — an edit produces a fresh Book
-// (library.Edit already does) and the registry swaps the pointer.
-type bookDir struct {
+// (library.Edit already does) and the registry swaps the pointer via SetSnapshot.
+type BookDir struct {
 	fs.StaticDir
 	book atomic.Pointer[model.Book]
 }
 
 // Book returns the current snapshot. Callers needing a consistent view across
 // several fields should call it once and read from the returned value.
-func (d *bookDir) Book() *model.Book {
+func (d *BookDir) Book() *model.Book {
 	return d.book.Load()
 }
 
+// SetSnapshot atomically replaces the book snapshot. The registry calls this
+// under its own lock while bracketing the swap with view remove/add; handler
+// goroutines read the pointer with Book() and never observe a torn value.
+func (d *BookDir) SetSnapshot(b *model.Book) {
+	d.book.Store(b)
+}
+
 // Stat reports the book's title as the entry name, recomputed live so a title
-// edit shows up wherever the bare bookDir is listed (all-books, by-author). The
+// edit shows up wherever the bare BookDir is listed (all-books, by-author). The
 // Qid stays fixed, so a client with the epub open keeps its handle across a rename.
-func (d *bookDir) Stat() proto.Stat {
+func (d *BookDir) Stat() proto.Stat {
 	s := d.StaticDir.Stat()
 	s.Name = d.Book().Title
 	return s
@@ -146,9 +157,11 @@ var fields = map[string]field{
 	},
 }
 
-func newBookDir(reg *bookRegistry, book *model.Book) *bookDir {
-	f, lib := reg.f, reg.lib
-	d := &bookDir{
+// NewBookDir builds the directory for a book. It takes the fs, the library
+// facade, and an edit callback (the registry passes its own edit method) rather
+// than the registry itself, so this package stays a leaf below the registry.
+func NewBookDir(f *fs.FS, lib library.Library, edit func(int64, model.Edits) error, book *model.Book) *BookDir {
+	d := &BookDir{
 		StaticDir: *fs.NewStaticDir(newStat(f, book.Title, 0755|proto.DMDIR)),
 	}
 	d.book.Store(book)
@@ -160,19 +173,19 @@ func newBookDir(reg *bookRegistry, book *model.Book) *bookDir {
 
 	// Child files read through d.Book so they always see the current snapshot,
 	// not the one captured at construction.
-	d.StaticDir.AddChild(vfile.NewEpubFile(
+	d.StaticDir.AddChild(newEpubFile(
 		newStat(f, book.EpubFilename, 0444),
 		lib,
 		d.Book,
 	))
 
-	d.StaticDir.AddChild(vfile.NewOPFFile(
+	d.StaticDir.AddChild(newOPFFile(
 		newStat(f, "opf", 0444),
 		lib,
 		d.Book,
 	))
 
-	// Editable fields route through the registry so the change is validated,
+	// Editable fields route through the edit callback so the change is validated,
 	// persisted, and bracketed by view remove/add (rehoming if the grouping or
 	// name changed). get reads the live book; set constructs Edits for the field.
 	for name, fld := range fields {
@@ -183,9 +196,9 @@ func newBookDir(reg *bookRegistry, book *model.Book) *bookDir {
 			if err != nil {
 				return err
 			}
-			return reg.edit(book.Meta.ID, edits)
+			return edit(book.Meta.ID, edits)
 		}
-		d.StaticDir.AddChild(vfile.NewFieldFile(newStat(f, name, 0644), get, set))
+		d.StaticDir.AddChild(newFieldFile(newStat(f, name, 0644), get, set))
 	}
 
 	// Read-only bib fields.
@@ -193,10 +206,10 @@ func newBookDir(reg *bookRegistry, book *model.Book) *bookDir {
 
 	// Cover image — only present when the epub declares one.
 	if book.CoverPath != "" {
-		d.StaticDir.AddChild(vfile.NewCoverFile(
+		d.StaticDir.AddChild(newCoverFile(
 			newStat(f, "cover"+filepath.Ext(book.CoverPath), 0644),
 			lib,
-			func(id int64, edits model.Edits) error { return reg.edit(id, edits) },
+			edit,
 			d.Book,
 		))
 	}

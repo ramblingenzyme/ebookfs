@@ -5,7 +5,6 @@ import (
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
-	"github.com/ramblingenzyme/ebookfs/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 )
@@ -49,7 +48,7 @@ func TestInboxCreateFile_WrongParent(t *testing.T) {
 	cf := InboxCreateFile(lib, nil)
 
 	// Pass a plain StaticDir as parent instead of *InboxDir.
-	parent := fs.NewStaticDir(vfile.NewStat(f, "wrong", 0755|proto.DMDIR))
+	parent := fs.NewStaticDir(newStat(f, "wrong", 0755|proto.DMDIR))
 	_, err := cf(f, parent, "glenda", "test.epub", 0644, 0)
 	if err == nil {
 		t.Fatal("expected error for non-InboxDir parent")

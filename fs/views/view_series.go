@@ -1,7 +1,9 @@
-package fs
+package views
 
 import (
 	"fmt"
+	"github.com/ramblingenzyme/ebookfs/fs/book"
+	"github.com/ramblingenzyme/ebookfs/fs/registry"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -34,7 +36,7 @@ func seriesEntryNameFunc(pad int) func(*model.Book) string {
 type seriesBookListDir struct {
 	fs.StaticDir
 	f        *fs.FS
-	books    map[int64]*bookDir
+	books    map[int64]*book.BookDir
 	children map[int64]*namedBookDir
 	pad      atomic.Int32
 }
@@ -43,17 +45,17 @@ func newSeriesBookListDir(f *fs.FS, name string) *seriesBookListDir {
 	return &seriesBookListDir{
 		StaticDir: *fs.NewStaticDir(newStat(f, name, 0555|proto.DMDIR)),
 		f:         f,
-		books:     make(map[int64]*bookDir),
+		books:     make(map[int64]*book.BookDir),
 		children:  make(map[int64]*namedBookDir),
 	}
 }
 
-func (s *seriesBookListDir) add(dir *bookDir) {
+func (s *seriesBookListDir) Add(dir *book.BookDir) {
 	s.books[dir.Book().Meta.ID] = dir
 	s.rebuild()
 }
 
-func (s *seriesBookListDir) remove(dir *bookDir) {
+func (s *seriesBookListDir) Remove(dir *book.BookDir) {
 	id := dir.Book().Meta.ID
 	delete(s.books, id)
 	// Drop the cached wrapper too, so a book removed from this series doesn't
@@ -84,7 +86,7 @@ func (s *seriesBookListDir) rebuild() {
 		if !ok {
 			stat := newStat(s.f, "", 0555|proto.DMDIR)
 			n = &namedBookDir{
-				bookDir:  d,
+				BookDir:  d,
 				baseStat: *stat,
 				name:     func(b *model.Book) string { return seriesEntryName(b, int(s.pad.Load())) },
 			}
@@ -96,37 +98,37 @@ func (s *seriesBookListDir) rebuild() {
 
 type bySeriesDir struct{ groupingDir }
 
-func newBySeriesDir(reg *bookRegistry) *bySeriesDir {
-	d := &bySeriesDir{newGroupingDir(reg.f, "by-series")}
+func NewBySeriesDir(reg *registry.BookRegistry) *bySeriesDir {
+	d := &bySeriesDir{newGroupingDir(reg.FS(), "by-series")}
 	reg.AddView(d)
 	return d
 }
 
 // seriesDir returns the subdir for a series name, creating it on first use.
-func (d *bySeriesDir) seriesDir(name string) bookView {
+func (d *bySeriesDir) seriesDir(name string) registry.BookView {
 	if child, ok := d.Children()[name]; ok {
-		return child.(bookView)
+		return child.(registry.BookView)
 	}
 	sd := newSeriesBookListDir(d.f, name)
 	d.StaticDir.AddChild(sd)
 	return sd
 }
 
-func (d *bySeriesDir) add(dir *bookDir) {
+func (d *bySeriesDir) Add(dir *book.BookDir) {
 	b := dir.Book()
 	if b.Series == nil {
 		return
 	}
-	d.seriesDir(b.Series.Name).add(dir)
+	d.seriesDir(b.Series.Name).Add(dir)
 }
 
-func (d *bySeriesDir) remove(dir *bookDir) {
+func (d *bySeriesDir) Remove(dir *book.BookDir) {
 	b := dir.Book()
 	if b.Series == nil {
 		return
 	}
 	if child, ok := d.Children()[b.Series.Name]; ok {
-		child.(bookView).remove(dir)
+		child.(registry.BookView).Remove(dir)
 		d.pruneEmpty(b.Series.Name)
 	}
 }

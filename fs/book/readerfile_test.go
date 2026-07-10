@@ -1,4 +1,4 @@
-package vfile
+package book
 
 import (
 	"bytes"
@@ -16,7 +16,7 @@ func testReaderFile(t *testing.T, exp library.Exporter) *ReaderFile {
 	f := testutil.NewTestFS(t)
 	book := testutil.MakeBook(1, "Test", "Author")
 	book.EpubFilename = "test.epub"
-	return NewReaderFile(NewStat(f, "test.epub", 0444), exp, testutil.Fixed(book))
+	return NewReaderFile(newStat(f, "test.epub", 0444), exp, testutil.Fixed(book))
 }
 
 // Read/open/close semantics are covered by the readAtFile base tests in

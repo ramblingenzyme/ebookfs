@@ -1,24 +1,31 @@
-package fs
+package views
 
 import (
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/fs/book"
+	"github.com/ramblingenzyme/ebookfs/fs/registry"
+	"github.com/ramblingenzyme/ebookfs/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-// namedBookDir wraps a shared *bookDir to present it under a name other than its
+// newStat is the package-local shorthand for vfile.NewStat, the single
+// definition of the glenda/glenda owner convention every node uses.
+var newStat = vfile.NewStat
+
+// namedBookDir wraps a shared *book.BookDir to present it under a name other than its
 // title (by-id, by-series). The name is recomputed live from the book, so a
 // title or series-index edit is reflected without rebuilding the entry; baseStat
 // carries a stable Qid distinct from the bare bookDir's listing.
 type namedBookDir struct {
-	*bookDir
+	*book.BookDir
 	baseStat proto.Stat
 	name     func(*model.Book) string
 }
 
 func (n *namedBookDir) Stat() proto.Stat {
 	s := n.baseStat
-	s.Name = n.name(n.bookDir.Book())
+	s.Name = n.name(n.BookDir.Book())
 	return s
 }
 
@@ -62,17 +69,17 @@ func (g *groupingDir) childDir(name string, factory func(*proto.Stat) fs.FSNode)
 	return ad
 }
 
-// listerDir returns the bookView child named name, creating it via newBookListDir
+// listerDir returns the registry.BookView child named name, creating it via newBookListDir
 // on first use.
-func (g *groupingDir) listerDir(name string) bookView {
-	return g.childDir(name, func(s *proto.Stat) fs.FSNode { return newBookListDir(s) }).(bookView)
+func (g *groupingDir) listerDir(name string) registry.BookView {
+	return g.childDir(name, func(s *proto.Stat) fs.FSNode { return newBookListDir(s) }).(registry.BookView)
 }
 
-// removeLister looks up the bookView child named name, removes dir from it,
+// removeLister looks up the registry.BookView child named name, removes dir from it,
 // and prunes the child if empty.
-func (g *groupingDir) removeLister(name string, dir *bookDir) {
+func (g *groupingDir) removeLister(name string, dir *book.BookDir) {
 	if child, ok := g.Children()[name]; ok {
-		child.(bookView).remove(dir)
+		child.(registry.BookView).Remove(dir)
 		g.pruneEmpty(name)
 	}
 }

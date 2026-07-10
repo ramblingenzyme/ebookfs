@@ -1,4 +1,4 @@
-package fs
+package book
 
 import (
 	"fmt"
@@ -8,7 +8,6 @@ import (
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
-	"github.com/ramblingenzyme/ebookfs/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -86,21 +85,21 @@ func measureBooksOnly(n int, withCover bool) float64 {
 }
 
 // measureBooksWithDirs returns the per-book heap cost of building n books AND
-// n bookDirs wrapping them. Like measureBooksOnly, measured independently from
-// a settled baseline so the delta between the two functions is the bookDir
+// n BookDirs wrapping them. Like measureBooksOnly, measured independently from
+// a settled baseline so the delta between the two functions is the BookDir
 // tree cost, uncontaminated by garbage from the other phase.
 func measureBooksWithDirs(n int, withCover bool) float64 {
 	f, _ := fs.NewFS("glenda", "glenda", 0555, fs.IgnorePermissions())
-	reg := newBookRegistry(f, nil)
+	noEdit := func(int64, model.Edits) error { return nil }
 
 	settleGC()
 	var before runtime.MemStats
 	runtime.ReadMemStats(&before)
 
-	dirs := make([]*bookDir, 0, n)
+	dirs := make([]*BookDir, 0, n)
 	for i := int64(0); i < int64(n); i++ {
 		b := representativeBook(i, withCover)
-		dirs = append(dirs, newBookDir(reg, b))
+		dirs = append(dirs, NewBookDir(f, nil, noEdit, b))
 	}
 
 	after := settleGC()
@@ -115,11 +114,11 @@ func BenchmarkBookDirMemoryFootprint(b *testing.B) {
 	b.Logf("  fs.StaticDir    = %d B", unsafe.Sizeof(fs.StaticDir{}))
 	b.Logf("  fs.BaseFile     = %d B", unsafe.Sizeof(fs.BaseFile{}))
 	b.Logf("  fs.StaticFile   = %d B", unsafe.Sizeof(fs.StaticFile{}))
-	b.Logf("  fieldFile       = %d B", unsafe.Sizeof(vfile.FieldFile{}))
-	b.Logf("  epubFile        = %d B", unsafe.Sizeof(vfile.EpubFile{}))
-	b.Logf("  coverFile       = %d B", unsafe.Sizeof(vfile.CoverFile{}))
+	b.Logf("  fieldFile       = %d B", unsafe.Sizeof(fieldFile{}))
+	b.Logf("  epubFile        = %d B", unsafe.Sizeof(epubFile{}))
+	b.Logf("  coverFile       = %d B", unsafe.Sizeof(coverFile{}))
 	b.Logf("  model.Book      = %d B", unsafe.Sizeof(model.Book{}))
-	b.Logf("  bookDir         = %d B", unsafe.Sizeof(bookDir{}))
+	b.Logf("  BookDir         = %d B", unsafe.Sizeof(BookDir{}))
 	b.Logf("")
 
 	for _, n := range []int{100, 1000, 10000} {
@@ -127,16 +126,16 @@ func BenchmarkBookDirMemoryFootprint(b *testing.B) {
 			perBook := measureBooksOnly(n, withCover)
 			perTotal := measureBooksWithDirs(n, withCover)
 			perDir := perTotal - perBook
-			b.Logf("N=%-6d cover=%-5v  per-book=%5.0f B  per-bookDir(marginal)=%5.0f B  total/book=%5.0f B",
+			b.Logf("N=%-6d cover=%-5v  per-book=%5.0f B  per-BookDir(marginal)=%5.0f B  total/book=%5.0f B",
 				n, withCover, perBook, perDir, perTotal)
 		}
 	}
 	b.Logf("")
-	b.Logf("Projections (per-book + per-bookDir), linear extrapolation from N=10000 with cover:")
+	b.Logf("Projections (per-book + per-BookDir), linear extrapolation from N=10000 with cover:")
 	perBook := measureBooksOnly(10000, true)
 	perTotal := measureBooksWithDirs(10000, true)
 	perDir := perTotal - perBook
-	b.Logf("  baseline: per-book=%.0f B  per-bookDir(marginal)=%.0f B  total/book=%.0f B",
+	b.Logf("  baseline: per-book=%.0f B  per-BookDir(marginal)=%.0f B  total/book=%.0f B",
 		perBook, perDir, perTotal)
 	for _, k := range []int{1000, 5000, 10000, 50000, 100000} {
 		b.Logf("  %6d books  →  %7.1f MiB  (%5.0f B/book × %d)",

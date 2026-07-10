@@ -1,7 +1,9 @@
-package fs
+package views
 
 import (
 	"fmt"
+	"github.com/ramblingenzyme/ebookfs/fs/book"
+	"github.com/ramblingenzyme/ebookfs/fs/registry"
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
@@ -19,13 +21,13 @@ func newBookListDir(stat *proto.Stat) *bookListDir {
 	return &bookListDir{StaticDir: *fs.NewStaticDir(stat)}
 }
 
-func (d *bookListDir) add(dir *bookDir) {
+func (d *bookListDir) Add(dir *book.BookDir) {
 	b := dir.Book()
 	plain := b.Title
 	if child, ok := d.Children()[plain]; ok && child != dir {
 		// Plain title is taken by a different book — disambiguate with the id.
 		d.AddChild(&namedBookDir{
-			bookDir:  dir,
+			BookDir:  dir,
 			baseStat: dir.Stat(),
 			name: func(b *model.Book) string {
 				return fmt.Sprintf("%s (%d)", b.Title, b.Meta.ID)
@@ -36,7 +38,7 @@ func (d *bookListDir) add(dir *bookDir) {
 	d.AddChild(dir)
 }
 
-func (d *bookListDir) remove(dir *bookDir) {
+func (d *bookListDir) Remove(dir *book.BookDir) {
 	b := dir.Book()
 	plain := b.Title
 	if child, ok := d.Children()[plain]; ok && child == dir {
@@ -46,8 +48,8 @@ func (d *bookListDir) remove(dir *bookDir) {
 	d.DeleteChild(fmt.Sprintf("%s (%d)", plain, b.Meta.ID))
 }
 
-func newAllBooksDir(reg *bookRegistry) *bookListDir {
-	d := newBookListDir(newStat(reg.f, "books", 0555|proto.DMDIR))
+func NewAllBooksDir(reg *registry.BookRegistry) *bookListDir {
+	d := newBookListDir(newStat(reg.FS(), "books", 0555|proto.DMDIR))
 	reg.AddView(d)
 	return d
 }

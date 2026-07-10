@@ -1,4 +1,4 @@
-package vfile
+package book
 
 import (
 	"bytes"
@@ -16,9 +16,9 @@ import (
 // basefile_test.go. These tests cover epubFile's own surface: that it wires
 // lib.OpenEpub for reads and reports name/size from the book snapshot in Stat.
 
-func newTestEpubFile(t *testing.T, name string, lib libfake.Lib, get func() *model.Book) *EpubFile {
+func newTestEpubFile(t *testing.T, name string, lib libfake.Lib, get func() *model.Book) *epubFile {
 	t.Helper()
-	return NewEpubFile(NewStat(testutil.NewTestFS(t), name, 0444), lib, get)
+	return newEpubFile(newStat(testutil.NewTestFS(t), name, 0444), lib, get)
 }
 
 func TestEpubFileOpenRead(t *testing.T) {

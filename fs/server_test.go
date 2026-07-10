@@ -3,6 +3,8 @@ package fs
 import (
 	"testing"
 
+	"github.com/knusbaum/go9p/fs"
+
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
@@ -60,7 +62,7 @@ func TestSetupServer_BooksPopulated(t *testing.T) {
 		t.Fatalf("setupServer: %v", err)
 	}
 
-	allBooks := root.Children()["books"].(*bookListDir)
+	allBooks := root.Children()["books"].(fs.Dir)
 	if _, ok := allBooks.Children()["Present"]; !ok {
 		t.Errorf("books view should contain 'Present' after setup")
 	}

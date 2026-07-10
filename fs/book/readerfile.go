@@ -1,25 +1,27 @@
-package vfile
+package book
 
 import (
 	"errors"
 
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // ReaderFile serves a book's export rendition through the Exporter, holding one
-// reader per fid. It mirrors EpubFile, but its size is reported live from the
-// exporter so a kepub's length appears once its cache is warm.
+// reader per fid. It mirrors epubFile, but its size is reported live from the
+// exporter so a kepub's length appears once its cache is warm. It is exported
+// because the reader view (fs/views) constructs it directly.
 type ReaderFile struct {
-	readAtFile
+	vfile.ReadAtFile
 	exp  library.Exporter
 	book func() *model.Book
 }
 
 func NewReaderFile(stat *proto.Stat, exp library.Exporter, book func() *model.Book) *ReaderFile {
 	return &ReaderFile{
-		readAtFile: newReadAtFile(stat, func() (library.EpubReader, error) {
+		ReadAtFile: vfile.NewReadAtFile(stat, func() (library.EpubReader, error) {
 			if exp == nil {
 				return nil, errors.New("exporter not available")
 			}

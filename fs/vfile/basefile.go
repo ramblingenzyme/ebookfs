@@ -1,8 +1,8 @@
-// Package vfile holds the leaf 9P file primitives that serve book data through
-// the library facade: generic snapshot/read-at bases and the concrete
-// cover/opf/epub/field/reader files. They depend only on the library
-// interfaces and plain-function callbacks, never on the registry or the book
-// directory tree, so the compiler enforces that this layer stays a leaf.
+// Package vfile holds the generic 9P file primitives: the snapshot and read-at
+// base types that concrete files embed, plus the NewStat owner convention. It
+// depends only on the library interfaces and plain-function callbacks — never on
+// the book directory tree, registry, or views — so it is the leaf of the
+// frontend.
 package vfile
 
 import (
@@ -14,25 +14,27 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library"
 )
 
-// snapshotFile is a base for files whose content is loaded once on Open via an
+// SnapshotFile is a base for files whose content is loaded once on Open via an
 // injected load func and served per-fid as a []byte slice. Open loads the data
 // and caches it per fid; Read returns clamped sub-slices of the cached bytes;
-// Close cleans up the per-fid entry.
-type snapshotFile struct {
+// Close cleans up the per-fid entry. Embedders that override Open/Close manage
+// the per-fid snapshot through the exported methods (Snapshot, and Open/Close
+// themselves) rather than the private map.
+type SnapshotFile struct {
 	fs.BaseFile
 	load  func() ([]byte, error)
 	reads map[uint64][]byte
 }
 
-func newSnapshotFile(stat *proto.Stat, load func() ([]byte, error)) snapshotFile {
-	return snapshotFile{
+func NewSnapshotFile(stat *proto.Stat, load func() ([]byte, error)) SnapshotFile {
+	return SnapshotFile{
 		BaseFile: *fs.NewBaseFile(stat),
 		load:     load,
 		reads:    make(map[uint64][]byte),
 	}
 }
 
-func (f *snapshotFile) Open(fid uint64, _ proto.Mode) error {
+func (f *SnapshotFile) Open(fid uint64, _ proto.Mode) error {
 	data, err := f.load()
 	if err != nil {
 		return err
@@ -43,7 +45,7 @@ func (f *snapshotFile) Open(fid uint64, _ proto.Mode) error {
 	return nil
 }
 
-func (f *snapshotFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error) {
+func (f *SnapshotFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error) {
 	f.RLock()
 	defer f.RUnlock()
 	data := f.reads[fid]
@@ -59,31 +61,41 @@ func (f *snapshotFile) Read(fid uint64, offset uint64, count uint64) ([]byte, er
 	return data[offset : offset+count], nil
 }
 
-func (f *snapshotFile) Close(fid uint64) error {
+// Snapshot returns the per-fid bytes cached at Open, for embedders (e.g. a
+// writable field file) that seed a write buffer from the current value. It is
+// self-locking; callers must not hold the file's lock.
+func (f *SnapshotFile) Snapshot(fid uint64) ([]byte, bool) {
+	f.RLock()
+	defer f.RUnlock()
+	data, ok := f.reads[fid]
+	return data, ok
+}
+
+func (f *SnapshotFile) Close(fid uint64) error {
 	f.Lock()
 	defer f.Unlock()
 	delete(f.reads, fid)
 	return nil
 }
 
-// readAtFile is a base for files that hold one EpubReader per fid, acquired
+// ReadAtFile is a base for files that hold one EpubReader per fid, acquired
 // via an injected open func. Read delegates to ReadAt and swallows io.EOF
 // (the reader may return its final bytes and EOF in a single call).
-type readAtFile struct {
+type ReadAtFile struct {
 	fs.BaseFile
 	open func() (library.EpubReader, error)
 	fids map[uint64]library.EpubReader
 }
 
-func newReadAtFile(stat *proto.Stat, open func() (library.EpubReader, error)) readAtFile {
-	return readAtFile{
+func NewReadAtFile(stat *proto.Stat, open func() (library.EpubReader, error)) ReadAtFile {
+	return ReadAtFile{
 		BaseFile: *fs.NewBaseFile(stat),
 		open:     open,
 		fids:     make(map[uint64]library.EpubReader),
 	}
 }
 
-func (f *readAtFile) Open(fid uint64, _ proto.Mode) error {
+func (f *ReadAtFile) Open(fid uint64, _ proto.Mode) error {
 	r, err := f.open()
 	if err != nil {
 		return err
@@ -94,7 +106,7 @@ func (f *readAtFile) Open(fid uint64, _ proto.Mode) error {
 	return nil
 }
 
-func (f *readAtFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error) {
+func (f *ReadAtFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error) {
 	f.RLock()
 	defer f.RUnlock()
 	r := f.fids[fid]
@@ -109,7 +121,7 @@ func (f *readAtFile) Read(fid uint64, offset uint64, count uint64) ([]byte, erro
 	return buf[:n], err
 }
 
-func (f *readAtFile) Close(fid uint64) error {
+func (f *ReadAtFile) Close(fid uint64) error {
 	f.Lock()
 	defer f.Unlock()
 	if r, ok := f.fids[fid]; ok {

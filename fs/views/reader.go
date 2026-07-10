@@ -1,9 +1,10 @@
-package fs
+package views
 
 import (
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
-	"github.com/ramblingenzyme/ebookfs/fs/vfile"
+	"github.com/ramblingenzyme/ebookfs/fs/book"
+	"github.com/ramblingenzyme/ebookfs/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/library"
 )
 
@@ -18,13 +19,13 @@ type readerDir struct {
 	included map[string]bool
 }
 
-func newReaderDir(reg *bookRegistry, exp library.Exporter) *readerDir {
+func NewReaderDir(reg *registry.BookRegistry, exp library.Exporter) *readerDir {
 	included := make(map[string]bool)
 	for _, s := range exp.Statuses() {
 		included[s] = true
 	}
 	d := &readerDir{
-		groupingDir: newGroupingDir(reg.f, "reader"),
+		groupingDir: newGroupingDir(reg.FS(), "reader"),
 		exp:         exp,
 		included:    included,
 	}
@@ -37,18 +38,18 @@ func (d *readerDir) authorDir(name string) fs.ModDir {
 	return d.childDir(name, func(s *proto.Stat) fs.FSNode { return fs.NewStaticDir(s) }).(fs.ModDir)
 }
 
-func (d *readerDir) add(dir *bookDir) {
+func (d *readerDir) Add(dir *book.BookDir) {
 	b := dir.Book()
 	if !d.included[b.Meta.Status] {
 		return
 	}
 	ad := d.authorDir(d.exp.Dirname(b))
 	stat := newStat(d.f, d.exp.Filename(b), 0444)
-	ad.AddChild(vfile.NewReaderFile(stat, d.exp, dir.Book))
+	ad.AddChild(book.NewReaderFile(stat, d.exp, dir.Book))
 	d.exp.Warm(b)
 }
 
-func (d *readerDir) remove(dir *bookDir) {
+func (d *readerDir) Remove(dir *book.BookDir) {
 	b := dir.Book()
 	if !d.included[b.Meta.Status] {
 		return

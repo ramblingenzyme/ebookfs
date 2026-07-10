@@ -8,7 +8,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // These tests cover the read/open/close semantics shared by the two base file
@@ -18,10 +17,10 @@ import (
 
 // ---- snapshotFile (embedded by coverFile, opfFile, fieldFile) ----
 
-func newTestSnapshotFile(t *testing.T, data []byte) *snapshotFile {
+func newTestSnapshotFile(t *testing.T, data []byte) *SnapshotFile {
 	t.Helper()
 	stat := NewStat(testutil.NewTestFS(t), "snap", 0444)
-	sf := newSnapshotFile(stat, func() ([]byte, error) { return data, nil })
+	sf := NewSnapshotFile(stat, func() ([]byte, error) { return data, nil })
 	return &sf
 }
 
@@ -65,7 +64,7 @@ func TestSnapshotFileReadUnopenedErrors(t *testing.T) {
 
 func TestSnapshotFileOpenPropagatesLoadError(t *testing.T) {
 	stat := NewStat(testutil.NewTestFS(t), "snap", 0444)
-	sf := newSnapshotFile(stat, func() ([]byte, error) { return nil, testutil.ErrTest })
+	sf := NewSnapshotFile(stat, func() ([]byte, error) { return nil, testutil.ErrTest })
 	if err := sf.Open(1, proto.Mode(0)); err != testutil.ErrTest {
 		t.Errorf("Open error = %v, want %v", err, testutil.ErrTest)
 	}
@@ -94,10 +93,10 @@ func TestSnapshotFilePerFidIsolation(t *testing.T) {
 
 // ---- readAtFile (embedded by epubFile, readerFile) ----
 
-func newTestReadAtFile(t *testing.T, data string) *readAtFile {
+func newTestReadAtFile(t *testing.T, data string) *ReadAtFile {
 	t.Helper()
 	stat := NewStat(testutil.NewTestFS(t), "reader", 0444)
-	raf := newReadAtFile(stat, func() (library.EpubReader, error) {
+	raf := NewReadAtFile(stat, func() (library.EpubReader, error) {
 		return &libfake.EpubReader{Reader: bytes.NewReader([]byte(data))}, nil
 	})
 	return &raf
@@ -136,7 +135,7 @@ func TestReadAtFileReadUnopenedErrors(t *testing.T) {
 
 func TestReadAtFileOpenPropagatesError(t *testing.T) {
 	stat := NewStat(testutil.NewTestFS(t), "reader", 0444)
-	raf := newReadAtFile(stat, func() (library.EpubReader, error) { return nil, testutil.ErrTest })
+	raf := NewReadAtFile(stat, func() (library.EpubReader, error) { return nil, testutil.ErrTest })
 	if err := raf.Open(1, proto.Mode(0)); err != testutil.ErrTest {
 		t.Errorf("Open error = %v, want %v", err, testutil.ErrTest)
 	}
@@ -162,7 +161,7 @@ func TestReadAtFilePerFidIsolation(t *testing.T) {
 func TestReadAtFileCloseReleasesReader(t *testing.T) {
 	r := &libfake.EpubReader{Reader: bytes.NewReader([]byte("data"))}
 	stat := NewStat(testutil.NewTestFS(t), "reader", 0444)
-	raf := newReadAtFile(stat, func() (library.EpubReader, error) { return r, nil })
+	raf := NewReadAtFile(stat, func() (library.EpubReader, error) { return r, nil })
 
 	if err := raf.Open(1, proto.Mode(0)); err != nil {
 		t.Fatalf("Open: %v", err)
@@ -175,57 +174,5 @@ func TestReadAtFileCloseReleasesReader(t *testing.T) {
 	}
 	if !r.Closed {
 		t.Error("reader should be closed after Close")
-	}
-}
-
-// ---- shared write size-limit behavior (coverFile and fieldFile) ----
-
-// limitedWriteFile is the common surface of the two size-capped writable files.
-type limitedWriteFile interface {
-	Open(fid uint64, mode proto.Mode) error
-	Write(fid uint64, offset uint64, data []byte) (uint32, error)
-}
-
-// TestWriteFileSizeLimits exercises the overflow-safe cap that coverFile and
-// fieldFile both apply in Write: an offset past the cap is rejected, a
-// near-maxuint64 offset can't wrap past the check, and a write ending exactly at
-// the cap is allowed.
-func TestWriteFileSizeLimits(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		limit uint64
-		open  func(t *testing.T) limitedWriteFile
-	}{
-		{"coverFile", maxCoverFileSize, func(t *testing.T) limitedWriteFile {
-			book := testutil.MakeBook(1, "Test", "Author")
-			return NewCoverFile(NewStat(testutil.NewTestFS(t), "cover.jpg", 0644), libfake.Lib{}, func(int64, model.Edits) error { return nil }, testutil.Fixed(book))
-		}},
-		{"fieldFile", maxFieldFileSize, func(t *testing.T) limitedWriteFile {
-			return NewFieldFile(NewStat(testutil.NewTestFS(t), "field", 0644), func() string { return "" }, nil)
-		}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Run("exceeds limit rejected", func(t *testing.T) {
-				f := tc.open(t)
-				f.Open(1, proto.Mode(0))
-				if _, err := f.Write(1, tc.limit, []byte("x")); err == nil {
-					t.Fatal("expected error writing past the size limit")
-				}
-			})
-			t.Run("offset overflow rejected", func(t *testing.T) {
-				f := tc.open(t)
-				f.Open(1, proto.Mode(0))
-				if _, err := f.Write(1, ^uint64(0)-3, []byte("overflow")); err == nil {
-					t.Fatal("expected error on overflowing write offset")
-				}
-			})
-			t.Run("write at limit allowed", func(t *testing.T) {
-				f := tc.open(t)
-				f.Open(1, proto.Mode(0))
-				if _, err := f.Write(1, tc.limit-4, []byte("test")); err != nil {
-					t.Errorf("write ending at the limit should succeed, got: %v", err)
-				}
-			})
-		})
 	}
 }

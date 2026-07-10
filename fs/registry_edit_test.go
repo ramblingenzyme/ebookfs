@@ -1,21 +1,21 @@
 package fs
 
 import (
-	"sync"
 	"testing"
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
-	"github.com/ramblingenzyme/ebookfs/fs/vfile"
+	"github.com/ramblingenzyme/ebookfs/fs/registry"
+	"github.com/ramblingenzyme/ebookfs/fs/views"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // writeField drives a field edit the way a 9P client would: open the named
 // fieldFile with Otrunc, write the new value, and close to commit.
-func writeField(t *testing.T, bd *bookDir, name, value string) {
+func writeField(t *testing.T, bd fs.Dir, name, value string) {
 	t.Helper()
-	ff := bd.Children()[name].(*vfile.FieldFile)
+	ff := bd.Children()[name].(fs.File)
 	fid := uint64(1)
 	if err := ff.Open(fid, proto.Otrunc); err != nil {
 		t.Fatalf("Open %s field: %v", name, err)
@@ -47,16 +47,16 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 			return &updated, nil
 		},
 	}
-	reg := newBookRegistry(f, lib)
+	reg := registry.NewBookRegistry(f, lib)
 
-	allBooks := newAllBooksDir(reg)
-	byAuthor := newByAuthorDir(reg)
-	byID := newByIDDir(reg)
+	allBooks := views.NewAllBooksDir(reg)
+	byAuthor := views.NewByAuthorDir(reg)
+	byID := views.NewByIDDir(reg)
 
 	reg.Add(book)
 
 	// Edit the title via its fieldFile.
-	bd := allBooks.Children()["Old Title"].(*bookDir)
+	bd := allBooks.Children()["Old Title"].(fs.Dir)
 	writeField(t, bd, "title", "New Title")
 
 	// All views should reflect the new title.
@@ -76,7 +76,7 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 	if !ok {
 		t.Fatal("by-author should still have Alice")
 	}
-	ald := ad.(*bookListDir)
+	ald := ad.(fs.Dir)
 	if _, ok := ald.Children()["New Title"]; !ok {
 		t.Error("Alice's dir should contain 'New Title'")
 	}
@@ -95,15 +95,15 @@ func TestRegistryEditAuthorsRehomesInByAuthor(t *testing.T) {
 			return &updated, nil
 		},
 	}
-	reg := newBookRegistry(f, lib)
+	reg := registry.NewBookRegistry(f, lib)
 
-	allBooks := newAllBooksDir(reg)
-	byAuthor := newByAuthorDir(reg)
+	allBooks := views.NewAllBooksDir(reg)
+	byAuthor := views.NewByAuthorDir(reg)
 
 	reg.Add(book)
 
 	// Change authors from Alice to Bob.
-	bd := allBooks.Children()["Test"].(*bookDir)
+	bd := allBooks.Children()["Test"].(fs.Dir)
 	writeField(t, bd, "authors", "Bob")
 
 	// Author should now be Bob, Alice pruned.
@@ -114,7 +114,7 @@ func TestRegistryEditAuthorsRehomesInByAuthor(t *testing.T) {
 	if !ok {
 		t.Fatal("by-author should have 'Bob'")
 	}
-	ald := ad.(*bookListDir)
+	ald := ad.(fs.Dir)
 	if _, ok := ald.Children()["Test"]; !ok {
 		t.Error("Bob's dir should contain 'Test'")
 	}
@@ -139,9 +139,9 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 			return &updated, nil
 		},
 	}
-	reg := newBookRegistry(f, lib)
-	allBooks := newAllBooksDir(reg)
-	readerDir := newReaderDir(reg, libfake.Exporter{StatusList: []string{"reading"}})
+	reg := registry.NewBookRegistry(f, lib)
+	allBooks := views.NewAllBooksDir(reg)
+	readerDir := views.NewReaderDir(reg, libfake.Exporter{StatusList: []string{"reading"}})
 
 	reg.Add(book)
 
@@ -151,7 +151,7 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 	}
 
 	// Change status to "reading" via the field file.
-	bd := allBooks.Children()["Test"].(*bookDir)
+	bd := allBooks.Children()["Test"].(fs.Dir)
 	writeField(t, bd, "status", "reading")
 
 	// Now the reader view should reflect the change.
@@ -165,79 +165,7 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 	}
 }
 
-// TestRegistryEditConcurrentReaders exercises the snapshot swap under the
-// concurrency go9p actually produces: handler goroutines Stat/Children/read
-// fields with no registry lock while edits commit. Run with -race to verify;
-// without it the test still asserts a reader never observes a torn snapshot
-// (a name that is neither the old nor the new title).
-func TestRegistryEditConcurrentReaders(t *testing.T) {
-	f := newTestFS(t)
-	// current mimics the library's authoritative state; editFn runs under the
-	// registry mutex, so reading and replacing it is serialized.
-	current := makeBook(1, "Title A", "Alice")
-	lib := libfake.Lib{
-		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
-			updated := *current
-			if e.Title != nil {
-				updated.Title = *e.Title
-			}
-			current = &updated
-			return &updated, nil
-		},
-	}
-	reg := newBookRegistry(f, lib)
-	allBooks := newAllBooksDir(reg)
-	byID := newByIDDir(reg)
-
-	reg.Add(current)
-	bd := allBooks.Children()["Title A"].(*bookDir)
-	titleFF := bd.Children()["title"].(*vfile.FieldFile)
-
-	done := make(chan struct{})
-	var wg sync.WaitGroup
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer close(done)
-		titles := [2]string{"Title B", "Title A"}
-		for i := range 200 {
-			title := titles[i%2]
-			if err := reg.edit(1, model.Edits{Title: &title}); err != nil {
-				t.Errorf("edit: %v", err)
-				return
-			}
-		}
-	}()
-
-	for range 4 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for {
-				select {
-				case <-done:
-					return
-				default:
-				}
-				if name := bd.Stat().Name; name != "Title A" && name != "Title B" {
-					t.Errorf("torn bookDir name: %q", name)
-					return
-				}
-				titleFF.Stat()  // field get closure reads the snapshot
-				byID.Children() // namedBookDir.Stat recomputes the entry name
-			}
-		}()
-	}
-	wg.Wait()
-}
-
-func TestRegistryEditUnknownID(t *testing.T) {
-	reg := newBookRegistry(newTestFS(t), libfake.Lib{})
-
-	status := "read"
-	err := reg.edit(999, model.Edits{Status: &status})
-	if err == nil {
-		t.Fatal("expected error editing unknown book")
-	}
-}
+// Registry-internal behavior — edit on an unknown id, and the concurrent
+// snapshot swap — is tested white-box in fs/registry (those tests call the
+// unexported edit method). The tests here drive edits through the public 9P
+// field-file path and assert the resulting rehoming across the real views.
