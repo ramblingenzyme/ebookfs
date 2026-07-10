@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/BurntSushi/toml"
+	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 type Config struct {
@@ -62,7 +63,7 @@ func defaults() *Config {
 			IndexPath: "/var/lib/ebookfs/library/.index.db",
 		},
 		Reader: ReaderConfig{
-			Statuses: []string{"unread", "reading"},
+			Statuses: []string{model.StatusUnread, model.StatusReading},
 			Convert:  false,
 			CacheDir: "/var/lib/ebookfs/kepub-cache",
 		},
@@ -93,10 +94,8 @@ func (c *Config) validateAuth() error {
 
 func (c *Config) validateReader() error {
 	for _, s := range c.Reader.Statuses {
-		switch s {
-		case "unread", "reading", "read", "abandoned":
-		default:
-			return fmt.Errorf("reader.statuses contains invalid status %q: must be unread, reading, read, or abandoned", s)
+		if !model.IsValidStatus(s) {
+			return fmt.Errorf("reader.statuses contains invalid status %q: must be %s", s, model.StatusList())
 		}
 	}
 	if c.Reader.Convert && c.Reader.CacheDir == "" {

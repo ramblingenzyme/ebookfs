@@ -27,9 +27,6 @@ func (h *ingestHandle) WriteAt(p []byte, off int64) (int, error) { return h.file
 
 func (h *ingestHandle) Ingest() (*model.Book, error) {
 	h.file.Close()
-	if h.ingestFn == nil {
-		return nil, nil
-	}
 	b, err := h.ingestFn(h.path)
 	os.Remove(h.path)
 	return b, err

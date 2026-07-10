@@ -13,7 +13,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"strings"
 
 	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/config"
@@ -159,16 +158,7 @@ func (e Exporter) Filename(b *model.Book) string {
 }
 
 func (e Exporter) Dirname(b *model.Book) string {
-	var names []string
-	for _, a := range b.Authors {
-		if a.Name != "" {
-			names = append(names, a.Name)
-		}
-	}
-	if len(names) == 0 {
-		return "Unknown"
-	}
-	return strings.Join(names, " & ")
+	return model.JoinAuthors(b.Authors, " & ")
 }
 
 func (e Exporter) Statuses() []string { return e.StatusList }

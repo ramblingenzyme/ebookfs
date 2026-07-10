@@ -78,7 +78,7 @@ func TestWarmerErrorDoesNotPanic(t *testing.T) {
 	done := make(chan struct{})
 	w := newWarmer(func(b *model.Book) error {
 		defer close(done)
-		return errTest
+		return testutil.ErrTest
 	})
 	t.Cleanup(func() { close(w.ch) })
 
@@ -309,8 +309,6 @@ func TestCacheWarmProducesFile(t *testing.T) {
 		t.Errorf("cache file not created after warm: %v", err)
 	}
 }
-
-var errTest = errors.New("test error")
 
 func waitForWarm(t *testing.T, f func() bool) bool {
 	t.Helper()

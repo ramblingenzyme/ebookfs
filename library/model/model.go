@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -14,6 +15,33 @@ import (
 type EpubReader interface {
 	io.ReaderAt
 	io.Closer
+}
+
+// Reading-status vocabulary. This package owns the set: Edits.Validate, the
+// NewBook default, and config's reader.statuses validation all consult it, so
+// adding a status is a one-line change here.
+const (
+	StatusUnread    = "unread"
+	StatusReading   = "reading"
+	StatusRead      = "read"
+	StatusAbandoned = "abandoned"
+
+	// DefaultStatus is the status a freshly ingested book carries.
+	DefaultStatus = StatusUnread
+)
+
+// Statuses lists every valid reading status, in presentation order.
+var Statuses = []string{StatusUnread, StatusReading, StatusRead, StatusAbandoned}
+
+// IsValidStatus reports whether s is one of Statuses.
+func IsValidStatus(s string) bool {
+	return slices.Contains(Statuses, s)
+}
+
+// StatusList renders Statuses for error messages: "unread, reading, read, or
+// abandoned".
+func StatusList() string {
+	return strings.Join(Statuses[:len(Statuses)-1], ", ") + ", or " + Statuses[len(Statuses)-1]
 }
 
 // Book is the complete record for a book in the library: where it lives
@@ -55,7 +83,7 @@ func NewBook(bib Bib, meta Meta, loc Location) *Book {
 		meta.DateModified = time.Now()
 	}
 	if meta.Status == "" {
-		meta.Status = "unread"
+		meta.Status = DefaultStatus
 	}
 	if meta.Tags == nil {
 		meta.Tags = []string{}
@@ -92,6 +120,23 @@ type Bib struct {
 // metadata. It is injected by ingest and may appear defensively in store path
 // and export directory computations.
 const UnknownAuthor = "Unknown"
+
+// JoinAuthors renders authors as a display string joined by sep, skipping empty
+// names and falling back to UnknownAuthor when none remain. Callers differ only
+// in sep (" & " for directory names, ", " for log lines), so the filter and
+// fallback live here rather than being re-derived at each site.
+func JoinAuthors(authors []Author, sep string) string {
+	names := make([]string, 0, len(authors))
+	for _, a := range authors {
+		if a.Name != "" {
+			names = append(names, a.Name)
+		}
+	}
+	if len(names) == 0 {
+		return UnknownAuthor
+	}
+	return strings.Join(names, sep)
+}
 
 type Author struct {
 	ID       int64
@@ -221,12 +266,8 @@ func (e Edits) Validate(b *Book) *ValidationError {
 		ve = append(ve, FieldError{Field: field, Message: msg})
 	}
 
-	if e.Status != nil {
-		switch *e.Status {
-		case "unread", "reading", "read", "abandoned":
-		default:
-			add("status", fmt.Sprintf("invalid status %q: must be unread, reading, read, or abandoned", *e.Status))
-		}
+	if e.Status != nil && !IsValidStatus(*e.Status) {
+		add("status", fmt.Sprintf("invalid status %q: must be %s", *e.Status, StatusList()))
 	}
 
 	if e.Rating != nil {

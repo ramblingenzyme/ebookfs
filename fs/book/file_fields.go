@@ -78,12 +78,12 @@ func (f *fieldFile) Write(fid uint64, offset uint64, data []byte) (uint32, error
 	defer f.Unlock()
 	buf := f.writes[fid]
 	if buf == nil {
-		if f.truncated[fid] {
+		// Otrunc (or a missing snapshot) starts empty; otherwise seed from the
+		// current value so the client can append or edit at a middle offset.
+		if f.truncated[fid] || !hasSnapshot {
 			buf = []byte{}
-		} else if hasSnapshot {
-			buf = append([]byte(nil), snapshot...)
 		} else {
-			buf = []byte{}
+			buf = append([]byte(nil), snapshot...)
 		}
 	}
 	end := offset + uint64(len(data))

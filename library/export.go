@@ -3,7 +3,6 @@ package library
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/ramblingenzyme/ebookfs/library/config"
 	"github.com/ramblingenzyme/ebookfs/library/internal/kepub"
@@ -53,16 +52,7 @@ func (e epubExporter) Filename(b *model.Book) string { return b.EpubFilename }
 func (e epubExporter) Dirname(b *model.Book) string  { return exportDirname(b) }
 
 func exportDirname(b *model.Book) string {
-	var names []string
-	for _, a := range b.Authors {
-		if a.Name != "" {
-			names = append(names, a.Name)
-		}
-	}
-	name := model.UnknownAuthor
-	if len(names) > 0 {
-		name = strings.Join(names, " & ")
-	}
+	name := model.JoinAuthors(b.Authors, " & ")
 	if fat, err := naming.ForFAT(name); err == nil {
 		name = fat
 	}

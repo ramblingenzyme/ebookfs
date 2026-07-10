@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -380,14 +379,5 @@ func (l *libraryImpl) Delete(id int64) error {
 }
 
 func formatAuthors(authors []model.Author) string {
-	var names []string
-	for _, a := range authors {
-		if a.Name != "" {
-			names = append(names, a.Name)
-		}
-	}
-	if len(names) == 0 {
-		return model.UnknownAuthor
-	}
-	return strings.Join(names, ", ")
+	return model.JoinAuthors(authors, ", ")
 }

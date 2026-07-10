@@ -42,6 +42,7 @@ func editOPF(opfBytes []byte, e model.Edits) ([]byte, error) {
 	} else if e.Title != nil {
 		setTitleSort(pkg, md, "")
 	}
+
 	if e.Description != nil {
 		setDCText(md, dc, "description", *e.Description)
 	}
@@ -51,6 +52,7 @@ func editOPF(opfBytes []byte, e model.Edits) ([]byte, error) {
 	if e.Authors != nil {
 		setAuthors(pkg, md, dc, *e.Authors)
 	}
+
 	if e.Series != nil {
 		setSeries(pkg, md, *e.Series, e.SeriesIndex)
 	} else if e.SeriesIndex != nil {

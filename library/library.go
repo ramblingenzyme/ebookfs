@@ -48,6 +48,12 @@ type Library interface {
 // Exporter produces the rsync-export rendition of a book for the reader/ view.
 // It is the single swap point between serving the original epub and a converted
 // kepub: the Library returns the appropriate implementation based on config.
+//
+// Statuses (which books belong in the reader) and Dirname (how they group) sit
+// here alongside the rendition methods on purpose: deciding *what* syncs to the
+// reader is a library/backend policy concern, and fs/views/reader.go is only the
+// concrete 9P rendering of that data. They are not view logic leaking onto a
+// backend interface.
 type Exporter interface {
 	Open(*model.Book) (EpubReader, error) // bytes for reads
 	Size(*model.Book) (int64, bool)       // cheap; 9P stat length, false when cold

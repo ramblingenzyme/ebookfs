@@ -41,9 +41,11 @@ type seriesBookListDir struct {
 	pad      atomic.Int32
 }
 
-func newSeriesBookListDir(f *fs.FS, name string) *seriesBookListDir {
+// newSeriesBookListDir takes a prepared stat, matching newBookListDir, so
+// groupingDir.childDir can construct it.
+func newSeriesBookListDir(stat *proto.Stat, f *fs.FS) *seriesBookListDir {
 	return &seriesBookListDir{
-		StaticDir: *fs.NewStaticDir(newStat(f, name, 0555|proto.DMDIR)),
+		StaticDir: *fs.NewStaticDir(stat),
 		f:         f,
 		books:     make(map[int64]*book.BookDir),
 		children:  make(map[int64]*namedBookDir),
@@ -106,12 +108,9 @@ func NewBySeriesDir(reg *registry.BookRegistry) *bySeriesDir {
 
 // seriesDir returns the subdir for a series name, creating it on first use.
 func (d *bySeriesDir) seriesDir(name string) registry.BookView {
-	if child, ok := d.Children()[name]; ok {
-		return child.(registry.BookView)
-	}
-	sd := newSeriesBookListDir(d.f, name)
-	d.StaticDir.AddChild(sd)
-	return sd
+	return d.childDir(name, func(s *proto.Stat) fs.FSNode {
+		return newSeriesBookListDir(s, d.f)
+	}).(registry.BookView)
 }
 
 func (d *bySeriesDir) Add(dir *book.BookDir) {
@@ -127,8 +126,5 @@ func (d *bySeriesDir) Remove(dir *book.BookDir) {
 	if b.Series == nil {
 		return
 	}
-	if child, ok := d.Children()[b.Series.Name]; ok {
-		child.(registry.BookView).Remove(dir)
-		d.pruneEmpty(b.Series.Name)
-	}
+	d.removeLister(b.Series.Name, dir)
 }

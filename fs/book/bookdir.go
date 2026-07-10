@@ -58,21 +58,21 @@ func (d *BookDir) Stat() proto.Stat {
 type field struct {
 	get func(*model.Book) string
 	// edits converts string input to typed Edits. Error return is for input
-	// parsing failures (e.g. strconv.Atoi); validation is centralized in
-	// model.Edits.Validate.
-	edits func(*model.Book, string) (model.Edits, error)
+	// parsing failures (e.g. strconv.Atoi); validation against the book's current
+	// state is centralized in model.Edits.Validate, so this needs no snapshot.
+	edits func(string) (model.Edits, error)
 }
 
 var fields = map[string]field{
 	"status": {
 		get: func(b *model.Book) string { return b.Meta.Status },
-		edits: func(b *model.Book, s string) (model.Edits, error) {
+		edits: func(s string) (model.Edits, error) {
 			return model.Edits{Status: &s}, nil
 		},
 	},
 	"rating": {
 		get: func(b *model.Book) string { return strconv.FormatFloat(b.Meta.Rating, 'f', -1, 64) },
-		edits: func(b *model.Book, s string) (model.Edits, error) {
+		edits: func(s string) (model.Edits, error) {
 			n, err := strconv.ParseFloat(s, 64)
 			if err != nil {
 				return model.Edits{}, fmt.Errorf("invalid rating %q", s)
@@ -83,26 +83,26 @@ var fields = map[string]field{
 	},
 	"tags": {
 		get: func(b *model.Book) string { return strings.Join(b.Meta.Tags, "\n") },
-		edits: func(b *model.Book, s string) (model.Edits, error) {
+		edits: func(s string) (model.Edits, error) {
 			tags := strings.FieldsFunc(s, func(r rune) bool { return r == '\n' })
 			return model.Edits{Tags: &tags}, nil
 		},
 	},
 	"title": {
 		get: func(b *model.Book) string { return b.Title },
-		edits: func(b *model.Book, s string) (model.Edits, error) {
+		edits: func(s string) (model.Edits, error) {
 			return model.Edits{Title: &s}, nil
 		},
 	},
 	"language": {
 		get: func(b *model.Book) string { return b.Language },
-		edits: func(b *model.Book, s string) (model.Edits, error) {
+		edits: func(s string) (model.Edits, error) {
 			return model.Edits{Language: &s}, nil
 		},
 	},
 	"description": {
 		get: func(b *model.Book) string { return b.Description },
-		edits: func(b *model.Book, s string) (model.Edits, error) {
+		edits: func(s string) (model.Edits, error) {
 			return model.Edits{Description: &s}, nil
 		},
 	},
@@ -114,7 +114,7 @@ var fields = map[string]field{
 			}
 			return strings.Join(names, "\n")
 		},
-		edits: func(b *model.Book, s string) (model.Edits, error) {
+		edits: func(s string) (model.Edits, error) {
 			var names []string
 			for _, n := range strings.Split(s, "\n") {
 				if n = strings.TrimSpace(n); n != "" {
@@ -135,7 +135,7 @@ var fields = map[string]field{
 			}
 			return b.Series.Name
 		},
-		edits: func(b *model.Book, s string) (model.Edits, error) {
+		edits: func(s string) (model.Edits, error) {
 			return model.Edits{Series: &s}, nil
 		},
 	},
@@ -146,7 +146,7 @@ var fields = map[string]field{
 			}
 			return strconv.FormatFloat(b.Series.Index, 'f', 1, 64)
 		},
-		edits: func(b *model.Book, s string) (model.Edits, error) {
+		edits: func(s string) (model.Edits, error) {
 			idx, err := strconv.ParseFloat(s, 64)
 			if err != nil {
 				return model.Edits{}, fmt.Errorf("invalid series index %q", s)
@@ -191,12 +191,11 @@ func NewBookDir(f *fs.FS, lib library.Library, edit func(int64, model.Edits) err
 	for name, fld := range fields {
 		get := func() string { return fld.get(d.Book()) }
 		set := func(s string) error {
-			book := d.Book()
-			edits, err := fld.edits(book, s)
+			edits, err := fld.edits(s)
 			if err != nil {
 				return err
 			}
-			return edit(book.Meta.ID, edits)
+			return edit(d.Book().Meta.ID, edits)
 		}
 		d.StaticDir.AddChild(newFieldFile(newStat(f, name, 0644), get, set))
 	}

@@ -27,6 +27,11 @@ func bookValues(b *model.Book) []any {
 }
 
 // insertBook inserts a new book row, failing on id conflict — used by Rebuild.
+//
+// It deliberately skips cleanupOrphans: Rebuild empties every table before the
+// insert loop, so each author/series/tag is written alongside the book that
+// references it and nothing can be orphaned. Sweeping per book would run three
+// growing anti-join scans N times for no effect.
 func insertBook(tx *sql.Tx, b *model.Book) error {
 	// series_id/series_index are set by finishBook's upsertSeries.
 	if _, err := tx.Exec(
@@ -57,7 +62,11 @@ func putBook(tx *sql.Tx, b *model.Book) error {
 		return err
 	}
 
-	return finishBook(tx, b)
+	if err := finishBook(tx, b); err != nil {
+		return err
+	}
+	// Replacing a book can strand its former author/series/tag rows.
+	return cleanupOrphans(tx)
 }
 
 // finish runs fn and clears the pending row in one transaction. MarkPending
@@ -86,6 +95,9 @@ func (o *Op) Delete(bookID int64) error {
 	return o.finish(func(tx *sql.Tx) error { return deleteBook(tx, bookID) })
 }
 
+// finishBook writes a book's authors, tags, series, and identifiers. It does not
+// sweep orphans — callers that can strand rows (putBook, deleteBook) call
+// cleanupOrphans themselves.
 func finishBook(tx *sql.Tx, b *model.Book) error {
 	if err := upsertAuthors(tx, b.Meta.ID, b.Authors); err != nil {
 		return err
@@ -108,7 +120,7 @@ func finishBook(tx *sql.Tx, b *model.Book) error {
 			return err
 		}
 	}
-	return cleanupOrphans(tx)
+	return nil
 }
 
 func upsertAuthors(tx *sql.Tx, bookID int64, authors []model.Author) error {
