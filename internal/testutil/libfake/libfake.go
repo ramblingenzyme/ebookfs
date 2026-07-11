@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"slices"
 
 	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/config"
@@ -125,8 +126,9 @@ func (h IngestHandle) Ingest() (*model.Book, error) {
 	return h.IngestFn("")
 }
 
-// Exporter is a fake library.Exporter with injectable behavior. StatusList is
-// returned by Statuses (named to avoid colliding with the method).
+// Exporter is a fake library.Exporter with injectable behavior. Includes
+// reports whether the book's status is in StatusList, mirroring the real
+// exporters' status policy.
 type Exporter struct {
 	StatusList []string
 	OpenFn     func(*model.Book) (library.EpubReader, error)
@@ -161,4 +163,4 @@ func (e Exporter) Dirname(b *model.Book) string {
 	return model.JoinAuthors(b.Authors, " & ")
 }
 
-func (e Exporter) Statuses() []string { return e.StatusList }
+func (e Exporter) Includes(b *model.Book) bool { return slices.Contains(e.StatusList, b.Meta.Status) }

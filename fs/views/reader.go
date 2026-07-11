@@ -15,19 +15,13 @@ import (
 // co-authored book is exported once, not duplicated under each author.
 type readerDir struct {
 	groupingDir
-	exp      library.Exporter
-	included map[string]bool
+	exp library.Exporter
 }
 
 func NewReaderDir(reg *registry.BookRegistry, exp library.Exporter) *readerDir {
-	included := make(map[string]bool)
-	for _, s := range exp.Statuses() {
-		included[s] = true
-	}
 	d := &readerDir{
 		groupingDir: newGroupingDir(reg.FS(), "reader"),
 		exp:         exp,
-		included:    included,
 	}
 	reg.AddView(d)
 	return d
@@ -40,7 +34,7 @@ func (d *readerDir) authorDir(name string) fs.ModDir {
 
 func (d *readerDir) Add(dir *book.BookDir) {
 	b := dir.Book()
-	if !d.included[b.Meta.Status] {
+	if !d.exp.Includes(b) {
 		return
 	}
 	ad := d.authorDir(d.exp.Dirname(b))
@@ -51,7 +45,7 @@ func (d *readerDir) Add(dir *book.BookDir) {
 
 func (d *readerDir) Remove(dir *book.BookDir) {
 	b := dir.Book()
-	if !d.included[b.Meta.Status] {
+	if !d.exp.Includes(b) {
 		return
 	}
 	name := d.exp.Dirname(b)

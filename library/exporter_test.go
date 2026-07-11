@@ -120,11 +120,28 @@ func TestEpubExporter_Warm(t *testing.T) {
 	exp.Warm(nil) // no-op, must not panic
 }
 
-func TestEpubExporter_Statuses(t *testing.T) {
-	exp := epubExporter{statuses: []string{"unread", "reading"}}
-	got := exp.Statuses()
-	if len(got) != 2 || got[0] != "unread" || got[1] != "reading" {
-		t.Errorf("Statuses = %v, want [unread reading]", got)
+func TestEpubExporter_Includes(t *testing.T) {
+	tests := []struct {
+		name     string
+		statuses []string
+		status   string
+		want     bool
+	}{
+		{"matching status", []string{"unread", "reading"}, "unread", true},
+		{"non-matching status", []string{"unread", "reading"}, "archived", false},
+		{"empty statuses", nil, "unread", false},
+		{"empty book status", []string{"unread"}, "", false},
+		{"empty book status with empty in statuses", []string{""}, "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exp := epubExporter{statuses: tt.statuses}
+			book := makeBook(1, "Test", "Author")
+			book.Meta.Status = tt.status
+			if got := exp.Includes(book); got != tt.want {
+				t.Errorf("Includes = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -144,8 +161,8 @@ func TestKepubCacheDelegates(t *testing.T) {
 	b := makeBook(1, "Test", "Alice")
 	b.EpubFilename = "mybook.epub"
 
-	// Statuses returns the configured slice.
-	if s := kc.Statuses(); len(s) != 1 || s[0] != "reading" {
+	// statuses has the configured slice.
+	if s := kc.statuses; len(s) != 1 || s[0] != "reading" {
 		t.Errorf("Statuses = %v, want [reading]", s)
 	}
 

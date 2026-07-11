@@ -48,18 +48,19 @@ type Library interface {
 // It is the single swap point between serving the original epub and a converted
 // kepub: the Library returns the appropriate implementation based on config.
 //
-// Statuses (which books belong in the reader) and Dirname (how they group) sit
+// Includes (which books belong in the reader) and Dirname (how they group) sit
 // here alongside the rendition methods on purpose: deciding *what* syncs to the
 // reader is a library/backend policy concern, and fs/views/reader.go is only the
-// concrete 9P rendering of that data. They are not view logic leaking onto a
-// backend interface.
+// concrete 9P rendering of that data. Includes is a predicate rather than an
+// exposed status list so the policy can change (tag-based, size caps, …)
+// without touching the frontend.
 type Exporter interface {
 	Open(*model.Book) (EpubReader, error) // bytes for reads
 	Size(*model.Book) (int64, bool)       // cheap; 9P stat length, false when cold
 	Warm(*model.Book)                     // non-blocking proactive warm hint
 	Filename(*model.Book) string          // FAT-safe export name
 	Dirname(*model.Book) string           // FAT-safe export directory name
-	Statuses() []string                   // which book statuses appear in the reader view
+	Includes(*model.Book) bool            // whether the book appears in the reader view
 }
 
 func Open(cfg config.LibraryConfig, forceReindex bool) (Library, error) {

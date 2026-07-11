@@ -77,8 +77,14 @@ func TestLibraryImplExporter(t *testing.T) {
 	if e == nil {
 		t.Fatal("Exporter returned nil")
 	}
-	if s := e.Statuses(); len(s) != 1 || s[0] != "unread" {
-		t.Errorf("Statuses = %v, want [unread]", s)
+	book := makeBook(1, "Test", "Author")
+	book.Meta.Status = "unread"
+	if !e.Includes(book) {
+		t.Errorf("Includes should return true for a book with status %q", book.Meta.Status)
+	}
+	book.Meta.Status = "read"
+	if e.Includes(book) {
+		t.Errorf("Includes should return false for a book with status %q", book.Meta.Status)
 	}
 }
 
