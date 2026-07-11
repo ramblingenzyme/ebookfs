@@ -2,7 +2,6 @@ package book
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/knusbaum/go9p/proto"
@@ -26,7 +25,7 @@ type fieldFile struct {
 	vfile.SnapshotFile
 	get       func() string
 	set       func(string) error
-	writes    map[uint64][]byte
+	writes    vfile.WriteBuffer
 	truncated map[uint64]bool
 }
 
@@ -37,7 +36,7 @@ func newFieldFile(stat *proto.Stat, get func() string, set func(string) error) *
 		}),
 		get:       get,
 		set:       set,
-		writes:    make(map[uint64][]byte),
+		writes:    vfile.NewWriteBuffer(maxFieldFileSize),
 		truncated: make(map[uint64]bool),
 	}
 }
@@ -51,68 +50,39 @@ func (f *fieldFile) Stat() proto.Stat {
 
 func (f *fieldFile) Open(fid uint64, omode proto.Mode) error {
 	// The base loads and caches the per-fid snapshot (and self-locks); we then
-	// initialize our own write-tracking state.
+	// record whether the client asked for truncation.
 	if err := f.SnapshotFile.Open(fid, omode); err != nil {
 		return err
 	}
 	f.Lock()
-	f.writes[fid] = nil
 	f.truncated[fid] = omode&proto.Otrunc != 0
 	f.Unlock()
 	return nil
 }
 
 func (f *fieldFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
-	if len(data) == 0 {
-		return 0, nil
-	}
-	// Overflow-safe cap: offset is a client-controlled uint64, so offset+len can
-	// wrap past the check. Bound each term against the cap instead of the sum.
-	if offset > maxFieldFileSize || uint64(len(data)) > maxFieldFileSize-offset {
-		return 0, fmt.Errorf("write exceeds field file size limit (%d bytes)", maxFieldFileSize)
-	}
-	// Fetch the snapshot via the base before taking our own lock (the base
-	// method self-locks the shared mutex).
-	snapshot, hasSnapshot := f.Snapshot(fid)
-	f.Lock()
-	defer f.Unlock()
-	buf := f.writes[fid]
-	if buf == nil {
-		// Otrunc (or a missing snapshot) starts empty; otherwise seed from the
-		// current value so the client can append or edit at a middle offset.
-		if f.truncated[fid] || !hasSnapshot {
-			buf = []byte{}
-		} else {
-			buf = append([]byte(nil), snapshot...)
+	// Otrunc (or a missing snapshot) starts the buffer empty; otherwise the
+	// first write seeds it from the current value so the client can append or
+	// edit at a middle offset. The buffer's replace-on-shorter-first-write rule
+	// handles clients like Linux v9fs on 9P2000 that don't send Otrunc.
+	var seed func() []byte
+	f.RLock()
+	truncated := f.truncated[fid]
+	f.RUnlock()
+	if !truncated {
+		if snapshot, ok := f.Snapshot(fid); ok {
+			seed = func() []byte { return snapshot }
 		}
 	}
-	end := offset + uint64(len(data))
-	if end > uint64(len(buf)) {
-		buf = append(buf, make([]byte, end-uint64(len(buf)))...)
-	}
-	copy(buf[offset:], data)
-
-	// Without Otrunc the write buffer is seeded from the old value (snapshot).
-	// When writing shorter content at offset 0, truncate the buffer so residual
-	// bytes from the old value don't leak through. This matters for clients
-	// like Linux v9fs on 9P2000 that don't send Otrunc on file open.
-	firstWrite := f.writes[fid] == nil
-	shorter := uint64(len(data)) < uint64(len(buf))
-	if offset == 0 && firstWrite && !f.truncated[fid] && shorter {
-		buf = buf[:len(data)]
-	}
-
-	f.writes[fid] = buf
-	return uint32(len(data)), nil
+	return f.writes.Write(fid, offset, data, seed)
 }
 
 func (f *fieldFile) Close(fid uint64) error {
+	data := f.writes.Take(fid)
 	f.Lock()
-	data := f.writes[fid]
-	delete(f.writes, fid)
 	delete(f.truncated, fid)
 	f.Unlock()
-	// Forget the per-fid snapshot via the base, after releasing our own lock.
+	// Returns error but internally always returns nil...
 	f.SnapshotFile.Close(fid)
 	if len(data) == 0 {
 		return nil

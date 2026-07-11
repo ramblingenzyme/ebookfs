@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ramblingenzyme/ebookfs/library/internal/syncutil"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -30,9 +31,8 @@ type Cache struct {
 	dir string
 	src EpubSource
 
-	mu        sync.Mutex
 	closeOnce sync.Once
-	locks     map[int64]*sync.Mutex // per-book conversion lock, lazily created
+	locks     syncutil.KeyedMutex // per-book conversion lock
 	warmer    *warmer
 
 	// convertFn is the epub-to-kepub converter. Defaults to convert;
@@ -44,7 +44,6 @@ func NewCache(dir string, src EpubSource) *Cache {
 	c := &Cache{
 		dir:       dir,
 		src:       src,
-		locks:     make(map[int64]*sync.Mutex),
 		convertFn: convert,
 	}
 	c.warmer = newWarmer(c.Ensure)
@@ -86,7 +85,7 @@ func (c *Cache) Size(b *model.Book) (int64, bool) {
 // rendition on disk. It is idempotent (a fresh cache is a no-op) and serialized
 // per book, so concurrent warms and reads coalesce into a single conversion.
 func (c *Cache) Ensure(b *model.Book) error {
-	l := c.lockFor(b.Meta.ID)
+	l := c.locks.For(b.Meta.ID)
 	l.Lock()
 	defer l.Unlock()
 	return c.ensureLocked(b)
@@ -116,12 +115,12 @@ func (c *Cache) ensureLocked(b *model.Book) error {
 	}
 	defer src.Close()
 
-	return c.write(b, src, b.EpubSize)
+	return c.write(b, src)
 }
 
 // write converts src into a temp file in the cache dir, then atomically renames
 // it into place so a reader never observes a partial kepub.
-func (c *Cache) write(b *model.Book, src model.EpubReader, size int64) error {
+func (c *Cache) write(b *model.Book, src model.EpubReader) error {
 	tmp, err := os.CreateTemp(c.dir, fmt.Sprintf(".%d-*.tmp", b.Meta.ID))
 	if err != nil {
 		return err
@@ -129,7 +128,7 @@ func (c *Cache) write(b *model.Book, src model.EpubReader, size int64) error {
 	tmpName := tmp.Name()
 	defer os.Remove(tmpName) // no-op once renamed; cleans up on any error path
 
-	if err := c.convertFn(context.Background(), tmp, src, size); err != nil {
+	if err := c.convertFn(context.Background(), tmp, src, b.EpubSize); err != nil {
 		tmp.Close()
 		return err
 	}
@@ -141,17 +140,6 @@ func (c *Cache) write(b *model.Book, src model.EpubReader, size int64) error {
 		return err
 	}
 	return os.Rename(tmpName, c.path(b))
-}
-
-func (c *Cache) lockFor(id int64) *sync.Mutex {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	l, ok := c.locks[id]
-	if !ok {
-		l = &sync.Mutex{}
-		c.locks[id] = l
-	}
-	return l
 }
 
 const (

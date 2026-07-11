@@ -5,13 +5,14 @@ import (
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 )
 
 func TestNewInboxDir(t *testing.T) {
 	f := testutil.NewTestFS(t)
-	d := NewInboxDir(f)
+	d := NewInboxDir(f, libfake.Lib{}, nil)
 
 	s := d.Stat()
 	if s.Name != "inbox" {
@@ -24,16 +25,14 @@ func TestNewInboxDir(t *testing.T) {
 
 func TestInboxCreateFile_Success(t *testing.T) {
 	f := testutil.NewTestFS(t)
-	lib := libfake.Lib{}
-	cf := InboxCreateFile(lib, nil)
+	dir := NewInboxDir(f, libfake.Lib{}, nil)
 
-	dir := NewInboxDir(f)
-	file, err := cf(f, dir, "glenda", "test.epub", 0644, 0)
+	file, err := vfile.DispatchCreate(f, dir, "glenda", "test.epub", 0644, 0)
 	if err != nil {
-		t.Fatalf("InboxCreateFile: %v", err)
+		t.Fatalf("DispatchCreate: %v", err)
 	}
 	if file == nil {
-		t.Fatal("InboxCreateFile returned nil file")
+		t.Fatal("DispatchCreate returned nil file")
 	}
 
 	// File should be added as a child of the inbox dir.
@@ -44,16 +43,14 @@ func TestInboxCreateFile_Success(t *testing.T) {
 
 func TestInboxCreateFile_WrongParent(t *testing.T) {
 	f := testutil.NewTestFS(t)
-	lib := libfake.Lib{}
-	cf := InboxCreateFile(lib, nil)
 
-	// Pass a plain StaticDir as parent instead of *InboxDir.
+	// Pass a plain StaticDir (no Creator implementation) as the parent.
 	parent := fs.NewStaticDir(newStat(f, "wrong", 0755|proto.DMDIR))
-	_, err := cf(f, parent, "glenda", "test.epub", 0644, 0)
+	_, err := vfile.DispatchCreate(f, parent, "glenda", "test.epub", 0644, 0)
 	if err == nil {
-		t.Fatal("expected error for non-InboxDir parent")
+		t.Fatal("expected error for non-creatable parent")
 	}
-	if err.Error() != "not under inbox" {
-		t.Errorf("got error %q, want %q", err.Error(), "not under inbox")
+	if err.Error() != "cannot create files here" {
+		t.Errorf("got error %q, want %q", err.Error(), "cannot create files here")
 	}
 }

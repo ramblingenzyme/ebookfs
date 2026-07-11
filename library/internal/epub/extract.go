@@ -2,8 +2,6 @@ package epub
 
 import (
 	"archive/zip"
-	"fmt"
-	"io"
 )
 
 // ExtractCover returns the cover image bytes from the epub at epubPath.
@@ -14,19 +12,7 @@ func ExtractCover(epubPath, coverPath string) ([]byte, error) {
 		return nil, err
 	}
 	defer r.Close()
-
-	for _, f := range r.File {
-		if f.Name == coverPath {
-			rc, err := f.Open()
-			if err != nil {
-				return nil, err
-			}
-			defer rc.Close()
-			return io.ReadAll(rc)
-		}
-	}
-
-	return nil, fmt.Errorf("cover not found in epub: %s", coverPath)
+	return readEntry(&r.Reader, coverPath)
 }
 
 // ExtractOPF returns the raw OPF XML bytes from the epub at epubPath.

@@ -189,14 +189,13 @@ func TestInboxFileCloseWithParentDeadlockRegression(t *testing.T) {
 		},
 	}
 
-	dir := NewInboxDir(f)
-	cf := InboxCreateFile(lib, func(b *model.Book) {
+	dir := NewInboxDir(f, lib, func(b *model.Book) {
 		ingested <- b
 	})
 
-	file, err := cf(f, dir, "glenda", "test.epub", 0644, 0)
+	file, err := dir.Create(f, "test.epub", 0644, 0)
 	if err != nil {
-		t.Fatalf("inboxCreateFile: %v", err)
+		t.Fatalf("Create: %v", err)
 	}
 
 	fid := uint64(1)

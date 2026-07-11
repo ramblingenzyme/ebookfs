@@ -13,41 +13,51 @@ import (
 // bookListDir is a flat listing of bookDirs keyed by each book's title. Embed it in
 // views that present an unordered set of books (all books, one author's books,
 // search results).
+//
+// entries records, per book id, the entry name Add minted (plain title or
+// disambiguated), so Remove deletes exactly what was added instead of
+// re-deriving the name and guessing which form Add chose. The registry
+// serializes Add/Remove under its own lock, so the map needs none.
 type bookListDir struct {
 	fs.StaticDir
+	entries map[int64]string
 }
 
 func newBookListDir(stat *proto.Stat) *bookListDir {
-	return &bookListDir{StaticDir: *fs.NewStaticDir(stat)}
+	return &bookListDir{
+		StaticDir: *fs.NewStaticDir(stat),
+		entries:   make(map[int64]string),
+	}
 }
 
 // disambiguatedName is the entry name for a book whose plain title collides with
-// another book's. Add mints it and Remove reconstructs it, so both must agree —
-// keep it the single definition. Mirrors the store's canonicalDir convention.
+// another book's. Mirrors the store's canonicalDir convention.
 func disambiguatedName(b *model.Book) string {
 	return fmt.Sprintf("%s (%d)", b.Title, b.Meta.ID)
 }
 
 func (d *bookListDir) Add(dir *book.BookDir) {
-	if child, ok := d.Children()[dir.Book().Title]; ok && child != dir {
+	b := dir.Book()
+	if child, ok := d.Children()[b.Title]; ok && child != dir {
 		// Plain title is taken by a different book — disambiguate with the id.
 		d.AddChild(&namedBookDir{
 			BookDir:  dir,
 			baseStat: dir.Stat(),
 			name:     disambiguatedName,
 		})
+		d.entries[b.Meta.ID] = disambiguatedName(b)
 		return
 	}
 	d.AddChild(dir)
+	d.entries[b.Meta.ID] = b.Title
 }
 
 func (d *bookListDir) Remove(dir *book.BookDir) {
-	b := dir.Book()
-	if child, ok := d.Children()[b.Title]; ok && child == dir {
-		d.DeleteChild(b.Title)
-		return
+	id := dir.Book().Meta.ID
+	if name, ok := d.entries[id]; ok {
+		d.DeleteChild(name)
+		delete(d.entries, id)
 	}
-	d.DeleteChild(disambiguatedName(b))
 }
 
 func NewAllBooksDir(reg *registry.BookRegistry) *bookListDir {

@@ -2,7 +2,6 @@ package book
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/fs/vfile"
@@ -49,7 +48,7 @@ type coverFile struct {
 	vfile.SnapshotFile
 	edit   func(int64, model.Edits) error
 	book   func() *model.Book
-	writes map[uint64][]byte
+	writes vfile.WriteBuffer
 }
 
 func newCoverFile(stat *proto.Stat, lib library.Library, edit func(int64, model.Edits) error, book func() *model.Book) *coverFile {
@@ -62,7 +61,7 @@ func newCoverFile(stat *proto.Stat, lib library.Library, edit func(int64, model.
 		}),
 		edit:   edit,
 		book:   book,
-		writes: make(map[uint64][]byte),
+		writes: vfile.NewWriteBuffer(maxCoverFileSize),
 	}
 }
 
@@ -75,30 +74,13 @@ func (c *coverFile) Stat() proto.Stat {
 }
 
 func (c *coverFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
-	// Overflow-safe cap: offset is a client-controlled uint64, so offset+len can
-	// wrap past the check. Bound each term against the cap instead of the sum.
-	if offset > maxCoverFileSize || uint64(len(data)) > maxCoverFileSize-offset {
-		return 0, fmt.Errorf("write exceeds cover file size limit (%d bytes)", maxCoverFileSize)
-	}
-	c.Lock()
-	defer c.Unlock()
-	end := offset + uint64(len(data))
-	buf := c.writes[fid]
-	if end > uint64(len(buf)) {
-		buf = append(buf, make([]byte, end-uint64(len(buf)))...)
-	}
-	copy(buf[offset:], data)
-	c.writes[fid] = buf
-	return uint32(len(data)), nil
+	// A cover is replaced wholesale, never edited from the current bytes, so the
+	// buffer starts empty (nil seed).
+	return c.writes.Write(fid, offset, data, nil)
 }
 
 func (c *coverFile) Close(fid uint64) error {
-	c.Lock()
-	data := c.writes[fid]
-	delete(c.writes, fid)
-	c.Unlock()
-	// Forget the per-fid snapshot via the base, after releasing our own lock
-	// (the base method takes the same mutex).
+	data := c.writes.Take(fid)
 	c.SnapshotFile.Close(fid)
 	if len(data) == 0 {
 		return nil

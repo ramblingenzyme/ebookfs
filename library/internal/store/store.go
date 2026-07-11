@@ -94,12 +94,15 @@ func (s *Store) Move(from, to model.Location) error {
 		}
 	}
 
-	oldParent := filepath.Dir(oldPath)
-	// Try to delete the old author directory; ignore ENOTEMPTY (other books remain) and ENOENT (already gone).
-	if err := os.Remove(oldParent); err != nil && !errors.Is(err, syscall.ENOTEMPTY) && !errors.Is(err, os.ErrNotExist) {
+	return removeIfEmpty(filepath.Dir(oldPath))
+}
+
+// removeIfEmpty tries to delete an author directory that may have just lost its
+// last book; ENOTEMPTY (other books remain) and ENOENT (already gone) are fine.
+func removeIfEmpty(dir string) error {
+	if err := os.Remove(dir); err != nil && !errors.Is(err, syscall.ENOTEMPTY) && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-
 	return nil
 }
 
@@ -110,11 +113,5 @@ func (s *Store) Delete(loc model.Location) error {
 		return err
 	}
 
-	parent := filepath.Dir(path)
-	// Try to delete the author directory; ignore ENOTEMPTY (other books remain) and ENOENT (already gone).
-	if err := os.Remove(parent); err != nil && !errors.Is(err, syscall.ENOTEMPTY) && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-
-	return nil
+	return removeIfEmpty(filepath.Dir(path))
 }

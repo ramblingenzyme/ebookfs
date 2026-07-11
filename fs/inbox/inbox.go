@@ -22,12 +22,31 @@ var newStat = vfile.NewStat
 
 type InboxDir struct {
 	fs.StaticDir
+	lib      library.Library
+	onIngest func(*model.Book)
 }
 
-func NewInboxDir(f *fs.FS) *InboxDir {
+func NewInboxDir(f *fs.FS, lib library.Library, onIngest func(*model.Book)) *InboxDir {
 	return &InboxDir{
 		StaticDir: *fs.NewStaticDir(newStat(f, "inbox", 0755|proto.DMDIR)),
+		lib:       lib,
+		onIngest:  onIngest,
 	}
+}
+
+// Create satisfies vfile.Creator: a file created under the inbox is backed by
+// a fresh InboxFile wired to the library and the ingest callback. The FS-wide
+// vfile.DispatchCreate hook routes creates here, so this package owns only its
+// own create behavior, not the whole tree's create policy.
+func (d *InboxDir) Create(f *fs.FS, name string, perm uint32, mode uint8) (fs.File, error) {
+	log.Printf("inbox: create %q perm=%o mode=%d", name, perm, mode)
+	file := NewInboxFile(f, d.lib, name, perm, d.onIngest)
+	d.DeleteChild(name)
+	if err := d.AddChild(file); err != nil {
+		log.Printf("inbox: AddChild %q: %v", name, err)
+		return nil, err
+	}
+	return file, nil
 }
 
 type InboxFile struct {
@@ -36,27 +55,6 @@ type InboxFile struct {
 	handle   library.IngestHandle
 	lib      library.Library
 	onIngest func(*model.Book)
-}
-
-// InboxCreateFile returns a go9p CreateFile handler: a file created under an
-// InboxDir is backed by a fresh InboxFile wired to lib and onIngest. The
-// returned func matches the fs.FS.CreateFile field signature.
-func InboxCreateFile(lib library.Library, onIngest func(*model.Book)) func(*fs.FS, fs.Dir, string, string, uint32, uint8) (fs.File, error) {
-	return func(f *fs.FS, parent fs.Dir, user, name string, perm uint32, mode uint8) (fs.File, error) {
-		log.Printf("inbox: create %q perm=%o mode=%d parent=%s", name, perm, mode, fs.FullPath(parent))
-		inbox, ok := parent.(*InboxDir)
-		if !ok {
-			return nil, errors.New("not under inbox")
-		}
-
-		file := NewInboxFile(f, lib, name, perm, onIngest)
-		inbox.DeleteChild(name)
-		if err := inbox.AddChild(file); err != nil {
-			log.Printf("inbox: AddChild %q: %v", name, err)
-			return nil, err
-		}
-		return file, nil
-	}
 }
 
 func NewInboxFile(f *fs.FS, lib library.Library, name string, perm uint32, onIngest func(*model.Book)) *InboxFile {

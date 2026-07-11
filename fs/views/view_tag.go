@@ -15,13 +15,18 @@ func NewByTagDir(reg *registry.BookRegistry) *byTagDir {
 	return d
 }
 
+// tagEntryName maps a tag to its by-tag directory name. Add and Remove must
+// mint the same name or removals miss, so the mapping lives in one place.
+func tagEntryName(tag string) string {
+	return strings.ReplaceAll(tag, "/", "_")
+}
+
 func (d *byTagDir) Add(dir *book.BookDir) {
 	for _, tag := range dir.Book().Meta.Tags {
 		if tag == "" {
 			continue
 		}
-		name := strings.ReplaceAll(tag, "/", "_")
-		d.listerDir(name).Add(dir)
+		d.listerDir(tagEntryName(tag)).Add(dir)
 	}
 }
 
@@ -30,7 +35,6 @@ func (d *byTagDir) Remove(dir *book.BookDir) {
 		if tag == "" {
 			continue
 		}
-		name := strings.ReplaceAll(tag, "/", "_")
-		d.removeLister(name, dir)
+		d.removeLister(tagEntryName(tag), dir)
 	}
 }

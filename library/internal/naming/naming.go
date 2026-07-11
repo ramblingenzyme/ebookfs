@@ -9,15 +9,14 @@ import (
 	"strings"
 )
 
-// Sanitize makes s safe for use as a filesystem path component.
-// It replaces '/' with '-', strips NUL and control characters (< 0x20),
-// and trims leading/trailing dots, spaces, and tabs.
+// sanitize replaces the runes of forbidden with '-', strips NUL and control
+// characters (< 0x20), and trims leading/trailing dots, spaces, and tabs.
 // Returns an error if the result is empty.
-func Sanitize(s string) (string, error) {
+func sanitize(s, forbidden string) (string, error) {
 	var b strings.Builder
 	for _, r := range s {
 		switch {
-		case r == '/':
+		case strings.ContainsRune(forbidden, r):
 			b.WriteRune('-')
 		case r < 0x20:
 			// strip NUL and control characters
@@ -32,28 +31,16 @@ func Sanitize(s string) (string, error) {
 	return out, nil
 }
 
+// Sanitize makes s safe for use as a filesystem path component: '/' is the
+// only forbidden rune.
+func Sanitize(s string) (string, error) {
+	return sanitize(s, "/")
+}
+
 // ForFAT makes s safe for use as a filename on a FAT filesystem.
 // FAT forbids \ : * ? " < > | in addition to the characters Sanitize already
-// handles, and filenames may not end with a space or period.
+// handles, and filenames may not end with a space or period (covered by the
+// shared trim).
 func ForFAT(s string) (string, error) {
-	var b strings.Builder
-	for _, r := range s {
-		switch r {
-		case '/', '\\', ':', '*', '?', '"', '<', '>', '|':
-			b.WriteRune('-')
-		case 0x00:
-			// strip NUL
-		default:
-			if r < 0x20 {
-				// strip control characters
-				continue
-			}
-			b.WriteRune(r)
-		}
-	}
-	out := strings.Trim(b.String(), ". \t")
-	if out == "" {
-		return "", errors.New("sanitized string is empty")
-	}
-	return out, nil
+	return sanitize(s, `/\:*?"<>|`)
 }
