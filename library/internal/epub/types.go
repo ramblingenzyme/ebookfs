@@ -22,8 +22,6 @@ type rootfile struct {
 type opfPackage struct {
 	BasePath string
 	XMLName  xml.Name          `xml:"package"`
-	UniqueId string            `xml:"unique-identifier,attr"`
-	Version  string            `xml:"version,attr"`
 	Metadata opfMetadata       `xml:"metadata"`
 	Manifest []opfManifestItem `xml:"manifest>item"`
 }

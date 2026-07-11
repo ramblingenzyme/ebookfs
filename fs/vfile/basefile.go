@@ -107,9 +107,14 @@ func (f *ReadAtFile) Open(fid uint64, _ proto.Mode) error {
 }
 
 func (f *ReadAtFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error) {
+	// Copy the reader out and release the lock before the disk read: holding
+	// even the read lock across ReadAt would let one slow read plus a queued
+	// Open (write lock) stall every other in-flight read of this file. The
+	// reader is per-fid and a client never reads a fid it is clunking, so the
+	// unlocked ReadAt cannot race its own Close.
 	f.RLock()
-	defer f.RUnlock()
 	r := f.fids[fid]
+	f.RUnlock()
 	if r == nil {
 		return nil, errors.New("not open")
 	}

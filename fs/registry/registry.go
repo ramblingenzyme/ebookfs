@@ -13,6 +13,7 @@ import (
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/ramblingenzyme/ebookfs/fs/book"
+	"github.com/ramblingenzyme/ebookfs/internal/syncutil"
 	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
@@ -37,6 +38,10 @@ type BookRegistry struct {
 	views []BookView
 	f     *fs.FS
 	lib   library.Library
+
+	// editMu serializes edits per book id across the whole lib.Edit + commit
+	// span, so snapshot swaps land in the same order as the library's writes.
+	editMu syncutil.KeyedMutex
 }
 
 func NewBookRegistry(f *fs.FS, lib library.Library) *BookRegistry {
@@ -111,16 +116,34 @@ func (r *BookRegistry) Remove(id int64) {
 // book if its grouping or name changed. It is unexported: the only production
 // caller is a book's field file, which receives it as the edit callback passed
 // to book.NewBookDir.
+//
+// lib.Edit can rewrite the whole epub (seconds of disk I/O), so it must not
+// run under r.mu — that would queue every unrelated mutation behind it. The
+// per-book editMu keeps concurrent edits of the same book (and their commits)
+// in order; r.mu is only held for the lookup and the commit bracket.
 func (r *BookRegistry) edit(id int64, edits model.Edits) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	mu := r.editMu.For(id)
+	mu.Lock()
+	defer mu.Unlock()
+
+	r.mu.RLock()
 	dir, ok := r.books[id]
+	r.mu.RUnlock()
 	if !ok {
 		return fmt.Errorf("no book with id %d", id)
 	}
+
 	updated, err := r.lib.Edit(id, edits)
 	if err != nil {
 		return err
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.books[id] != dir {
+		// The book was removed while the edit ran; the disk write stands, but
+		// there is no tree entry left to re-file.
+		return nil
 	}
 	r.commit(dir, updated)
 	return nil

@@ -22,6 +22,9 @@ func Prepare(b *model.Book, e model.Edits) (*Commit, error) {
 		return &Commit{noop: true}, nil
 	}
 
+	// Library.Edit is the enforcement point that validates every edit
+	// (including the meta-only ones that noop out above); this re-check is a
+	// defensive backstop so an unvalidated Edits can never rewrite an epub.
 	if v := e.Validate(b); v != nil {
 		return nil, v
 	}

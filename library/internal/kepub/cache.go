@@ -14,7 +14,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ramblingenzyme/ebookfs/library/internal/syncutil"
+	"github.com/ramblingenzyme/ebookfs/internal/syncutil"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 

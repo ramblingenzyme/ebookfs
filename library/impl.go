@@ -4,14 +4,15 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 
+	"github.com/ramblingenzyme/ebookfs/internal/syncutil"
 	"github.com/ramblingenzyme/ebookfs/library/config"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index"
 	"github.com/ramblingenzyme/ebookfs/library/internal/store"
-	"github.com/ramblingenzyme/ebookfs/library/internal/syncutil"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -87,9 +88,8 @@ func (l *libraryImpl) CreateIngest() (IngestHandle, error) {
 // ingestPath parses the staged epub, lays it down in the store, and records it
 // in the index.
 func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
-	l.ingestMu.Lock()
-	defer l.ingestMu.Unlock()
-
+	// Parse before taking ingestMu: it touches only this upload's staged temp
+	// file, so bulk uploads overlap their parsing instead of serializing on it.
 	book, err := epub.Parse(epubPath)
 	if err != nil {
 		return nil, err
@@ -102,6 +102,10 @@ func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 	if len(bib.Authors) == 0 {
 		bib.Authors = []model.Author{{Name: model.UnknownAuthor, SortName: model.UnknownAuthor}}
 	}
+
+	l.ingestMu.Lock()
+	defer l.ingestMu.Unlock()
+
 	if l.store.Exists(bib.Authors, bib.Title) {
 		return nil, fmt.Errorf("book already in library: %q", bib.Title)
 	}
@@ -153,6 +157,10 @@ func (l *libraryImpl) Query(f model.Filter) ([]*model.Book, error) {
 // Reindex unconditionally rebuilds the index from the store (the source of
 // truth). Books that can't be read are logged and skipped rather than failing
 // the whole rebuild.
+//
+// Entries are parsed on a bounded worker pool: each is independent disk and
+// CPU work, and Reindex blocks startup, so a large library would otherwise
+// pay for every epub sequentially.
 func (l *libraryImpl) Reindex() error {
 	entries, err := l.store.Walk()
 	if err != nil {
@@ -160,27 +168,44 @@ func (l *libraryImpl) Reindex() error {
 	}
 
 	var (
+		mu    sync.Mutex
 		books []*model.Book
 		maxID int64
+		wg    sync.WaitGroup
+		sem   = make(chan struct{}, runtime.GOMAXPROCS(0))
 	)
 	for _, e := range entries {
-		meta, err := l.store.ReadMeta(e)
-		if err != nil {
-			log.Printf("reindex: skip %s: read meta: %v", e.LibraryPath, err)
-			continue
-		}
-		if meta.ID > maxID {
-			maxID = meta.ID
-		}
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
 
-		book, err := epub.Parse(e.EpubPath)
-		if err != nil {
-			log.Printf("reindex: skip %s: parse epub: %v", e.LibraryPath, err)
-			continue
-		}
+			meta, err := l.store.ReadMeta(e)
+			if err != nil {
+				log.Printf("reindex: skip %s: read meta: %v", e.LibraryPath, err)
+				return
+			}
+			// Bump maxID as soon as the meta is readable, even if the epub then
+			// fails to parse — the id is taken and must not be reissued.
+			mu.Lock()
+			if meta.ID > maxID {
+				maxID = meta.ID
+			}
+			mu.Unlock()
 
-		books = append(books, model.NewBook(bibFromEpub(book), *meta, e))
+			book, err := epub.Parse(e.EpubPath)
+			if err != nil {
+				log.Printf("reindex: skip %s: parse epub: %v", e.LibraryPath, err)
+				return
+			}
+
+			mu.Lock()
+			books = append(books, model.NewBook(bibFromEpub(book), *meta, e))
+			mu.Unlock()
+		}()
 	}
+	wg.Wait()
 
 	if err := l.index.Rebuild(books, maxID); err != nil {
 		return err
