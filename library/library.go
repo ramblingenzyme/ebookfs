@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/ramblingenzyme/ebookfs/library/config"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index"
@@ -85,7 +84,6 @@ func Open(cfg config.LibraryConfig, forceReindex bool) (Library, error) {
 		store:     store.New(cfg.Root, cfg.InboxTemp),
 		index:     idx,
 		inboxTemp: cfg.InboxTemp,
-		bookMu:    make(map[int64]*sync.Mutex),
 	}
 	if forceReindex || lib.needsReindex() {
 		if err := lib.Reindex(); err != nil {

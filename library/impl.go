@@ -11,6 +11,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index"
 	"github.com/ramblingenzyme/ebookfs/library/internal/store"
+	"github.com/ramblingenzyme/ebookfs/library/internal/syncutil"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -25,27 +26,13 @@ type libraryImpl struct {
 
 	// bookMu serializes the operations that mutate one book's on-disk state
 	// (Edit, Delete), so e.g. a cover rewrite cannot interleave with an edit
-	// that is moving the book directory. Lazily created per id,
-	// mirroring kepub.Cache's conversion locks.
-	bookMuMu sync.Mutex
-	bookMu   map[int64]*sync.Mutex
+	// that is moving the book directory.
+	bookMu syncutil.KeyedMutex
 
 	// ingestMu serializes the entire ingest path (Exists → NextID → Layout →
 	// Ingest → index Put) so two simultaneous uploads of the same new book
 	// cannot both pass the Exists check before either lays the book down.
 	ingestMu sync.Mutex
-}
-
-// lockBook returns the mutex serializing on-disk mutations of book id.
-func (l *libraryImpl) lockBook(id int64) *sync.Mutex {
-	l.bookMuMu.Lock()
-	defer l.bookMuMu.Unlock()
-	m, ok := l.bookMu[id]
-	if !ok {
-		m = &sync.Mutex{}
-		l.bookMu[id] = m
-	}
-	return m
 }
 
 // get returns the current state of book id from the index, hydrated with its
@@ -94,7 +81,7 @@ func (l *libraryImpl) CreateIngest() (IngestHandle, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ingestHandle{file: f, path: f.Name(), ingestFn: l.ingestPath}, nil
+	return &ingestHandle{file: f, ingestFn: l.ingestPath}, nil
 }
 
 // ingestPath parses the staged epub, lays it down in the store, and records it
@@ -148,7 +135,7 @@ func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 		return nil, err
 	}
 
-	log.Printf("ingest: book %d (%q) by %s", b.Meta.ID, b.Title, formatAuthors(bib.Authors))
+	log.Printf("ingest: book %d (%q) by %s", b.Meta.ID, b.Title, model.JoinAuthors(bib.Authors, ", "))
 	return b, nil
 }
 
@@ -253,13 +240,21 @@ func (l *libraryImpl) ExtractOPF(id int64) ([]byte, error) {
 // cannot revert each other's changes by editing from stale snapshots. If the
 // title or authors change, the book directory is moved.
 func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
-	mu := l.lockBook(id)
+	mu := l.bookMu.For(id)
 	mu.Lock()
 	defer mu.Unlock()
 
 	b, err := l.get(id)
 	if err != nil {
 		return nil, err
+	}
+
+	// Every edit is validated here at the facade — the single enforcement
+	// point — so meta-only edits (which skip the epub rewrite) can't slip
+	// through unchecked.
+	e = e.Normalized()
+	if v := e.Validate(b); v != nil {
+		return nil, v
 	}
 
 	updated := applyMeta(b, e)
@@ -352,7 +347,7 @@ func bibFromEpub(src *epub.Book) model.Bib {
 // Delete removes the book with the given id from the store and the index,
 // resolving its current location under the per-book lock.
 func (l *libraryImpl) Delete(id int64) error {
-	mu := l.lockBook(id)
+	mu := l.bookMu.For(id)
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -376,8 +371,4 @@ func (l *libraryImpl) Delete(id int64) error {
 	}
 	log.Printf("delete: book %d (%q): ok", id, b.Title)
 	return nil
-}
-
-func formatAuthors(authors []model.Author) string {
-	return model.JoinAuthors(authors, ", ")
 }

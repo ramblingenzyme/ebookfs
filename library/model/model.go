@@ -215,6 +215,23 @@ type Edits struct {
 	Tags   *[]string
 }
 
+// Normalized returns a copy of e with the persisted-precision rules applied:
+// ratings are stored to 2 decimal places and series indices to 1. Rounding is
+// a storage policy enforced by Library.Edit for every caller, not a parsing
+// concern re-implemented by each frontend. NaN/Inf survive rounding and are
+// rejected by Validate.
+func (e Edits) Normalized() Edits {
+	if e.Rating != nil {
+		r := math.Round(*e.Rating*100) / 100
+		e.Rating = &r
+	}
+	if e.SeriesIndex != nil {
+		i := math.Round(*e.SeriesIndex*10) / 10
+		e.SeriesIndex = &i
+	}
+	return e
+}
+
 // HasBibEdits reports whether any OPF-level field is non-nil.
 func (e Edits) HasBibEdits() bool {
 	return e.Title != nil || e.SortTitle != nil || e.Description != nil ||

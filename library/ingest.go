@@ -19,15 +19,15 @@ type IngestHandle interface {
 // ingestHandle is the concrete file-backed implementation of IngestHandle.
 type ingestHandle struct {
 	file     *os.File
-	path     string
 	ingestFn func(string) (*model.Book, error)
 }
 
 func (h *ingestHandle) WriteAt(p []byte, off int64) (int, error) { return h.file.WriteAt(p, off) }
 
 func (h *ingestHandle) Ingest() (*model.Book, error) {
+	path := h.file.Name()
 	h.file.Close()
-	b, err := h.ingestFn(h.path)
-	os.Remove(h.path)
+	b, err := h.ingestFn(path)
+	os.Remove(path)
 	return b, err
 }

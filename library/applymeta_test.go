@@ -85,28 +85,6 @@ func TestApplyMetaAllFields(t *testing.T) {
 	}
 }
 
-func TestFormatAuthors(t *testing.T) {
-	tests := []struct {
-		name    string
-		authors []model.Author
-		want    string
-	}{
-		{"single", []model.Author{{Name: "Alice"}}, "Alice"},
-		{"multiple", []model.Author{{Name: "Alice"}, {Name: "Bob"}}, "Alice, Bob"},
-		{"empty names", []model.Author{{Name: ""}, {Name: ""}}, model.UnknownAuthor},
-		{"mixed empty and valid", []model.Author{{Name: ""}, {Name: "Alice"}}, "Alice"},
-		{"nil", nil, model.UnknownAuthor},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := formatAuthors(tt.authors)
-			if got != tt.want {
-				t.Errorf("formatAuthors(%v) = %q, want %q", tt.authors, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestApplyMetaNoEdits(t *testing.T) {
 	book := model.NewBook(
 		model.Bib{Title: "Test", Authors: []model.Author{{Name: "Alice"}}},

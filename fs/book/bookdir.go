@@ -6,7 +6,6 @@ package book
 
 import (
 	"fmt"
-	"math"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -17,10 +16,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
-
-func addReadOnlyField(d *BookDir, f *fs.FS, name string, get func() string) {
-	d.StaticDir.AddChild(newFieldFile(newStat(f, name, 0444), get, nil))
-}
 
 // BookDir is the stable directory identity for one book. The book's state is
 // held as an atomically swapped snapshot: 9P handlers run on many goroutines
@@ -77,7 +72,6 @@ var fields = map[string]field{
 			if err != nil {
 				return model.Edits{}, fmt.Errorf("invalid rating %q", s)
 			}
-			n = math.Round(n*100) / 100
 			return model.Edits{Rating: &n}, nil
 		},
 	},
@@ -151,7 +145,6 @@ var fields = map[string]field{
 			if err != nil {
 				return model.Edits{}, fmt.Errorf("invalid series index %q", s)
 			}
-			idx = math.Round(idx*10) / 10
 			return model.Edits{SeriesIndex: &idx}, nil
 		},
 	},
@@ -201,7 +194,7 @@ func NewBookDir(f *fs.FS, lib library.Library, edit func(int64, model.Edits) err
 	}
 
 	// Read-only bib fields.
-	addReadOnlyField(d, f, "pubdate", func() string { return d.Book().Pubdate })
+	d.StaticDir.AddChild(newFieldFile(newStat(f, "pubdate", 0444), func() string { return d.Book().Pubdate }, nil))
 
 	// Cover image — only present when the epub declares one.
 	if book.CoverPath != "" {
