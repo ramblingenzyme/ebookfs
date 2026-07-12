@@ -29,7 +29,7 @@ func TestSetupServer(t *testing.T) {
 		t.Fatal("setupServer returned nil root")
 	}
 
-	wantChildren := []string{"inbox", "books", "by-author", "by-id", "by-series", "reader"}
+	wantChildren := []string{"inbox", "books", "by-author", "by-id", "by-series", "reader", "recent", "stats"}
 	for _, name := range wantChildren {
 		if _, ok := root.Children()[name]; !ok {
 			t.Errorf("root should have child %q", name)

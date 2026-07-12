@@ -6,7 +6,8 @@
 
 - **9P server** serving a synthetic filesystem on TCP.
 - **SQLite index** with full CRUD (Query, Get, Put, Delete) and schema versioning.
-- **Views:** `books/`, `by-author/`, `by-series/`, `by-tag/`, `by-status/`, `by-id/`, `reader/`, `inbox/`.
+- **Views:** `books/`, `by-author/`, `by-series/`, `by-tag/`, `by-status/`, `by-id/`, `recent/`, `reader/`, `inbox/`.
+- **`stats` file:** read-only at root, reports books/authors/series/tags/total-size/last-added/last-modified as live SQL aggregates over the index.
 - **Per-book directory files:** `book.epub`, `title`, `authors`, `series`, `series_index`, `language`, `description`, `pubdate`, `cover.jpg`, `tags`, `status`, `rating`, `id` — all backed by either the epub's internal OPF or `meta.toml`.
 - **Writable metadata:** sidecar fields (status, tags, rating) update `meta.toml` atomically; bib fields (title, authors, series, language, description) rewrite the epub's internal OPF via atomic zip surgery. Cover images are replaceable.
 - **Inbox ingestion:** write a file into `inbox/` over 9P; the server parses, validates, allocates an id, and lays the book down atomically. In-flight writes are buffered; `Tclunk` is the transaction boundary.
@@ -42,10 +43,12 @@
 │   ├── read/
 │   └── abandoned/
 ├── by-id/                       ← flat listing by id
+├── recent/                      ← last 5 books by date_added, newest first
 ├── inbox/                       ← write here to ingest
 ├── reader/                      ← export view for rsync-to-Kobo
 │   └── Author/                  ← all authors joined with " & "
 │       └── Title.epub           ← or .kepub.epub when Convert
+└── stats                        ← read-only aggregate library statistics
 ```
 
 ### Remaining V1 work
@@ -53,11 +56,9 @@
 | Feature | Description | Dependencies |
 |---------|-------------|--------------|
 | Multi-author filename convention | Epub filename and author directory should use all author names joined together (e.g. `Title - Alice & Bob.epub` under a joined author dir) instead of only the first author. Affects `store.path` functions (`epubFilename`, `authorDirName`). The exporter filenames (`epubExporter.Filename`, `kepubCache.Filename`) follow automatically since they're derived from `b.EpubFilename`. The exporter `Dirname` already joins all authors. Existing books must be migrated — the reindex pass can rename directories and files to match the new convention. | None |
-| `recent/` view | Shows last 5 books by `date_added` desc. `Filter.Recent` already exists in the query layer; needs a 9P view wired in `server.go`. | None |
-| `search/` directory | Virtual root. Walking to `title:foundation/` or `author:asimov/` queries the index and returns matching books. Supported prefixes: `title:`, `author:`, `tag:`, `series:`, `status:`, `id:`. Compound with `/` (e.g. `tag:sci-fi/status:unread`). | Extended query methods (V2 #6) provide the Library-level `Search` and `Count` APIs; this view is a thin 9P wrapper over them. |
+| `search/` directory | Virtual root. Walking to `title:foundation/` or `author:asimov/` queries the index and returns matching books. Supported prefixes: `title:`, `author:`, `tag:`, `series:`, `status:`, `id:`. Compound with `+` (e.g. `tag:sci-fi+status:unread`). | Extended query methods (V2 #6) provide the Library-level `Search` and `Count` APIs; this view is a thin 9P wrapper over them. |
 | `ctl` file | Plan 9-style control file at the root of the 9P namespace. Write a command line, server parses and executes. Commands: `add-tag <tag> <id-spec>`, `remove-tag <tag> <id-spec>`, `set-status <status> <id-spec>`, `set-rating <0-5> <id-spec>`, `delete <id>`, `reindex`, `rename-tag <old> <new>`, `merge-tags <a> <b>`, `rename-author <old> <new>`, `rename-series <old> <new>`. Reading returns the last result. | Entity management utilities (below) for the last four commands; otherwise none — calls existing Library `Edit`/`Delete`/`Reindex` methods. |
 | Entity management utilities | Rename or merge shared entities across every book that references them: tags (rename, merge two into one), authors (update display/sort name — a sort-name change triggers the same directory `Move` an ordinary edit already uses), series (rename, update sort name). Moved here from V2 #11: V1 has no book-subscriber/event system yet, so instead of a bulk index write plus `BookEdited` events, the `ctl` handler resolves affected book ids via `Query` and drives each one through the existing per-book `Edit` path (the same codepath a field-file write already uses) — the registry's live 9P tree stays in sync for free, no new bulk-write path or sync mechanism required. | `ctl` file (delivery mechanism) |
-| `stats` file | Read-only at root. Returns formatted text: books, authors, series, tags, total-size, last-added, last-modified. | None (calls `Count`, `ListAuthors`, `ListTags` — part of V2 #6, but could be implemented with SQL queries now). |
 | End-to-end test | A fixture library of sample epubs, spinning up `ebookfs` against a temp directory and driving it via real 9P client calls. Exercises the full edit → rewrite path. | None |
 | Drift detection: mtime tracking | Startup drift detection currently compares the on-disk store against the index using book directory paths and epub file *size* only. Size alone is unsound: two different epub contents can compress to the identical byte count. `os.Stat` already returns `ModTime()` in the same syscall used for `Size()`, so tracking mtime alongside size is free at check time and closes the collision. While migrating, also add `meta.toml` mtime tracking to catch a sidecar hand-edited outside the 9P mount (status/rating/tags changed directly on the host), which today isn't checked at all. Both need a new index column (`epub_mtime`, `meta_mtime`) — bundle into one schema version bump so there's a single one-time full reindex on next deploy rather than two. | None |
 

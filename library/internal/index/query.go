@@ -251,5 +251,32 @@ func (idx *Index) ListAuthors() ([]*model.Author, error) {
 
 // Stats returns aggregate library statistics.
 func (idx *Index) Stats() (*model.Stats, error) {
-	panic("not yet implemented")
+	var s model.Stats
+	var totalSize sql.NullInt64
+	var lastAdded, lastModified sql.NullString
+	err := idx.db.QueryRow(`
+		SELECT COUNT(*), COALESCE(SUM(epub_size), 0), MAX(date_added), MAX(date_modified)
+		FROM books
+	`).Scan(&s.Books, &totalSize, &lastAdded, &lastModified)
+	if err != nil {
+		return nil, err
+	}
+	s.TotalSize = totalSize.Int64
+	if lastAdded.Valid {
+		s.LastAdded, _ = time.Parse(time.RFC3339, lastAdded.String)
+	}
+	if lastModified.Valid {
+		s.LastModified, _ = time.Parse(time.RFC3339, lastModified.String)
+	}
+
+	if err := idx.db.QueryRow(`SELECT COUNT(*) FROM authors`).Scan(&s.Authors); err != nil {
+		return nil, err
+	}
+	if err := idx.db.QueryRow(`SELECT COUNT(*) FROM series`).Scan(&s.Series); err != nil {
+		return nil, err
+	}
+	if err := idx.db.QueryRow(`SELECT COUNT(*) FROM tags`).Scan(&s.Tags); err != nil {
+		return nil, err
+	}
+	return &s, nil
 }

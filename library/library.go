@@ -36,6 +36,7 @@ type Library interface {
 	// close it themselves.
 	Exporter(config.ReaderConfig) (Exporter, error)
 	Query(model.Filter) ([]*model.Book, error)
+	Stats() (*model.Stats, error)
 	Reindex() error
 	OpenEpub(id int64) (EpubReader, error)
 	ExtractCover(id int64) ([]byte, error)

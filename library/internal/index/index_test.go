@@ -589,14 +589,97 @@ func TestListAuthorsPanics(t *testing.T) {
 	idx.ListAuthors()
 }
 
-func TestStatsPanics(t *testing.T) {
+func TestStatsEmptyIndex(t *testing.T) {
 	idx := openTestIndex(t)
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic from Stats")
-		}
-	}()
-	idx.Stats()
+
+	s, err := idx.Stats()
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	if s.Books != 0 || s.Authors != 0 || s.Series != 0 || s.Tags != 0 || s.TotalSize != 0 {
+		t.Errorf("Stats on empty index = %+v, want all zero", s)
+	}
+	if !s.LastAdded.IsZero() || !s.LastModified.IsZero() {
+		t.Errorf("Stats on empty index = %+v, want zero timestamps", s)
+	}
+}
+
+func TestStatsAggregates(t *testing.T) {
+	idx := openTestIndex(t)
+
+	b1 := model.NewBook(
+		model.Bib{
+			Title:    "First",
+			Authors:  []model.Author{{Name: "Alice", SortName: "Alice"}},
+			Series:   &model.SeriesRef{Name: "EPIC", Index: 1},
+			EpubSize: 100,
+		},
+		model.Meta{ID: 1, Tags: []string{"sci-fi", "space"}},
+		model.Location{LibraryPath: "A/First (1)", EpubFilename: "book.epub"},
+	)
+	b2 := model.NewBook(
+		model.Bib{
+			Title:    "Second",
+			Authors:  []model.Author{{Name: "Alice", SortName: "Alice"}, {Name: "Bob", SortName: "Bob"}},
+			Series:   &model.SeriesRef{Name: "EPIC", Index: 2},
+			EpubSize: 250,
+		},
+		model.Meta{ID: 2, Tags: []string{"sci-fi"}},
+		model.Location{LibraryPath: "A/Second (2)", EpubFilename: "book.epub"},
+	)
+	storeInIndex(t, idx, b1)
+	storeInIndex(t, idx, b2)
+
+	s, err := idx.Stats()
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	if s.Books != 2 {
+		t.Errorf("Books = %d, want 2", s.Books)
+	}
+	if s.Authors != 2 {
+		t.Errorf("Authors = %d, want 2 (Alice, Bob)", s.Authors)
+	}
+	if s.Series != 1 {
+		t.Errorf("Series = %d, want 1 (EPIC)", s.Series)
+	}
+	if s.Tags != 2 {
+		t.Errorf("Tags = %d, want 2 (sci-fi, space)", s.Tags)
+	}
+	if s.TotalSize != 350 {
+		t.Errorf("TotalSize = %d, want 350", s.TotalSize)
+	}
+	if s.LastAdded.IsZero() || s.LastModified.IsZero() {
+		t.Errorf("Stats = %+v, want non-zero timestamps", s)
+	}
+}
+
+// TestStatsExcludesOrphans exercises the same orphan cleanup TestPutAuthorsWithExistingName
+// relies on: replacing a book's tags must not leave the old tag counted in Stats.
+func TestStatsExcludesOrphans(t *testing.T) {
+	idx := openTestIndex(t)
+
+	b := model.NewBook(
+		model.Bib{Title: "Book", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		model.Meta{ID: 1, Tags: []string{"stale"}},
+		model.Location{LibraryPath: "A/Book (1)", EpubFilename: "book.epub"},
+	)
+	storeInIndex(t, idx, b)
+
+	updated := model.NewBook(
+		model.Bib{Title: "Book", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		model.Meta{ID: 1, Tags: []string{"fresh"}},
+		model.Location{LibraryPath: "A/Book (1)", EpubFilename: "book.epub"},
+	)
+	storeInIndex(t, idx, updated)
+
+	s, err := idx.Stats()
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	if s.Tags != 1 {
+		t.Errorf("Tags = %d, want 1 (stale tag should be swept)", s.Tags)
+	}
 }
 
 func TestSearchPanics(t *testing.T) {

@@ -65,6 +65,19 @@ func TestLibraryImplExtractOPF(t *testing.T) {
 	}
 }
 
+func TestLibraryImplStats(t *testing.T) {
+	lib := openTestLibrary(t)
+	ingestTestEpub(t, lib, buildTestEpub(t, "Stats Test"))
+
+	s, err := lib.Stats()
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	if s.Books != 1 {
+		t.Errorf("Books = %d, want 1", s.Books)
+	}
+}
+
 func TestLibraryImplExporter(t *testing.T) {
 	lib := openTestLibrary(t)
 

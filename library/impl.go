@@ -154,6 +154,11 @@ func (l *libraryImpl) Query(f model.Filter) ([]*model.Book, error) {
 	return books, nil
 }
 
+// Stats returns aggregate library statistics.
+func (l *libraryImpl) Stats() (*model.Stats, error) {
+	return l.index.Stats()
+}
+
 // Reindex unconditionally rebuilds the index from the store (the source of
 // truth). Books that can't be read are logged and skipped rather than failing
 // the whole rebuild.

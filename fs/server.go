@@ -61,7 +61,9 @@ func setupServer(lib library.Library, exp library.Exporter) (*fs.FS, *fs.StaticD
 	bySeries := views.NewBySeriesDir(reg)
 	byTag := views.NewByTagDir(reg)
 	byStatus := views.NewByStatusDir(reg)
+	recent := views.NewRecentDir(reg)
 	reader := views.NewReaderDir(reg, exp)
+	stats := views.NewStatsFile(ebookfs, lib)
 
 	books, err := lib.Query(model.Filter{})
 	if err != nil {
@@ -78,7 +80,9 @@ func setupServer(lib library.Library, exp library.Exporter) (*fs.FS, *fs.StaticD
 	root.AddChild(bySeries)
 	root.AddChild(byTag)
 	root.AddChild(byStatus)
+	root.AddChild(recent)
 	root.AddChild(reader)
+	root.AddChild(stats)
 
 	return ebookfs, root, nil
 }

@@ -34,6 +34,7 @@ func (l testLib) Close() error                                     { return nil 
 func (l testLib) Exporter(_ config.ReaderConfig) (Exporter, error) { return nil, nil }
 func (l testLib) CreateIngest() (IngestHandle, error)              { return nil, nil }
 func (l testLib) Query(_ model.Filter) ([]*model.Book, error)      { return nil, nil }
+func (l testLib) Stats() (*model.Stats, error)                     { return nil, nil }
 func (l testLib) Reindex() error                                   { return nil }
 func (l testLib) OpenEpub(id int64) (EpubReader, error) {
 	if l.openEpubFn != nil {
