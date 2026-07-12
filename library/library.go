@@ -86,7 +86,7 @@ func Open(cfg config.LibraryConfig, forceReindex bool) (Library, error) {
 		index:     idx,
 		inboxTemp: cfg.InboxTemp,
 	}
-	if forceReindex || lib.needsReindex() {
+	if forceReindex || lib.needsReindex() || lib.storeDrifted() {
 		if err := lib.Reindex(); err != nil {
 			return nil, fmt.Errorf("reindexing library: %w", err)
 		}

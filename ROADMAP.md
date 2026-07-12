@@ -53,11 +53,13 @@
 | Feature | Description | Dependencies |
 |---------|-------------|--------------|
 | Multi-author filename convention | Epub filename and author directory should use all author names joined together (e.g. `Title - Alice & Bob.epub` under a joined author dir) instead of only the first author. Affects `store.path` functions (`epubFilename`, `authorDirName`). The exporter filenames (`epubExporter.Filename`, `kepubCache.Filename`) follow automatically since they're derived from `b.EpubFilename`. The exporter `Dirname` already joins all authors. Existing books must be migrated — the reindex pass can rename directories and files to match the new convention. | None |
-| `recent/` view | Shows last 50 books by `date_added` desc. `Filter.Recent` already exists in the query layer; needs a 9P view wired in `server.go`. | None |
-| `search/` directory | Virtual root. Walking to `title:foundation/` or `author:asimov/` queries the index and returns matching books. Supported prefixes: `title:`, `author:`, `tag:`, `series:`, `status:`, `id:`. Compound with `+` (e.g. `tag:sci-fi+status:unread`). | Extended query methods (V2 #6) provide the Library-level `Search` and `Count` APIs; this view is a thin 9P wrapper over them. |
-| `ctl` file | Plan 9-style control file at the root of the 9P namespace. Write a command line, server parses and executes. Commands: `add-tag <tag> <id-spec>`, `remove-tag <tag> <id-spec>`, `set-status <status> <id-spec>`, `set-rating <0-5> <id-spec>`, `delete <id>`, `reindex`. Reading returns the last result. | None (frontend-only — calls existing Library `Edit`/`Delete`/`Reindex` methods). |
+| `recent/` view | Shows last 5 books by `date_added` desc. `Filter.Recent` already exists in the query layer; needs a 9P view wired in `server.go`. | None |
+| `search/` directory | Virtual root. Walking to `title:foundation/` or `author:asimov/` queries the index and returns matching books. Supported prefixes: `title:`, `author:`, `tag:`, `series:`, `status:`, `id:`. Compound with `/` (e.g. `tag:sci-fi/status:unread`). | Extended query methods (V2 #6) provide the Library-level `Search` and `Count` APIs; this view is a thin 9P wrapper over them. |
+| `ctl` file | Plan 9-style control file at the root of the 9P namespace. Write a command line, server parses and executes. Commands: `add-tag <tag> <id-spec>`, `remove-tag <tag> <id-spec>`, `set-status <status> <id-spec>`, `set-rating <0-5> <id-spec>`, `delete <id>`, `reindex`, `rename-tag <old> <new>`, `merge-tags <a> <b>`, `rename-author <old> <new>`, `rename-series <old> <new>`. Reading returns the last result. | Entity management utilities (below) for the last four commands; otherwise none — calls existing Library `Edit`/`Delete`/`Reindex` methods. |
+| Entity management utilities | Rename or merge shared entities across every book that references them: tags (rename, merge two into one), authors (update display/sort name — a sort-name change triggers the same directory `Move` an ordinary edit already uses), series (rename, update sort name). Moved here from V2 #11: V1 has no book-subscriber/event system yet, so instead of a bulk index write plus `BookEdited` events, the `ctl` handler resolves affected book ids via `Query` and drives each one through the existing per-book `Edit` path (the same codepath a field-file write already uses) — the registry's live 9P tree stays in sync for free, no new bulk-write path or sync mechanism required. | `ctl` file (delivery mechanism) |
 | `stats` file | Read-only at root. Returns formatted text: books, authors, series, tags, total-size, last-added, last-modified. | None (calls `Count`, `ListAuthors`, `ListTags` — part of V2 #6, but could be implemented with SQL queries now). |
 | End-to-end test | A fixture library of sample epubs, spinning up `ebookfs` against a temp directory and driving it via real 9P client calls. Exercises the full edit → rewrite path. | None |
+| Drift detection: mtime tracking | Startup drift detection currently compares the on-disk store against the index using book directory paths and epub file *size* only. Size alone is unsound: two different epub contents can compress to the identical byte count. `os.Stat` already returns `ModTime()` in the same syscall used for `Size()`, so tracking mtime alongside size is free at check time and closes the collision. While migrating, also add `meta.toml` mtime tracking to catch a sidecar hand-edited outside the 9P mount (status/rating/tags changed directly on the host), which today isn't checked at all. Both need a new index column (`epub_mtime`, `meta_mtime`) — bundle into one schema version bump so there's a single one-time full reindex on next deploy rather than two. | None |
 
 ---
 
@@ -144,41 +146,16 @@ Additive library-surface changes first, then internal frontend migrations.
 5. Add book subscriber mechanism.
 6. Add sidecar file interface.
 7. Add metadata handler mechanism.
-8. Add entity management utilities (tag rename, author/series update).
-9. Decide module extraction approach and split `go.mod`.
-10. Migrate `fs/registry/` to subscriber pattern.
-11. Migrate `fs/book/` constructors to `BookReader`.
-12. Migrate `fs/inbox/` to `BookIngester`.
+8. Decide module extraction approach and split `go.mod`.
+9. Migrate `fs/registry/` to subscriber pattern.
+10. Migrate `fs/book/` constructors to `BookReader`.
+11. Migrate `fs/inbox/` to `BookIngester`.
 
-Steps 1-8 are purely additive to the library surface and independently releasable. Steps 10-12 are internal frontend migrations with no visible change to consumers.
+Steps 1-7 are purely additive to the library surface and independently releasable. Steps 9-11 are internal frontend migrations with no visible change to consumers.
 
 ---
 
-### 11. Entity Management Utilities
-
-Add methods for renaming shared entities (authors, tags, series) across all books, rather than requiring each book to be edited individually.
-
-Authors, tags, and series are stored as shared references in the SQLite index. Currently there is no public API to update an author's name or sort name, or to rename a tag across every book that carries it.
-
-**Covered entities:**
-- **Tags:** rename `"science fiction"` → `"sci-fi"` across every book that uses the old tag. Merge two tags into one.
-- **Authors:** update display name or sort name. This affects the on-disk directory path when the sort name changes.
-- **Series:** rename a series across all books in it. Update sort name.
-
-Methods go on `BookMutator`:
-```go
-type BookMutator interface {
-    Edit(id int64, e model.Edits) (*model.Book, error)
-    Delete(id int64) error
-    RenameTag(oldName, newName string) error
-    UpdateAuthor(id int64, name, sortName string) error
-    RenameSeries(id int64, name string) error
-}
-```
-
-Renames update the index and trigger `BookEdited` events for every affected book so subscribers (the 9P view registry, caches) react appropriately.
-
-### 12. OPDS + HTTP API Frontends
+### 11. OPDS + HTTP API Frontends
 
 Build two reference frontends on top of the refactored Library module to validate the extension points and demonstrate the patterns for third-party developers.
 

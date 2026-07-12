@@ -45,6 +45,28 @@ func (idx *Index) Query(f model.Filter) ([]*model.Book, error) {
 	return idx.queryBooks(strings.Join(where, " AND "), args, order, f.Limit)
 }
 
+// PathSizes returns every indexed book's library_path mapped to its
+// last-recorded epub_size, used to cheaply detect on-disk drift without a
+// full reindex.
+func (idx *Index) PathSizes() (map[string]int64, error) {
+	rows, err := idx.db.Query(`SELECT library_path, epub_size FROM books`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	sizes := make(map[string]int64)
+	for rows.Next() {
+		var path string
+		var size int64
+		if err := rows.Scan(&path, &size); err != nil {
+			return nil, err
+		}
+		sizes[path] = size
+	}
+	return sizes, rows.Err()
+}
+
 // Get returns the book with the given id, or sql.ErrNoRows if it is absent.
 func (idx *Index) Get(bookID int64) (*model.Book, error) {
 	books, err := idx.Query(model.Filter{ID: bookID})

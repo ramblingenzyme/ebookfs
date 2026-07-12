@@ -225,6 +225,45 @@ func (l *libraryImpl) needsReindex() bool {
 	return needs
 }
 
+// storeDrifted reports whether the on-disk store no longer matches the index
+// — a book directory added or removed, or an epub file swapped out — by
+// something that bypassed the library (e.g. a manual edit to the store).
+// It compares a directory listing and file sizes rather than re-parsing every
+// epub, so it's cheap enough to run on every startup.
+func (l *libraryImpl) storeDrifted() bool {
+	entries, err := l.store.Walk()
+	if err != nil {
+		log.Printf("reindex: could not walk store (%v), forcing rebuild", err)
+		return true
+	}
+
+	onDisk := make(map[string]int64, len(entries))
+	for _, e := range entries {
+		fi, err := os.Stat(e.EpubPath)
+		if err != nil {
+			log.Printf("reindex: could not stat %s (%v), forcing rebuild", e.EpubPath, err)
+			return true
+		}
+		onDisk[e.LibraryPath] = fi.Size()
+	}
+
+	indexed, err := l.index.PathSizes()
+	if err != nil {
+		log.Printf("reindex: could not read indexed path sizes (%v), forcing rebuild", err)
+		return true
+	}
+
+	if len(onDisk) != len(indexed) {
+		return true
+	}
+	for path, size := range onDisk {
+		if indexed[path] != size {
+			return true
+		}
+	}
+	return false
+}
+
 // OpenEpub returns a handle to the epub content of book id. The caller must
 // close it. The book's current location is resolved fresh, so the handle always
 // tracks the live file even if a concurrent edit moved it.
