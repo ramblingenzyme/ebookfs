@@ -52,13 +52,21 @@ func (f *SnapshotFile) Read(fid uint64, offset uint64, count uint64) ([]byte, er
 	if data == nil {
 		return nil, errors.New("not open")
 	}
+	return ClampRead(data, offset, count), nil
+}
+
+// ClampRead returns the sub-slice of data a 9P Tread at offset/count should
+// yield, clamped to data's bounds: empty at or past the end, truncated when
+// count overruns. Files that serve a static byte slice per fid share this
+// instead of re-deriving the boundary checks.
+func ClampRead(data []byte, offset, count uint64) []byte {
 	if offset >= uint64(len(data)) {
-		return []byte{}, nil
+		return []byte{}
 	}
 	if offset+count > uint64(len(data)) {
 		count = uint64(len(data)) - offset
 	}
-	return data[offset : offset+count], nil
+	return data[offset : offset+count]
 }
 
 // Snapshot returns the per-fid bytes cached at Open, for embedders (e.g. a

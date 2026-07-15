@@ -9,6 +9,7 @@ package registry
 
 import (
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/knusbaum/go9p/fs"
@@ -55,6 +56,31 @@ func NewBookRegistry(f *fs.FS, lib library.Library) *BookRegistry {
 // FS returns the filesystem the tree is served from, so views can build stats
 // for the directories they create.
 func (r *BookRegistry) FS() *fs.FS { return r.f }
+
+// ResyncView atomically rebuilds v's membership: reset runs first (typically
+// clearing v and swapping its filter), then every registered book is offered to
+// v.Add, all under the registry lock so the rebuild is serialized against
+// Add/Remove/commit notifications. v decides membership inside its Add, so a
+// view that attached after books existed — or changed its filter — converges on
+// the registry's current state with no window for lost or stale entries. reset
+// must not call back into the registry or the library.
+func (r *BookRegistry) ResyncView(v BookView, reset func()) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	reset()
+	for _, dir := range r.books {
+		v.Add(dir)
+	}
+}
+
+// RemoveView unregisters v from receiving Add/Remove for every book.
+func (r *BookRegistry) RemoveView(v BookView) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if i := slices.Index(r.views, v); i >= 0 {
+		r.views = slices.Delete(r.views, i, i+1)
+	}
+}
 
 // AddView registers v to receive Add/Remove for every book. Register all views
 // before adding books.

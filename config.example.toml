@@ -14,6 +14,14 @@ convert = false
 # walk never treats cached files as books. Only used when convert = true.
 cache_dir = "/var/lib/ebookfs/kepub-cache"
 
+[search]
+# handle_ttl controls how long a search handle lives without activity before the
+# cleanup worker reclaims it. Set to "0s" to disable TTL-based cleanup.
+handle_ttl = "30m"
+# max_handles caps concurrent search handles; the oldest (by last query time) are
+# evicted when the limit is exceeded. Set to 0 to disable max-handle eviction.
+max_handles = 100
+
 [server]
 listen = "0.0.0.0:5640"
 # "none" is the only implemented mode; "shared-secret" is reserved and rejected

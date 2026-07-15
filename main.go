@@ -62,14 +62,22 @@ func main() {
 		fatal("creating exporter", err)
 	}
 
+	srv, err := fs.SetupServer(lib, exp, cfg.Search.HandleTTL, cfg.Search.MaxHandles)
+	if err != nil {
+		fatal("setting up server", err)
+	}
+
 	go func() {
 		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 		<-sig
 		log.Print("shutting down…")
+		srv.Close()
 		lib.Close()
 		os.Exit(0)
 	}()
 
-	fs.StartServer(lib, exp, cfg.Server.Listen)
+	if err := srv.Start(cfg.Server.Listen); err != nil {
+		fatal("9P server", err)
+	}
 }

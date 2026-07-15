@@ -9,6 +9,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/knusbaum/go9p"
 	"github.com/knusbaum/go9p/fs"
@@ -20,19 +21,21 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-// StartServer serves the library over 9P at listen. The caller owns composition
-// of the backend (store, index, library) and chooses the reader/ Exporter
-// (original epub vs kepub); the frontend depends only on the library facade and
-// that Exporter.
-func StartServer(lib library.Library, exp library.Exporter, listen string) {
-	ebookfs, _, err := setupServer(lib, exp)
-	if err != nil {
-		fatal("setting up server", err)
-	}
+// Server wraps an *fs.FS with Close and Start methods for lifecycle
+// management.
+type Server struct {
+	ebookfs  *fs.FS
+	root     *fs.StaticDir
+	shutdown func()
+}
+
+func (s *Server) Close() { s.shutdown() }
+
+// Start begins serving the 9P filesystem on listen and blocks until the
+// listener returns. It should be called from the main goroutine.
+func (s *Server) Start(listen string) error {
 	log.Printf("serving 9P on %s", listen)
-	if err := go9p.Serve(listen, ebookfs.Server()); err != nil {
-		fatal("9P server", err)
-	}
+	return go9p.Serve(listen, s.ebookfs.Server())
 }
 
 // fatal logs at error level — never filtered by any configured log.level — and
@@ -43,16 +46,12 @@ func fatal(msg string, err error) {
 	os.Exit(1)
 }
 
-// setupServer wires the FS, registry, and views without starting the 9P
-// listener, so the wiring can be tested without blocking. It returns the FS
-// and the root directory for inspection.
-func setupServer(lib library.Library, exp library.Exporter) (*fs.FS, *fs.StaticDir, error) {
+// SetupServer wires the FS, registry, and views without starting the 9P
+// listener, so the wiring can be tested without blocking.
+func SetupServer(lib library.Library, exp library.Exporter, searchTTL time.Duration, searchMaxHandles int) (*Server, error) {
 	ebookfs, root := fs.NewFS("glenda", "glenda", 0555, fs.IgnorePermissions())
 	reg := registry.NewBookRegistry(ebookfs, lib)
 	ebookfs.CreateFile = vfile.DispatchCreate
-
-	// TODO: add graceful shutdown. go9p.Serve blocks; the warmer's 4 goroutines
-	// (reader.go) leak on exit because their channel is never closed.
 
 	// Each view self-registers with the registry on construction.
 	allBooks := views.NewAllBooksDir(reg)
@@ -67,7 +66,7 @@ func setupServer(lib library.Library, exp library.Exporter) (*fs.FS, *fs.StaticD
 
 	books, err := lib.Query(model.Filter{})
 	if err != nil {
-		return nil, nil, fmt.Errorf("loading books: %w", err)
+		return nil, fmt.Errorf("loading books: %w", err)
 	}
 	for _, b := range books {
 		reg.Add(b)
@@ -84,5 +83,8 @@ func setupServer(lib library.Library, exp library.Exporter) (*fs.FS, *fs.StaticD
 	root.AddChild(reader)
 	root.AddChild(stats)
 
-	return ebookfs, root, nil
+	search := views.NewSearchDir(ebookfs, reg, searchTTL, searchMaxHandles)
+	root.AddChild(search)
+
+	return &Server{ebookfs: ebookfs, root: root, shutdown: search.Close}, nil
 }

@@ -60,6 +60,13 @@ func (d *bookListDir) Remove(dir *book.BookDir) {
 	}
 }
 
+func (d *bookListDir) clear() {
+	for id, name := range d.entries {
+		d.DeleteChild(name)
+		delete(d.entries, id)
+	}
+}
+
 func NewAllBooksDir(reg *registry.BookRegistry) *bookListDir {
 	d := newBookListDir(newStat(reg.FS(), "books", 0555|proto.DMDIR))
 	reg.AddView(d)

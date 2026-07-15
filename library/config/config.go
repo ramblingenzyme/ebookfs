@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/ramblingenzyme/ebookfs/library/model"
@@ -11,6 +12,7 @@ type Config struct {
 	Library LibraryConfig `toml:"library"`
 	Reader  ReaderConfig  `toml:"reader"`
 	Server  ServerConfig  `toml:"server"`
+	Search  SearchConfig  `toml:"search"`
 	Log     LogConfig     `toml:"log"`
 }
 
@@ -18,6 +20,12 @@ type LibraryConfig struct {
 	Root      string `toml:"root"`
 	InboxTemp string `toml:"inbox_temp"`
 	IndexPath string `toml:"index_path"`
+}
+
+// SearchConfig configures the search/ directory in the 9P namespace.
+type SearchConfig struct {
+	HandleTTL  time.Duration `toml:"handle_ttl"`  // e.g. "30m"
+	MaxHandles int    `toml:"max_handles"` // e.g. 100
 }
 
 // ReaderConfig configures the reader/ rsync export. Statuses selects which books
@@ -62,6 +70,10 @@ func defaults() *Config {
 			InboxTemp: "/var/lib/ebookfs/library/.inbox-tmp",
 			IndexPath: "/var/lib/ebookfs/library/.index.db",
 		},
+		Search: SearchConfig{
+			HandleTTL:  30 * time.Minute,
+			MaxHandles: 100,
+		},
 		Reader: ReaderConfig{
 			Statuses: []string{model.StatusUnread, model.StatusReading},
 			Convert:  false,
@@ -104,6 +116,18 @@ func (c *Config) validateReader() error {
 	return nil
 }
 
+func (c *Config) validateSearch() error {
+	if c.Search.HandleTTL < 0 {
+		return fmt.Errorf("search.handle_ttl must be >= 0, got %s", c.Search.HandleTTL)
+	}
+
+	if c.Search.MaxHandles < 0 {
+		return fmt.Errorf("search.max_handles must be >= 0, got %d", c.Search.MaxHandles)
+	}
+
+	return nil
+}
+
 func (c *Config) validate() error {
 	if c.Library.Root == "" {
 		return fmt.Errorf("library.root is required")
@@ -120,6 +144,10 @@ func (c *Config) validate() error {
 	}
 
 	if err := c.validateAuth(); err != nil {
+		return err
+	}
+
+	if err := c.validateSearch(); err != nil {
 		return err
 	}
 

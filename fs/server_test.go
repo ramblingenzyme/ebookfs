@@ -2,6 +2,7 @@ package fs
 
 import (
 	"testing"
+	"time"
 
 	"github.com/knusbaum/go9p/fs"
 
@@ -21,17 +22,18 @@ func TestSetupServer(t *testing.T) {
 	}
 	exp := libfake.Exporter{StatusList: []string{"unread"}}
 
-	_, root, err := setupServer(lib, exp)
+	srv, err := SetupServer(lib, exp, 30*time.Minute, 100)
 	if err != nil {
-		t.Fatalf("setupServer: %v", err)
+		t.Fatalf("SetupServer: %v", err)
 	}
-	if root == nil {
-		t.Fatal("setupServer returned nil root")
+	if srv.root == nil {
+		t.Fatal("SetupServer returned nil root")
 	}
+	srv.Close()
 
-	wantChildren := []string{"inbox", "books", "by-author", "by-id", "by-series", "reader", "recent", "stats"}
+	wantChildren := []string{"inbox", "books", "by-author", "by-id", "by-series", "reader", "recent", "stats", "search"}
 	for _, name := range wantChildren {
-		if _, ok := root.Children()[name]; !ok {
+		if _, ok := srv.root.Children()[name]; !ok {
 			t.Errorf("root should have child %q", name)
 		}
 	}
@@ -43,9 +45,9 @@ func TestSetupServer_QueryError(t *testing.T) {
 			return nil, errTest
 		},
 	}
-	_, _, err := setupServer(lib, libfake.Exporter{})
+	_, err := SetupServer(lib, libfake.Exporter{}, 30*time.Minute, 100)
 	if err == nil {
-		t.Fatal("expected error from setupServer when Query fails")
+		t.Fatal("expected error from SetupServer when Query fails")
 	}
 }
 
@@ -57,12 +59,13 @@ func TestSetupServer_BooksPopulated(t *testing.T) {
 			return []*model.Book{b}, nil
 		},
 	}
-	_, root, err := setupServer(lib, libfake.Exporter{})
+	srv, err := SetupServer(lib, libfake.Exporter{}, 30*time.Minute, 100)
 	if err != nil {
-		t.Fatalf("setupServer: %v", err)
+		t.Fatalf("SetupServer: %v", err)
 	}
+	srv.Close()
 
-	allBooks := root.Children()["books"].(fs.Dir)
+	allBooks := srv.root.Children()["books"].(fs.Dir)
 	if _, ok := allBooks.Children()["Present"]; !ok {
 		t.Errorf("books view should contain 'Present' after setup")
 	}
