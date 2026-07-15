@@ -102,22 +102,38 @@ var fields = map[string]field{
 	},
 	"authors": {
 		get: func(b *model.Book) string {
-			names := make([]string, len(b.Authors))
+			lines := make([]string, len(b.Authors))
 			for i, a := range b.Authors {
-				names[i] = a.Name
-			}
-			return strings.Join(names, "\n")
-		},
-		edits: func(s string) (model.Edits, error) {
-			var names []string
-			for _, n := range strings.Split(s, "\n") {
-				if n = strings.TrimSpace(n); n != "" {
-					names = append(names, n)
+				if a.SortName != "" {
+					lines[i] = fmt.Sprintf("%s | %s", a.Name, a.SortName)
+				} else {
+					lines[i] = a.Name
 				}
 			}
-			authors := make([]model.Author, len(names))
-			for i, n := range names {
-				authors[i] = model.Author{Name: n}
+			return strings.Join(lines, "\n")
+		},
+		edits: func(s string) (model.Edits, error) {
+			var authors []model.Author
+			for _, line := range strings.Split(s, "\n") {
+				line = strings.TrimSpace(line)
+				if line == "" {
+					continue
+				}
+				name, sortName, ok := strings.Cut(line, "|")
+				name = strings.TrimSpace(name)
+				if name == "" {
+					continue
+				}
+				a := model.Author{Name: name}
+				if ok {
+					if sn := strings.TrimSpace(sortName); sn != "" {
+						a.SortName = sn
+					}
+				}
+				authors = append(authors, a)
+			}
+			if len(authors) == 0 {
+				return model.Edits{}, fmt.Errorf("at least one author is required")
 			}
 			return model.Edits{Authors: &authors}, nil
 		},
