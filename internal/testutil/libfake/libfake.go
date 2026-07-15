@@ -46,6 +46,7 @@ type Lib struct {
 	ExtractOPFFn   func(int64) ([]byte, error)
 	OpenEpubFn     func(int64) (library.EpubReader, error)
 	QueryFn        func(model.Filter) ([]*model.Book, error)
+	SearchFn       func(model.Query) ([]*model.Book, error)
 	StatsFn        func() (*model.Stats, error)
 	ReindexFn      func() error
 	DeleteFn       func(int64) error
@@ -94,6 +95,13 @@ func (l Lib) OpenEpub(id int64) (library.EpubReader, error) {
 func (l Lib) Query(f model.Filter) ([]*model.Book, error) {
 	if l.QueryFn != nil {
 		return l.QueryFn(f)
+	}
+	return nil, nil
+}
+
+func (l Lib) Search(q model.Query) ([]*model.Book, error) {
+	if l.SearchFn != nil {
+		return l.SearchFn(q)
 	}
 	return nil, nil
 }

@@ -1,9 +1,9 @@
 package model
 
-// Query selects a subset of books for search. Within each slice field values are
+// Query selects a subset of books for Search. Within each slice field values are
 // OR'd (tag:sci-fi+tag:fantasy matches books with either tag). Across fields they
 // are AND'd (tag:sci-fi+status:unread matches books with the tag AND the status).
-// Zero-valued fields are ignored. Title is a case-insensitive substring match.
+// Zero-valued fields are ignored. Titles are substring matches via SQL LIKE.
 type Query struct {
 	Authors []string // books by ANY of these authors (exact name match)
 	Tags    []string // books carrying ANY of these tags (exact name match)

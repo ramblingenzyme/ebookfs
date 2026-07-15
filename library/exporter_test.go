@@ -47,7 +47,8 @@ func (l testLib) ExtractOPF(id int64) ([]byte, error)   { return nil, nil }
 func (l testLib) Edit(id int64, e model.Edits) (*model.Book, error) {
 	return nil, nil
 }
-func (l testLib) Delete(id int64) error { return nil }
+func (l testLib) Search(_ model.Query) ([]*model.Book, error) { return nil, nil }
+func (l testLib) Delete(id int64) error                       { return nil }
 
 var makeBook = testutil.MakeBook
 

@@ -138,6 +138,14 @@ func (r *BookRegistry) Remove(id int64) {
 	delete(r.books, id)
 }
 
+// CommitEdit persists edits to a book and commits the change so views rehome
+// the book if its grouping or name changed. It is the exported entry point for
+// callers outside the field-file path (e.g. the root ctl file). The same
+// locking and commit protocol as the unexported edit applies.
+func (r *BookRegistry) CommitEdit(id int64, edits model.Edits) error {
+	return r.edit(id, edits)
+}
+
 // edit persists edits to a book and commits the change so views rehome the
 // book if its grouping or name changed. It is unexported: the only production
 // caller is a book's field file, which receives it as the edit callback passed

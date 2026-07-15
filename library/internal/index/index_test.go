@@ -682,14 +682,136 @@ func TestStatsExcludesOrphans(t *testing.T) {
 	}
 }
 
-func TestSearchPanics(t *testing.T) {
+func makeTestBook(id int64, title string, authors []string, tag string, status string) *model.Book {
+	authorObjs := make([]model.Author, len(authors))
+	for i, name := range authors {
+		authorObjs[i] = model.Author{Name: name}
+	}
+	meta := model.Meta{ID: id, Status: status}
+	if tag != "" {
+		meta.Tags = []string{tag}
+	}
+	return model.NewBook(
+		model.Bib{Title: title, Authors: authorObjs},
+		meta,
+		model.Location{LibraryPath: title, EpubFilename: "book.epub"},
+	)
+}
+
+func TestSearch(t *testing.T) {
 	idx := openTestIndex(t)
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic from Search")
+
+	b1 := makeTestBook(1, "Foundation", []string{"Isaac Asimov"}, "sci-fi", model.StatusRead)
+	b2 := makeTestBook(2, "Dune", []string{"Frank Herbert"}, "sci-fi", model.StatusUnread)
+	b3 := makeTestBook(3, "The Hobbit", []string{"J.R.R. Tolkien"}, "fantasy", model.StatusRead)
+	if err := idx.Rebuild([]*model.Book{b1, b2, b3}, 3); err != nil {
+		t.Fatalf("Rebuild: %v", err)
+	}
+
+	t.Run("empty query returns all", func(t *testing.T) {
+		books, err := idx.Search(model.Query{})
+		if err != nil {
+			t.Fatal(err)
 		}
-	}()
-	idx.Search("query")
+		if len(books) != 3 {
+			t.Fatalf("got %d books, want 3", len(books))
+		}
+	})
+
+	t.Run("single tag", func(t *testing.T) {
+		books, err := idx.Search(model.Query{Tags: []string{"sci-fi"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(books) != 2 {
+			t.Fatalf("got %d books, want 2", len(books))
+		}
+	})
+
+	t.Run("multiple tags OR", func(t *testing.T) {
+		books, err := idx.Search(model.Query{Tags: []string{"sci-fi", "fantasy"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(books) != 3 {
+			t.Fatalf("got %d books, want 3", len(books))
+		}
+	})
+
+	t.Run("tag AND status", func(t *testing.T) {
+		books, err := idx.Search(model.Query{Tags: []string{"sci-fi"}, Status: []string{"unread"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(books) != 1 {
+			t.Fatalf("got %d books, want 1", len(books))
+		}
+		if books[0].Title != "Dune" {
+			t.Errorf("got %q, want Dune", books[0].Title)
+		}
+	})
+
+	t.Run("title substring", func(t *testing.T) {
+		books, err := idx.Search(model.Query{Titles: []string{"found"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(books) != 1 {
+			t.Fatalf("got %d books, want 1", len(books))
+		}
+		if books[0].Title != "Foundation" {
+			t.Errorf("got %q, want Foundation", books[0].Title)
+		}
+	})
+
+	t.Run("author name", func(t *testing.T) {
+		books, err := idx.Search(model.Query{Authors: []string{"Isaac Asimov"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(books) != 1 {
+			t.Fatalf("got %d books, want 1", len(books))
+		}
+	})
+
+	t.Run("no match", func(t *testing.T) {
+		books, err := idx.Search(model.Query{Tags: []string{"nonexistent"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(books) != 0 {
+			t.Fatalf("got %d books, want 0", len(books))
+		}
+	})
+}
+
+func TestSearchIDs(t *testing.T) {
+	idx := openTestIndex(t)
+
+	b1 := makeTestBook(1, "A", nil, "", "")
+	b2 := makeTestBook(2, "B", nil, "", "")
+	if err := idx.Rebuild([]*model.Book{b1, b2}, 2); err != nil {
+		t.Fatalf("Rebuild: %v", err)
+	}
+
+	books, err := idx.Search(model.Query{IDs: []int64{1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(books) != 1 {
+		t.Fatalf("got %d books, want 1", len(books))
+	}
+	if books[0].Meta.ID != 1 {
+		t.Errorf("got id %d, want 1", books[0].Meta.ID)
+	}
+
+	books, err = idx.Search(model.Query{IDs: []int64{1, 2}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(books) != 2 {
+		t.Fatalf("got %d books, want 2", len(books))
+	}
 }
 
 func TestPutAuthorsWithExistingName(t *testing.T) {

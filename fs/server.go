@@ -13,6 +13,7 @@ import (
 
 	"github.com/knusbaum/go9p"
 	"github.com/knusbaum/go9p/fs"
+	"github.com/ramblingenzyme/ebookfs/fs/ctl"
 	"github.com/ramblingenzyme/ebookfs/fs/inbox"
 	"github.com/ramblingenzyme/ebookfs/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/fs/vfile"
@@ -82,6 +83,11 @@ func SetupServer(lib library.Library, exp library.Exporter, searchTTL time.Durat
 	root.AddChild(recent)
 	root.AddChild(reader)
 	root.AddChild(stats)
+
+	cmdLog := ctl.NewCommandLog(100)
+	root.AddChild(ctl.NewCtlFile(ebookfs, lib, reg, cmdLog))
+	root.AddChild(ctl.NewLogFile(ebookfs, cmdLog))
+	root.AddChild(ctl.NewHelpFile(ebookfs))
 
 	search := views.NewSearchDir(ebookfs, reg, searchTTL, searchMaxHandles)
 	root.AddChild(search)

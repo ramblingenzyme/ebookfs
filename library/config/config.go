@@ -25,7 +25,7 @@ type LibraryConfig struct {
 // SearchConfig configures the search/ directory in the 9P namespace.
 type SearchConfig struct {
 	HandleTTL  time.Duration `toml:"handle_ttl"`  // e.g. "30m"
-	MaxHandles int    `toml:"max_handles"` // e.g. 100
+	MaxHandles int           `toml:"max_handles"` // e.g. 100
 }
 
 // ReaderConfig configures the reader/ rsync export. Statuses selects which books

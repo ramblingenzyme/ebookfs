@@ -16,6 +16,8 @@
 - **Reindex on startup:** the index is always rebuilt from the filesystem, guaranteeing no drift between store and cache.
 - **`search/` directory:** Plan 9 clone-style API. Opening `search/clone` allocates a new search handle; walking to `search/<id>/` gives a `ctl` file for writing queries (prefixes: `title:`, `author:`, `tag:`, `series:`, `status:`, `id:`, compound with `+`). Results stay live — edits/deletes reflect immediately. Handles are closed explicitly via `ctl` write, with TTL and max-handle cleanup as backstop.
 - **Multi-author filename convention:** On-disk paths use all author display names joined with `" & "` (e.g. `Alice & Bob/Title (1)/Title - Alice & Bob.epub`). The `authors` field file supports an optional `Name | SortName` format. Existing books are migrated via a `Layout`/`Move` pass during startup reindex.
+- **Root `ctl` file:** Plan 9-style control file at the root of the 9P namespace. Write a command line, server parses and executes. Commands: `add-tag`, `remove-tag`, `set-status`, `set-rating`, `delete`, `reindex`, `rename-tag` (doubles as merge), `rename-author`, `rename-series`. Reading returns the last command's result. A `log` file shows recent command history; a `help` file documents usage.
+- **Entity management utilities:** `rename-tag`, `rename-author`, `rename-series` commands in the root `ctl` file handle bulk entity renaming/merging across all books that reference them, driving each book through the existing per-book `Edit` path so the registry's live 9P tree stays in sync.
 
 ### 9P namespace
 
@@ -55,6 +57,9 @@
 ├── reader/                      ← export view for rsync-to-Kobo
 │   └── Author/                  ← all authors joined with " & "
 │       └── Title.epub           ← or .kepub.epub when Convert
+├── ctl                          ← write commands, read last result
+├── log                          ← recent command history
+├── help                         ← command reference
 └── stats                        ← read-only aggregate library statistics
 ```
 
@@ -62,8 +67,6 @@
 
 | Feature | Description | Dependencies |
 |---------|-------------|--------------|
-| `ctl` file | Plan 9-style control file at the root of the 9P namespace. Write a command line, server parses and executes. Commands: `add-tag <tag> <id-spec>`, `remove-tag <tag> <id-spec>`, `set-status <status> <id-spec>`, `set-rating <0-5> <id-spec>`, `delete <id>`, `reindex`, `rename-tag <old> <new>`, `merge-tags <a> <b>`, `rename-author <old> <new>`, `rename-series <old> <new>`. Reading returns the last result. | Entity management utilities (below) for the last four commands; otherwise none — calls existing Library `Edit`/`Delete`/`Reindex` methods. |
-| Entity management utilities | Rename or merge shared entities across every book that references them: tags (rename, merge two into one), authors (update display/sort name — a sort-name change triggers the same directory `Move` an ordinary edit already uses), series (rename, update sort name). Moved here from V2 #11: V1 has no book-subscriber/event system yet, so instead of a bulk index write plus `BookEdited` events, the `ctl` handler resolves affected book ids via `Query` and drives each one through the existing per-book `Edit` path (the same codepath a field-file write already uses) — the registry's live 9P tree stays in sync for free, no new bulk-write path or sync mechanism required. | `ctl` file (delivery mechanism) |
 | End-to-end test | A fixture library of sample epubs, spinning up `ebookfs` against a temp directory and driving it via real 9P client calls. Exercises the full edit → rewrite path. | None |
 | Drift detection: mtime tracking | Startup drift detection currently compares the on-disk store against the index using book directory paths and epub file *size* only. Size alone is unsound: two different epub contents can compress to the identical byte count. `os.Stat` already returns `ModTime()` in the same syscall used for `Size()`, so tracking mtime alongside size is free at check time and closes the collision. While migrating, also add `meta.toml` mtime tracking to catch a sidecar hand-edited outside the 9P mount (status/rating/tags changed directly on the host), which today isn't checked at all. Both need a new index column (`epub_mtime`, `meta_mtime`) — bundle into one schema version bump so there's a single one-time full reindex on next deploy rather than two. | None |
 

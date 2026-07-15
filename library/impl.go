@@ -154,6 +154,17 @@ func (l *libraryImpl) Query(f model.Filter) ([]*model.Book, error) {
 	return books, nil
 }
 
+func (l *libraryImpl) Search(q model.Query) ([]*model.Book, error) {
+	books, err := l.index.Search(q)
+	if err != nil {
+		return nil, err
+	}
+	for _, b := range books {
+		b.EpubPath = l.store.AbsPath(b.LibraryPath, b.EpubFilename)
+	}
+	return books, nil
+}
+
 // Stats returns aggregate library statistics.
 func (l *libraryImpl) Stats() (*model.Stats, error) {
 	return l.index.Stats()

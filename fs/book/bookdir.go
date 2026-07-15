@@ -115,20 +115,9 @@ var fields = map[string]field{
 		edits: func(s string) (model.Edits, error) {
 			var authors []model.Author
 			for _, line := range strings.Split(s, "\n") {
-				line = strings.TrimSpace(line)
-				if line == "" {
+				a := model.ParseAuthor(line)
+				if a.Name == "" {
 					continue
-				}
-				name, sortName, ok := strings.Cut(line, "|")
-				name = strings.TrimSpace(name)
-				if name == "" {
-					continue
-				}
-				a := model.Author{Name: name}
-				if ok {
-					if sn := strings.TrimSpace(sortName); sn != "" {
-						a.SortName = sn
-					}
 				}
 				authors = append(authors, a)
 			}
