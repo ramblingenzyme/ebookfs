@@ -33,22 +33,16 @@ func epubFilename(authors []model.Author, title string) string {
 	if len(authors) == 0 {
 		return fmt.Sprintf("%s.epub", fatTitle)
 	}
-	fatAuthor, err := naming.ForFAT(authors[0].Name)
+	joined := model.JoinAuthors(authors, " & ")
+	fatAuthor, err := naming.ForFAT(joined)
 	if err != nil {
-		fatAuthor = authors[0].Name
+		fatAuthor = joined
 	}
 	return fmt.Sprintf("%s - %s.epub", fatTitle, fatAuthor)
 }
 
 func authorDirName(authors []model.Author) string {
-	if len(authors) == 0 {
-		return model.UnknownAuthor
-	}
-	name := authors[0].SortName
-	if name == "" {
-		name = authors[0].Name
-	}
-	return name
+	return model.JoinAuthors(authors, " & ")
 }
 
 func canonicalDir(authors []model.Author, title string, id int64) string {

@@ -212,6 +212,21 @@ func (l *libraryImpl) Reindex() error {
 	}
 	wg.Wait()
 
+	// Migrate books to the canonical naming convention (e.g. all-author
+	// directory and filename). Books that can't be moved stay at their old
+	// location — the index will still track them correctly.
+	for _, b := range books {
+		canonical := l.store.Layout(b.Authors, b.Title, b.Meta.ID)
+		if canonical.LibraryPath != b.Location.LibraryPath || canonical.EpubFilename != b.Location.EpubFilename {
+			if err := l.store.Move(b.Location, canonical); err != nil {
+				log.Printf("reindex: move %s -> %s: %v", b.Location.LibraryPath, canonical.LibraryPath, err)
+				continue
+			}
+			b.Location = canonical
+			b.EpubPath = l.store.AbsPath(canonical.LibraryPath, canonical.EpubFilename)
+		}
+	}
+
 	if err := l.index.Rebuild(books, maxID); err != nil {
 		return err
 	}

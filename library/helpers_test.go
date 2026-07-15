@@ -3,6 +3,7 @@ package library
 import (
 	"archive/zip"
 	"bytes"
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -11,9 +12,14 @@ import (
 )
 
 // buildTestEpub writes a minimal valid EPUB 3 with a cover entry and returns
-// its bytes. The mimetype entry is STORED first per OCF.
-func buildTestEpub(t *testing.T, title string) []byte {
+// its bytes. The mimetype entry is STORED first per OCF. If authors are
+// omitted, defaults to ["Alice"].
+func buildTestEpub(t *testing.T, title string, authors ...string) []byte {
 	t.Helper()
+	if len(authors) == 0 {
+		authors = []string{"Alice"}
+	}
+
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 
@@ -22,6 +28,11 @@ func buildTestEpub(t *testing.T, title string) []byte {
 		t.Fatal(err)
 	}
 	mt.Write([]byte("application/epub+zip"))
+
+	var creatorEls string
+	for i, a := range authors {
+		creatorEls += fmt.Sprintf("    <dc:creator id=\"c%d\">%s</dc:creator>\n", i+1, a)
+	}
 
 	files := map[string]string{
 		"META-INF/container.xml": `<?xml version="1.0"?>
@@ -35,8 +46,7 @@ func buildTestEpub(t *testing.T, title string) []byte {
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
     <dc:identifier id="id">ebookfs-test-1</dc:identifier>
     <dc:title>` + title + `</dc:title>
-    <dc:creator id="c1">Alice</dc:creator>
-    <dc:language>en</dc:language>
+` + creatorEls + `    <dc:language>en</dc:language>
   </metadata>
   <manifest>
     <item id="cover" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>

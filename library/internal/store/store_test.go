@@ -139,28 +139,6 @@ func TestMoveSameLocationNoop(t *testing.T) {
 	}
 }
 
-func TestAuthorDirName(t *testing.T) {
-	tests := []struct {
-		name    string
-		authors []model.Author
-		want    string
-	}{
-		{"sort name preferred", []model.Author{{Name: "Alice", SortName: "Smith, Alice"}}, "Smith, Alice"},
-		{"name fallback when sort name empty", []model.Author{{Name: "Bob", SortName: ""}}, "Bob"},
-		{"name fallback when no sort name", []model.Author{{Name: "Carol"}}, "Carol"},
-		{"unknown when no authors", nil, model.UnknownAuthor},
-		{"unknown when empty authors", []model.Author{}, model.UnknownAuthor},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := authorDirName(tt.authors)
-			if got != tt.want {
-				t.Errorf("authorDirName(%v) = %q, want %q", tt.authors, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestEpubFilename(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -168,7 +146,8 @@ func TestEpubFilename(t *testing.T) {
 		title   string
 		want    string
 	}{
-		{"with author", []model.Author{{Name: "Alice Author"}}, "Wonderful Title", "Wonderful Title - Alice Author.epub"},
+		{"single author", []model.Author{{Name: "Alice"}}, "Wonderful Title", "Wonderful Title - Alice.epub"},
+		{"two authors", []model.Author{{Name: "Alice"}, {Name: "Bob"}}, "Title", "Title - Alice & Bob.epub"},
 		{"no authors", nil, "No Author Book", "No Author Book.epub"},
 		{"empty authors", []model.Author{}, "Empty Authors", "Empty Authors.epub"},
 		{"colon in title", []model.Author{{Name: "Alice"}}, "Title: Sub", "Title- Sub - Alice.epub"},
@@ -193,7 +172,8 @@ func TestCanonicalDir(t *testing.T) {
 		id      int64
 		want    string
 	}{
-		{"basic", []model.Author{{Name: "Alice", SortName: "Smith, Alice"}}, "The Title", 42, "Smith, Alice/The Title (42)"},
+		{"basic", []model.Author{{Name: "Alice"}}, "The Title", 42, "Alice/The Title (42)"},
+		{"two authors", []model.Author{{Name: "Alice"}, {Name: "Bob"}}, "The Title", 42, "Alice & Bob/The Title (42)"},
 		{"unknown author", nil, "No Author", 1, "Unknown/No Author (1)"},
 		{"title with id", []model.Author{{Name: "Bob"}}, "My Book", 7, "Bob/My Book (7)"},
 	}
@@ -210,8 +190,8 @@ func TestCanonicalDir(t *testing.T) {
 func TestLayout(t *testing.T) {
 	s, root := newStore(t)
 
-	loc := s.Layout([]model.Author{{Name: "Alice", SortName: "Smith, Alice"}}, "My Title", 1)
-	wantLibPath := "Smith, Alice/My Title (1)"
+	loc := s.Layout([]model.Author{{Name: "Alice"}}, "My Title", 1)
+	wantLibPath := "Alice/My Title (1)"
 	wantEpub := "My Title - Alice.epub"
 	if loc.LibraryPath != wantLibPath {
 		t.Errorf("LibraryPath = %q, want %q", loc.LibraryPath, wantLibPath)
@@ -239,22 +219,22 @@ func TestLayoutUnknownAuthor(t *testing.T) {
 func TestExists(t *testing.T) {
 	s, root := newStore(t)
 
-	writeBook(t, root, "Author, A/Book Title (1)", "Book Title - Author A.epub", "fake epub", nil)
+	writeBook(t, root, "Author A/Book Title (1)", "Book Title - Author A.epub", "fake epub", nil)
 
 	t.Run("book exists", func(t *testing.T) {
-		if !s.Exists([]model.Author{{Name: "Author A", SortName: "Author, A"}}, "Book Title") {
+		if !s.Exists([]model.Author{{Name: "Author A"}}, "Book Title") {
 			t.Error("Exists returned false, want true")
 		}
 	})
 
 	t.Run("book does not exist", func(t *testing.T) {
-		if s.Exists([]model.Author{{Name: "Author A", SortName: "Author, A"}}, "Different Title") {
+		if s.Exists([]model.Author{{Name: "Author A"}}, "Different Title") {
 			t.Error("Exists returned true, want false")
 		}
 	})
 
 	t.Run("author dir does not exist", func(t *testing.T) {
-		if s.Exists([]model.Author{{Name: "Nobody", SortName: "Nobody"}}, "Anything") {
+		if s.Exists([]model.Author{{Name: "Nobody"}}, "Anything") {
 			t.Error("Exists returned true for non-existent author dir")
 		}
 	})
@@ -272,7 +252,7 @@ func TestIngest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	loc := s.Layout([]model.Author{{Name: "Alice", SortName: "Smith, Alice"}}, "Ingested", 10)
+	loc := s.Layout([]model.Author{{Name: "Alice"}}, "Ingested", 10)
 	meta := &model.Meta{ID: 10}
 
 	if err := s.Ingest(tmpEpub, loc, meta); err != nil {
