@@ -1,0 +1,6 @@
+.git/
+.gitignore
+.claude/
+.github/
+docs/
+*.md
