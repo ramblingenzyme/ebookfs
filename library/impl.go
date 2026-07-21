@@ -138,6 +138,9 @@ func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 		_ = l.store.Delete(b.Location)
 		return nil, err
 	}
+	// Take the size from the observation being indexed, so the book handed back
+	// reports the same length as one later read from the index.
+	b.EpubSize = mt.Size
 	if err := op.Put(b, mt); err != nil {
 		_ = l.store.Delete(b.Location)
 		return nil, err
@@ -271,6 +274,9 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 		log.Printf("edit: book %d (%q): stat: %v", b.Meta.ID, b.Title, err)
 		return nil, err
 	}
+	// After the rewrite and the move, so this is the size of the epub as it now
+	// stands — the value the index is about to record, not the pre-edit one.
+	updated.EpubSize = mt.Size
 	if err := op.Put(updated, mt); err != nil {
 		return nil, err
 	}
@@ -319,7 +325,6 @@ func bibFromEpub(src *epub.Book) model.Bib {
 		CoverPath:   src.CoverPath,
 		OpfSize:     src.OpfSize,
 		CoverSize:   src.CoverSize,
-		EpubSize:    src.EpubSize,
 	}
 }
 

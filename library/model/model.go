@@ -63,6 +63,15 @@ type Book struct {
 	Location
 	Bib
 	Meta Meta
+
+	// EpubSize is the epub file's size on disk. It sits outside Location and Bib
+	// because it is observed rather than derived: the library stats the epub
+	// before every index write and fails the write if it cannot, so the size the
+	// index stores is the same observation the drift check compares against, and
+	// there is no "unknown" case for readers to guard. Both Location (by a move)
+	// and Bib (by a re-parse) are replaced wholesale during an edit, which would
+	// silently discard it from either.
+	EpubSize int64
 }
 
 // NewBook returns a Book with all fields populated. Location is required so
@@ -96,11 +105,11 @@ func NewBook(bib Bib, meta Meta, loc Location) *Book {
 // (re-parse → new Bib) when bib fields are edited through the write path,
 // while Location and Meta remain intact.
 //
-// OpfSize, CoverSize, and EpubSize are all captured during epub.Parse (from
-// the zip central directory and a single os.Stat), propagated through
-// bibFromEpub, and persisted in the index. They let the 9P Stat path report
-// file lengths without touching the disk (no zip decompression on directory
-// listings).
+// OpfSize and CoverSize are captured during epub.Parse, from the zip central
+// directory, propagated through bibFromEpub, and persisted in the index. They
+// let the 9P Stat path report file lengths without touching the disk (no zip
+// decompression on directory listings). The epub's own size is not among them —
+// it describes the file rather than its contents, so it lives on Book.
 type Bib struct {
 	Title       string
 	SortTitle   string
@@ -113,7 +122,6 @@ type Bib struct {
 	CoverPath   string // zip-relative path to cover image; empty if none
 	OpfSize     int64  // OPF uncompressed size from zip central directory; 0 if unavailable
 	CoverSize   int64  // cover uncompressed size from zip central directory; 0 if unavailable
-	EpubSize    int64  // on-disk epub file size; 0 if unavailable (pre-v6 index)
 }
 
 // UnknownAuthor is the fallback author name used when a book has no author
@@ -160,9 +168,7 @@ type SeriesRef struct {
 	Index float64
 }
 
-// Location identifies where a book lives on disk. EpubSize was historically
-// here but moved to Bib so all three file sizes (Opf, Cover, Epub)
-// are set together during epub.Parse and flow through bibFromEpub as a unit.
+// Location identifies where a book lives on disk.
 type Location struct {
 	LibraryPath  string
 	EpubFilename string

@@ -19,7 +19,7 @@ type Index struct {
 	db *sql.DB
 }
 
-const schemaVersion = 8
+const schemaVersion = 9
 
 // Open opens or creates the index at path.
 func Open(path string) (*Index, error) {

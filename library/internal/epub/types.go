@@ -90,5 +90,4 @@ type Book struct {
 	Identifiers []Identifier
 	OpfSize     int64 // uncompressed OPF size from zip central directory; 0 if unavailable
 	CoverSize   int64 // uncompressed cover size from zip central directory; 0 if unavailable
-	EpubSize    int64 // on-disk epub file size; 0 if unavailable
 }

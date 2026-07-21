@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path"
 	"strings"
 )
@@ -159,18 +158,16 @@ func Parse(bpath string) (*Book, error) {
 		return nil, err
 	}
 
-	// Capture OPF, cover, and epub sizes. OPF and cover sizes come
-	// from the zip central directory without decompressing the entries; epub
-	// size requires a cheap os.Stat. All three are carried on epub.Book and
-	// propagated to model.Bib via bibFromEpub.
+	// Capture OPF and cover sizes from the zip central directory, without
+	// decompressing the entries. Both are carried on epub.Book and propagated to
+	// model.Bib via bibFromEpub. The epub file's own size is not read here: the
+	// library stats it anyway for drift detection, and a second stat could only
+	// disagree with that one or fail where it succeeded.
 	book.OpfSize = int64(mfile.UncompressedSize64)
 	if book.CoverPath != "" {
 		if cf := filemap[book.CoverPath]; cf != nil {
 			book.CoverSize = int64(cf.UncompressedSize64)
 		}
-	}
-	if fi, err := os.Stat(bpath); err == nil {
-		book.EpubSize = fi.Size()
 	}
 
 	return book, nil

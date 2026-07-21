@@ -207,10 +207,9 @@ func (l *libraryImpl) scanEntry(s *scanState, known map[string]drift.PathInfo, e
 		return
 	}
 
-	s.add(index.BookPath{
-		Book: model.NewBook(bibFromEpub(book), *meta, e),
-		Info: pi,
-	})
+	b := model.NewBook(bibFromEpub(book), *meta, e)
+	b.EpubSize = pi.Size
+	s.add(index.BookPath{Book: b, Info: pi})
 }
 
 // checkDuplicateIDs fails the rebuild when two directories claim one id.

@@ -14,9 +14,10 @@ CREATE TABLE books (
     date_modified TEXT    NOT NULL,
     series_id     INTEGER REFERENCES series(id),
     series_index  REAL,
+    -- opf_size and cover_size come from the zip central directory, so they are
+    -- the parser's and only ever known for a book that parsed.
     opf_size      INTEGER NOT NULL DEFAULT 0,
     cover_size    INTEGER NOT NULL DEFAULT 0,
-    epub_size     INTEGER NOT NULL DEFAULT 0,
     -- Drift bookkeeping: both files' sizes and mtimes as observed by one stat
     -- per file. The epub's name is compared too, via epub_filename above —
     -- rename preserves size and mtime, so those alone cannot see it.
@@ -24,18 +25,14 @@ CREATE TABLE books (
     -- time.Time losslessly (RFC3339, used for the date columns above, truncates
     -- to whole seconds). Comparison happens in Go, not SQL.
     -- 0 means "never recorded" and reads back as drift.
-    -- epub_stat_size duplicates epub_size by value but not by contract:
-    -- epub_size is the parser's, and degrades to 0 when the parse-time stat
-    -- fails, whereas these four must always come from one successful stat or
-    -- the comparison is against a value never actually observed.
-    -- TODO: collapse the two. Every write path now requires a successful stat,
-    -- so epub_size can be fed from that single observation and stop being
-    -- zeroable — which also fixes the 0-length epub reported over 9P and the
-    -- guard export sizing needs. See ROADMAP, "single source for the epub's size".
-    epub_stat_size INTEGER NOT NULL DEFAULT 0,
-    epub_mtime     INTEGER NOT NULL DEFAULT 0,
-    meta_mtime     INTEGER NOT NULL DEFAULT 0,
-    meta_stat_size INTEGER NOT NULL DEFAULT 0
+    -- epub_size is also the epub's length as reported over 9P and the size
+    -- export sizing needs: every write path stats the file and fails if it
+    -- cannot, so the one observation serves both and there is no "unknown"
+    -- case for readers to guard against.
+    epub_size  INTEGER NOT NULL DEFAULT 0,
+    epub_mtime INTEGER NOT NULL DEFAULT 0,
+    meta_mtime INTEGER NOT NULL DEFAULT 0,
+    meta_size  INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE authors (
@@ -84,14 +81,14 @@ CREATE TABLE book_id_seq (id INTEGER PRIMARY KEY AUTOINCREMENT);
 -- Recording the file state keeps it self-healing: repair the epub and its mtime
 -- changes, which reads as drift and earns the book another indexing attempt.
 CREATE TABLE skipped_books (
-    library_path   TEXT PRIMARY KEY,
+    library_path  TEXT PRIMARY KEY,
     -- Mirrors books.epub_filename so drift detection can compare the on-disk
     -- epub name for indexed and skipped directories through one code path.
-    epub_filename  TEXT NOT NULL DEFAULT '',
-    epub_stat_size INTEGER NOT NULL DEFAULT 0,
-    epub_mtime     INTEGER NOT NULL DEFAULT 0,
-    meta_mtime     INTEGER NOT NULL DEFAULT 0,
-    meta_stat_size INTEGER NOT NULL DEFAULT 0
+    epub_filename TEXT    NOT NULL DEFAULT '',
+    epub_size  INTEGER NOT NULL DEFAULT 0,
+    epub_mtime INTEGER NOT NULL DEFAULT 0,
+    meta_mtime INTEGER NOT NULL DEFAULT 0,
+    meta_size  INTEGER NOT NULL DEFAULT 0
 );
 
 -- Each mutation inserts its own row (autocommit, outside the SQL transaction)

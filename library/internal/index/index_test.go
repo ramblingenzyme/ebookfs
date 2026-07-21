@@ -93,6 +93,37 @@ func TestPathInfoRoundTrip(t *testing.T) {
 	}
 }
 
+// TestEpubSizeComesFromObservation pins the collapse of the epub's two size
+// columns into one: books.epub_size is written from the observation handed to
+// Put, and a size set on the book itself is ignored. The book's copy is what 9P
+// reports as the file's length and what export sizing uses, while the drift
+// check compares the stat's — so a second column here means those two can
+// silently disagree, which is what this replaced.
+func TestEpubSizeComesFromObservation(t *testing.T) {
+	idx := openTestIndex(t)
+
+	b := newBook(1, "Sized")
+	b.EpubSize = 7 // discarded: the observation below is what lands in the row
+	storeInIndexSized(t, idx, b, 4242)
+
+	got, err := idx.Get(1)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.EpubSize != 4242 {
+		t.Errorf("EpubSize = %d, want 4242 (the observed size)", got.EpubSize)
+	}
+
+	info, err := idx.AllPathInfo()
+	if err != nil {
+		t.Fatalf("AllPathInfo: %v", err)
+	}
+	if info[got.LibraryPath].Size != got.EpubSize {
+		t.Errorf("drift size = %d but book size = %d; they must be one column",
+			info[got.LibraryPath].Size, got.EpubSize)
+	}
+}
+
 // Rebuild records skipped directories so AllPathInfo reports every path the
 // rebuild accounted for, indexed or not.
 func TestRebuildRecordsSkippedPaths(t *testing.T) {
@@ -352,11 +383,19 @@ func TestRebuildClearsLeakedRows(t *testing.T) {
 // storeInIndex inserts a book into a clean index via Put, failing on error.
 func storeInIndex(t *testing.T, idx *Index, b *model.Book) {
 	t.Helper()
+	storeInIndexSized(t, idx, b, 0)
+}
+
+// storeInIndexSized is storeInIndex for tests that care about the epub size the
+// index records. The size travels in the observation Put is handed, not on the
+// book — books has one epub_size column and it is the stat's.
+func storeInIndexSized(t *testing.T, idx *Index, b *model.Book, size int64) {
+	t.Helper()
 	op := idx.BeginOp()
 	if err := op.MarkPending(); err != nil {
 		t.Fatalf("MarkPending: %v", err)
 	}
-	if err := op.Put(b, drift.PathInfo{}); err != nil {
+	if err := op.Put(b, drift.PathInfo{EpubFilename: b.EpubFilename, Size: size}); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 }
@@ -716,26 +755,24 @@ func TestStatsAggregates(t *testing.T) {
 
 	b1 := model.NewBook(
 		model.Bib{
-			Title:    "First",
-			Authors:  []model.Author{{Name: "Alice", SortName: "Alice"}},
-			Series:   &model.SeriesRef{Name: "EPIC", Index: 1},
-			EpubSize: 100,
+			Title:   "First",
+			Authors: []model.Author{{Name: "Alice", SortName: "Alice"}},
+			Series:  &model.SeriesRef{Name: "EPIC", Index: 1},
 		},
 		model.Meta{ID: 1, Tags: []string{"sci-fi", "space"}},
 		model.Location{LibraryPath: "A/First (1)", EpubFilename: "book.epub"},
 	)
 	b2 := model.NewBook(
 		model.Bib{
-			Title:    "Second",
-			Authors:  []model.Author{{Name: "Alice", SortName: "Alice"}, {Name: "Bob", SortName: "Bob"}},
-			Series:   &model.SeriesRef{Name: "EPIC", Index: 2},
-			EpubSize: 250,
+			Title:   "Second",
+			Authors: []model.Author{{Name: "Alice", SortName: "Alice"}, {Name: "Bob", SortName: "Bob"}},
+			Series:  &model.SeriesRef{Name: "EPIC", Index: 2},
 		},
 		model.Meta{ID: 2, Tags: []string{"sci-fi"}},
 		model.Location{LibraryPath: "A/Second (2)", EpubFilename: "book.epub"},
 	)
-	storeInIndex(t, idx, b1)
-	storeInIndex(t, idx, b2)
+	storeInIndexSized(t, idx, b1, 100)
+	storeInIndexSized(t, idx, b2, 250)
 
 	s, err := idx.Stats()
 	if err != nil {

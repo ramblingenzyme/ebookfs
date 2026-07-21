@@ -33,14 +33,13 @@ func fromUnixNano(n int64) time.Time {
 // pathInfoValues supplies them. books carries them after its own columns;
 // skipped_books carries them alone, keyed by library_path. Stating the tuple
 // once keeps the two tables and every statement that reads them in step.
-const pathInfoColumns = `epub_stat_size, epub_mtime, meta_mtime, meta_stat_size`
+const pathInfoColumns = `epub_size, epub_mtime, meta_mtime, meta_size`
 
 // pathInfoSelect reads a full drift.PathInfo, keyed by library path.
 // epub_filename is deliberately not in pathInfoColumns: that list is spliced
 // into bookColumns, and books already carries epub_filename as the book's own
-// location — a second copy would be the epub_stat_size/epub_size trap again.
-// Both tables expose it under the same name, so the read path can still state
-// the tuple once.
+// location — a second copy would drift from the first. Both tables expose it
+// under the same name, so the read path can still state the tuple once.
 const pathInfoSelect = `library_path, epub_filename, ` + pathInfoColumns
 
 // pathInfoValues returns mt's columns in pathInfoColumns order.
@@ -66,13 +65,16 @@ func excludedAssignments(columns string) string {
 
 const bookColumns = `(id, title, sort_title, pubdate, description, language,
 		     library_path, epub_filename, cover_path, status, rating,
-		     date_added, date_modified, opf_size, cover_size, epub_size,
+		     date_added, date_modified, opf_size, cover_size,
 		     ` + pathInfoColumns + `)`
 
 // bookPlaceholders is the VALUES list for bookColumns, derived from it so a
 // new column cannot leave the two disagreeing on a hand-counted run of `?`.
 var bookPlaceholders = "(?" + strings.Repeat(", ?", strings.Count(bookColumns, ",")) + ")"
 
+// bookValues returns b's columns in bookColumns order. b.EpubSize is not among
+// them: the epub's size is written from mt, the observation that is also being
+// recorded for drift detection, so the row cannot hold two sizes that disagree.
 func bookValues(b *model.Book, mt drift.PathInfo) []any {
 	sortTitle := any(b.SortTitle)
 	if sortTitle == "" {
@@ -83,7 +85,7 @@ func bookValues(b *model.Book, mt drift.PathInfo) []any {
 		b.LibraryPath, b.EpubFilename, b.CoverPath, b.Meta.Status, b.Meta.Rating,
 		b.Meta.DateAdded.UTC().Format(time.RFC3339),
 		b.Meta.DateModified.UTC().Format(time.RFC3339),
-		b.OpfSize, b.CoverSize, b.EpubSize,
+		b.OpfSize, b.CoverSize,
 	}, pathInfoValues(mt)...)
 }
 
@@ -117,7 +119,7 @@ func putBook(tx *sql.Tx, b *model.Book, mt drift.PathInfo) error {
 		     library_path=excluded.library_path, epub_filename=excluded.epub_filename,
 		     cover_path=excluded.cover_path, status=excluded.status, rating=excluded.rating,
 		     date_added=excluded.date_added, date_modified=excluded.date_modified,
-		     opf_size=excluded.opf_size, cover_size=excluded.cover_size, epub_size=excluded.epub_size,
+		     opf_size=excluded.opf_size, cover_size=excluded.cover_size,
 		     `+pathInfoUpdates,
 		bookValues(b, mt)...,
 	); err != nil {

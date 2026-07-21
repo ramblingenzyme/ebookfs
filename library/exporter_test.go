@@ -92,17 +92,24 @@ func TestEpubExporter_Size_Success(t *testing.T) {
 	}
 }
 
-func TestEpubExporter_Size_MissingFile(t *testing.T) {
+// TestEpubExporter_Size_ReportsRecordedSize pins that Size answers from the
+// size recorded at index time rather than the filesystem. Every indexed book was
+// stat'd on the way in, so an epub's size is never unknown — the ok=false case
+// belongs to the kepub exporter, whose size really is unknown until a conversion
+// has run. A path that has since gone missing surfaces at Open, not as a length
+// the exporter has to guess at.
+func TestEpubExporter_Size_ReportsRecordedSize(t *testing.T) {
 	book := makeBook(1, "Test", "Author")
 	book.EpubPath = "/nonexistent/missing.epub"
+	book.EpubSize = 4242
 
 	exp := epubExporter{lib: testLib{}}
 	size, ok := exp.Size(book)
-	if ok {
-		t.Error("Size should return ok=false for a missing file")
+	if !ok {
+		t.Error("Size should be known for any indexed book")
 	}
-	if size != 0 {
-		t.Errorf("Size = %d, want 0", size)
+	if size != 4242 {
+		t.Errorf("Size = %d, want 4242", size)
 	}
 }
 
