@@ -207,8 +207,7 @@ func (l *libraryImpl) scanEntry(s *scanState, known map[string]drift.PathInfo, e
 		return
 	}
 
-	b := model.NewBook(bibFromEpub(book), *meta, e)
-	b.EpubSize = pi.Size
+	b := bookFromBib(bibFromEpub(book), *meta, e, pi)
 	s.add(index.BookPath{Book: b, Info: pi})
 }
 

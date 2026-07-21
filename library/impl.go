@@ -9,6 +9,7 @@ import (
 
 	"github.com/ramblingenzyme/ebookfs/internal/syncutil"
 	"github.com/ramblingenzyme/ebookfs/library/config"
+	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index"
 	"github.com/ramblingenzyme/ebookfs/library/internal/store"
@@ -121,26 +122,23 @@ func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 		DateModified: now,
 	}
 	loc := l.store.Layout(bib.Authors, bib.Title, id)
-	b := model.NewBook(bib, meta, loc)
 
 	op := l.index.BeginOp()
 	if err := op.MarkPending(); err != nil {
 		return nil, err
 	}
-	if err := l.store.Ingest(epubPath, b.Location, &b.Meta); err != nil {
+	if err := l.store.Ingest(epubPath, loc, &meta); err != nil {
 		// Ingest failed; the pending row stays (forcing a healing reindex) and
 		// we clean up the store so a retry starts fresh.
-		_ = l.store.Delete(b.Location)
+		_ = l.store.Delete(loc)
 		return nil, err
 	}
-	mt, err := l.store.Stat(b.Location)
+	mt, err := l.store.Stat(loc)
 	if err != nil {
-		_ = l.store.Delete(b.Location)
+		_ = l.store.Delete(loc)
 		return nil, err
 	}
-	// Take the size from the observation being indexed, so the book handed back
-	// reports the same length as one later read from the index.
-	b.EpubSize = mt.Size
+	b := bookFromBib(bib, meta, loc, mt)
 	if err := op.Put(b, mt); err != nil {
 		_ = l.store.Delete(b.Location)
 		return nil, err
@@ -326,6 +324,15 @@ func bibFromEpub(src *epub.Book) model.Bib {
 		OpfSize:     src.OpfSize,
 		CoverSize:   src.CoverSize,
 	}
+}
+
+// bookFromBib creates a complete Book from a bib, meta, location, and observation.
+// The Book is fully populated when returned, with EpubSize set from the observation,
+// so callers don't need to set it separately.
+func bookFromBib(bib model.Bib, meta model.Meta, loc model.Location, obs drift.PathInfo) *model.Book {
+	b := model.NewBook(bib, meta, loc)
+	b.EpubSize = obs.Size
+	return b
 }
 
 // Delete removes the book with the given id from the store and the index,

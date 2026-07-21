@@ -70,7 +70,8 @@ type Book struct {
 	// index stores is the same observation the drift check compares against, and
 	// there is no "unknown" case for readers to guard. Both Location (by a move)
 	// and Bib (by a re-parse) are replaced wholesale during an edit, which would
-	// silently discard it from either.
+	// silently discard it from either. Set by bookFromBib in the library package
+	// for ingest and reindex, and directly in Edit after the stat.
 	EpubSize int64
 }
 
