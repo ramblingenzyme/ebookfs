@@ -49,6 +49,15 @@ func (s *scanState) reserveID(id int64) {
 	s.mu.Unlock()
 }
 
+// storeScan is one traversal of the store: every book directory the walk found,
+// and the file state observed for each, keyed by library path. Both halves are
+// carried together so a reindex triggered by a drift verdict can reuse the whole
+// traversal rather than walking and stat'ing the library a second time.
+type storeScan struct {
+	entries []model.Location
+	info    map[string]drift.PathInfo
+}
+
 // storeDrifted reports whether the on-disk store no longer matches the index
 // — a book directory added or removed, or a file swapped out — by something
 // that bypassed the library (e.g. a manual edit to the store).
@@ -56,17 +65,17 @@ func (s *scanState) reserveID(id int64) {
 // modification time (cheap, no parse), both taken from the same stat that
 // recorded them. Size is compared as well as mtime because coarse-clock
 // filesystems reuse an mtime for writes in the same tick (see drift.PathInfo).
-// It also returns the store scan it built, keyed by library path, so a reindex
-// triggered by that verdict can reuse it instead of stat'ing every book again.
-// The scan is nil when the walk itself failed; reindex then stats everything.
-func (l *libraryImpl) storeDrifted() (map[string]drift.PathInfo, bool) {
+// It also returns the scan it built, so a reindex triggered by that verdict can
+// reuse it. The scan is nil when the walk itself failed; reindex then walks and
+// stats everything, and surfaces the walk error rather than swallowing it here.
+func (l *libraryImpl) storeDrifted() (*storeScan, bool) {
 	entries, err := l.store.Walk()
 	if err != nil {
 		log.Printf("reindex: could not walk store (%v), forcing rebuild", err)
 		return nil, true
 	}
 
-	onDisk := make(map[string]drift.PathInfo, len(entries))
+	onDisk := &storeScan{entries: entries, info: make(map[string]drift.PathInfo, len(entries))}
 	for _, e := range entries {
 		mt, err := l.store.Stat(e)
 		if err != nil {
@@ -76,7 +85,7 @@ func (l *libraryImpl) storeDrifted() (map[string]drift.PathInfo, bool) {
 			log.Printf("reindex: could not stat %s (%v), recording as unreadable", e.LibraryPath, err)
 			mt = drift.Unobserved(e.EpubFilename)
 		}
-		onDisk[e.LibraryPath] = mt
+		onDisk.info[e.LibraryPath] = mt
 	}
 
 	indexed, err := l.index.AllPathInfo()
@@ -85,10 +94,10 @@ func (l *libraryImpl) storeDrifted() (map[string]drift.PathInfo, bool) {
 		return onDisk, true
 	}
 
-	if len(onDisk) != len(indexed) {
+	if len(onDisk.info) != len(indexed) {
 		return onDisk, true
 	}
-	for path, mt := range onDisk {
+	for path, mt := range onDisk.info {
 		if im, ok := indexed[path]; !ok || !im.Equal(mt) {
 			return onDisk, true
 		}
@@ -101,22 +110,27 @@ func (l *libraryImpl) storeDrifted() (map[string]drift.PathInfo, bool) {
 // the whole rebuild.
 func (l *libraryImpl) Reindex() error { return l.reindex(nil) }
 
-// reindex rebuilds the index. known, when non-nil, is the store scan storeDrifted
-// already performed — reusing it saves re-stating every book on the startup path
-// that most often reaches here, where the scan happened moments earlier.
-func (l *libraryImpl) reindex(known map[string]drift.PathInfo) error {
-	entries, err := l.store.Walk()
-	if err != nil {
-		return err
+// reindex rebuilds the index. scan, when non-nil, is the traversal storeDrifted
+// already performed — reusing it saves both the walk and a stat per book on the
+// startup path that most often reaches here, where the scan happened moments ago.
+// Without one, the store is walked here and the scan carries no observations, so
+// every book is stat'd during the scan below as it always was.
+func (l *libraryImpl) reindex(scan *storeScan) error {
+	if scan == nil {
+		entries, err := l.store.Walk()
+		if err != nil {
+			return err
+		}
+		scan = &storeScan{entries: entries}
 	}
 
 	// Each entry is stat'd during the scan, before the canonical moves below.
-	// That ordering is what makes reusing known safe: it is keyed by pre-move
-	// library path, so reading it there lines the keys up and stops a book that
-	// moves into a path another just vacated from picking up that book's state.
-	// Rename preserves size and mtime, so a value captured then stays accurate
-	// once the moves run.
-	s := l.scanEntries(entries, known)
+	// That ordering is what makes reusing the observations safe: they are keyed
+	// by pre-move library path, so reading them there lines the keys up and stops
+	// a book that moves into a path another just vacated from picking up that
+	// book's state. Rename preserves size and mtime, so a value captured then
+	// stays accurate once the moves run.
+	s := l.scanEntries(scan)
 	// Before the moves, so the reported paths are the ones on disk right now.
 	if err := s.checkDuplicateIDs(); err != nil {
 		return err
@@ -126,29 +140,29 @@ func (l *libraryImpl) reindex(known map[string]drift.PathInfo) error {
 	if err := l.index.Rebuild(s.indexed, s.unindexed, s.maxID); err != nil {
 		return err
 	}
-	log.Printf("reindex: indexed %d of %d books", len(s.indexed), len(entries))
+	log.Printf("reindex: indexed %d of %d books", len(s.indexed), len(scan.entries))
 	return nil
 }
 
 // scanEntries reads every entry into a scanState on a bounded worker pool: each
 // is independent disk and CPU work, and reindex blocks startup, so a large
 // library would otherwise pay for every epub sequentially.
-func (l *libraryImpl) scanEntries(entries []model.Location, known map[string]drift.PathInfo) *scanState {
+func (l *libraryImpl) scanEntries(scan *storeScan) *scanState {
 	s := &scanState{
-		indexed:   make([]index.BookPath, 0, len(entries)),
+		indexed:   make([]index.BookPath, 0, len(scan.entries)),
 		unindexed: make(map[string]drift.PathInfo),
 	}
 	var (
 		wg  sync.WaitGroup
 		sem = make(chan struct{}, runtime.GOMAXPROCS(0))
 	)
-	for _, e := range entries {
+	for _, e := range scan.entries {
 		wg.Add(1)
 		sem <- struct{}{}
 		go func() {
 			defer wg.Done()
 			defer func() { <-sem }()
-			l.scanEntry(s, known, e)
+			l.scanEntry(s, scan.info, e)
 		}()
 	}
 	wg.Wait()

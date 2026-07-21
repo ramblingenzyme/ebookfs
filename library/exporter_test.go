@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"os"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
@@ -71,33 +70,11 @@ func TestEpubExporter_Open(t *testing.T) {
 	r.Close()
 }
 
-func TestEpubExporter_Size_Success(t *testing.T) {
-	content := []byte("hello epub")
-	path := t.TempDir() + "/test.epub"
-	if err := os.WriteFile(path, content, 0644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-
-	book := makeBook(1, "Test", "Author")
-	book.EpubPath = path
-	book.EpubSize = int64(len(content))
-
-	exp := epubExporter{lib: testLib{}}
-	size, ok := exp.Size(book)
-	if !ok {
-		t.Fatal("Size should return ok=true for a valid file")
-	}
-	if size != int64(len(content)) {
-		t.Errorf("Size = %d, want %d", size, len(content))
-	}
-}
-
-// TestEpubExporter_Size_ReportsRecordedSize pins that Size answers from the
-// size recorded at index time rather than the filesystem. Every indexed book was
-// stat'd on the way in, so an epub's size is never unknown — the ok=false case
-// belongs to the kepub exporter, whose size really is unknown until a conversion
-// has run. A path that has since gone missing surfaces at Open, not as a length
-// the exporter has to guess at.
+// TestEpubExporter_Size_ReportsRecordedSize pins that Size answers from the size
+// recorded at index time rather than the filesystem — the book's path points at
+// nothing, and the call must still succeed without touching disk. Every indexed
+// book was stat'd on the way in, so a missing file surfaces at Open rather than
+// as a length the exporter has to guess at.
 func TestEpubExporter_Size_ReportsRecordedSize(t *testing.T) {
 	book := makeBook(1, "Test", "Author")
 	book.EpubPath = "/nonexistent/missing.epub"
@@ -110,6 +87,20 @@ func TestEpubExporter_Size_ReportsRecordedSize(t *testing.T) {
 	}
 	if size != 4242 {
 		t.Errorf("Size = %d, want 4242", size)
+	}
+}
+
+// TestEpubExporter_Size_Unrecorded covers the other side of that guard. A book
+// carrying no recorded size was never observed, and reporting 0 as authoritative
+// would have 9P advertise a zero-length file and export sizing believe it — so
+// the size reads as unknown and the caller falls back rather than trusting it.
+func TestEpubExporter_Size_Unrecorded(t *testing.T) {
+	book := makeBook(1, "Test", "Author") // EpubSize left at its zero value
+
+	exp := epubExporter{lib: testLib{}}
+	size, ok := exp.Size(book)
+	if ok {
+		t.Errorf("Size = (%d, true) for a book with no recorded size, want it reported as unknown", size)
 	}
 }
 

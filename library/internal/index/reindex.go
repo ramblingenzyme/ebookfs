@@ -20,7 +20,7 @@ func (idx *Index) NeedsReindex() (bool, error) {
 	if v != schemaVersion {
 		return true, nil
 	}
-	
+
 	count, err := idx.queries.CountPendingOps(idx.ctx)
 	if err != nil {
 		return true, err

@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -97,6 +98,81 @@ func openLib(t *testing.T, cfg config.LibraryConfig, forceReindex bool) Library 
 	}
 	t.Cleanup(func() { lib.Close() })
 	return lib
+}
+
+// ptr matches the helper the model and epub test packages already use.
+func ptr[T any](v T) *T { return &v }
+
+// drifted reports storeDrifted's verdict, discarding the store scan it returns
+// for the reindex path to reuse.
+func drifted(t *testing.T, lib Library) bool {
+	t.Helper()
+	_, d := lib.(*libraryImpl).storeDrifted()
+	return d
+}
+
+// metaPathOf returns the path of book's meta.toml sidecar. The store keeps the
+// filename private, so tests that reach around the library restate it here once.
+func metaPathOf(book *model.Book) string {
+	return filepath.Join(filepath.Dir(book.EpubPath), "meta.toml")
+}
+
+// breakEpub replaces book's epub with a symlink to nothing. store.Walk still
+// reports the directory — findEpub only reads the directory entry — while
+// os.Stat follows the link and fails, which is the one way to reach the
+// rebuild's "could not observe this book at all" path from a test.
+func breakEpub(t *testing.T, book *model.Book) {
+	t.Helper()
+	if err := os.Remove(book.EpubPath); err != nil {
+		t.Fatalf("remove epub: %v", err)
+	}
+	dangling := filepath.Join(filepath.Dir(book.EpubPath), "nowhere.epub")
+	if err := os.Symlink(dangling, book.EpubPath); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+}
+
+// dropIndex deletes the index database, so the next Open rebuilds it from the
+// store alone. That is the state the id-reservation logic exists for: the id
+// sequence lives in the index, so a rebuild that starts without one has nothing
+// but the store to learn which ids are already spoken for. Rebuild leaves the
+// sequence table alone otherwise, which is why merely reindexing does not
+// exercise this.
+func dropIndex(t *testing.T, cfg config.LibraryConfig) {
+	t.Helper()
+	// The WAL and shared-memory sidecars would otherwise resurrect the sequence.
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		if err := os.Remove(cfg.IndexPath + suffix); err != nil && !os.IsNotExist(err) {
+			t.Fatalf("remove index%s: %v", suffix, err)
+		}
+	}
+}
+
+// assertSettlesClean pins that a library at cfg stops drifting once it has been
+// rebuilt: the first Open reindexes and records what it found, and every Open
+// after that must see a clean index. A book the rebuild cannot read is the case
+// that breaks this — if the rebuild forgets it, drift detection sees a directory
+// on disk it cannot account for and reindexes the whole library on every startup.
+//
+// Two restarts is the whole proof: one to record, one to confirm the record is
+// believed. Both are closed explicitly rather than through openLib, since the
+// point is what a later process sees after this one has let go.
+func assertSettlesClean(t *testing.T, cfg config.LibraryConfig) {
+	t.Helper()
+	for i := 1; i <= 2; i++ {
+		lib, err := Open(cfg, false)
+		if err != nil {
+			t.Fatalf("reopen %d: %v", i, err)
+		}
+		d := drifted(t, lib)
+		if err := lib.Close(); err != nil {
+			t.Fatalf("Close %d: %v", i, err)
+		}
+		if d {
+			t.Fatalf("storeDrifted() = true on restart %d — the rebuild did not record what it found, "+
+				"so one unreadable book forces a full reindex on every startup", i)
+		}
+	}
 }
 
 func ingestTestEpub(t *testing.T, lib Library, data []byte) *model.Book {

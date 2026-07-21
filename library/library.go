@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/ramblingenzyme/ebookfs/library/config"
-	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index"
 	"github.com/ramblingenzyme/ebookfs/library/internal/store"
 	"github.com/ramblingenzyme/ebookfs/library/model"
@@ -91,15 +90,19 @@ func Open(cfg config.LibraryConfig, forceReindex bool) (Library, error) {
 	}
 	// Spelled out rather than as one || chain (which short-circuits the same
 	// way) so the store scan can be captured: when storeDrifted is the check
-	// that fires, its result is handed to the rebuild so the books are not
-	// stat'd twice.
-	var onDisk map[string]drift.PathInfo
+	// that fires, its scan is handed to the rebuild, which then neither walks
+	// the store nor stats the books a second time.
+	var onDisk *storeScan
 	needs := forceReindex || lib.needsReindex()
 	if !needs {
 		onDisk, needs = lib.storeDrifted()
 	}
 	if needs {
 		if err := lib.reindex(onDisk); err != nil {
+			// The index was opened above and lib is never returned, so nothing
+			// else will ever close it. A duplicate book id makes this a routine
+			// path (see DECISIONS.md #14), not just a crash-adjacent one.
+			idx.Close()
 			return nil, fmt.Errorf("reindexing library: %w", err)
 		}
 	} else {

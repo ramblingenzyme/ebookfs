@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"slices"
 	"sync"
 	"time"
 
@@ -280,9 +281,16 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 	return updated, nil
 }
 
-// applyMeta returns a copy of b with the meta edits in e applied and the
+// applyMeta returns a copy of m with the meta edits in e applied and the
 // modified time stamped. Fields left nil in e are untouched. Bib fields are not
 // applied here — Edit derives them from the epub re-parse.
+//
+// The result shares nothing with its arguments. Taking m by value covers the
+// scalars, but Tags is a slice and would otherwise alias whichever of the two
+// it came from — the caller's Meta when the edit is absent, the caller's Edits
+// when it is present. Both are live objects the caller still holds, and the
+// result travels on to the sidecar write and the index, so the copy is made
+// here once rather than left as a caveat every caller has to know about.
 func applyMeta(m model.Meta, e model.Edits) model.Meta {
 	if e.Status != nil {
 		m.Status = *e.Status
@@ -293,6 +301,7 @@ func applyMeta(m model.Meta, e model.Edits) model.Meta {
 	if e.Tags != nil {
 		m.Tags = *e.Tags
 	}
+	m.Tags = slices.Clone(m.Tags)
 	m.DateModified = time.Now()
 	return m
 }

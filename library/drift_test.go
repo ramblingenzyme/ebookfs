@@ -11,17 +11,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-// ptr matches the helper the model and epub test packages already use.
-func ptr[T any](v T) *T { return &v }
-
-// drifted reports storeDrifted's verdict, discarding the store scan it returns
-// for the reindex path to reuse.
-func drifted(t *testing.T, lib Library) bool {
-	t.Helper()
-	_, d := lib.(*libraryImpl).storeDrifted()
-	return d
-}
-
 // writeManualBookDir lays down a book directory storeDrifted (via store.Walk)
 // will discover, without going through the library's ingest path — simulating
 // a book added directly to the store on disk. Walk only checks for meta.toml's
@@ -174,10 +163,11 @@ func TestRenamedEpubHealedOnRestart(t *testing.T) {
 }
 
 // TestUnstattableBookReservesID covers the id-reservation half of the reindex
-// worker: a book whose epub cannot be stat'd (here a dangling symlink, which
-// store.Walk still reports because findEpub only reads the directory entry) is
-// left unindexed, but its meta.toml is readable so its id is taken and must not
-// be handed to a later ingest.
+// worker: a book whose epub cannot be stat'd is left unindexed, but its
+// meta.toml is readable so its id is taken and must not be handed to a later
+// ingest. The index is dropped first for the same reason as
+// TestUnreadableMetaReservesIDFromPath — with the sequence still on disk the
+// reservation is never what keeps the ids apart, and the test cannot fail.
 func TestUnstattableBookReservesID(t *testing.T) {
 	cfg := testConfig(t)
 	lib := openLib(t, cfg, false)
@@ -186,13 +176,8 @@ func TestUnstattableBookReservesID(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	if err := os.Remove(book.EpubPath); err != nil {
-		t.Fatalf("remove epub: %v", err)
-	}
-	dangling := filepath.Join(filepath.Dir(book.EpubPath), "nowhere.epub")
-	if err := os.Symlink(dangling, book.EpubPath); err != nil {
-		t.Fatalf("symlink: %v", err)
-	}
+	breakEpub(t, book)
+	dropIndex(t, cfg)
 
 	lib2 := openLib(t, cfg, false)
 
@@ -214,31 +199,8 @@ func TestUnstattableBookSettlesClean(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	// A dangling symlink: store.Walk still reports the directory (findEpub only
-	// reads the directory entry) but os.Stat follows the link and fails.
-	if err := os.Remove(book.EpubPath); err != nil {
-		t.Fatalf("remove epub: %v", err)
-	}
-	dangling := filepath.Join(filepath.Dir(book.EpubPath), "nowhere.epub")
-	if err := os.Symlink(dangling, book.EpubPath); err != nil {
-		t.Fatalf("symlink: %v", err)
-	}
-
-	// First restart reindexes and records the unobserved marker; from then on
-	// every further plain restart must see a clean index.
-	for i := 1; i <= 3; i++ {
-		l, err := Open(cfg, false)
-		if err != nil {
-			t.Fatalf("reopen %d: %v", i, err)
-		}
-		d := drifted(t, l)
-		if err := l.Close(); err != nil {
-			t.Fatalf("Close %d: %v", i, err)
-		}
-		if d {
-			t.Fatalf("storeDrifted() = true on restart %d — one unreadable book forces a full reindex on every startup", i)
-		}
-	}
+	breakEpub(t, book)
+	assertSettlesClean(t, cfg)
 
 	// Repairing it must still be noticed: real file state differs from the
 	// unobserved marker, so the book earns another indexing attempt.
@@ -273,37 +235,66 @@ func TestUnreadableMetaAndUnstattableEpubSettlesClean(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	// Dangling symlink, so store.Walk still reports the directory but os.Stat
-	// follows the link and fails.
-	if err := os.Remove(book.EpubPath); err != nil {
-		t.Fatalf("remove epub: %v", err)
-	}
-	dangling := filepath.Join(filepath.Dir(book.EpubPath), "nowhere.epub")
-	if err := os.Symlink(dangling, book.EpubPath); err != nil {
-		t.Fatalf("symlink: %v", err)
-	}
+	breakEpub(t, book)
 	// Present but unparseable, so Walk still sees a book directory while
 	// ReadMeta fails.
-	metaPath := filepath.Join(filepath.Dir(book.EpubPath), "meta.toml")
-	if err := os.WriteFile(metaPath, []byte("id = \"not an integer\"\n"), 0644); err != nil {
+	if err := os.WriteFile(metaPathOf(book), []byte("id = \"not an integer\"\n"), 0644); err != nil {
 		t.Fatalf("corrupt meta.toml: %v", err)
 	}
 
-	// First restart reindexes and records the directory; every further plain
-	// restart must then see a clean index.
-	for i := 1; i <= 3; i++ {
-		l, err := Open(cfg, false)
-		if err != nil {
-			t.Fatalf("reopen %d: %v", i, err)
-		}
-		d := drifted(t, l)
-		if err := l.Close(); err != nil {
-			t.Fatalf("Close %d: %v", i, err)
-		}
-		if d {
-			t.Fatalf("storeDrifted() = true on restart %d — a book with an unreadable sidecar "+
-				"and an unstattable epub forces a full reindex on every startup", i)
-		}
+	assertSettlesClean(t, cfg)
+}
+
+// TestUnreadableMetaReservesIDFromPath covers the reindex worker's last resort
+// for a book whose sidecar can't be parsed: the id is still legible in the
+// directory name, so it is reserved from there. Without it the next ingest
+// reissues that id, and the moment the sidecar is repaired the two directories
+// claim one id and startup is fatal by design (DECISIONS.md #14) — a corrupt
+// file turning into an unbootable library.
+//
+// The index is dropped so the rebuild starts with no id sequence and has only
+// the store to learn from, which is the situation the fallback is for. Only the
+// sidecar is broken; the epub stays parseable, so the read-meta branch is the
+// only one that fires.
+func TestUnreadableMetaReservesIDFromPath(t *testing.T) {
+	cfg := testConfig(t)
+	lib := openLib(t, cfg, false)
+	book := ingestTestEpub(t, lib, buildTestEpub(t, "Ghost"))
+	meta, err := os.ReadFile(metaPathOf(book))
+	if err != nil {
+		t.Fatalf("read meta.toml: %v", err)
+	}
+	if err := lib.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	if err := os.WriteFile(metaPathOf(book), []byte("id = \"not an integer\"\n"), 0644); err != nil {
+		t.Fatalf("corrupt meta.toml: %v", err)
+	}
+	dropIndex(t, cfg)
+
+	lib2 := openLib(t, cfg, false)
+	next := ingestTestEpub(t, lib2, buildTestEpub(t, "Newcomer"))
+	if next.Meta.ID <= book.Meta.ID {
+		t.Fatalf("new book got id %d, reusing id %d held by the book with the unreadable sidecar",
+			next.Meta.ID, book.Meta.ID)
+	}
+	if err := lib2.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	// Repairing the sidecar must not resurrect a collision.
+	if err := os.WriteFile(metaPathOf(book), meta, 0644); err != nil {
+		t.Fatalf("repair meta.toml: %v", err)
+	}
+	lib3 := openLib(t, cfg, false)
+
+	got, err := lib3.Query(model.Filter{})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("got %d books, want both the repaired book and the newcomer indexed", len(got))
 	}
 }
 
@@ -356,9 +347,10 @@ func TestStoreDriftedDetectsManualMetaEdit(t *testing.T) {
 	lib := openTestLibrary(t)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Book"))
 
-	metaPath := filepath.Join(filepath.Dir(book.EpubPath), "meta.toml")
+	metaPath := metaPathOf(book)
 	// Write a modified meta.toml to simulate hand-editing the sidecar.
-	if err := os.WriteFile(metaPath, []byte("id = 1\nstatus = \"read\"\n"), 0644); err != nil {
+	edited := fmt.Sprintf("id = %d\nstatus = \"read\"\n", book.Meta.ID)
+	if err := os.WriteFile(metaPath, []byte(edited), 0644); err != nil {
 		t.Fatalf("write meta.toml: %v", err)
 	}
 	// Ensure a deterministically different mtime for the same reason as the

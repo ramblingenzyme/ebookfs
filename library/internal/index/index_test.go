@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -43,10 +44,30 @@ func openTestIndex(t *testing.T) *Index {
 // zero drift.PathInfo, so without this a broken encode/decode would surface only as
 // drift detection quietly rebuilding on every startup.
 //
-// EpubFilename is expected back as newBook's "book.epub" whatever Put was
+// Both write paths are covered because each maps the observation onto its own
+// query params — Put through UpsertBook, Rebuild through InsertBook — so an
+// encoding fixed in one can stay broken in the other.
+//
+// EpubFilename is expected back as newBook's "book.epub" whatever the writer was
 // handed: for an indexed book the name is read from books.epub_filename, the
 // row's own authoritative copy, rather than stored a second time.
 func TestPathInfoRoundTrip(t *testing.T) {
+	writers := map[string]func(*testing.T, *Index, *model.Book, drift.PathInfo){
+		"put": func(t *testing.T, idx *Index, b *model.Book, pi drift.PathInfo) {
+			op := idx.BeginOp()
+			if err := op.MarkPending(); err != nil {
+				t.Fatalf("MarkPending: %v", err)
+			}
+			if err := op.Put(b, pi); err != nil {
+				t.Fatalf("Put: %v", err)
+			}
+		},
+		"rebuild": func(t *testing.T, idx *Index, b *model.Book, pi drift.PathInfo) {
+			if err := idx.Rebuild([]BookPath{{Book: b, Info: pi}}, nil, b.Meta.ID); err != nil {
+				t.Fatalf("Rebuild: %v", err)
+			}
+		},
+	}
 	tests := []struct {
 		name string
 		want drift.PathInfo
@@ -64,33 +85,25 @@ func TestPathInfoRoundTrip(t *testing.T) {
 		// to the Unix epoch, which would read as a real (and wrong) timestamp.
 		{"zero", drift.PathInfo{EpubFilename: "book.epub"}},
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			idx := openTestIndex(t)
+	for writer, write := range writers {
+		for _, tc := range tests {
+			t.Run(writer+"/"+tc.name, func(t *testing.T) {
+				idx := openTestIndex(t)
+				write(t, idx, newBook(1, tc.name), tc.want)
 
-			op := idx.BeginOp()
-			if err := op.MarkPending(); err != nil {
-				t.Fatalf("MarkPending: %v", err)
-			}
-			if err := op.Put(newBook(1, tc.name), tc.want); err != nil {
-				t.Fatalf("Put: %v", err)
-			}
-
-			all, err := idx.AllPathInfo()
-			if err != nil {
-				t.Fatalf("AllPathInfo: %v", err)
-			}
-			got, ok := all[tc.name]
-			if !ok {
-				t.Fatalf("AllPathInfo missing %q, got %v", tc.name, all)
-			}
-			if !got.Equal(tc.want) {
-				t.Errorf("drift.PathInfo = %+v, want %+v", got, tc.want)
-			}
-			if tc.want.EpubMtime.IsZero() && !got.EpubMtime.IsZero() {
-				t.Errorf("EpubMtime = %v, want the zero time", got.EpubMtime)
-			}
-		})
+				all, err := idx.AllPathInfo()
+				if err != nil {
+					t.Fatalf("AllPathInfo: %v", err)
+				}
+				got, ok := all[tc.name]
+				if !ok {
+					t.Fatalf("AllPathInfo missing %q, got %v", tc.name, all)
+				}
+				if !got.Equal(tc.want) {
+					t.Errorf("drift.PathInfo = %+v, want %+v", got, tc.want)
+				}
+			})
+		}
 	}
 }
 
@@ -167,8 +180,13 @@ func TestRebuildRecordsSkippedPaths(t *testing.T) {
 
 // newBook builds a minimal valid book for insertion.
 func newBook(id int64, title string) *model.Book {
+	return makeAuthoredBook(id, title, model.Author{Name: "Alice", SortName: "Alice"})
+}
+
+// makeAuthoredBook is newBook for tests that care which authors a book carries.
+func makeAuthoredBook(id int64, title string, authors ...model.Author) *model.Book {
 	return model.NewBook(
-		model.Bib{Title: title, Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		model.Bib{Title: title, Authors: authors},
 		model.Meta{ID: id},
 		model.Location{LibraryPath: title, EpubFilename: "book.epub"},
 	)
@@ -726,32 +744,41 @@ func TestNextID(t *testing.T) {
 	}
 }
 
+// TestListAuthors covers the author list the by-author view is built from. The
+// third book deliberately reuses Alice: authors is a shared table joined through
+// book_authors, so listing it must yield one row per author rather than one per
+// authorship. Sort order is by sort_name, which is why Carol sorts last despite
+// being written second.
 func TestListAuthors(t *testing.T) {
 	idx := openTestIndex(t)
-	
-	alice := model.NewBook(
-		model.Bib{Title: "Book1", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
-		model.Meta{ID: 1},
-		model.Location{LibraryPath: "Book1", EpubFilename: "book.epub"},
-	)
-	bob := model.NewBook(
-		model.Bib{Title: "Book2", Authors: []model.Author{{Name: "Bob", SortName: "Bob"}}},
-		model.Meta{ID: 2},
-		model.Location{LibraryPath: "Book2", EpubFilename: "book.epub"},
-	)
-	
-	storeInIndex(t, idx, alice)
-	storeInIndex(t, idx, bob)
+
+	books := []*model.Book{
+		makeAuthoredBook(1, "Book1", model.Author{Name: "Alice", SortName: "Alice"}),
+		makeAuthoredBook(2, "Book2", model.Author{Name: "Carol", SortName: "Carol"}),
+		// Alice again, plus a co-author: one new authors row, two new book_authors rows.
+		makeAuthoredBook(3, "Book3",
+			model.Author{Name: "Alice", SortName: "Alice"},
+			model.Author{Name: "Bob", SortName: "Bob"},
+		),
+	}
+	for _, b := range books {
+		storeInIndex(t, idx, b)
+	}
 
 	authors, err := idx.ListAuthors()
 	if err != nil {
 		t.Fatalf("ListAuthors: %v", err)
 	}
-	if len(authors) != 2 {
-		t.Fatalf("len = %d, want 2", len(authors))
+	var names []string
+	for _, a := range authors {
+		if a.ID == 0 {
+			t.Errorf("author %q has no ID, so nothing can reference it", a.Name)
+		}
+		names = append(names, a.Name)
 	}
-	if authors[0].Name != "Alice" || authors[1].Name != "Bob" {
-		t.Errorf("authors = %v, want [Alice, Bob]", authors)
+	want := []string{"Alice", "Bob", "Carol"}
+	if !slices.Equal(names, want) {
+		t.Errorf("authors = %v, want %v (deduped, ordered by sort_name)", names, want)
 	}
 }
 

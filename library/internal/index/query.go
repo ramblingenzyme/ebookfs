@@ -206,10 +206,10 @@ func (idx *Index) Stats() (*model.Stats, error) {
 	}
 
 	s := &model.Stats{
-		Books:   int(stats.Books),
-		Authors: int(stats.Authors),
-		Series:  int(stats.Series),
-		Tags:    int(stats.Tags),
+		Books:     int(stats.Books),
+		Authors:   int(stats.Authors),
+		Series:    int(stats.Series),
+		Tags:      int(stats.Tags),
 		TotalSize: stats.TotalSize,
 	}
 

@@ -12,6 +12,9 @@ import (
 // toUnixNano encodes an mtime for storage. The zero time means "never observed"
 // and stores as 0 — note time.Time{}.UnixNano() is a large negative number, so
 // the zero case has to be handled explicitly.
+//
+// We ignore the edge case of a file having a mtime of 0 because that would imply
+// a broken system clock, rather than a real value
 func toUnixNano(t time.Time) int64 {
 	if t.IsZero() {
 		return 0
@@ -52,7 +55,7 @@ func (idx *Index) insertBook(q *dbsqlc.Queries, b *model.Book, mt drift.PathInfo
 		Rating:       b.Meta.Rating,
 		DateAdded:    b.Meta.DateAdded.UTC().Format(time.RFC3339),
 		DateModified: b.Meta.DateModified.UTC().Format(time.RFC3339),
-		SeriesID:     sql.NullInt64{}, // series_id set by finishBook
+		SeriesID:     sql.NullInt64{},   // series_id set by finishBook
 		SeriesIndex:  sql.NullFloat64{}, // series_index set by finishBook
 		OpfSize:      b.OpfSize,
 		CoverSize:    b.CoverSize,
@@ -88,7 +91,7 @@ func (idx *Index) putBook(q *dbsqlc.Queries, b *model.Book, mt drift.PathInfo) e
 		Rating:       b.Meta.Rating,
 		DateAdded:    b.Meta.DateAdded.UTC().Format(time.RFC3339),
 		DateModified: b.Meta.DateModified.UTC().Format(time.RFC3339),
-		SeriesID:     sql.NullInt64{}, // series_id set by finishBook
+		SeriesID:     sql.NullInt64{},   // series_id set by finishBook
 		SeriesIndex:  sql.NullFloat64{}, // series_index set by finishBook
 		OpfSize:      b.OpfSize,
 		CoverSize:    b.CoverSize,
