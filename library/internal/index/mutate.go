@@ -2,11 +2,10 @@ package index
 
 import (
 	"database/sql"
-	"errors"
-	"strings"
 	"time"
 
 	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
+	"github.com/ramblingenzyme/ebookfs/library/internal/index/dbsqlc"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -29,207 +28,159 @@ func fromUnixNano(n int64) time.Time {
 	return time.Unix(0, n)
 }
 
-// pathInfoColumns are the drift-bookkeeping columns, in the order
-// pathInfoValues supplies them. books carries them after its own columns;
-// skipped_books carries them alone, keyed by library_path. Stating the tuple
-// once keeps the two tables and every statement that reads them in step.
-const pathInfoColumns = `epub_size, epub_mtime, meta_mtime, meta_size`
-
-// pathInfoSelect reads a full drift.PathInfo, keyed by library path.
-// epub_filename is deliberately not in pathInfoColumns: that list is spliced
-// into bookColumns, and books already carries epub_filename as the book's own
-// location — a second copy would drift from the first. Both tables expose it
-// under the same name, so the read path can still state the tuple once.
-const pathInfoSelect = `library_path, epub_filename, ` + pathInfoColumns
-
-// pathInfoValues returns mt's columns in pathInfoColumns order.
-func pathInfoValues(mt drift.PathInfo) []any {
-	return []any{mt.Size, toUnixNano(mt.EpubMtime), toUnixNano(mt.MetaMtime), mt.MetaSize}
-}
-
-// pathInfoUpdates is the ON CONFLICT DO UPDATE clause for pathInfoColumns,
-// derived once at init rather than per statement execution.
-var pathInfoUpdates = excludedAssignments(pathInfoColumns)
-
-// excludedAssignments renders `col=excluded.col, …` for an ON CONFLICT DO
-// UPDATE clause, so a column list drives its own update rather than being
-// restated by hand.
-func excludedAssignments(columns string) string {
-	parts := strings.Split(columns, ",")
-	for i, c := range parts {
-		c = strings.TrimSpace(c)
-		parts[i] = c + "=excluded." + c
-	}
-	return strings.Join(parts, ", ")
-}
-
-const bookColumns = `(id, title, sort_title, pubdate, description, language,
-		     library_path, epub_filename, cover_path, status, rating,
-		     date_added, date_modified, opf_size, cover_size,
-		     ` + pathInfoColumns + `)`
-
-// bookPlaceholders is the VALUES list for bookColumns, derived from it so a
-// new column cannot leave the two disagreeing on a hand-counted run of `?`.
-var bookPlaceholders = "(?" + strings.Repeat(", ?", strings.Count(bookColumns, ",")) + ")"
-
-// bookValues returns b's columns in bookColumns order. b.EpubSize is not among
-// them: the epub's size is written from mt, the observation that is also being
-// recorded for drift detection, so the row cannot hold two sizes that disagree.
-func bookValues(b *model.Book, mt drift.PathInfo) []any {
-	sortTitle := any(b.SortTitle)
-	if sortTitle == "" {
-		sortTitle = nil
-	}
-	return append([]any{
-		b.Meta.ID, b.Title, sortTitle, b.Pubdate, b.Description, b.Language,
-		b.LibraryPath, b.EpubFilename, b.CoverPath, b.Meta.Status, b.Meta.Rating,
-		b.Meta.DateAdded.UTC().Format(time.RFC3339),
-		b.Meta.DateModified.UTC().Format(time.RFC3339),
-		b.OpfSize, b.CoverSize,
-	}, pathInfoValues(mt)...)
-}
-
 // insertBook inserts a new book row, failing on id conflict — used by Rebuild.
 //
 // It deliberately skips cleanupOrphans: Rebuild empties every table before the
 // insert loop, so each author/series/tag is written alongside the book that
 // references it and nothing can be orphaned. Sweeping per book would run three
 // growing anti-join scans N times for no effect.
-func insertBook(tx *sql.Tx, b *model.Book, mt drift.PathInfo) error {
-	// series_id/series_index are set by finishBook's upsertSeries.
-	if _, err := tx.Exec(
-		`INSERT INTO books `+bookColumns+` VALUES `+bookPlaceholders,
-		bookValues(b, mt)...,
-	); err != nil {
+func (idx *Index) insertBook(q *dbsqlc.Queries, b *model.Book, mt drift.PathInfo) error {
+	sortTitle := sql.NullString{String: b.SortTitle, Valid: b.SortTitle != ""}
+	pubdate := sql.NullString{String: b.Pubdate, Valid: b.Pubdate != ""}
+
+	err := q.InsertBook(idx.ctx, dbsqlc.InsertBookParams{
+		ID:           b.Meta.ID,
+		Title:        b.Title,
+		SortTitle:    sortTitle,
+		Pubdate:      pubdate,
+		Description:  b.Description,
+		Language:     b.Language,
+		LibraryPath:  b.LibraryPath,
+		EpubFilename: b.EpubFilename,
+		CoverPath:    b.CoverPath,
+		Status:       b.Meta.Status,
+		Rating:       b.Meta.Rating,
+		DateAdded:    b.Meta.DateAdded.UTC().Format(time.RFC3339),
+		DateModified: b.Meta.DateModified.UTC().Format(time.RFC3339),
+		SeriesID:     sql.NullInt64{}, // series_id set by finishBook
+		SeriesIndex:  sql.NullFloat64{}, // series_index set by finishBook
+		OpfSize:      b.OpfSize,
+		CoverSize:    b.CoverSize,
+		EpubSize:     mt.Size,
+		EpubMtime:    toUnixNano(mt.EpubMtime),
+		MetaMtime:    toUnixNano(mt.MetaMtime),
+		MetaSize:     mt.MetaSize,
+	})
+	if err != nil {
 		return err
 	}
 
-	return finishBook(tx, b)
+	return idx.finishBook(q, b)
 }
 
 // putBook inserts or replaces b, using ON CONFLICT to update an existing row.
 // Rebuild, which must surface id collisions, uses insertBook instead.
-func putBook(tx *sql.Tx, b *model.Book, mt drift.PathInfo) error {
-	// series_id/series_index are set by finishBook's upsertSeries.
-	if _, err := tx.Exec(
-		`INSERT INTO books `+bookColumns+` VALUES `+bookPlaceholders+`
-		 ON CONFLICT(id) DO UPDATE SET
-		     title=excluded.title, sort_title=excluded.sort_title, pubdate=excluded.pubdate,
-		     description=excluded.description, language=excluded.language,
-		     library_path=excluded.library_path, epub_filename=excluded.epub_filename,
-		     cover_path=excluded.cover_path, status=excluded.status, rating=excluded.rating,
-		     date_added=excluded.date_added, date_modified=excluded.date_modified,
-		     opf_size=excluded.opf_size, cover_size=excluded.cover_size,
-		     `+pathInfoUpdates,
-		bookValues(b, mt)...,
-	); err != nil {
+func (idx *Index) putBook(q *dbsqlc.Queries, b *model.Book, mt drift.PathInfo) error {
+	sortTitle := sql.NullString{String: b.SortTitle, Valid: b.SortTitle != ""}
+	pubdate := sql.NullString{String: b.Pubdate, Valid: b.Pubdate != ""}
+
+	err := q.UpsertBook(idx.ctx, dbsqlc.UpsertBookParams{
+		ID:           b.Meta.ID,
+		Title:        b.Title,
+		SortTitle:    sortTitle,
+		Pubdate:      pubdate,
+		Description:  b.Description,
+		Language:     b.Language,
+		LibraryPath:  b.LibraryPath,
+		EpubFilename: b.EpubFilename,
+		CoverPath:    b.CoverPath,
+		Status:       b.Meta.Status,
+		Rating:       b.Meta.Rating,
+		DateAdded:    b.Meta.DateAdded.UTC().Format(time.RFC3339),
+		DateModified: b.Meta.DateModified.UTC().Format(time.RFC3339),
+		SeriesID:     sql.NullInt64{}, // series_id set by finishBook
+		SeriesIndex:  sql.NullFloat64{}, // series_index set by finishBook
+		OpfSize:      b.OpfSize,
+		CoverSize:    b.CoverSize,
+		EpubSize:     mt.Size,
+		EpubMtime:    toUnixNano(mt.EpubMtime),
+		MetaMtime:    toUnixNano(mt.MetaMtime),
+		MetaSize:     mt.MetaSize,
+	})
+	if err != nil {
 		return err
 	}
 
-	if err := finishBook(tx, b); err != nil {
+	if err := idx.finishBook(q, b); err != nil {
 		return err
 	}
 	// Replacing a book can strand its former author/series/tag rows.
-	return cleanupOrphans(tx)
-}
-
-// finish runs fn and clears the pending row in one transaction. MarkPending
-// must have been called first so a pending row protects the preceding store
-// writes; the row is atomically deleted inside the same transaction.
-func (o *Op) finish(fn func(*sql.Tx) error) error {
-	if o.opID == "" {
-		return errors.New("MarkPending must be called before commit")
-	}
-	return o.idx.withTx(func(tx *sql.Tx) error {
-		if err := fn(tx); err != nil {
-			return err
-		}
-		_, err := tx.Exec("DELETE FROM pending_ops WHERE op_id = ?", o.opID)
-		return err
-	})
-}
-
-// Put writes b into the index, inserting or replacing the record for b.Meta.ID.
-// mt carries the on-disk file state used for drift detection.
-func (o *Op) Put(b *model.Book, mt drift.PathInfo) error {
-	return o.finish(func(tx *sql.Tx) error { return putBook(tx, b, mt) })
-}
-
-// Delete removes all index rows for book.
-func (o *Op) Delete(bookID int64) error {
-	return o.finish(func(tx *sql.Tx) error { return deleteBook(tx, bookID) })
+	return idx.cleanupOrphans(q)
 }
 
 // finishBook writes a book's authors, tags, series, and identifiers. It does not
 // sweep orphans — callers that can strand rows (putBook, deleteBook) call
 // cleanupOrphans themselves.
-func finishBook(tx *sql.Tx, b *model.Book) error {
-	if err := upsertAuthors(tx, b.Meta.ID, b.Authors); err != nil {
+func (idx *Index) finishBook(q *dbsqlc.Queries, b *model.Book) error {
+	if err := idx.upsertAuthors(q, b.Meta.ID, b.Authors); err != nil {
 		return err
 	}
-	if err := upsertTags(tx, b.Meta.ID, b.Meta.Tags); err != nil {
+	if err := idx.upsertTags(q, b.Meta.ID, b.Meta.Tags); err != nil {
 		return err
 	}
-	if err := upsertSeries(tx, b); err != nil {
+	if err := idx.upsertSeries(q, b); err != nil {
 		return err
 	}
 
-	if _, err := tx.Exec(`DELETE FROM identifiers WHERE book_id=?`, b.Meta.ID); err != nil {
+	if err := q.DeleteBookIdentifiers(idx.ctx, b.Meta.ID); err != nil {
 		return err
 	}
 	for scheme, value := range b.Identifiers {
-		if _, err := tx.Exec(
-			`INSERT INTO identifiers (book_id, scheme, value) VALUES (?, ?, ?)`,
-			b.Meta.ID, scheme, value,
-		); err != nil {
+		if err := q.InsertIdentifier(idx.ctx, dbsqlc.InsertIdentifierParams{
+			BookID: b.Meta.ID,
+			Scheme: scheme,
+			Value:  value,
+		}); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func upsertAuthors(tx *sql.Tx, bookID int64, authors []model.Author) error {
-	if _, err := tx.Exec(`DELETE FROM book_authors WHERE book_id=?`, bookID); err != nil {
+func (idx *Index) upsertAuthors(q *dbsqlc.Queries, bookID int64, authors []model.Author) error {
+	if err := q.DeleteBookAuthors(idx.ctx, bookID); err != nil {
 		return err
 	}
 	for i, a := range authors {
 		// Insert or update: only overwrite sort_name when we have a real value and the
 		// stored one is empty (fills in missing file-as data without stomping corrections).
-		if _, err := tx.Exec(
-			`INSERT INTO authors (name, sort_name) VALUES (?, ?)
-			 ON CONFLICT(name) DO UPDATE SET sort_name=excluded.sort_name
-			 WHERE excluded.sort_name != '' AND authors.sort_name = ''`,
-			a.Name, a.SortName,
-		); err != nil {
+		if err := q.InsertAuthor(idx.ctx, dbsqlc.InsertAuthorParams{
+			Name:     a.Name,
+			SortName: a.SortName,
+		}); err != nil {
 			return err
 		}
-		var authorID int64
-		if err := tx.QueryRow(`SELECT id FROM authors WHERE name=?`, a.Name).Scan(&authorID); err != nil {
+		author, err := q.GetAuthorByName(idx.ctx, a.Name)
+		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(
-			`INSERT INTO book_authors (book_id, author_id, position) VALUES (?, ?, ?)`,
-			bookID, authorID, i,
-		); err != nil {
+		if err := q.InsertBookAuthor(idx.ctx, dbsqlc.InsertBookAuthorParams{
+			BookID:   bookID,
+			AuthorID: author.ID,
+			Position: int64(i),
+		}); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func upsertTags(tx *sql.Tx, bookID int64, tags []string) error {
-	if _, err := tx.Exec(`DELETE FROM book_tags WHERE book_id=?`, bookID); err != nil {
+func (idx *Index) upsertTags(q *dbsqlc.Queries, bookID int64, tags []string) error {
+	if err := q.DeleteBookTags(idx.ctx, bookID); err != nil {
 		return err
 	}
 	for _, tag := range tags {
-		if _, err := tx.Exec(`INSERT OR IGNORE INTO tags (name) VALUES (?)`, tag); err != nil {
+		if err := q.InsertTag(idx.ctx, tag); err != nil {
 			return err
 		}
-		var tagID int64
-		if err := tx.QueryRow(`SELECT id FROM tags WHERE name=?`, tag).Scan(&tagID); err != nil {
+		tagRow, err := q.GetTagByName(idx.ctx, tag)
+		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`INSERT INTO book_tags (book_id, tag_id) VALUES (?, ?)`, bookID, tagID); err != nil {
+		if err := q.InsertBookTag(idx.ctx, dbsqlc.InsertBookTagParams{
+			BookID: bookID,
+			TagID:  tagRow.ID,
+		}); err != nil {
 			return err
 		}
 	}
@@ -238,49 +189,52 @@ func upsertTags(tx *sql.Tx, bookID int64, tags []string) error {
 
 // upsertSeries points the book at its series or clears series_id, then removes
 // orphaned series rows. It must run after the books row exists.
-func upsertSeries(tx *sql.Tx, b *model.Book) error {
-	var seriesID, seriesIndex any
+func (idx *Index) upsertSeries(q *dbsqlc.Queries, b *model.Book) error {
+	var seriesID sql.NullInt64
+	var seriesIndex sql.NullFloat64
+
 	if b.Series != nil {
-		if _, err := tx.Exec(`INSERT OR IGNORE INTO series (name) VALUES (?)`, b.Series.Name); err != nil {
+		if err := q.InsertSeries(idx.ctx, b.Series.Name); err != nil {
 			return err
 		}
-		var id int64
-		if err := tx.QueryRow(`SELECT id FROM series WHERE name=?`, b.Series.Name).Scan(&id); err != nil {
+		series, err := q.GetSeriesByName(idx.ctx, b.Series.Name)
+		if err != nil {
 			return err
 		}
-		seriesID, seriesIndex = id, b.Series.Index
+		seriesID = sql.NullInt64{Int64: series.ID, Valid: true}
+		seriesIndex = sql.NullFloat64{Float64: b.Series.Index, Valid: true}
 	}
 
-	if _, err := tx.Exec(
-		`UPDATE books SET series_id=?, series_index=? WHERE id=?`,
-		seriesID, seriesIndex, b.Meta.ID,
-	); err != nil {
+	if err := q.UpdateBookSeries(idx.ctx, dbsqlc.UpdateBookSeriesParams{
+		SeriesID:    seriesID,
+		SeriesIndex: seriesIndex,
+		ID:          b.Meta.ID,
+	}); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func deleteBook(tx *sql.Tx, id int64) error {
+func (idx *Index) deleteBook(q *dbsqlc.Queries, id int64) error {
 	// ON DELETE CASCADE handles book_authors, book_tags, identifiers.
-	if _, err := tx.Exec(`DELETE FROM books WHERE id=?`, id); err != nil {
+	if err := q.DeleteBook(idx.ctx, id); err != nil {
 		return err
 	}
-	return cleanupOrphans(tx)
+	return idx.cleanupOrphans(q)
 }
 
 // cleanupOrphans removes authors, series, and tags that are no longer
 // referenced by any book.
-func cleanupOrphans(tx *sql.Tx) error {
-	queries := []string{
-		`DELETE FROM authors WHERE id NOT IN (SELECT author_id FROM book_authors)`,
-		`DELETE FROM series  WHERE id NOT IN (SELECT series_id  FROM books WHERE series_id IS NOT NULL)`,
-		`DELETE FROM tags    WHERE id NOT IN (SELECT tag_id     FROM book_tags)`,
+func (idx *Index) cleanupOrphans(q *dbsqlc.Queries) error {
+	if err := q.DeleteOrphanedAuthors(idx.ctx); err != nil {
+		return err
 	}
-	for _, q := range queries {
-		if _, err := tx.Exec(q); err != nil {
-			return err
-		}
+	if err := q.DeleteOrphanedSeries(idx.ctx); err != nil {
+		return err
+	}
+	if err := q.DeleteOrphanedTags(idx.ctx); err != nil {
+		return err
 	}
 	return nil
 }

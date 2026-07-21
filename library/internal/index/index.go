@@ -1,12 +1,14 @@
 package index
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
 	_ "embed"
 	"encoding/hex"
 	"fmt"
 
+	"github.com/ramblingenzyme/ebookfs/library/internal/index/dbsqlc"
 	_ "modernc.org/sqlite"
 )
 
@@ -16,7 +18,9 @@ var schema string
 // Index is a SQLite-backed cache of the library. It is derived from the
 // filesystem and can be fully rebuilt via Reindex.
 type Index struct {
-	db *sql.DB
+	db      *sql.DB
+	queries *dbsqlc.Queries
+	ctx     context.Context
 }
 
 const schemaVersion = 9
@@ -57,11 +61,15 @@ func Open(path string) (*Index, error) {
 		}
 	}
 
-	return &Index{db: db}, nil
+	return &Index{
+		db:      db,
+		queries: dbsqlc.New(db),
+		ctx:     context.Background(),
+	}, nil
 }
 
 func (idx *Index) dropAllTables() error {
-	rows, err := idx.db.Query(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`)
+	rows, err := idx.db.QueryContext(idx.ctx, `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`)
 	if err != nil {
 		return err
 	}
@@ -78,15 +86,15 @@ func (idx *Index) dropAllTables() error {
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	if _, err := idx.db.Exec(`PRAGMA foreign_keys=OFF`); err != nil {
+	if _, err := idx.db.ExecContext(idx.ctx, `PRAGMA foreign_keys=OFF`); err != nil {
 		return err
 	}
 	for _, t := range tables {
-		if _, err := idx.db.Exec(`DROP TABLE IF EXISTS ` + t); err != nil {
+		if _, err := idx.db.ExecContext(idx.ctx, `DROP TABLE IF EXISTS `+t); err != nil {
 			return err
 		}
 	}
-	if _, err := idx.db.Exec(`PRAGMA foreign_keys=ON`); err != nil {
+	if _, err := idx.db.ExecContext(idx.ctx, `PRAGMA foreign_keys=ON`); err != nil {
 		return err
 	}
 	return nil
@@ -99,9 +107,7 @@ func (idx *Index) Close() error {
 // NextID reserves and returns a new unique book ID. Must be called before
 // Put so the id is available for canonical path construction.
 func (idx *Index) NextID() (int64, error) {
-	var id int64
-	err := idx.db.QueryRow("INSERT INTO book_id_seq DEFAULT VALUES RETURNING id").Scan(&id)
-	return id, err
+	return idx.queries.NextBookID(idx.ctx)
 }
 
 // newOpID returns a random hex string used as a unique pending-op identifier.
@@ -113,44 +119,26 @@ func newOpID() string {
 
 // withTx runs fn inside a SQLite transaction, committing on success and
 // rolling back on error.
-func (idx *Index) withTx(fn func(*sql.Tx) error) error {
+func (idx *Index) withTx(fn func(*dbsqlc.Queries, *sql.Tx) error) error {
 	tx, err := idx.db.Begin()
 	if err != nil {
 		return err
 	}
-	if err := fn(tx); err != nil {
+	q := dbsqlc.New(tx)
+	if err := fn(q, tx); err != nil {
 		tx.Rollback()
 		return err
 	}
 	return tx.Commit()
 }
 
-// Op represents a single mutation operation. The caller calls BeginOp to
-// obtain one, optionally calls MarkPending before touching disk, performs the
-// store writes, then calls Op.Put or Op.Delete to commit the index write and
-// atomically clear the pending row.
-type Op struct {
-	idx  *Index
-	opID string
+func (idx *Index) getSchemaVersion() (int64, error) {
+	var v int64
+	err := idx.db.QueryRowContext(idx.ctx, "PRAGMA user_version").Scan(&v)
+	return v, err
 }
 
-// BeginOp starts a new mutation operation.
-func (idx *Index) BeginOp() *Op {
-	return &Op{idx: idx}
-}
-
-// MarkPending inserts a row into pending_ops via autocommit (so it survives a
-// crash) and is idempotent — at most one row per operation. Call it before
-// the first real disk mutation. If the operation fails after MarkPending the
-// row stays behind, forcing a healing reindex on the next startup.
-func (o *Op) MarkPending() error {
-	if o.opID != "" {
-		return nil
-	}
-	id := newOpID()
-	if _, err := o.idx.db.Exec("INSERT INTO pending_ops (op_id) VALUES (?)", id); err != nil {
-		return err
-	}
-	o.opID = id
-	return nil
+func (idx *Index) setSchemaVersion(v int64) error {
+	_, err := idx.db.ExecContext(idx.ctx, fmt.Sprintf("PRAGMA user_version=%d", v))
+	return err
 }

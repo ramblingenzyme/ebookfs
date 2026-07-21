@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
+	"github.com/ramblingenzyme/ebookfs/library/internal/index/dbsqlc"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -725,14 +726,33 @@ func TestNextID(t *testing.T) {
 	}
 }
 
-func TestListAuthorsPanics(t *testing.T) {
+func TestListAuthors(t *testing.T) {
 	idx := openTestIndex(t)
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic from ListAuthors")
-		}
-	}()
-	idx.ListAuthors()
+	
+	alice := model.NewBook(
+		model.Bib{Title: "Book1", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		model.Meta{ID: 1},
+		model.Location{LibraryPath: "Book1", EpubFilename: "book.epub"},
+	)
+	bob := model.NewBook(
+		model.Bib{Title: "Book2", Authors: []model.Author{{Name: "Bob", SortName: "Bob"}}},
+		model.Meta{ID: 2},
+		model.Location{LibraryPath: "Book2", EpubFilename: "book.epub"},
+	)
+	
+	storeInIndex(t, idx, alice)
+	storeInIndex(t, idx, bob)
+
+	authors, err := idx.ListAuthors()
+	if err != nil {
+		t.Fatalf("ListAuthors: %v", err)
+	}
+	if len(authors) != 2 {
+		t.Fatalf("len = %d, want 2", len(authors))
+	}
+	if authors[0].Name != "Alice" || authors[1].Name != "Bob" {
+		t.Errorf("authors = %v, want [Alice, Bob]", authors)
+	}
 }
 
 func TestStatsEmptyIndex(t *testing.T) {
@@ -1093,7 +1113,8 @@ func rolledBackTX(t *testing.T, idx *Index) *sql.Tx {
 func TestFinishBookRolledBackTx(t *testing.T) {
 	idx := openTestIndex(t)
 	tx := rolledBackTX(t, idx)
-	err := finishBook(tx, newBook(1, "Test"))
+	q := dbsqlc.New(tx)
+	err := idx.finishBook(q, newBook(1, "Test"))
 	if err == nil {
 		t.Fatal("expected error from finishBook on rolled-back tx")
 	}
@@ -1102,7 +1123,8 @@ func TestFinishBookRolledBackTx(t *testing.T) {
 func TestUpsertAuthorsRolledBackTx(t *testing.T) {
 	idx := openTestIndex(t)
 	tx := rolledBackTX(t, idx)
-	err := upsertAuthors(tx, 1, []model.Author{{Name: "Alice", SortName: "Alice"}})
+	q := dbsqlc.New(tx)
+	err := idx.upsertAuthors(q, 1, []model.Author{{Name: "Alice", SortName: "Alice"}})
 	if err == nil {
 		t.Fatal("expected error from upsertAuthors on rolled-back tx")
 	}
@@ -1111,7 +1133,8 @@ func TestUpsertAuthorsRolledBackTx(t *testing.T) {
 func TestUpsertTagsRolledBackTx(t *testing.T) {
 	idx := openTestIndex(t)
 	tx := rolledBackTX(t, idx)
-	err := upsertTags(tx, 1, []string{"sci-fi"})
+	q := dbsqlc.New(tx)
+	err := idx.upsertTags(q, 1, []string{"sci-fi"})
 	if err == nil {
 		t.Fatal("expected error from upsertTags on rolled-back tx")
 	}
@@ -1120,9 +1143,10 @@ func TestUpsertTagsRolledBackTx(t *testing.T) {
 func TestUpsertSeriesRolledBackTx(t *testing.T) {
 	idx := openTestIndex(t)
 	tx := rolledBackTX(t, idx)
+	q := dbsqlc.New(tx)
 	b := newBook(1, "Test")
 	b.Series = &model.SeriesRef{Name: "S", Index: 1}
-	err := upsertSeries(tx, b)
+	err := idx.upsertSeries(q, b)
 	if err == nil {
 		t.Fatal("expected error from upsertSeries on rolled-back tx")
 	}
@@ -1131,7 +1155,8 @@ func TestUpsertSeriesRolledBackTx(t *testing.T) {
 func TestPutBookRolledBackTx(t *testing.T) {
 	idx := openTestIndex(t)
 	tx := rolledBackTX(t, idx)
-	err := putBook(tx, newBook(1, "Test"), drift.PathInfo{})
+	q := dbsqlc.New(tx)
+	err := idx.putBook(q, newBook(1, "Test"), drift.PathInfo{})
 	if err == nil {
 		t.Fatal("expected error from putBook on rolled-back tx")
 	}
@@ -1140,7 +1165,8 @@ func TestPutBookRolledBackTx(t *testing.T) {
 func TestInsertBookRolledBackTx(t *testing.T) {
 	idx := openTestIndex(t)
 	tx := rolledBackTX(t, idx)
-	err := insertBook(tx, newBook(1, "Test"), drift.PathInfo{})
+	q := dbsqlc.New(tx)
+	err := idx.insertBook(q, newBook(1, "Test"), drift.PathInfo{})
 	if err == nil {
 		t.Fatal("expected error from insertBook on rolled-back tx")
 	}
@@ -1149,7 +1175,8 @@ func TestInsertBookRolledBackTx(t *testing.T) {
 func TestDeleteBookRolledBackTx(t *testing.T) {
 	idx := openTestIndex(t)
 	tx := rolledBackTX(t, idx)
-	err := deleteBook(tx, 1)
+	q := dbsqlc.New(tx)
+	err := idx.deleteBook(q, 1)
 	if err == nil {
 		t.Fatal("expected error from deleteBook on rolled-back tx")
 	}
@@ -1158,7 +1185,8 @@ func TestDeleteBookRolledBackTx(t *testing.T) {
 func TestCleanupOrphansRolledBackTx(t *testing.T) {
 	idx := openTestIndex(t)
 	tx := rolledBackTX(t, idx)
-	err := cleanupOrphans(tx)
+	q := dbsqlc.New(tx)
+	err := idx.cleanupOrphans(q)
 	if err == nil {
 		t.Fatal("expected error from cleanupOrphans on rolled-back tx")
 	}

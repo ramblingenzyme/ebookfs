@@ -14,8 +14,6 @@ import (
 // identifiers. Every book-listing view (all books, by author, by tag, recent,
 // …) is expressed as a Filter rather than its own bespoke method.
 func (idx *Index) Query(f model.Filter) ([]*model.Book, error) {
-	// Each row is one optional predicate: include its expr/arg when `on` holds.
-	// Values are always parameterized; only the fixed expressions are literal.
 	conds := []struct {
 		on   bool
 		expr string
@@ -47,60 +45,6 @@ func (idx *Index) Query(f model.Filter) ([]*model.Book, error) {
 	return idx.queryBooks(strings.Join(where, " AND "), args, order, f.Limit)
 }
 
-// AllPathInfo returns every library path the last rebuild accounted for, mapped
-// to the file state recorded for it — both indexed books and the directories it
-// could not index. Drift detection compares a store listing against this, so a
-// path missing here is genuinely unexplained rather than merely unindexable.
-func (idx *Index) AllPathInfo() (map[string]drift.PathInfo, error) {
-	rows, err := idx.db.Query(`
-		SELECT ` + pathInfoSelect + ` FROM books
-		UNION ALL
-		SELECT ` + pathInfoSelect + ` FROM skipped_books`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	info := make(map[string]drift.PathInfo)
-	for rows.Next() {
-		var path, epubName string
-		var size, epubMtime, metaMtime, metaSize int64
-		if err := rows.Scan(&path, &epubName, &size, &epubMtime, &metaMtime, &metaSize); err != nil {
-			return nil, err
-		}
-		// books and skipped_books are disjoint by construction (Rebuild puts
-		// each walked directory in exactly one), but nothing in the schema
-		// enforces it across tables. A path in both would collapse in this map
-		// and silently satisfy the caller's count comparison, masking real
-		// drift — so refuse rather than return a half-truth.
-		if _, dup := info[path]; dup {
-			return nil, fmt.Errorf("index inconsistency: %q recorded as both indexed and skipped", path)
-		}
-		info[path] = drift.PathInfo{
-			EpubFilename: epubName,
-			Size:         size,
-			EpubMtime:    fromUnixNano(epubMtime),
-			MetaSize:     metaSize,
-			MetaMtime:    fromUnixNano(metaMtime),
-		}
-	}
-	return info, rows.Err()
-}
-
-// Get returns the book with the given id, or sql.ErrNoRows if it is absent.
-func (idx *Index) Get(bookID int64) (*model.Book, error) {
-	books, err := idx.Query(model.Filter{ID: bookID})
-	if err != nil {
-		return nil, err
-	}
-	if len(books) == 0 {
-		return nil, sql.ErrNoRows
-	}
-	return books[0], nil
-}
-
-// queryBooks runs the shared book SELECT with optional WHERE/ORDER/LIMIT and
-// hydrates per-book authors, tags, and identifiers.
 func (idx *Index) queryBooks(where string, args []any, order string, limit int) ([]*model.Book, error) {
 	q := `
 		SELECT b.id, b.title, b.sort_title, COALESCE(b.pubdate, ''), b.description, b.language,
@@ -119,7 +63,7 @@ func (idx *Index) queryBooks(where string, args []any, order string, limit int) 
 		args = append(args, limit)
 	}
 
-	rows, err := idx.db.Query(q, args...)
+	rows, err := idx.db.QueryContext(idx.ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -156,147 +100,125 @@ func (idx *Index) queryBooks(where string, args []any, order string, limit int) 
 		return nil, err
 	}
 
-	// Nothing matched: skip the child queries entirely rather than scanning
-	// three tables to hydrate zero books.
 	if len(byID) == 0 {
 		return books, nil
 	}
 
-	if err := idx.loadAuthors(byID); err != nil {
-		return nil, err
+	for _, b := range books {
+		authors, err := idx.queries.GetAuthorsByBookID(idx.ctx, b.Meta.ID)
+		if err != nil {
+			return nil, err
+		}
+		b.Authors = make([]model.Author, len(authors))
+		for i, a := range authors {
+			b.Authors[i] = model.Author{
+				ID:       a.ID,
+				Name:     a.Name,
+				SortName: a.SortName,
+			}
+		}
+
+		tags, err := idx.queries.GetTagsByBookID(idx.ctx, b.Meta.ID)
+		if err != nil {
+			return nil, err
+		}
+		b.Meta.Tags = tags
+
+		identifiers, err := idx.queries.GetIdentifiersByBookID(idx.ctx, b.Meta.ID)
+		if err != nil {
+			return nil, err
+		}
+		b.Identifiers = make(map[string]string)
+		for _, id := range identifiers {
+			b.Identifiers[id.Scheme] = id.Value
+		}
 	}
-	if err := idx.loadTags(byID); err != nil {
-		return nil, err
-	}
-	if err := idx.loadIdentifiers(byID); err != nil {
-		return nil, err
-	}
+
 	return books, nil
 }
 
-// maxScopeIDs caps how many ids scopeByBook binds into an IN clause before
-// falling back to a full table scan. 900 is safely below every SQLite build's
-// SQLITE_MAX_VARIABLE_NUMBER and past the point IN beats a scan anyway.
-const maxScopeIDs = 900
+// AllPathInfo returns every library path the last rebuild accounted for, mapped
+// to the file state recorded for it — both indexed books and the directories it
+// could not index. Drift detection compares a store listing against this, so a
+// path missing here is genuinely unexplained rather than merely unindexable.
+func (idx *Index) AllPathInfo() (map[string]drift.PathInfo, error) {
+	rows, err := idx.queries.GetAllPathInfo(idx.ctx)
+	if err != nil {
+		return nil, err
+	}
 
-// scopeByBook returns a "WHERE <col> IN (…)" clause scoped to byID, or ("", nil)
-// for a full scan when there are too many ids.
-func scopeByBook(col string, byID map[int64]*model.Book) (string, []any) {
-	if len(byID) == 0 || len(byID) > maxScopeIDs {
-		return "", nil
+	info := make(map[string]drift.PathInfo)
+	for _, row := range rows {
+		// books and skipped_books are disjoint by construction (Rebuild puts
+		// each walked directory in exactly one), but nothing in the schema
+		// enforces it across tables. A path in both would collapse in this map
+		// and silently satisfy the caller's count comparison, masking real
+		// drift — so refuse rather than return a half-truth.
+		if _, dup := info[row.LibraryPath]; dup {
+			return nil, fmt.Errorf("index inconsistency: %q recorded as both indexed and skipped", row.LibraryPath)
+		}
+		info[row.LibraryPath] = drift.PathInfo{
+			EpubFilename: row.EpubFilename,
+			Size:         row.EpubSize,
+			EpubMtime:    fromUnixNano(row.EpubMtime),
+			MetaSize:     row.MetaSize,
+			MetaMtime:    fromUnixNano(row.MetaMtime),
+		}
 	}
-	placeholders := make([]string, 0, len(byID))
-	args := make([]any, 0, len(byID))
-	for id := range byID {
-		placeholders = append(placeholders, "?")
-		args = append(args, id)
-	}
-	return " WHERE " + col + " IN (" + strings.Join(placeholders, ",") + ")", args
+	return info, nil
 }
 
-func (idx *Index) loadAuthors(byID map[int64]*model.Book) error {
-	where, args := scopeByBook("ba.book_id", byID)
-	rows, err := idx.db.Query(`
-		SELECT ba.book_id, a.id, a.name, a.sort_name
-		FROM book_authors ba
-		JOIN authors a ON a.id = ba.author_id`+where+`
-		ORDER BY ba.book_id, ba.position
-	`, args...)
+// Get returns the book with the given id, or sql.ErrNoRows if it is absent.
+func (idx *Index) Get(bookID int64) (*model.Book, error) {
+	books, err := idx.Query(model.Filter{ID: bookID})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var bookID int64
-		var a model.Author
-		if err := rows.Scan(&bookID, &a.ID, &a.Name, &a.SortName); err != nil {
-			return err
-		}
-		if b, ok := byID[bookID]; ok {
-			b.Authors = append(b.Authors, a)
-		}
+	if len(books) == 0 {
+		return nil, sql.ErrNoRows
 	}
-	return rows.Err()
-}
-
-func (idx *Index) loadTags(byID map[int64]*model.Book) error {
-	where, args := scopeByBook("bt.book_id", byID)
-	rows, err := idx.db.Query(`
-		SELECT bt.book_id, t.name
-		FROM book_tags bt
-		JOIN tags t ON t.id = bt.tag_id`+where+`
-		ORDER BY bt.book_id, t.name
-	`, args...)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var bookID int64
-		var tag string
-		if err := rows.Scan(&bookID, &tag); err != nil {
-			return err
-		}
-		if b, ok := byID[bookID]; ok {
-			b.Meta.Tags = append(b.Meta.Tags, tag)
-		}
-	}
-	return rows.Err()
-}
-
-func (idx *Index) loadIdentifiers(byID map[int64]*model.Book) error {
-	where, args := scopeByBook("book_id", byID)
-	rows, err := idx.db.Query(`SELECT book_id, scheme, value FROM identifiers`+where, args...)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var bookID int64
-		var scheme, value string
-		if err := rows.Scan(&bookID, &scheme, &value); err != nil {
-			return err
-		}
-		if b, ok := byID[bookID]; ok {
-			b.Identifiers[scheme] = value
-		}
-	}
-	return rows.Err()
+	return books[0], nil
 }
 
 // ListAuthors returns all authors in the index, ordered by sort_name.
 func (idx *Index) ListAuthors() ([]*model.Author, error) {
-	panic("not yet implemented")
+	authors, err := idx.queries.ListAuthors(idx.ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*model.Author, len(authors))
+	for i, a := range authors {
+		result[i] = &model.Author{
+			ID:       a.ID,
+			Name:     a.Name,
+			SortName: a.SortName,
+		}
+	}
+	return result, nil
 }
 
 // Stats returns aggregate library statistics.
 func (idx *Index) Stats() (*model.Stats, error) {
-	var s model.Stats
-	var totalSize sql.NullInt64
-	var lastAdded, lastModified sql.NullString
-	err := idx.db.QueryRow(`
-		SELECT COUNT(*), COALESCE(SUM(epub_size), 0), MAX(date_added), MAX(date_modified)
-		FROM books
-	`).Scan(&s.Books, &totalSize, &lastAdded, &lastModified)
+	stats, err := idx.queries.GetStats(idx.ctx)
 	if err != nil {
 		return nil, err
 	}
-	s.TotalSize = totalSize.Int64
-	if lastAdded.Valid {
-		s.LastAdded, _ = time.Parse(time.RFC3339, lastAdded.String)
-	}
-	if lastModified.Valid {
-		s.LastModified, _ = time.Parse(time.RFC3339, lastModified.String)
+
+	s := &model.Stats{
+		Books:   int(stats.Books),
+		Authors: int(stats.Authors),
+		Series:  int(stats.Series),
+		Tags:    int(stats.Tags),
+		TotalSize: stats.TotalSize,
 	}
 
-	if err := idx.db.QueryRow(`SELECT COUNT(*) FROM authors`).Scan(&s.Authors); err != nil {
-		return nil, err
+	if dateStr, ok := stats.LastAdded.(string); ok && dateStr != "" {
+		s.LastAdded, _ = time.Parse(time.RFC3339, dateStr)
 	}
-	if err := idx.db.QueryRow(`SELECT COUNT(*) FROM series`).Scan(&s.Series); err != nil {
-		return nil, err
+	if dateStr, ok := stats.LastModified.(string); ok && dateStr != "" {
+		s.LastModified, _ = time.Parse(time.RFC3339, dateStr)
 	}
-	if err := idx.db.QueryRow(`SELECT COUNT(*) FROM tags`).Scan(&s.Tags); err != nil {
-		return nil, err
-	}
-	return &s, nil
+
+	return s, nil
 }
