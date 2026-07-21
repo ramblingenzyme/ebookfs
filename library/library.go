@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/ramblingenzyme/ebookfs/library/config"
+	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index"
 	"github.com/ramblingenzyme/ebookfs/library/internal/store"
 	"github.com/ramblingenzyme/ebookfs/library/model"
@@ -92,7 +93,7 @@ func Open(cfg config.LibraryConfig, forceReindex bool) (Library, error) {
 	// way) so the store scan can be captured: when storeDrifted is the check
 	// that fires, its result is handed to the rebuild so the books are not
 	// stat'd twice.
-	var onDisk map[string]index.PathInfo
+	var onDisk map[string]drift.PathInfo
 	needs := forceReindex || lib.needsReindex()
 	if !needs {
 		onDisk, needs = lib.storeDrifted()

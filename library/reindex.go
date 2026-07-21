@@ -3,12 +3,12 @@ package library
 import (
 	"fmt"
 	"log"
-	"os"
 	"runtime"
 	"slices"
 	"strings"
 	"sync"
 
+	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index"
 	"github.com/ramblingenzyme/ebookfs/library/internal/store"
@@ -21,7 +21,7 @@ import (
 type scanState struct {
 	mu        sync.Mutex
 	indexed   []index.BookPath
-	unindexed map[string]index.PathInfo
+	unindexed map[string]drift.PathInfo
 	maxID     int64
 }
 
@@ -34,7 +34,7 @@ func (s *scanState) add(bp index.BookPath) {
 
 // skip records a directory this rebuild can't index, so drift detection can
 // tell it apart from one that appeared on disk unaccounted for.
-func (s *scanState) skip(path string, pi index.PathInfo) {
+func (s *scanState) skip(path string, pi drift.PathInfo) {
 	s.mu.Lock()
 	s.unindexed[path] = pi
 	s.mu.Unlock()
@@ -55,26 +55,26 @@ func (s *scanState) reserveID(id int64) {
 // It compares a directory listing against the index using each file's size and
 // modification time (cheap, no parse), both taken from the same stat that
 // recorded them. Size is compared as well as mtime because coarse-clock
-// filesystems reuse an mtime for writes in the same tick (see index.PathInfo).
+// filesystems reuse an mtime for writes in the same tick (see drift.PathInfo).
 // It also returns the store scan it built, keyed by library path, so a reindex
 // triggered by that verdict can reuse it instead of stat'ing every book again.
 // The scan is nil when the walk itself failed; reindex then stats everything.
-func (l *libraryImpl) storeDrifted() (map[string]index.PathInfo, bool) {
+func (l *libraryImpl) storeDrifted() (map[string]drift.PathInfo, bool) {
 	entries, err := l.store.Walk()
 	if err != nil {
 		log.Printf("reindex: could not walk store (%v), forcing rebuild", err)
 		return nil, true
 	}
 
-	onDisk := make(map[string]index.PathInfo, len(entries))
+	onDisk := make(map[string]drift.PathInfo, len(entries))
 	for _, e := range entries {
-		mt, err := l.statBook(e)
+		mt, err := l.store.Stat(e)
 		if err != nil {
 			// Recorded as unobserved rather than forcing a rebuild: the rebuild
 			// records the same marker, so the two agree and one unreadable book
-			// stops meaning a full reindex on every startup (see index.Unobserved).
+			// stops meaning a full reindex on every startup (see drift.Unobserved).
 			log.Printf("reindex: could not stat %s (%v), recording as unreadable", e.LibraryPath, err)
-			mt = index.Unobserved(e.EpubFilename)
+			mt = drift.Unobserved(e.EpubFilename)
 		}
 		onDisk[e.LibraryPath] = mt
 	}
@@ -104,7 +104,7 @@ func (l *libraryImpl) Reindex() error { return l.reindex(nil) }
 // reindex rebuilds the index. known, when non-nil, is the store scan storeDrifted
 // already performed — reusing it saves re-stating every book on the startup path
 // that most often reaches here, where the scan happened moments earlier.
-func (l *libraryImpl) reindex(known map[string]index.PathInfo) error {
+func (l *libraryImpl) reindex(known map[string]drift.PathInfo) error {
 	entries, err := l.store.Walk()
 	if err != nil {
 		return err
@@ -133,10 +133,10 @@ func (l *libraryImpl) reindex(known map[string]index.PathInfo) error {
 // scanEntries reads every entry into a scanState on a bounded worker pool: each
 // is independent disk and CPU work, and reindex blocks startup, so a large
 // library would otherwise pay for every epub sequentially.
-func (l *libraryImpl) scanEntries(entries []model.Location, known map[string]index.PathInfo) *scanState {
+func (l *libraryImpl) scanEntries(entries []model.Location, known map[string]drift.PathInfo) *scanState {
 	s := &scanState{
 		indexed:   make([]index.BookPath, 0, len(entries)),
-		unindexed: make(map[string]index.PathInfo),
+		unindexed: make(map[string]drift.PathInfo),
 	}
 	var (
 		wg  sync.WaitGroup
@@ -158,7 +158,7 @@ func (l *libraryImpl) scanEntries(entries []model.Location, known map[string]ind
 // scanEntry records one book directory in s: indexed when its sidecar and epub
 // both read, skipped with whatever file state was observed when they don't.
 // Either way it reserves the id the directory holds.
-func (l *libraryImpl) scanEntry(s *scanState, known map[string]index.PathInfo, e model.Location) {
+func (l *libraryImpl) scanEntry(s *scanState, known map[string]drift.PathInfo, e model.Location) {
 	// One stat up front serves every branch below, indexed or not: a directory
 	// this rebuild can't index still needs its state recorded, or drift
 	// detection cannot tell it from one that appeared on disk unaccounted for.
@@ -170,8 +170,8 @@ func (l *libraryImpl) scanEntry(s *scanState, known map[string]index.PathInfo, e
 		// as one. Substituting the marker here rather than in the branches below
 		// is what guarantees every skip path records something: a directory in
 		// neither books nor skipped_books reads as one that appeared on disk
-		// unaccounted for, which is drift on every startup (see index.Unobserved).
-		pi = index.Unobserved(e.EpubFilename)
+		// unaccounted for, which is drift on every startup (see drift.Unobserved).
+		pi = drift.Unobserved(e.EpubFilename)
 	}
 
 	meta, err := l.store.ReadMeta(e)
@@ -267,11 +267,11 @@ func (l *libraryImpl) moveToCanonical(indexed []index.BookPath) {
 // record of failure rather than a usable reading, so it is re-stat'd instead of
 // being handed back as a successful one — which would index the book against
 // file state that was never actually seen.
-func (l *libraryImpl) pathInfo(known map[string]index.PathInfo, loc model.Location) (index.PathInfo, error) {
+func (l *libraryImpl) pathInfo(known map[string]drift.PathInfo, loc model.Location) (drift.PathInfo, error) {
 	if pi, ok := known[loc.LibraryPath]; ok && !pi.IsUnobserved() {
 		return pi, nil
 	}
-	return l.statBook(loc)
+	return l.store.Stat(loc)
 }
 
 // needsReindex reports whether the index requires a rebuild — true when there
@@ -283,33 +283,4 @@ func (l *libraryImpl) needsReindex() bool {
 		return true
 	}
 	return needs
-}
-
-// statBook returns the on-disk state of a book's epub and meta.toml — the epub
-// size and both modification times — used by the library layer for drift
-// detection. A stat failure is returned rather than defaulted away: a zero
-// mtime can never match a real file, so recording one would silently force a
-// full reindex on every startup thereafter.
-//
-// TODO: this belongs on the store, which owns on-disk layout — it is the only
-// place the library reaches past the store to the filesystem, and the reason
-// store.MetaPath is exported at all. Blocked on index.PathInfo living in the
-// index, which store cannot import; moving it to model unblocks both. See
-// ROADMAP, "observing file state belongs to the store".
-func (l *libraryImpl) statBook(loc model.Location) (index.PathInfo, error) {
-	epubFI, err := os.Stat(l.store.AbsPath(loc.LibraryPath, loc.EpubFilename))
-	if err != nil {
-		return index.PathInfo{}, err
-	}
-	metaFI, err := os.Stat(l.store.MetaPath(loc))
-	if err != nil {
-		return index.PathInfo{}, err
-	}
-	return index.PathInfo{
-		EpubFilename: loc.EpubFilename,
-		Size:         epubFI.Size(),
-		EpubMtime:    epubFI.ModTime(),
-		MetaSize:     metaFI.Size(),
-		MetaMtime:    metaFI.ModTime(),
-	}, nil
 }

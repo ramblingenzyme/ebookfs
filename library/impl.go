@@ -133,7 +133,7 @@ func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 		_ = l.store.Delete(b.Location)
 		return nil, err
 	}
-	mt, err := l.statBook(b.Location)
+	mt, err := l.store.Stat(b.Location)
 	if err != nil {
 		_ = l.store.Delete(b.Location)
 		return nil, err
@@ -266,7 +266,7 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 		return nil, err
 	}
 
-	mt, err := l.statBook(updated.Location)
+	mt, err := l.store.Stat(updated.Location)
 	if err != nil {
 		log.Printf("edit: book %d (%q): stat: %v", b.Meta.ID, b.Title, err)
 		return nil, err

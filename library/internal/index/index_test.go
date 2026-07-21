@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -38,7 +39,7 @@ func openTestIndex(t *testing.T) *Index {
 }
 
 // TestPathInfoRoundTrip pins the nanosecond encoding: every other test passes a
-// zero PathInfo, so without this a broken encode/decode would surface only as
+// zero drift.PathInfo, so without this a broken encode/decode would surface only as
 // drift detection quietly rebuilding on every startup.
 //
 // EpubFilename is expected back as newBook's "book.epub" whatever Put was
@@ -47,11 +48,11 @@ func openTestIndex(t *testing.T) *Index {
 func TestPathInfoRoundTrip(t *testing.T) {
 	tests := []struct {
 		name string
-		want PathInfo
+		want drift.PathInfo
 	}{
 		// A whole second (zero nanoseconds) alongside sub-millisecond precision
 		// that a second-granularity format would silently truncate.
-		{"recorded", PathInfo{
+		{"recorded", drift.PathInfo{
 			EpubFilename: "book.epub",
 			Size:         4242,
 			EpubMtime:    time.Unix(1700000000, 0),
@@ -60,7 +61,7 @@ func TestPathInfoRoundTrip(t *testing.T) {
 		}},
 		// Never observed: stores as 0 and must decode back to the zero time, not
 		// to the Unix epoch, which would read as a real (and wrong) timestamp.
-		{"zero", PathInfo{EpubFilename: "book.epub"}},
+		{"zero", drift.PathInfo{EpubFilename: "book.epub"}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -83,7 +84,7 @@ func TestPathInfoRoundTrip(t *testing.T) {
 				t.Fatalf("AllPathInfo missing %q, got %v", tc.name, all)
 			}
 			if !got.Equal(tc.want) {
-				t.Errorf("PathInfo = %+v, want %+v", got, tc.want)
+				t.Errorf("drift.PathInfo = %+v, want %+v", got, tc.want)
 			}
 			if tc.want.EpubMtime.IsZero() && !got.EpubMtime.IsZero() {
 				t.Errorf("EpubMtime = %v, want the zero time", got.EpubMtime)
@@ -97,7 +98,7 @@ func TestPathInfoRoundTrip(t *testing.T) {
 func TestRebuildRecordsSkippedPaths(t *testing.T) {
 	idx := openTestIndex(t)
 
-	skipped := map[string]PathInfo{
+	skipped := map[string]drift.PathInfo{
 		"Corrupt/Bad Book (7)": {Size: 99, EpubMtime: time.Unix(1700000000, 5)},
 	}
 	if err := idx.Rebuild(bookPaths(newBook(1, "Good")), skipped, 7); err != nil {
@@ -168,7 +169,7 @@ func TestPutSuccessLeavesClean(t *testing.T) {
 
 	op := idx.BeginOp()
 	op.MarkPending()
-	if err := op.Put(newBook(1, "Clean"), PathInfo{}); err != nil {
+	if err := op.Put(newBook(1, "Clean"), drift.PathInfo{}); err != nil {
 		t.Fatalf("put: %v", err)
 	}
 
@@ -186,7 +187,7 @@ func TestPutSuccessLeavesClean(t *testing.T) {
 func TestPutWithoutMarkPendingErrors(t *testing.T) {
 	idx := openTestIndex(t)
 	op := idx.BeginOp()
-	if err := op.Put(newBook(1, "Oops"), PathInfo{}); err == nil {
+	if err := op.Put(newBook(1, "Oops"), drift.PathInfo{}); err == nil {
 		t.Fatal("expected error when Put is called without MarkPending")
 	}
 }
@@ -255,7 +256,7 @@ func TestPerOpIndependence(t *testing.T) {
 	// Op B: MarkPending and complete successfully.
 	opB := idx.BeginOp()
 	opB.MarkPending()
-	if err := opB.Put(newBook(2, "B"), PathInfo{}); err != nil {
+	if err := opB.Put(newBook(2, "B"), drift.PathInfo{}); err != nil {
 		t.Fatalf("op B: %v", err)
 	}
 
@@ -274,7 +275,7 @@ func TestDeleteSuccessLeavesClean(t *testing.T) {
 
 	op1 := idx.BeginOp()
 	op1.MarkPending()
-	if err := op1.Put(newBook(1, "Gone"), PathInfo{}); err != nil {
+	if err := op1.Put(newBook(1, "Gone"), drift.PathInfo{}); err != nil {
 		t.Fatalf("put: %v", err)
 	}
 
@@ -355,7 +356,7 @@ func storeInIndex(t *testing.T, idx *Index, b *model.Book) {
 	if err := op.MarkPending(); err != nil {
 		t.Fatalf("MarkPending: %v", err)
 	}
-	if err := op.Put(b, PathInfo{}); err != nil {
+	if err := op.Put(b, drift.PathInfo{}); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 }
@@ -998,7 +999,7 @@ func TestPutClosedDB(t *testing.T) {
 	op := idx.BeginOp()
 	op.MarkPending()
 	idx.Close()
-	err := op.Put(newBook(1, "T"), PathInfo{})
+	err := op.Put(newBook(1, "T"), drift.PathInfo{})
 	if err == nil {
 		t.Fatal("expected error from Put after db closed")
 	}
@@ -1009,7 +1010,7 @@ func TestDeleteClosedDB(t *testing.T) {
 
 	op1 := idx.BeginOp()
 	op1.MarkPending()
-	if err := op1.Put(newBook(1, "T"), PathInfo{}); err != nil {
+	if err := op1.Put(newBook(1, "T"), drift.PathInfo{}); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 
@@ -1093,7 +1094,7 @@ func TestUpsertSeriesRolledBackTx(t *testing.T) {
 func TestPutBookRolledBackTx(t *testing.T) {
 	idx := openTestIndex(t)
 	tx := rolledBackTX(t, idx)
-	err := putBook(tx, newBook(1, "Test"), PathInfo{})
+	err := putBook(tx, newBook(1, "Test"), drift.PathInfo{})
 	if err == nil {
 		t.Fatal("expected error from putBook on rolled-back tx")
 	}
@@ -1102,7 +1103,7 @@ func TestPutBookRolledBackTx(t *testing.T) {
 func TestInsertBookRolledBackTx(t *testing.T) {
 	idx := openTestIndex(t)
 	tx := rolledBackTX(t, idx)
-	err := insertBook(tx, newBook(1, "Test"), PathInfo{})
+	err := insertBook(tx, newBook(1, "Test"), drift.PathInfo{})
 	if err == nil {
 		t.Fatal("expected error from insertBook on rolled-back tx")
 	}
@@ -1155,7 +1156,7 @@ func TestRebuildClearsLeakedRowsAndInsertsBooks(t *testing.T) {
 	}
 	op := idx.BeginOp()
 	op.MarkPending()
-	if err := op.Put(newBook(1, "Stale"), PathInfo{}); err != nil {
+	if err := op.Put(newBook(1, "Stale"), drift.PathInfo{}); err != nil {
 		t.Fatalf("Put stale: %v", err)
 	}
 	mustNeedReindex(t, idx, true)

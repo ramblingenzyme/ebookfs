@@ -6,57 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
-
-// PathInfo carries the on-disk state that the library layer observes with one
-// stat per file and the index stores for drift detection. Size accompanies the
-// mtimes because mtime alone cannot detect a change made within the same clock
-// tick as the recorded one — filesystems that stamp mtimes from the kernel's
-// coarse clock (tmpfs among them) hand out identical nanosecond values for
-// writes in the same tick. All of it is internal bookkeeping, not exposed on
-// model.Book.
-type PathInfo struct {
-	// EpubFilename is the epub's name within the book directory. Renaming a
-	// file preserves its size and mtime, so without the name a rename is
-	// invisible to drift detection and the index keeps serving a path that no
-	// longer exists. For an indexed book it is not persisted here — AllPathInfo
-	// reads books.epub_filename, the row's own copy — so Put ignores it; only
-	// skipped_books, which has no book row, stores it.
-	EpubFilename string
-	Size         int64 // epub size, from the same stat as EpubMtime
-	EpubMtime    time.Time
-	MetaSize     int64 // meta.toml size, from the same stat as MetaMtime
-	MetaMtime    time.Time
-}
-
-// Unobserved returns the state recorded for a book directory whose files could
-// not be stat'd. It is a definite value rather than an absent one, so both
-// sides of drift detection can record "we looked and could not see it" and
-// agree with each other across restarts — otherwise one unreadable book means a
-// full reindex on every startup, forever. The epub's name is still carried, so
-// the directory is not mistaken for a different one; if the files become
-// readable again the observed state differs from this and the book earns
-// another indexing attempt.
-func Unobserved(epubFilename string) PathInfo {
-	return PathInfo{EpubFilename: epubFilename}
-}
-
-// IsUnobserved reports whether p records a failed observation rather than a
-// real one. No stat of an existing file yields two zero mtimes.
-func (p PathInfo) IsUnobserved() bool {
-	return p.EpubMtime.IsZero() && p.MetaMtime.IsZero()
-}
-
-// Equal reports whether two observations describe the same on-disk state. The
-// times need Time.Equal rather than ==, which also compares location and
-// monotonic reading.
-func (p PathInfo) Equal(o PathInfo) bool {
-	return p.EpubFilename == o.EpubFilename &&
-		p.Size == o.Size && p.MetaSize == o.MetaSize &&
-		p.EpubMtime.Equal(o.EpubMtime) &&
-		p.MetaMtime.Equal(o.MetaMtime)
-}
 
 // toUnixNano encodes an mtime for storage. The zero time means "never observed"
 // and stores as 0 — note time.Time{}.UnixNano() is a large negative number, so
@@ -83,15 +35,16 @@ func fromUnixNano(n int64) time.Time {
 // once keeps the two tables and every statement that reads them in step.
 const pathInfoColumns = `epub_stat_size, epub_mtime, meta_mtime, meta_stat_size`
 
-// pathInfoSelect reads a full PathInfo, keyed by library path. epub_filename is
-// deliberately not in pathInfoColumns: that list is spliced into bookColumns,
-// and books already carries epub_filename as the book's own location — a second
-// copy would be the epub_stat_size/epub_size trap again. Both tables expose it
-// under the same name, so the read path can still state the tuple once.
+// pathInfoSelect reads a full drift.PathInfo, keyed by library path.
+// epub_filename is deliberately not in pathInfoColumns: that list is spliced
+// into bookColumns, and books already carries epub_filename as the book's own
+// location — a second copy would be the epub_stat_size/epub_size trap again.
+// Both tables expose it under the same name, so the read path can still state
+// the tuple once.
 const pathInfoSelect = `library_path, epub_filename, ` + pathInfoColumns
 
 // pathInfoValues returns mt's columns in pathInfoColumns order.
-func pathInfoValues(mt PathInfo) []any {
+func pathInfoValues(mt drift.PathInfo) []any {
 	return []any{mt.Size, toUnixNano(mt.EpubMtime), toUnixNano(mt.MetaMtime), mt.MetaSize}
 }
 
@@ -120,7 +73,7 @@ const bookColumns = `(id, title, sort_title, pubdate, description, language,
 // new column cannot leave the two disagreeing on a hand-counted run of `?`.
 var bookPlaceholders = "(?" + strings.Repeat(", ?", strings.Count(bookColumns, ",")) + ")"
 
-func bookValues(b *model.Book, mt PathInfo) []any {
+func bookValues(b *model.Book, mt drift.PathInfo) []any {
 	sortTitle := any(b.SortTitle)
 	if sortTitle == "" {
 		sortTitle = nil
@@ -140,7 +93,7 @@ func bookValues(b *model.Book, mt PathInfo) []any {
 // insert loop, so each author/series/tag is written alongside the book that
 // references it and nothing can be orphaned. Sweeping per book would run three
 // growing anti-join scans N times for no effect.
-func insertBook(tx *sql.Tx, b *model.Book, mt PathInfo) error {
+func insertBook(tx *sql.Tx, b *model.Book, mt drift.PathInfo) error {
 	// series_id/series_index are set by finishBook's upsertSeries.
 	if _, err := tx.Exec(
 		`INSERT INTO books `+bookColumns+` VALUES `+bookPlaceholders,
@@ -154,7 +107,7 @@ func insertBook(tx *sql.Tx, b *model.Book, mt PathInfo) error {
 
 // putBook inserts or replaces b, using ON CONFLICT to update an existing row.
 // Rebuild, which must surface id collisions, uses insertBook instead.
-func putBook(tx *sql.Tx, b *model.Book, mt PathInfo) error {
+func putBook(tx *sql.Tx, b *model.Book, mt drift.PathInfo) error {
 	// series_id/series_index are set by finishBook's upsertSeries.
 	if _, err := tx.Exec(
 		`INSERT INTO books `+bookColumns+` VALUES `+bookPlaceholders+`
@@ -196,7 +149,7 @@ func (o *Op) finish(fn func(*sql.Tx) error) error {
 
 // Put writes b into the index, inserting or replacing the record for b.Meta.ID.
 // mt carries the on-disk file state used for drift detection.
-func (o *Op) Put(b *model.Book, mt PathInfo) error {
+func (o *Op) Put(b *model.Book, mt drift.PathInfo) error {
 	return o.finish(func(tx *sql.Tx) error { return putBook(tx, b, mt) })
 }
 

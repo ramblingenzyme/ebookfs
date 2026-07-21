@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -27,11 +28,11 @@ func (idx *Index) NeedsReindex() (bool, error) {
 
 // BookPath pairs a book with its on-disk file state. Rebuild takes the two
 // together rather than as a book slice plus a lookup table so that indexing a
-// book without its drift bookkeeping is not representable — see PathInfo for
-// why a zero value there is not benign.
+// book without its drift bookkeeping is not representable — see drift.PathInfo
+// for why a zero value there is not benign.
 type BookPath struct {
 	Book *model.Book
-	Info PathInfo
+	Info drift.PathInfo
 }
 
 // Rebuild replaces the entire index with books, dropping and recreating tables
@@ -39,7 +40,7 @@ type BookPath struct {
 // skipped maps the library path of each directory that could not be indexed to
 // the file state it had; they are recorded rather than forgotten so AllPathInfo
 // can report every path the rebuild accounted for.
-func (idx *Index) Rebuild(books []BookPath, skipped map[string]PathInfo, maxID int64) error {
+func (idx *Index) Rebuild(books []BookPath, skipped map[string]drift.PathInfo, maxID int64) error {
 	var v int64
 	if err := idx.db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
 		return err

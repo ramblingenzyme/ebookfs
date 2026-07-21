@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -50,7 +51,7 @@ func (idx *Index) Query(f model.Filter) ([]*model.Book, error) {
 // to the file state recorded for it — both indexed books and the directories it
 // could not index. Drift detection compares a store listing against this, so a
 // path missing here is genuinely unexplained rather than merely unindexable.
-func (idx *Index) AllPathInfo() (map[string]PathInfo, error) {
+func (idx *Index) AllPathInfo() (map[string]drift.PathInfo, error) {
 	rows, err := idx.db.Query(`
 		SELECT ` + pathInfoSelect + ` FROM books
 		UNION ALL
@@ -60,7 +61,7 @@ func (idx *Index) AllPathInfo() (map[string]PathInfo, error) {
 	}
 	defer rows.Close()
 
-	info := make(map[string]PathInfo)
+	info := make(map[string]drift.PathInfo)
 	for rows.Next() {
 		var path, epubName string
 		var size, epubMtime, metaMtime, metaSize int64
@@ -75,7 +76,7 @@ func (idx *Index) AllPathInfo() (map[string]PathInfo, error) {
 		if _, dup := info[path]; dup {
 			return nil, fmt.Errorf("index inconsistency: %q recorded as both indexed and skipped", path)
 		}
-		info[path] = PathInfo{
+		info[path] = drift.PathInfo{
 			EpubFilename: epubName,
 			Size:         size,
 			EpubMtime:    fromUnixNano(epubMtime),

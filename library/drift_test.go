@@ -356,7 +356,7 @@ func TestStoreDriftedDetectsManualMetaEdit(t *testing.T) {
 	lib := openTestLibrary(t)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Book"))
 
-	metaPath := lib.(*libraryImpl).store.MetaPath(book.Location)
+	metaPath := filepath.Join(filepath.Dir(book.EpubPath), "meta.toml")
 	// Write a modified meta.toml to simulate hand-editing the sidecar.
 	if err := os.WriteFile(metaPath, []byte("id = 1\nstatus = \"read\"\n"), 0644); err != nil {
 		t.Fatalf("write meta.toml: %v", err)
