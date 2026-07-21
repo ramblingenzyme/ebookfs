@@ -259,6 +259,54 @@ func TestUnstattableBookSettlesClean(t *testing.T) {
 	}
 }
 
+// TestUnreadableMetaAndUnstattableEpubSettlesClean covers both halves of a book
+// failing at once: the epub can't be stat'd and the sidecar can't be parsed. The
+// rebuild has no trustworthy file state for it, but it must still record the
+// directory — one left out of both books and skipped_books reads as a path that
+// appeared on disk unaccounted for, so storeDrifted reports drift and the whole
+// library is reindexed on every startup.
+func TestUnreadableMetaAndUnstattableEpubSettlesClean(t *testing.T) {
+	cfg := testConfig(t)
+	lib := openLib(t, cfg, false)
+	book := ingestTestEpub(t, lib, buildTestEpub(t, "Ghost"))
+	if err := lib.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	// Dangling symlink, so store.Walk still reports the directory but os.Stat
+	// follows the link and fails.
+	if err := os.Remove(book.EpubPath); err != nil {
+		t.Fatalf("remove epub: %v", err)
+	}
+	dangling := filepath.Join(filepath.Dir(book.EpubPath), "nowhere.epub")
+	if err := os.Symlink(dangling, book.EpubPath); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+	// Present but unparseable, so Walk still sees a book directory while
+	// ReadMeta fails.
+	metaPath := filepath.Join(filepath.Dir(book.EpubPath), "meta.toml")
+	if err := os.WriteFile(metaPath, []byte("id = \"not an integer\"\n"), 0644); err != nil {
+		t.Fatalf("corrupt meta.toml: %v", err)
+	}
+
+	// First restart reindexes and records the directory; every further plain
+	// restart must then see a clean index.
+	for i := 1; i <= 3; i++ {
+		l, err := Open(cfg, false)
+		if err != nil {
+			t.Fatalf("reopen %d: %v", i, err)
+		}
+		d := drifted(t, l)
+		if err := l.Close(); err != nil {
+			t.Fatalf("Close %d: %v", i, err)
+		}
+		if d {
+			t.Fatalf("storeDrifted() = true on restart %d — a book with an unreadable sidecar "+
+				"and an unstattable epub forces a full reindex on every startup", i)
+		}
+	}
+}
+
 // TestDuplicateBookIDFailsOpenNamingBothPaths covers a book directory copied on
 // disk, giving two directories the same meta.toml id. This is fatal by design
 // (DECISIONS.md #14) — the test pins that, and that the error names both

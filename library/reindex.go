@@ -165,6 +165,14 @@ func (l *libraryImpl) scanEntry(s *scanState, known map[string]index.PathInfo, e
 	// The error is held rather than acted on so an unstattable book still
 	// reserves its id below.
 	pi, statErr := l.pathInfo(known, e)
+	if statErr != nil {
+		// Nothing was observed, so pi is not a reading and must not be recorded
+		// as one. Substituting the marker here rather than in the branches below
+		// is what guarantees every skip path records something: a directory in
+		// neither books nor skipped_books reads as one that appeared on disk
+		// unaccounted for, which is drift on every startup (see index.Unobserved).
+		pi = index.Unobserved(e.EpubFilename)
+	}
 
 	meta, err := l.store.ReadMeta(e)
 	if err != nil {
@@ -176,9 +184,7 @@ func (l *libraryImpl) scanEntry(s *scanState, known map[string]index.PathInfo, e
 		if id, ok := store.IDFromPath(e.LibraryPath); ok {
 			s.reserveID(id)
 		}
-		if statErr == nil {
-			s.skip(e.LibraryPath, pi)
-		}
+		s.skip(e.LibraryPath, pi)
 		return
 	}
 	// Reserve as soon as the meta is readable, even if the epub then fails to
@@ -187,11 +193,10 @@ func (l *libraryImpl) scanEntry(s *scanState, known map[string]index.PathInfo, e
 
 	// Left out of the rebuild — there is no trustworthy file state to index it
 	// against — but recorded as unobserved so drift detection agrees with the
-	// same verdict next startup instead of rebuilding forever (see
-	// index.Unobserved).
+	// same verdict next startup instead of rebuilding forever.
 	if statErr != nil {
 		log.Printf("reindex: skip %s: stat: %v", e.LibraryPath, statErr)
-		s.skip(e.LibraryPath, index.Unobserved(e.EpubFilename))
+		s.skip(e.LibraryPath, pi)
 		return
 	}
 
