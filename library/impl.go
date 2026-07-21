@@ -232,8 +232,6 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 		return nil, v
 	}
 
-	updated := applyMeta(b, e)
-
 	op := l.index.BeginOp()
 
 	c, err := epub.Prepare(b, e)
@@ -250,31 +248,32 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 		log.Printf("edit: book %d (%q): commit rewrite: %v", b.Meta.ID, b.Title, err)
 		return nil, err
 	}
+
+	bib := b.Bib
 	if book := c.Book(); book != nil {
-		updated.Bib = bibFromEpub(book)
+		bib = bibFromEpub(book)
 	}
 
-	newLoc := l.store.Layout(updated.Authors, updated.Title, updated.Meta.ID)
-	if newLoc.LibraryPath != b.Location.LibraryPath || newLoc.EpubFilename != b.Location.EpubFilename {
-		if err := l.store.Move(b.Location, newLoc); err != nil {
+	meta := applyMeta(b.Meta, e)
+	location := l.store.Layout(bib.Authors, bib.Title, meta.ID)
+	if location.LibraryPath != b.Location.LibraryPath || location.EpubFilename != b.Location.EpubFilename {
+		if err := l.store.Move(b.Location, location); err != nil {
 			log.Printf("edit: book %d (%q): move directory: %v", b.Meta.ID, b.Title, err)
 			return nil, err
 		}
-		updated.Location = newLoc
 	}
-	if err := l.store.WriteMeta(updated.Location, &updated.Meta); err != nil {
+	if err := l.store.WriteMeta(location, &meta); err != nil {
 		log.Printf("edit: book %d (%q): write meta: %v", b.Meta.ID, b.Title, err)
 		return nil, err
 	}
 
-	mt, err := l.store.Stat(updated.Location)
+	mt, err := l.store.Stat(location)
 	if err != nil {
 		log.Printf("edit: book %d (%q): stat: %v", b.Meta.ID, b.Title, err)
 		return nil, err
 	}
-	// After the rewrite and the move, so this is the size of the epub as it now
-	// stands — the value the index is about to record, not the pre-edit one.
-	updated.EpubSize = mt.Size
+
+	updated := bookFromBib(bib, meta, location, mt)
 	if err := op.Put(updated, mt); err != nil {
 		return nil, err
 	}
@@ -284,19 +283,18 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 // applyMeta returns a copy of b with the meta edits in e applied and the
 // modified time stamped. Fields left nil in e are untouched. Bib fields are not
 // applied here — Edit derives them from the epub re-parse.
-func applyMeta(b *model.Book, e model.Edits) *model.Book {
-	cp := *b
+func applyMeta(m model.Meta, e model.Edits) model.Meta {
 	if e.Status != nil {
-		cp.Meta.Status = *e.Status
+		m.Status = *e.Status
 	}
 	if e.Rating != nil {
-		cp.Meta.Rating = *e.Rating
+		m.Rating = *e.Rating
 	}
 	if e.Tags != nil {
-		cp.Meta.Tags = *e.Tags
+		m.Tags = *e.Tags
 	}
-	cp.Meta.DateModified = time.Now()
-	return &cp
+	m.DateModified = time.Now()
+	return m
 }
 
 // bibFromEpub converts a parsed epub.Book into a model.Bib.
