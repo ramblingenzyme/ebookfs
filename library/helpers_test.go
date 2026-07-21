@@ -67,14 +67,31 @@ func buildTestEpub(t *testing.T, title string, authors ...string) []byte {
 	return buf.Bytes()
 }
 
-func openTestLibrary(t *testing.T) Library {
+// testConfig returns a library config rooted in a fresh temp dir. Tests that
+// reopen a library across restarts need the config itself, not just the opened
+// library, so the layout is stated here once.
+func testConfig(t *testing.T) config.LibraryConfig {
 	t.Helper()
 	dir := t.TempDir()
-	lib, err := Open(config.LibraryConfig{
+	return config.LibraryConfig{
 		Root:      filepath.Join(dir, "root"),
 		InboxTemp: filepath.Join(dir, "inbox-tmp"),
 		IndexPath: filepath.Join(dir, "index.db"),
-	}, false)
+	}
+}
+
+func openTestLibrary(t *testing.T) Library {
+	t.Helper()
+	return openLib(t, testConfig(t), false)
+}
+
+// openLib opens a library at cfg and registers its close, so an assertion that
+// fails mid-test cannot leave the index open. Tests that reopen across a
+// simulated restart still Close explicitly for sequencing; the second close is
+// a no-op.
+func openLib(t *testing.T, cfg config.LibraryConfig, forceReindex bool) Library {
+	t.Helper()
+	lib, err := Open(cfg, forceReindex)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}

@@ -8,14 +8,25 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
+// metaFilename is the per-book sidecar the store writes alongside each epub.
+// Everything that needs the file goes through MetaPath so the name is stated
+// once — a rename stays a compile-time concern rather than a silent ENOENT.
+const metaFilename = "meta.toml"
+
+// MetaPath returns the absolute path of the meta.toml sidecar for the book at
+// loc. Callers outside the store need it to stat the sidecar directly.
+func (s *Store) MetaPath(loc model.Location) string {
+	return s.AbsPath(loc.LibraryPath, metaFilename)
+}
+
 // ReadMeta reads the meta.toml sidecar for the book at loc.
 func (s *Store) ReadMeta(loc model.Location) (*model.Meta, error) {
-	return readMeta(s.AbsPath(loc.LibraryPath, "meta.toml"))
+	return readMeta(s.MetaPath(loc))
 }
 
 // WriteMeta atomically replaces the meta.toml sidecar for the book at loc.
 func (s *Store) WriteMeta(loc model.Location, meta *model.Meta) error {
-	return writeMeta(s.AbsPath(loc.LibraryPath, "meta.toml"), meta)
+	return writeMeta(s.MetaPath(loc), meta)
 }
 
 func readMeta(path string) (*model.Meta, error) {

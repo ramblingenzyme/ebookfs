@@ -2,6 +2,7 @@ package index
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 	"time"
 
@@ -45,26 +46,44 @@ func (idx *Index) Query(f model.Filter) ([]*model.Book, error) {
 	return idx.queryBooks(strings.Join(where, " AND "), args, order, f.Limit)
 }
 
-// PathSizes returns every indexed book's library_path mapped to its
-// last-recorded epub_size, used to cheaply detect on-disk drift without a
-// full reindex.
-func (idx *Index) PathSizes() (map[string]int64, error) {
-	rows, err := idx.db.Query(`SELECT library_path, epub_size FROM books`)
+// AllPathInfo returns every library path the last rebuild accounted for, mapped
+// to the file state recorded for it — both indexed books and the directories it
+// could not index. Drift detection compares a store listing against this, so a
+// path missing here is genuinely unexplained rather than merely unindexable.
+func (idx *Index) AllPathInfo() (map[string]PathInfo, error) {
+	rows, err := idx.db.Query(`
+		SELECT ` + pathInfoSelect + ` FROM books
+		UNION ALL
+		SELECT ` + pathInfoSelect + ` FROM skipped_books`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	sizes := make(map[string]int64)
+	info := make(map[string]PathInfo)
 	for rows.Next() {
-		var path string
-		var size int64
-		if err := rows.Scan(&path, &size); err != nil {
+		var path, epubName string
+		var size, epubMtime, metaMtime, metaSize int64
+		if err := rows.Scan(&path, &epubName, &size, &epubMtime, &metaMtime, &metaSize); err != nil {
 			return nil, err
 		}
-		sizes[path] = size
+		// books and skipped_books are disjoint by construction (Rebuild puts
+		// each walked directory in exactly one), but nothing in the schema
+		// enforces it across tables. A path in both would collapse in this map
+		// and silently satisfy the caller's count comparison, masking real
+		// drift — so refuse rather than return a half-truth.
+		if _, dup := info[path]; dup {
+			return nil, fmt.Errorf("index inconsistency: %q recorded as both indexed and skipped", path)
+		}
+		info[path] = PathInfo{
+			EpubFilename: epubName,
+			Size:         size,
+			EpubMtime:    fromUnixNano(epubMtime),
+			MetaSize:     metaSize,
+			MetaMtime:    fromUnixNano(metaMtime),
+		}
 	}
-	return sizes, rows.Err()
+	return info, rows.Err()
 }
 
 // Get returns the book with the given id, or sql.ErrNoRows if it is absent.

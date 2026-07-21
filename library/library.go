@@ -88,8 +88,17 @@ func Open(cfg config.LibraryConfig, forceReindex bool) (Library, error) {
 		index:     idx,
 		inboxTemp: cfg.InboxTemp,
 	}
-	if forceReindex || lib.needsReindex() || lib.storeDrifted() {
-		if err := lib.Reindex(); err != nil {
+	// Spelled out rather than as one || chain (which short-circuits the same
+	// way) so the store scan can be captured: when storeDrifted is the check
+	// that fires, its result is handed to the rebuild so the books are not
+	// stat'd twice.
+	var onDisk map[string]index.PathInfo
+	needs := forceReindex || lib.needsReindex()
+	if !needs {
+		onDisk, needs = lib.storeDrifted()
+	}
+	if needs {
+		if err := lib.reindex(onDisk); err != nil {
 			return nil, fmt.Errorf("reindexing library: %w", err)
 		}
 	} else {

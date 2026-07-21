@@ -30,7 +30,7 @@ func writeBook(t *testing.T, root, libPath, epubName, content string, meta *mode
 		}
 	}
 	if meta != nil {
-		if err := writeMeta(filepath.Join(dir, "meta.toml"), meta); err != nil {
+		if err := writeMeta(filepath.Join(dir, metaFilename), meta); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -277,7 +277,7 @@ func TestIngest(t *testing.T) {
 	}
 
 	// Verify meta.toml was written.
-	metaPath := filepath.Join(bookDir, "meta.toml")
+	metaPath := filepath.Join(bookDir, metaFilename)
 	if _, err := os.Stat(metaPath); err != nil {
 		t.Errorf("meta.toml not found: %v", err)
 	}
@@ -484,5 +484,41 @@ func TestDeleteWithReadOnlyDirError(t *testing.T) {
 	err := s.Delete(loc)
 	if err == nil {
 		t.Error("expected error deleting a read-only book directory")
+	}
+}
+
+// TestIDFromPath pins the inverse of canonicalDir's " (id)" suffix. It is the
+// only way to recover a book's id when meta.toml can't be parsed, so it has to
+// reject anything it isn't certain about rather than guess.
+func TestIDFromPath(t *testing.T) {
+	tests := []struct {
+		path string
+		want int64
+		ok   bool
+	}{
+		// The three layouts this project has used.
+		{"Alice/Test Title (1)", 1, true},
+		{"Alice & Bob/Test Title (42)", 42, true},
+		{"Smith, Alice/Test Title (7)", 7, true},
+		// A title that itself ends in parentheses: the last group wins.
+		{"Alice/Test Title (Annotated) (9)", 9, true},
+		// Nothing to read.
+		{"Alice/Test Title", 0, false},
+		{"Alice", 0, false},
+		{"", 0, false},
+		// Present but not a usable id.
+		{"Alice/Test Title ()", 0, false},
+		{"Alice/Test Title (abc)", 0, false},
+		{"Alice/Test Title (0)", 0, false},
+		{"Alice/Test Title (-3)", 0, false},
+		// Unclosed or malformed.
+		{"Alice/Test Title (12", 0, false},
+		{"Alice/(5)", 0, false},
+	}
+	for _, tc := range tests {
+		got, ok := IDFromPath(tc.path)
+		if got != tc.want || ok != tc.ok {
+			t.Errorf("IDFromPath(%q) = (%d, %v), want (%d, %v)", tc.path, got, ok, tc.want, tc.ok)
+		}
 	}
 }

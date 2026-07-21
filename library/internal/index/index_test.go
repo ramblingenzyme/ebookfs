@@ -5,9 +5,20 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
+
+// bookPaths pairs books with zero file times for Rebuild. Tests that don't
+// exercise drift detection don't care what mtimes get recorded.
+func bookPaths(books ...*model.Book) []BookPath {
+	bts := make([]BookPath, len(books))
+	for i, b := range books {
+		bts[i] = BookPath{Book: b}
+	}
+	return bts
+}
 
 // openTestIndex returns a fresh index at a temp path, rebuilt to a clean,
 // version-stamped baseline so tests start from a known clean state.
@@ -20,10 +31,105 @@ func openTestIndex(t *testing.T) *Index {
 	t.Cleanup(func() { idx.Close() })
 	// A fresh index is intentionally "dirty" (see TestFreshOpenForcesReindex);
 	// rebuild an empty index to reach the clean baseline the mutation tests want.
-	if err := idx.Rebuild(nil, 0); err != nil {
+	if err := idx.Rebuild(nil, nil, 0); err != nil {
 		t.Fatalf("baseline rebuild: %v", err)
 	}
 	return idx
+}
+
+// TestPathInfoRoundTrip pins the nanosecond encoding: every other test passes a
+// zero PathInfo, so without this a broken encode/decode would surface only as
+// drift detection quietly rebuilding on every startup.
+//
+// EpubFilename is expected back as newBook's "book.epub" whatever Put was
+// handed: for an indexed book the name is read from books.epub_filename, the
+// row's own authoritative copy, rather than stored a second time.
+func TestPathInfoRoundTrip(t *testing.T) {
+	tests := []struct {
+		name string
+		want PathInfo
+	}{
+		// A whole second (zero nanoseconds) alongside sub-millisecond precision
+		// that a second-granularity format would silently truncate.
+		{"recorded", PathInfo{
+			EpubFilename: "book.epub",
+			Size:         4242,
+			EpubMtime:    time.Unix(1700000000, 0),
+			MetaSize:     17,
+			MetaMtime:    time.Unix(1700000000, 123456789),
+		}},
+		// Never observed: stores as 0 and must decode back to the zero time, not
+		// to the Unix epoch, which would read as a real (and wrong) timestamp.
+		{"zero", PathInfo{EpubFilename: "book.epub"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			idx := openTestIndex(t)
+
+			op := idx.BeginOp()
+			if err := op.MarkPending(); err != nil {
+				t.Fatalf("MarkPending: %v", err)
+			}
+			if err := op.Put(newBook(1, tc.name), tc.want); err != nil {
+				t.Fatalf("Put: %v", err)
+			}
+
+			all, err := idx.AllPathInfo()
+			if err != nil {
+				t.Fatalf("AllPathInfo: %v", err)
+			}
+			got, ok := all[tc.name]
+			if !ok {
+				t.Fatalf("AllPathInfo missing %q, got %v", tc.name, all)
+			}
+			if !got.Equal(tc.want) {
+				t.Errorf("PathInfo = %+v, want %+v", got, tc.want)
+			}
+			if tc.want.EpubMtime.IsZero() && !got.EpubMtime.IsZero() {
+				t.Errorf("EpubMtime = %v, want the zero time", got.EpubMtime)
+			}
+		})
+	}
+}
+
+// Rebuild records skipped directories so AllPathInfo reports every path the
+// rebuild accounted for, indexed or not.
+func TestRebuildRecordsSkippedPaths(t *testing.T) {
+	idx := openTestIndex(t)
+
+	skipped := map[string]PathInfo{
+		"Corrupt/Bad Book (7)": {Size: 99, EpubMtime: time.Unix(1700000000, 5)},
+	}
+	if err := idx.Rebuild(bookPaths(newBook(1, "Good")), skipped, 7); err != nil {
+		t.Fatalf("Rebuild: %v", err)
+	}
+
+	all, err := idx.AllPathInfo()
+	if err != nil {
+		t.Fatalf("AllPathInfo: %v", err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("AllPathInfo has %d paths, want 2 (1 indexed + 1 skipped): %v", len(all), all)
+	}
+	got, ok := all["Corrupt/Bad Book (7)"]
+	if !ok {
+		t.Fatalf("skipped path missing from AllPathInfo: %v", all)
+	}
+	if got.Size != 99 || !got.EpubMtime.Equal(time.Unix(1700000000, 5)) {
+		t.Errorf("skipped info = %+v, want Size 99 and the recorded mtime", got)
+	}
+
+	// A later rebuild must not leave the previous run's skips behind.
+	if err := idx.Rebuild(bookPaths(newBook(1, "Good")), nil, 7); err != nil {
+		t.Fatalf("second Rebuild: %v", err)
+	}
+	all, err = idx.AllPathInfo()
+	if err != nil {
+		t.Fatalf("AllPathInfo: %v", err)
+	}
+	if _, ok := all["Corrupt/Bad Book (7)"]; ok {
+		t.Errorf("stale skipped path survived a rebuild that did not skip it: %v", all)
+	}
 }
 
 // newBook builds a minimal valid book for insertion.
@@ -62,7 +168,7 @@ func TestPutSuccessLeavesClean(t *testing.T) {
 
 	op := idx.BeginOp()
 	op.MarkPending()
-	if err := op.Put(newBook(1, "Clean")); err != nil {
+	if err := op.Put(newBook(1, "Clean"), PathInfo{}); err != nil {
 		t.Fatalf("put: %v", err)
 	}
 
@@ -80,7 +186,7 @@ func TestPutSuccessLeavesClean(t *testing.T) {
 func TestPutWithoutMarkPendingErrors(t *testing.T) {
 	idx := openTestIndex(t)
 	op := idx.BeginOp()
-	if err := op.Put(newBook(1, "Oops")); err == nil {
+	if err := op.Put(newBook(1, "Oops"), PathInfo{}); err == nil {
 		t.Fatal("expected error when Put is called without MarkPending")
 	}
 }
@@ -149,7 +255,7 @@ func TestPerOpIndependence(t *testing.T) {
 	// Op B: MarkPending and complete successfully.
 	opB := idx.BeginOp()
 	opB.MarkPending()
-	if err := opB.Put(newBook(2, "B")); err != nil {
+	if err := opB.Put(newBook(2, "B"), PathInfo{}); err != nil {
 		t.Fatalf("op B: %v", err)
 	}
 
@@ -168,7 +274,7 @@ func TestDeleteSuccessLeavesClean(t *testing.T) {
 
 	op1 := idx.BeginOp()
 	op1.MarkPending()
-	if err := op1.Put(newBook(1, "Gone")); err != nil {
+	if err := op1.Put(newBook(1, "Gone"), PathInfo{}); err != nil {
 		t.Fatalf("put: %v", err)
 	}
 
@@ -199,7 +305,7 @@ func TestFreshOpenForcesReindex(t *testing.T) {
 	}
 	mustNeedReindex(t, idx, true)
 
-	if err := idx.Rebuild(nil, 0); err != nil {
+	if err := idx.Rebuild(nil, nil, 0); err != nil {
 		t.Fatalf("rebuild: %v", err)
 	}
 	mustNeedReindex(t, idx, false)
@@ -233,7 +339,7 @@ func TestRebuildClearsLeakedRows(t *testing.T) {
 	}
 	mustNeedReindex(t, idx, true)
 
-	if err := idx.Rebuild(nil, 0); err != nil {
+	if err := idx.Rebuild(nil, nil, 0); err != nil {
 		t.Fatalf("rebuild: %v", err)
 	}
 	if n := pendingCount(t, idx); n != 0 {
@@ -249,7 +355,7 @@ func storeInIndex(t *testing.T, idx *Index, b *model.Book) {
 	if err := op.MarkPending(); err != nil {
 		t.Fatalf("MarkPending: %v", err)
 	}
-	if err := op.Put(b); err != nil {
+	if err := op.Put(b, PathInfo{}); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 }
@@ -704,7 +810,7 @@ func TestSearch(t *testing.T) {
 	b1 := makeTestBook(1, "Foundation", []string{"Isaac Asimov"}, "sci-fi", model.StatusRead)
 	b2 := makeTestBook(2, "Dune", []string{"Frank Herbert"}, "sci-fi", model.StatusUnread)
 	b3 := makeTestBook(3, "The Hobbit", []string{"J.R.R. Tolkien"}, "fantasy", model.StatusRead)
-	if err := idx.Rebuild([]*model.Book{b1, b2, b3}, 3); err != nil {
+	if err := idx.Rebuild(bookPaths(b1, b2, b3), nil, 3); err != nil {
 		t.Fatalf("Rebuild: %v", err)
 	}
 
@@ -790,7 +896,7 @@ func TestSearchIDs(t *testing.T) {
 
 	b1 := makeTestBook(1, "A", nil, "", "")
 	b2 := makeTestBook(2, "B", nil, "", "")
-	if err := idx.Rebuild([]*model.Book{b1, b2}, 2); err != nil {
+	if err := idx.Rebuild(bookPaths(b1, b2), nil, 2); err != nil {
 		t.Fatalf("Rebuild: %v", err)
 	}
 
@@ -892,7 +998,7 @@ func TestPutClosedDB(t *testing.T) {
 	op := idx.BeginOp()
 	op.MarkPending()
 	idx.Close()
-	err := op.Put(newBook(1, "T"))
+	err := op.Put(newBook(1, "T"), PathInfo{})
 	if err == nil {
 		t.Fatal("expected error from Put after db closed")
 	}
@@ -903,7 +1009,7 @@ func TestDeleteClosedDB(t *testing.T) {
 
 	op1 := idx.BeginOp()
 	op1.MarkPending()
-	if err := op1.Put(newBook(1, "T")); err != nil {
+	if err := op1.Put(newBook(1, "T"), PathInfo{}); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 
@@ -919,7 +1025,7 @@ func TestDeleteClosedDB(t *testing.T) {
 func TestRebuildClosedDB(t *testing.T) {
 	idx := openTestIndex(t)
 	idx.Close()
-	err := idx.Rebuild(nil, 0)
+	err := idx.Rebuild(nil, nil, 0)
 	if err == nil {
 		t.Fatal("expected error from Rebuild after db closed")
 	}
@@ -987,7 +1093,7 @@ func TestUpsertSeriesRolledBackTx(t *testing.T) {
 func TestPutBookRolledBackTx(t *testing.T) {
 	idx := openTestIndex(t)
 	tx := rolledBackTX(t, idx)
-	err := putBook(tx, newBook(1, "Test"))
+	err := putBook(tx, newBook(1, "Test"), PathInfo{})
 	if err == nil {
 		t.Fatal("expected error from putBook on rolled-back tx")
 	}
@@ -996,7 +1102,7 @@ func TestPutBookRolledBackTx(t *testing.T) {
 func TestInsertBookRolledBackTx(t *testing.T) {
 	idx := openTestIndex(t)
 	tx := rolledBackTX(t, idx)
-	err := insertBook(tx, newBook(1, "Test"))
+	err := insertBook(tx, newBook(1, "Test"), PathInfo{})
 	if err == nil {
 		t.Fatal("expected error from insertBook on rolled-back tx")
 	}
@@ -1049,7 +1155,7 @@ func TestRebuildClearsLeakedRowsAndInsertsBooks(t *testing.T) {
 	}
 	op := idx.BeginOp()
 	op.MarkPending()
-	if err := op.Put(newBook(1, "Stale")); err != nil {
+	if err := op.Put(newBook(1, "Stale"), PathInfo{}); err != nil {
 		t.Fatalf("Put stale: %v", err)
 	}
 	mustNeedReindex(t, idx, true)
@@ -1059,7 +1165,7 @@ func TestRebuildClearsLeakedRowsAndInsertsBooks(t *testing.T) {
 		newBook(10, "Fresh A"),
 		newBook(20, "Fresh B"),
 	}
-	if err := idx.Rebuild(fresh, 20); err != nil {
+	if err := idx.Rebuild(bookPaths(fresh...), nil, 20); err != nil {
 		t.Fatalf("Rebuild: %v", err)
 	}
 
@@ -1098,7 +1204,7 @@ func TestRebuildWithMultipleBooks(t *testing.T) {
 		),
 	}
 
-	if err := idx.Rebuild(books, 2); err != nil {
+	if err := idx.Rebuild(bookPaths(books...), nil, 2); err != nil {
 		t.Fatalf("Rebuild: %v", err)
 	}
 

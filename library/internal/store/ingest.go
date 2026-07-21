@@ -22,7 +22,7 @@ func (s *Store) Ingest(epubPath string, loc model.Location, meta *model.Meta) er
 		return err
 	}
 
-	if err := writeMeta(filepath.Join(rpath, "meta.toml"), meta); err != nil {
+	if err := writeMeta(filepath.Join(rpath, metaFilename), meta); err != nil {
 		if rmErr := os.RemoveAll(rpath); rmErr != nil {
 			log.Printf("store: Ingest cleanup failed for %s: %v", rpath, rmErr)
 		}

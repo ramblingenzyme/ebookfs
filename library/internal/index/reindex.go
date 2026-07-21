@@ -25,9 +25,21 @@ func (idx *Index) NeedsReindex() (bool, error) {
 	return count > 0, nil
 }
 
+// BookPath pairs a book with its on-disk file state. Rebuild takes the two
+// together rather than as a book slice plus a lookup table so that indexing a
+// book without its drift bookkeeping is not representable — see PathInfo for
+// why a zero value there is not benign.
+type BookPath struct {
+	Book *model.Book
+	Info PathInfo
+}
+
 // Rebuild replaces the entire index with books, dropping and recreating tables
 // if the schema is stale. maxID advances the id sequence past all reindexed ids.
-func (idx *Index) Rebuild(books []*model.Book, maxID int64) error {
+// skipped maps the library path of each directory that could not be indexed to
+// the file state it had; they are recorded rather than forgotten so AllPathInfo
+// can report every path the rebuild accounted for.
+func (idx *Index) Rebuild(books []BookPath, skipped map[string]PathInfo, maxID int64) error {
 	var v int64
 	if err := idx.db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
 		return err
@@ -49,15 +61,25 @@ func (idx *Index) Rebuild(books []*model.Book, maxID int64) error {
 	if err := idx.withTx(func(tx *sql.Tx) error {
 		for _, t := range []string{
 			"book_authors", "book_tags", "identifiers",
-			"books", "authors", "series", "tags",
+			"books", "authors", "series", "tags", "skipped_books",
 		} {
 			if _, err := tx.Exec("DELETE FROM " + t); err != nil {
 				return err
 			}
 		}
 
-		for _, b := range books {
-			if err := insertBook(tx, b); err != nil {
+		for _, bt := range books {
+			if err := insertBook(tx, bt.Book, bt.Info); err != nil {
+				return err
+			}
+		}
+
+		for path, info := range skipped {
+			if _, err := tx.Exec(
+				`INSERT INTO skipped_books (library_path, epub_filename, `+pathInfoColumns+`)
+				 VALUES (?, ?, ?, ?, ?, ?)`,
+				append([]any{path, info.EpubFilename}, pathInfoValues(info)...)...,
+			); err != nil {
 				return err
 			}
 		}

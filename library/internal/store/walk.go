@@ -21,7 +21,7 @@ func (s *Store) Walk() ([]model.Location, error) {
 		if !d.IsDir() {
 			return nil
 		}
-		if _, err := os.Stat(filepath.Join(path, "meta.toml")); err != nil {
+		if _, err := os.Stat(filepath.Join(path, metaFilename)); err != nil {
 			return nil // not a book directory; keep descending
 		}
 
