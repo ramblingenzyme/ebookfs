@@ -7,7 +7,7 @@ import (
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
-	"github.com/ramblingenzyme/ebookfs/library"
+	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // These tests cover the read/open/close semantics shared by the two base file
@@ -96,7 +96,7 @@ func TestSnapshotFilePerFidIsolation(t *testing.T) {
 func newTestReadAtFile(t *testing.T, data string) *ReadAtFile {
 	t.Helper()
 	stat := NewStat(testutil.NewTestFS(t), "reader", 0444)
-	raf := NewReadAtFile(stat, func() (library.EpubReader, error) {
+	raf := NewReadAtFile(stat, func() (model.EpubReader, error) {
 		return &libfake.EpubReader{Reader: bytes.NewReader([]byte(data))}, nil
 	})
 	return &raf
@@ -135,7 +135,7 @@ func TestReadAtFileReadUnopenedErrors(t *testing.T) {
 
 func TestReadAtFileOpenPropagatesError(t *testing.T) {
 	stat := NewStat(testutil.NewTestFS(t), "reader", 0444)
-	raf := NewReadAtFile(stat, func() (library.EpubReader, error) { return nil, testutil.ErrTest })
+	raf := NewReadAtFile(stat, func() (model.EpubReader, error) { return nil, testutil.ErrTest })
 	if err := raf.Open(1, proto.Mode(0)); err != testutil.ErrTest {
 		t.Errorf("Open error = %v, want %v", err, testutil.ErrTest)
 	}
@@ -161,7 +161,7 @@ func TestReadAtFilePerFidIsolation(t *testing.T) {
 func TestReadAtFileCloseReleasesReader(t *testing.T) {
 	r := &libfake.EpubReader{Reader: bytes.NewReader([]byte("data"))}
 	stat := NewStat(testutil.NewTestFS(t), "reader", 0444)
-	raf := NewReadAtFile(stat, func() (library.EpubReader, error) { return r, nil })
+	raf := NewReadAtFile(stat, func() (model.EpubReader, error) { return r, nil })
 
 	if err := raf.Open(1, proto.Mode(0)); err != nil {
 		t.Fatalf("Open: %v", err)

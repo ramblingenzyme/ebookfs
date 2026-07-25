@@ -32,7 +32,7 @@ func (r *EpubReader) Close() error {
 	return nil
 }
 
-var _ library.EpubReader = (*EpubReader)(nil)
+var _ model.EpubReader = (*EpubReader)(nil)
 var _ io.ReaderAt = (*EpubReader)(nil)
 
 // Lib is a fake library.Library whose behavior is injected per method; a nil
@@ -44,7 +44,7 @@ type Lib struct {
 	CreateIngestFn func() (library.IngestHandle, error)
 	ExtractCoverFn func(int64) ([]byte, error)
 	ExtractOPFFn   func(int64) ([]byte, error)
-	OpenEpubFn     func(int64) (library.EpubReader, error)
+	OpenEpubFn     func(int64) (model.EpubReader, error)
 	QueryFn        func(model.Filter) ([]*model.Book, error)
 	SearchFn       func(model.Query) ([]*model.Book, error)
 	StatsFn        func() (*model.Stats, error)
@@ -85,7 +85,7 @@ func (l Lib) ExtractOPF(id int64) ([]byte, error) {
 	return nil, nil
 }
 
-func (l Lib) OpenEpub(id int64) (library.EpubReader, error) {
+func (l Lib) OpenEpub(id int64) (model.EpubReader, error) {
 	if l.OpenEpubFn != nil {
 		return l.OpenEpubFn(id)
 	}
@@ -147,17 +147,19 @@ func (h IngestHandle) Ingest() (*model.Book, error) {
 // exporters' status policy.
 type Exporter struct {
 	StatusList []string
-	OpenFn     func(*model.Book) (library.EpubReader, error)
+	OpenFn     func(*model.Book) (model.EpubReader, error)
 	SizeFn     func(*model.Book) (int64, bool)
 	FilenameFn func(*model.Book) string
 }
 
-func (e Exporter) Open(b *model.Book) (library.EpubReader, error) {
+func (e Exporter) Open(b *model.Book) (model.EpubReader, error) {
 	if e.OpenFn != nil {
 		return e.OpenFn(b)
 	}
 	return nil, nil
 }
+
+func (e Exporter) Close() error { return nil }
 
 func (e Exporter) Size(b *model.Book) (int64, bool) {
 	if e.SizeFn != nil {

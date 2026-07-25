@@ -26,9 +26,9 @@ type kepubCache struct {
 	c        *kepub.Cache
 }
 
-func (k *kepubCache) close() error                           { return k.c.Close() }
+func (k *kepubCache) Close() error                              { return k.c.Close() }
 func (k *kepubCache) Includes(b *model.Book) bool            { return slices.Contains(k.statuses, b.Meta.Status) }
-func (k *kepubCache) Open(b *model.Book) (EpubReader, error) { return k.c.Open(b) }
+func (k *kepubCache) Open(b *model.Book) (model.EpubReader, error) { return k.c.Open(b) }
 func (k *kepubCache) Size(b *model.Book) (int64, bool)       { return k.c.Size(b) }
 func (k *kepubCache) Warm(b *model.Book)                     { k.c.Warm(b) }
 func (k *kepubCache) Filename(b *model.Book) string          { return k.c.Filename(b) }
@@ -39,9 +39,11 @@ type epubExporter struct {
 	lib      Library
 }
 
-func (e epubExporter) Open(b *model.Book) (EpubReader, error) {
+func (e epubExporter) Open(b *model.Book) (model.EpubReader, error) {
 	return e.lib.OpenEpub(b.Meta.ID)
 }
+
+func (e epubExporter) Close() error { return nil }
 
 func (e epubExporter) Size(b *model.Book) (int64, bool) {
 	return b.EpubSize, b.EpubSize > 0

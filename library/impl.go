@@ -49,14 +49,10 @@ func (l *libraryImpl) get(id int64) (*model.Book, error) {
 	return b, nil
 }
 
-type exporterCloser interface{ close() error }
-
 func (l *libraryImpl) Close() error {
 	l.expMu.Lock()
 	for _, e := range l.exporters {
-		if c, ok := e.(exporterCloser); ok {
-			c.close()
-		}
+		_ = e.Close()
 	}
 	l.expMu.Unlock()
 	return l.index.Close()
@@ -179,7 +175,7 @@ func (l *libraryImpl) Stats() (*model.Stats, error) {
 // OpenEpub returns a handle to the epub content of book id. The caller must
 // close it. The book's current location is resolved fresh, so the handle always
 // tracks the live file even if a concurrent edit moved it.
-func (l *libraryImpl) OpenEpub(id int64) (EpubReader, error) {
+func (l *libraryImpl) OpenEpub(id int64) (model.EpubReader, error) {
 	b, err := l.get(id)
 	if err != nil {
 		return nil, err

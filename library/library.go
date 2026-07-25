@@ -13,11 +13,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-// EpubReader is a handle to a book's epub content. It hides where the bytes
-// live (currently a file on disk) from the 9P layer, which needs random reads
-// and a close.
-type EpubReader = model.EpubReader
-
 // Library defines the public API for filesystem and index operations on the
 // book collection. The concrete implementation is unexported; construct via New.
 //
@@ -39,7 +34,7 @@ type Library interface {
 	Search(model.Query) ([]*model.Book, error)
 	Stats() (*model.Stats, error)
 	Reindex() error
-	OpenEpub(id int64) (EpubReader, error)
+	OpenEpub(id int64) (model.EpubReader, error)
 	ExtractCover(id int64) ([]byte, error)
 	ExtractOPF(id int64) ([]byte, error)
 	Edit(id int64, e model.Edits) (*model.Book, error)
@@ -57,12 +52,13 @@ type Library interface {
 // exposed status list so the policy can change (tag-based, size caps, …)
 // without touching the frontend.
 type Exporter interface {
-	Open(*model.Book) (EpubReader, error) // bytes for reads
-	Size(*model.Book) (int64, bool)       // cheap; 9P stat length, false when cold
-	Warm(*model.Book)                     // non-blocking proactive warm hint
-	Filename(*model.Book) string          // FAT-safe export name
-	Dirname(*model.Book) string           // FAT-safe export directory name
-	Includes(*model.Book) bool            // whether the book appears in the reader view
+	Open(*model.Book) (model.EpubReader, error) // bytes for reads
+	Size(*model.Book) (int64, bool)             // cheap; 9P stat length, false when cold
+	Close() error                               // releases exporter resources; called by Library.Close
+	Warm(*model.Book)                           // non-blocking proactive warm hint
+	Filename(*model.Book) string                // FAT-safe export name
+	Dirname(*model.Book) string                 // FAT-safe export directory name
+	Includes(*model.Book) bool                  // whether the book appears in the reader view
 }
 
 func Open(cfg config.LibraryConfig, forceReindex bool) (Library, error) {

@@ -21,7 +21,7 @@ type ReaderFile struct {
 
 func NewReaderFile(stat *proto.Stat, exp library.Exporter, book func() *model.Book) *ReaderFile {
 	return &ReaderFile{
-		ReadAtFile: vfile.NewReadAtFile(stat, func() (library.EpubReader, error) {
+		ReadAtFile: vfile.NewReadAtFile(stat, func() (model.EpubReader, error) {
 			if exp == nil {
 				return nil, errors.New("exporter not available")
 			}

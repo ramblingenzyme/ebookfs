@@ -22,11 +22,11 @@ func (r *fakeEpubReader) Close() error {
 	return nil
 }
 
-var _ EpubReader = (*fakeEpubReader)(nil)
+var _ model.EpubReader = (*fakeEpubReader)(nil)
 var _ io.ReaderAt = (*fakeEpubReader)(nil)
 
 type testLib struct {
-	openEpubFn func(int64) (EpubReader, error)
+	openEpubFn func(int64) (model.EpubReader, error)
 }
 
 func (l testLib) Close() error                                     { return nil }
@@ -35,7 +35,7 @@ func (l testLib) CreateIngest() (IngestHandle, error)              { return nil,
 func (l testLib) Query(_ model.Filter) ([]*model.Book, error)      { return nil, nil }
 func (l testLib) Stats() (*model.Stats, error)                     { return nil, nil }
 func (l testLib) Reindex() error                                   { return nil }
-func (l testLib) OpenEpub(id int64) (EpubReader, error) {
+func (l testLib) OpenEpub(id int64) (model.EpubReader, error) {
 	if l.openEpubFn != nil {
 		return l.openEpubFn(id)
 	}
@@ -53,7 +53,7 @@ var makeBook = testutil.MakeBook
 
 func TestEpubExporter_Open(t *testing.T) {
 	lib := testLib{
-		openEpubFn: func(_ int64) (EpubReader, error) {
+		openEpubFn: func(_ int64) (model.EpubReader, error) {
 			return &fakeEpubReader{Reader: bytes.NewReader([]byte("data"))}, nil
 		},
 	}
@@ -205,7 +205,7 @@ func TestKepubCacheDelegates(t *testing.T) {
 	}
 
 	// Close stops the warmer without error.
-	if err := kc.close(); err != nil {
+	if err := kc.Close(); err != nil {
 		t.Errorf("close: %v", err)
 	}
 }

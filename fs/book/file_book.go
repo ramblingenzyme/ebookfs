@@ -98,7 +98,7 @@ type epubFile struct {
 
 func newEpubFile(stat *proto.Stat, lib library.Library, book func() *model.Book) *epubFile {
 	return &epubFile{
-		ReadAtFile: vfile.NewReadAtFile(stat, func() (library.EpubReader, error) {
+		ReadAtFile: vfile.NewReadAtFile(stat, func() (model.EpubReader, error) {
 			if lib == nil {
 				return nil, errors.New("library not available")
 			}
