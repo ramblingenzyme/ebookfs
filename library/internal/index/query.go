@@ -3,6 +3,7 @@ package index
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -87,14 +88,25 @@ func (idx *Index) queryBooks(where string, args []any, order string, limit int) 
 		); err != nil {
 			return nil, err
 		}
-		b.Meta.DateAdded, _ = time.Parse(time.RFC3339, dateAdded)
-		b.Meta.DateModified, _ = time.Parse(time.RFC3339, dateModified)
+		if t, err := time.Parse(time.RFC3339, dateAdded); err != nil {
+			log.Printf("book %d: invalid date_added %q: %v", b.Meta.ID, dateAdded, err)
+		} else {
+			b.Meta.DateAdded = t
+		}
+		if t, err := time.Parse(time.RFC3339, dateModified); err != nil {
+			log.Printf("book %d: invalid date_modified %q: %v", b.Meta.ID, dateModified, err)
+		} else {
+			b.Meta.DateModified = t
+		}
 		b.SortTitle = sortTitle.String
 		if seriesName.Valid {
 			b.Series = &model.SeriesRef{ID: seriesID.Int64, Name: seriesName.String, Index: seriesIndex.Float64}
 		}
 		books = append(books, b)
 		byID[b.Meta.ID] = b
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -104,33 +116,60 @@ func (idx *Index) queryBooks(where string, args []any, order string, limit int) 
 		return books, nil
 	}
 
+	ids := make([]int64, 0, len(byID))
+	for id := range byID {
+		ids = append(ids, id)
+	}
+
+	authorRows, err := idx.queries.GetAuthorsByBookIDs(idx.ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	bookAuthors := make(map[int64][]model.Author, len(ids))
+	for _, row := range authorRows {
+		bookAuthors[row.BookID] = append(bookAuthors[row.BookID], model.Author{
+			ID:       row.ID,
+			Name:     row.Name,
+			SortName: row.SortName,
+		})
+	}
+
+	tagRows, err := idx.queries.GetTagsByBookIDs(idx.ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	bookTags := make(map[int64][]string, len(ids))
+	for _, row := range tagRows {
+		bookTags[row.BookID] = append(bookTags[row.BookID], row.Name)
+	}
+
+	idRows, err := idx.queries.GetIdentifiersByBookIDs(idx.ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	bookIDs := make(map[int64]map[string]string, len(ids))
+	for _, row := range idRows {
+		m := bookIDs[row.BookID]
+		if m == nil {
+			m = make(map[string]string)
+			bookIDs[row.BookID] = m
+		}
+		m[row.Scheme] = row.Value
+	}
+
 	for _, b := range books {
-		authors, err := idx.queries.GetAuthorsByBookID(idx.ctx, b.Meta.ID)
-		if err != nil {
-			return nil, err
+		b.Authors = bookAuthors[b.Meta.ID]
+		if b.Authors == nil {
+			b.Authors = []model.Author{}
 		}
-		b.Authors = make([]model.Author, len(authors))
-		for i, a := range authors {
-			b.Authors[i] = model.Author{
-				ID:       a.ID,
-				Name:     a.Name,
-				SortName: a.SortName,
-			}
+		b.Meta.Tags = bookTags[b.Meta.ID]
+		if b.Meta.Tags == nil {
+			b.Meta.Tags = []string{}
 		}
-
-		tags, err := idx.queries.GetTagsByBookID(idx.ctx, b.Meta.ID)
-		if err != nil {
-			return nil, err
-		}
-		b.Meta.Tags = tags
-
-		identifiers, err := idx.queries.GetIdentifiersByBookID(idx.ctx, b.Meta.ID)
-		if err != nil {
-			return nil, err
-		}
-		b.Identifiers = make(map[string]string)
-		for _, id := range identifiers {
-			b.Identifiers[id.Scheme] = id.Value
+		if m := bookIDs[b.Meta.ID]; m != nil {
+			b.Identifiers = m
+		} else {
+			b.Identifiers = make(map[string]string)
 		}
 	}
 

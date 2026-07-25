@@ -31,6 +31,12 @@ func fromUnixNano(n int64) time.Time {
 	return time.Unix(0, n)
 }
 
+// toNullString converts a string to a sql.NullString, setting Valid to true
+// only when the string is non-empty.
+func toNullString(s string) sql.NullString {
+	return sql.NullString{String: s, Valid: s != ""}
+}
+
 // insertBook inserts a new book row, failing on id conflict — used by Rebuild.
 //
 // It deliberately skips cleanupOrphans: Rebuild empties every table before the
@@ -38,8 +44,8 @@ func fromUnixNano(n int64) time.Time {
 // references it and nothing can be orphaned. Sweeping per book would run three
 // growing anti-join scans N times for no effect.
 func (idx *Index) insertBook(q *dbsqlc.Queries, b *model.Book, mt drift.PathInfo) error {
-	sortTitle := sql.NullString{String: b.SortTitle, Valid: b.SortTitle != ""}
-	pubdate := sql.NullString{String: b.Pubdate, Valid: b.Pubdate != ""}
+	sortTitle := toNullString(b.SortTitle)
+	pubdate := toNullString(b.Pubdate)
 
 	err := q.InsertBook(idx.ctx, dbsqlc.InsertBookParams{
 		ID:           b.Meta.ID,
@@ -74,8 +80,8 @@ func (idx *Index) insertBook(q *dbsqlc.Queries, b *model.Book, mt drift.PathInfo
 // putBook inserts or replaces b, using ON CONFLICT to update an existing row.
 // Rebuild, which must surface id collisions, uses insertBook instead.
 func (idx *Index) putBook(q *dbsqlc.Queries, b *model.Book, mt drift.PathInfo) error {
-	sortTitle := sql.NullString{String: b.SortTitle, Valid: b.SortTitle != ""}
-	pubdate := sql.NullString{String: b.Pubdate, Valid: b.Pubdate != ""}
+	sortTitle := toNullString(b.SortTitle)
+	pubdate := toNullString(b.Pubdate)
 
 	err := q.UpsertBook(idx.ctx, dbsqlc.UpsertBookParams{
 		ID:           b.Meta.ID,

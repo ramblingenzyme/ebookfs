@@ -180,11 +180,9 @@ func (l *libraryImpl) scanEntry(s *scanState, known map[string]drift.PathInfo, e
 	// reserves its id below.
 	pi, statErr := l.pathInfo(known, e)
 	if statErr != nil {
-		// Nothing was observed, so pi is not a reading and must not be recorded
-		// as one. Substituting the marker here rather than in the branches below
-		// is what guarantees every skip path records something: a directory in
-		// neither books nor skipped_books reads as one that appeared on disk
-		// unaccounted for, which is drift on every startup (see drift.Unobserved).
+		// Replace the failed observation with the unobserved marker so every
+		// skip path records something — otherwise a permanently unstattable
+		// directory triggers drift on every startup (see drift.Unobserved).
 		pi = drift.Unobserved(e.EpubFilename)
 	}
 

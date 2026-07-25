@@ -7,6 +7,16 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
+// placeholders returns n SQL parameter placeholders ("?") joined by commas.
+func placeholders(n int) string {
+	if n == 0 {
+		return ""
+	}
+	// strings.Repeat("?,", n) yields trailing comma; slice it off.
+	s := strings.Repeat("?,", n)
+	return s[:len(s)-1]
+}
+
 // Search returns the books matching q, using SQL-level filtering for all fields
 // including title (LIKE). Within each field values are OR'd; across fields they're
 // AND'd. Empty fields are ignored.
@@ -15,62 +25,44 @@ func (idx *Index) Search(q model.Query) ([]*model.Book, error) {
 	var args []any
 
 	if len(q.Authors) > 0 {
-		placeholders := make([]string, len(q.Authors))
-		for i := range placeholders {
-			placeholders[i] = "?"
-		}
 		for _, a := range q.Authors {
 			args = append(args, a)
 		}
 		where = append(where, fmt.Sprintf(
 			"b.id IN (SELECT ba.book_id FROM book_authors ba JOIN authors a ON a.id = ba.author_id WHERE a.name IN (%s))",
-			strings.Join(placeholders, ",")))
+			placeholders(len(q.Authors))))
 	}
 
 	if len(q.Tags) > 0 {
-		placeholders := make([]string, len(q.Tags))
-		for i := range placeholders {
-			placeholders[i] = "?"
-		}
 		for _, t := range q.Tags {
 			args = append(args, t)
 		}
 		where = append(where, fmt.Sprintf(
 			"b.id IN (SELECT bt.book_id FROM book_tags bt JOIN tags t ON t.id = bt.tag_id WHERE t.name IN (%s))",
-			strings.Join(placeholders, ",")))
+			placeholders(len(q.Tags))))
 	}
 
 	if len(q.Series) > 0 {
-		placeholders := make([]string, len(q.Series))
-		for i := range placeholders {
-			placeholders[i] = "?"
-		}
 		for _, s := range q.Series {
 			args = append(args, s)
 		}
 		where = append(where, fmt.Sprintf(
 			"b.series_id IN (SELECT id FROM series WHERE name IN (%s))",
-			strings.Join(placeholders, ",")))
+			placeholders(len(q.Series))))
 	}
 
 	if len(q.Status) > 0 {
-		placeholders := make([]string, len(q.Status))
-		for i := range placeholders {
-			placeholders[i] = "?"
-		}
 		for _, s := range q.Status {
 			args = append(args, s)
 		}
-		where = append(where, "b.status IN ("+strings.Join(placeholders, ",")+")")
+		where = append(where, "b.status IN ("+placeholders(len(q.Status))+")")
 	}
 
 	if len(q.IDs) > 0 {
-		placeholders := make([]string, len(q.IDs))
-		for i, id := range q.IDs {
-			placeholders[i] = "?"
+		for _, id := range q.IDs {
 			args = append(args, id)
 		}
-		where = append(where, "b.id IN ("+strings.Join(placeholders, ",")+")")
+		where = append(where, "b.id IN ("+placeholders(len(q.IDs))+")")
 	}
 
 	if len(q.Titles) > 0 {

@@ -724,6 +724,94 @@ func TestQueryLoadsIdentifiers(t *testing.T) {
 	}
 }
 
+func TestQueryBatchLoadsMultipleBooks(t *testing.T) {
+	idx := openTestIndex(t)
+
+	// Three books with distinct authors, tags, and identifiers — the batch
+	// loading path must hydrate each book correctly from the same three
+	// batch queries, not misattribute rows between books.
+	books := []*model.Book{
+		model.NewBook(
+			model.Bib{
+				Title:       "Alpha",
+				Authors:     []model.Author{{Name: "Alice", SortName: "Alice"}, {Name: "Ariel", SortName: "Ariel"}},
+				Identifiers: map[string]string{"isbn": "111"},
+			},
+			model.Meta{ID: 1, Tags: []string{"fiction", "sci-fi"}},
+			model.Location{LibraryPath: "A/Alpha (1)", EpubFilename: "alpha.epub"},
+		),
+		model.NewBook(
+			model.Bib{
+				Title:       "Beta",
+				Authors:     []model.Author{{Name: "Bob", SortName: "Bob"}},
+				Identifiers: map[string]string{"isbn": "222", "doi": "10.1234/beta"},
+			},
+			model.Meta{ID: 2, Tags: []string{"non-fiction"}},
+			model.Location{LibraryPath: "B/Beta (2)", EpubFilename: "beta.epub"},
+		),
+		model.NewBook(
+			model.Bib{
+				Title:       "Gamma",
+				Authors:     []model.Author{{Name: "Carol", SortName: "Carol"}, {Name: "Charlie", SortName: "Charlie"}, {Name: "Cecil", SortName: "Cecil"}},
+				Identifiers: map[string]string{},
+			},
+			model.Meta{ID: 3},
+			model.Location{LibraryPath: "C/Gamma (3)", EpubFilename: "gamma.epub"},
+		),
+	}
+	for _, b := range books {
+		storeInIndex(t, idx, b)
+	}
+
+	got, err := idx.Query(model.Filter{})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("len = %d, want 3", len(got))
+	}
+
+	for _, b := range got {
+		switch b.Meta.ID {
+		case int64(1):
+			if len(b.Authors) != 2 || b.Authors[0].Name != "Alice" || b.Authors[1].Name != "Ariel" {
+				t.Errorf("book 1 authors = %v, want [Alice, Ariel]", b.Authors)
+			}
+			if !slices.Equal(b.Meta.Tags, []string{"fiction", "sci-fi"}) {
+				t.Errorf("book 1 tags = %v, want [fiction, sci-fi]", b.Meta.Tags)
+			}
+			if b.Identifiers["isbn"] != "111" {
+				t.Errorf("book 1 isbn = %q, want 111", b.Identifiers["isbn"])
+			}
+			if len(b.Identifiers) != 1 {
+				t.Errorf("book 1 identifiers = %v, want 1 entry", b.Identifiers)
+			}
+		case int64(2):
+			if len(b.Authors) != 1 || b.Authors[0].Name != "Bob" {
+				t.Errorf("book 2 authors = %v, want [Bob]", b.Authors)
+			}
+			if !slices.Equal(b.Meta.Tags, []string{"non-fiction"}) {
+				t.Errorf("book 2 tags = %v, want [non-fiction]", b.Meta.Tags)
+			}
+			if b.Identifiers["isbn"] != "222" || b.Identifiers["doi"] != "10.1234/beta" {
+				t.Errorf("book 2 identifiers = %v", b.Identifiers)
+			}
+		case int64(3):
+			if len(b.Authors) != 3 || b.Authors[0].Name != "Carol" || b.Authors[2].Name != "Cecil" {
+				t.Errorf("book 3 authors = %v, want [Carol, Charlie, Cecil]", b.Authors)
+			}
+			if len(b.Meta.Tags) != 0 {
+				t.Errorf("book 3 tags = %v, want empty", b.Meta.Tags)
+			}
+			if len(b.Identifiers) != 0 {
+				t.Errorf("book 3 identifiers = %v, want empty", b.Identifiers)
+			}
+		default:
+			t.Errorf("unexpected book id %d", b.Meta.ID)
+		}
+	}
+}
+
 func TestGetReturnsIdentifiers(t *testing.T) {
 	idx := openTestIndex(t)
 
