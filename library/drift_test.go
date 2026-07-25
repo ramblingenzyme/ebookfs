@@ -1,6 +1,7 @@
 package library
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ramblingenzyme/ebookfs/library/config"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -30,101 +32,116 @@ func writeManualBookDir(t *testing.T, lib Library, libraryPath string) {
 	}
 }
 
-func TestStoreDriftedCleanIndex(t *testing.T) {
-	lib := openTestLibrary(t)
-	ingestTestEpub(t, lib, buildTestEpub(t, "Clean"))
-
-	if drifted(t, lib) {
-		t.Error("storeDrifted() = true, want false for an index that matches the store")
+// TestStoreDrifted covers the verdict itself: what counts as the store having
+// moved out from under the index. Every case ingests one book through the
+// library, changes the store behind its back, and asks whether the change is
+// noticed — so a comparison that goes blind to any one of them surfaces here,
+// rather than as startups that quietly stop reindexing.
+func TestStoreDrifted(t *testing.T) {
+	tests := []struct {
+		name   string
+		change func(t *testing.T, lib Library, book *model.Book)
+		want   bool
+	}{
+		{
+			"nothing changed",
+			func(*testing.T, Library, *model.Book) {},
+			false,
+		},
+		{
+			"book directory added by hand",
+			func(t *testing.T, lib Library, _ *model.Book) {
+				writeManualBookDir(t, lib, "Manual/Added Book (999)")
+			},
+			true,
+		},
+		{
+			"book directory removed by hand",
+			func(t *testing.T, _ Library, book *model.Book) {
+				if err := os.RemoveAll(filepath.Dir(book.EpubPath)); err != nil {
+					t.Fatalf("remove book dir: %v", err)
+				}
+			},
+			true,
+		},
+		{
+			"epub swapped for a different one",
+			func(t *testing.T, _ Library, book *model.Book) {
+				swapped := buildTestEpub(t, "A Completely Different And Much Longer Title")
+				if err := os.WriteFile(book.EpubPath, swapped, 0644); err != nil {
+					t.Fatalf("swap epub: %v", err)
+				}
+			},
+			true,
+		},
+		{
+			// The case a size-only check misses: same byte count, different
+			// content, so only mtime separates them. The mtime is set
+			// explicitly because a fast write can land in the same clock tick
+			// as the recorded one on a coarse-clock filesystem.
+			"epub swapped for one of the same size",
+			func(t *testing.T, _ Library, book *model.Book) {
+				orig, err := os.ReadFile(book.EpubPath)
+				if err != nil {
+					t.Fatalf("read epub: %v", err)
+				}
+				if err := os.WriteFile(book.EpubPath, bytes.Repeat([]byte("X"), len(orig)), 0644); err != nil {
+					t.Fatalf("write same-size blob: %v", err)
+				}
+				mt := book.Meta.DateModified.Add(-time.Hour)
+				if err := os.Chtimes(book.EpubPath, mt, mt); err != nil {
+					t.Fatalf("chtimes: %v", err)
+				}
+			},
+			true,
+		},
+		{
+			// The mirror of the case above, and the reason size is compared at
+			// all: a coarse-clock filesystem hands out the same mtime for two
+			// writes in one tick, so here the mtime is pinned back to its
+			// recorded value and only the length gives the change away.
+			"epub resized under an unchanged mtime",
+			func(t *testing.T, _ Library, book *model.Book) {
+				fi, err := os.Stat(book.EpubPath)
+				if err != nil {
+					t.Fatalf("stat epub: %v", err)
+				}
+				grown := bytes.Repeat([]byte("X"), int(fi.Size())+512)
+				if err := os.WriteFile(book.EpubPath, grown, 0644); err != nil {
+					t.Fatalf("write longer blob: %v", err)
+				}
+				if err := os.Chtimes(book.EpubPath, fi.ModTime(), fi.ModTime()); err != nil {
+					t.Fatalf("chtimes: %v", err)
+				}
+			},
+			true,
+		},
+		{
+			// Rename preserves size and mtime, so only the filename comparison
+			// catches this. Miss it and the index goes on serving a path that
+			// no longer exists, failing every read with ENOENT until someone
+			// forces a reindex by hand.
+			"epub renamed in place",
+			func(t *testing.T, _ Library, book *model.Book) {
+				renamed := filepath.Join(filepath.Dir(book.EpubPath), "hand-renamed.epub")
+				if err := os.Rename(book.EpubPath, renamed); err != nil {
+					t.Fatalf("rename epub: %v", err)
+				}
+			},
+			true,
+		},
 	}
-}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			lib := openTestLibrary(t)
+			book := ingestTestEpub(t, lib, buildTestEpub(t, "Original"))
 
-func TestStoreDriftedDetectsAddedBook(t *testing.T) {
-	lib := openTestLibrary(t)
-	ingestTestEpub(t, lib, buildTestEpub(t, "Original"))
+			tc.change(t, lib, book)
 
-	writeManualBookDir(t, lib, "Manual/Added Book (999)")
-
-	if !drifted(t, lib) {
-		t.Error("storeDrifted() = false, want true after a book directory was added by hand")
-	}
-}
-
-func TestStoreDriftedDetectsRemovedBook(t *testing.T) {
-	lib := openTestLibrary(t)
-	book := ingestTestEpub(t, lib, buildTestEpub(t, "Doomed"))
-
-	if err := os.RemoveAll(filepath.Dir(book.EpubPath)); err != nil {
-		t.Fatalf("remove book dir: %v", err)
-	}
-
-	if !drifted(t, lib) {
-		t.Error("storeDrifted() = false, want true after a book directory was removed by hand")
-	}
-}
-
-func TestStoreDriftedDetectsSwappedEpub(t *testing.T) {
-	lib := openTestLibrary(t)
-	book := ingestTestEpub(t, lib, buildTestEpub(t, "Original"))
-
-	swapped := buildTestEpub(t, "A Completely Different And Much Longer Title")
-	if err := os.WriteFile(book.EpubPath, swapped, 0644); err != nil {
-		t.Fatalf("swap epub: %v", err)
-	}
-
-	if !drifted(t, lib) {
-		t.Error("storeDrifted() = false, want true after the epub file was swapped by hand")
-	}
-}
-
-// TestStoreDriftedDetectsSameSizeSwap verifies that replacing an epub with
-// different content of the exact same byte size is still detected as drift via
-// mtime — something the old size-only check would miss.
-func TestStoreDriftedDetectsSameSizeSwap(t *testing.T) {
-	lib := openTestLibrary(t)
-	book := ingestTestEpub(t, lib, buildTestEpub(t, "Original"))
-
-	// Read the original bytes to determine its exact size.
-	orig, err := os.ReadFile(book.EpubPath)
-	if err != nil {
-		t.Fatalf("read epub: %v", err)
-	}
-	// Write a blob of exactly the same size but different content.
-	padded := make([]byte, len(orig))
-	for i := range padded {
-		padded[i] = 'X'
-	}
-	if err := os.WriteFile(book.EpubPath, padded, 0644); err != nil {
-		t.Fatalf("write same-size blob: %v", err)
-	}
-	// Set a deterministically different mtime so the test is not racy on
-	// filesystems where a fast write completes within the same clock tick.
-	mt := book.Meta.DateModified.Add(-time.Hour)
-	if err := os.Chtimes(book.EpubPath, mt, mt); err != nil {
-		t.Fatalf("chtimes: %v", err)
-	}
-
-	if !drifted(t, lib) {
-		t.Error("storeDrifted() = false, want true after same-size epub swap")
-	}
-}
-
-// TestStoreDriftedDetectsRenamedEpub verifies that renaming the epub within its
-// book directory is drift. Rename preserves both size and mtime, so a check
-// built only on those two is blind to it — and the index would go on serving an
-// epub_filename that no longer exists, failing every read with ENOENT until
-// someone forced a reindex by hand.
-func TestStoreDriftedDetectsRenamedEpub(t *testing.T) {
-	lib := openTestLibrary(t)
-	book := ingestTestEpub(t, lib, buildTestEpub(t, "Renamed"))
-
-	dir := filepath.Dir(book.EpubPath)
-	if err := os.Rename(book.EpubPath, filepath.Join(dir, "hand-renamed.epub")); err != nil {
-		t.Fatalf("rename epub: %v", err)
-	}
-
-	if !drifted(t, lib) {
-		t.Error("storeDrifted() = false, want true after the epub was renamed in place")
+			if got := drifted(t, lib); got != tc.want {
+				t.Errorf("storeDrifted() = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -472,59 +489,86 @@ func TestOpenReindexesOnDrift(t *testing.T) {
 	}
 }
 
-// TestReindexMigratesToCanonicalPath verifies that the Layout/Move pass during
-// reindex relocates books from old-style paths (single-author directories,
-// sort-name directories) to the canonical naming convention. The test ingests
-// a multi-author book, moves it to a single-author directory on disk, then
-// triggers a reindex and confirms the book is restored to the "Alice & Bob"
-// directory with the all-author epub filename.
-func TestReindexMigratesToCanonicalPath(t *testing.T) {
-	cfg := testConfig(t)
-	root := cfg.Root
+// stageLegacyLayout ingests a book, closes the library, and then moves its
+// directory to legacyAuthorDir — the state an upgraded library finds on disk,
+// left by a naming convention it no longer uses. legacyEpub, when non-empty,
+// also renames the epub inside it. It returns the book and the canonical
+// location the next reindex has to restore.
+func stageLegacyLayout(t *testing.T, cfg config.LibraryConfig, title string, authors []string, legacyAuthorDir, legacyEpub string) (*model.Book, model.Location) {
+	t.Helper()
 
 	lib := openLib(t, cfg, false)
-	book := ingestTestEpub(t, lib, buildTestEpub(t, "Test Title", "Alice", "Bob"))
-	canonicalPath := book.Location.LibraryPath  // e.g. "Alice & Bob/Test Title (1)"
-	canonicalEpub := book.Location.EpubFilename // e.g. "Test Title - Alice & Bob.epub"
+	book := ingestTestEpub(t, lib, buildTestEpub(t, title, authors...))
+	canonical := book.Location
 	if err := lib.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 
-	// Move the book directory from the multi-author path to a single-author
-	// path on disk, simulating an old-style layout or external interference.
-	oldDir := filepath.Join(root, "Alice", fmt.Sprintf("Test Title (%d)", book.Meta.ID))
-	if err := os.MkdirAll(filepath.Dir(oldDir), 0755); err != nil {
-		t.Fatalf("mkdir old dir: %v", err)
+	legacyDir := filepath.Join(cfg.Root, legacyAuthorDir, fmt.Sprintf("%s (%d)", title, book.Meta.ID))
+	if err := os.MkdirAll(filepath.Dir(legacyDir), 0755); err != nil {
+		t.Fatalf("mkdir legacy parent: %v", err)
 	}
-	if err := os.Rename(filepath.Join(root, canonicalPath), oldDir); err != nil {
-		t.Fatalf("rename book dir to old path: %v", err)
+	if err := os.Rename(filepath.Join(cfg.Root, canonical.LibraryPath), legacyDir); err != nil {
+		t.Fatalf("move book dir to %q: %v", legacyAuthorDir, err)
 	}
-	// The epub filename also needs the old single-author form.
-	oldEpub := "Test Title - Alice.epub"
-	if err := os.Rename(filepath.Join(oldDir, canonicalEpub), filepath.Join(oldDir, oldEpub)); err != nil {
-		t.Fatalf("rename epub to old filename: %v", err)
+	if legacyEpub != "" {
+		if err := os.Rename(filepath.Join(legacyDir, canonical.EpubFilename), filepath.Join(legacyDir, legacyEpub)); err != nil {
+			t.Fatalf("rename epub to %q: %v", legacyEpub, err)
+		}
 	}
+	return book, canonical
+}
 
-	// Reopen with force reindex — triggers Layout/Move.
-	lib2 := openLib(t, cfg, true)
+// legacyLayouts are the pre-canonical shapes a book directory can be found in.
+var legacyLayouts = []struct {
+	name            string
+	title           string
+	authors         []string
+	legacyAuthorDir string
+	legacyEpub      string
+}{
+	{
+		// Co-authored books were filed under their first author alone, and the
+		// epub filename named only that author too.
+		name: "single-author directory", title: "Test Title", authors: []string{"Alice", "Bob"},
+		legacyAuthorDir: "Alice", legacyEpub: "Test Title - Alice.epub",
+	},
+	{
+		// Author directories used the sort name. The epub filename always used
+		// the display name, so it needs no rename here.
+		name: "sort-name directory", title: "The Title", authors: []string{"Alice"},
+		legacyAuthorDir: "Smith, Alice", legacyEpub: "",
+	},
+}
 
-	got, err := lib2.Query(model.Filter{ID: book.Meta.ID})
-	if err != nil {
-		t.Fatalf("Query: %v", err)
-	}
-	if len(got) != 1 {
-		t.Fatalf("got %d books, want 1", len(got))
-	}
-	if got[0].Location.LibraryPath != canonicalPath {
-		t.Errorf("LibraryPath = %q, want %q", got[0].Location.LibraryPath, canonicalPath)
-	}
-	if got[0].Location.EpubFilename != canonicalEpub {
-		t.Errorf("EpubFilename = %q, want %q", got[0].Location.EpubFilename, canonicalEpub)
-	}
+// TestReindexMigratesToCanonicalPath verifies the Layout/Move pass relocates a
+// book from each old-style path to the canonical one, and that the index
+// records where it ended up rather than where it was found.
+func TestReindexMigratesToCanonicalPath(t *testing.T) {
+	for _, tc := range legacyLayouts {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := testConfig(t)
+			book, canonical := stageLegacyLayout(t, cfg, tc.title, tc.authors, tc.legacyAuthorDir, tc.legacyEpub)
 
-	// The canonical directory should exist on disk.
-	if _, err := os.Stat(filepath.Join(root, canonicalPath)); err != nil {
-		t.Errorf("canonical dir missing after reindex: %v", err)
+			lib := openLib(t, cfg, true)
+
+			got, err := lib.Query(model.Filter{ID: book.Meta.ID})
+			if err != nil {
+				t.Fatalf("Query: %v", err)
+			}
+			if len(got) != 1 {
+				t.Fatalf("got %d books, want 1", len(got))
+			}
+			if got[0].Location.LibraryPath != canonical.LibraryPath {
+				t.Errorf("LibraryPath = %q, want %q", got[0].Location.LibraryPath, canonical.LibraryPath)
+			}
+			if got[0].Location.EpubFilename != canonical.EpubFilename {
+				t.Errorf("EpubFilename = %q, want %q", got[0].Location.EpubFilename, canonical.EpubFilename)
+			}
+			if _, err := os.Stat(filepath.Join(cfg.Root, canonical.LibraryPath)); err != nil {
+				t.Errorf("canonical dir missing after reindex: %v", err)
+			}
+		})
 	}
 }
 
@@ -534,81 +578,20 @@ func TestReindexMigratesToCanonicalPath(t *testing.T) {
 // it — reindex records each book's file state before the Layout/Move pass (so
 // its reuse of storeDrifted's scan keys correctly), and that recorded state is
 // only still accurate afterwards because rename preserves size and mtime.
+//
+// It runs on a plain restart, not a forced one, so the drift verdict and the
+// rebuild it triggers are both under test.
 func TestReindexLeavesIndexClean(t *testing.T) {
-	cfg := testConfig(t)
-	root := cfg.Root
+	for _, tc := range legacyLayouts {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := testConfig(t)
+			stageLegacyLayout(t, cfg, tc.title, tc.authors, tc.legacyAuthorDir, tc.legacyEpub)
 
-	lib := openLib(t, cfg, false)
-	book := ingestTestEpub(t, lib, buildTestEpub(t, "Test Title", "Alice", "Bob"))
-	canonicalPath := book.Location.LibraryPath
-	canonicalEpub := book.Location.EpubFilename
-	if err := lib.Close(); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
+			lib := openLib(t, cfg, false)
 
-	// Put the book at an old-style single-author path so the next Open drifts
-	// and its reindex has canonical moves to perform.
-	oldDir := filepath.Join(root, "Alice", fmt.Sprintf("Test Title (%d)", book.Meta.ID))
-	if err := os.MkdirAll(filepath.Dir(oldDir), 0755); err != nil {
-		t.Fatalf("mkdir old dir: %v", err)
-	}
-	if err := os.Rename(filepath.Join(root, canonicalPath), oldDir); err != nil {
-		t.Fatalf("rename book dir to old path: %v", err)
-	}
-	if err := os.Rename(filepath.Join(oldDir, canonicalEpub), filepath.Join(oldDir, "Test Title - Alice.epub")); err != nil {
-		t.Fatalf("rename epub to old filename: %v", err)
-	}
-
-	// Plain restart: storeDrifted must notice, and its reindex must migrate.
-	lib2 := openLib(t, cfg, false)
-
-	if drifted(t, lib2) {
-		t.Error("storeDrifted() = true after a reindex, want false — the rebuild left the index disagreeing with the store, so every startup will reindex again")
-	}
-}
-
-// TestReindexMigratesFromSortNamePath verifies that a book originally placed
-// at a SortName-based path (e.g. "Smith, Alice/Title (id)/") is relocated to
-// the display-name path ("Alice/Title (id)/") during reindex. The epub filename
-// is unaffected — it always used display name, never SortName.
-func TestReindexMigratesFromSortNamePath(t *testing.T) {
-	cfg := testConfig(t)
-	root := cfg.Root
-
-	lib := openLib(t, cfg, false)
-	book := ingestTestEpub(t, lib, buildTestEpub(t, "The Title", "Alice"))
-	canonicalPath := book.Location.LibraryPath  // "Alice/The Title (1)"
-	canonicalEpub := book.Location.EpubFilename // "The Title - Alice.epub"
-	if err := lib.Close(); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
-
-	// Rename directory to old SortName-based path (Last, First).
-	oldDir := filepath.Join(root, "Smith, Alice", fmt.Sprintf("The Title (%d)", book.Meta.ID))
-	if err := os.MkdirAll(filepath.Dir(oldDir), 0755); err != nil {
-		t.Fatalf("mkdir old dir: %v", err)
-	}
-	if err := os.Rename(filepath.Join(root, canonicalPath), oldDir); err != nil {
-		t.Fatalf("rename to SortName path: %v", err)
-	}
-	// Epub filename stays the same (it always used display Name, not SortName).
-
-	lib2 := openLib(t, cfg, true)
-
-	got, err := lib2.Query(model.Filter{ID: book.Meta.ID})
-	if err != nil {
-		t.Fatalf("Query: %v", err)
-	}
-	if len(got) != 1 {
-		t.Fatalf("got %d books, want 1", len(got))
-	}
-	if got[0].Location.LibraryPath != canonicalPath {
-		t.Errorf("LibraryPath = %q, want %q", got[0].Location.LibraryPath, canonicalPath)
-	}
-	if got[0].Location.EpubFilename != canonicalEpub {
-		t.Errorf("EpubFilename = %q, want %q", got[0].Location.EpubFilename, canonicalEpub)
-	}
-	if _, err := os.Stat(filepath.Join(root, canonicalPath)); err != nil {
-		t.Errorf("canonical dir missing after reindex: %v", err)
+			if drifted(t, lib) {
+				t.Error("storeDrifted() = true after a reindex, want false — the rebuild left the index disagreeing with the store, so every startup will reindex again")
+			}
+		})
 	}
 }

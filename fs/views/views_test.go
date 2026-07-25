@@ -1,11 +1,14 @@
 package views
 
 import (
+	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/fs/book"
+	"github.com/ramblingenzyme/ebookfs/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
@@ -30,11 +33,19 @@ func TestRegistryAddAndRemove(t *testing.T) {
 	}
 }
 
+// TestRegistryRemoveUnknownID keeps a real book registered, so removing an id
+// that was never added is distinguishable from removing everything — against an
+// empty registry a Remove that cleared the whole view would look identical.
 func TestRegistryRemoveUnknownID(t *testing.T) {
 	reg := newTestRegistry(t)
-	NewAllBooksDir(reg)
+	d := NewAllBooksDir(reg)
+	reg.Add(makeBook(1, "Kept", "Author"))
 
-	reg.Remove(999) // should not panic
+	reg.Remove(999)
+
+	if _, ok := d.Children()["Kept"]; !ok {
+		t.Errorf("removing an unknown id disturbed the registered books: %v", dirChildNames(d))
+	}
 }
 
 func TestRegistryAddSameIDTwiceUsesSameDir(t *testing.T) {
@@ -99,236 +110,231 @@ func TestBooksDirEmptyNilMap(t *testing.T) {
 	}
 }
 
-// ---- ByAuthorDir ----
+// ---- Grouping views ----
 
-func TestByAuthorDirSingleAuthor(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewByAuthorDir(reg)
+// groupingView describes a directory that files books into subdirectories keyed
+// by some property of the book — author, series, tag, status. The four differ
+// only in which property they read and how many values it can hold, so the
+// behaviour they share (a group appears with its first book, is pruned with its
+// last, and follows the book when the property changes) is asserted once here
+// rather than restated four times over.
+type groupingView struct {
+	name   string
+	newDir func(*registry.BookRegistry) fs.Dir
+	// withKeys returns a book this view files under each of keys. A view whose
+	// property holds a single value is never handed more than one.
+	withKeys func(id int64, title string, keys ...string) *model.Book
+	// keyless returns a book the view files nowhere, or nil for a property
+	// every book carries.
+	keyless func(id int64, title string) *model.Book
+	// entryName is the name a book appears under inside its group; nil means
+	// the title unchanged.
+	entryName func(id int64, title string) string
+	// multiKey reports whether the property can hold more than one value.
+	multiKey bool
+}
 
-	b := makeBook(1, "My Book", "Alice")
-	reg.Add(b)
+// entry is the name title appears under inside one of v's groups.
+func (v groupingView) entry(id int64, title string) string {
+	if v.entryName == nil {
+		return title
+	}
+	return v.entryName(id, title)
+}
 
-	ad, ok := d.Children()["Alice"]
+var groupingViews = []groupingView{
+	{
+		name:     "by-author",
+		newDir:   func(reg *registry.BookRegistry) fs.Dir { return NewByAuthorDir(reg) },
+		withKeys: func(id int64, title string, keys ...string) *model.Book { return makeBook(id, title, keys...) },
+		keyless: func(id int64, title string) *model.Book {
+			b := makeBook(id, title)
+			b.Authors = nil
+			return b
+		},
+		multiKey: true,
+	},
+	{
+		name:   "by-series",
+		newDir: func(reg *registry.BookRegistry) fs.Dir { return NewBySeriesDir(reg) },
+		withKeys: func(id int64, title string, keys ...string) *model.Book {
+			b := makeBook(id, title, "Author")
+			b.Series = &model.SeriesRef{Name: keys[0], Index: float64(id)}
+			return b
+		},
+		keyless: func(id int64, title string) *model.Book { return makeBook(id, title, "Author") },
+		// Series entries lead with the index so a plain readdir reads in order.
+		entryName: func(id int64, title string) string { return fmt.Sprintf("%d - %s", id, title) },
+	},
+	{
+		name:   "by-tag",
+		newDir: func(reg *registry.BookRegistry) fs.Dir { return NewByTagDir(reg) },
+		withKeys: func(id int64, title string, keys ...string) *model.Book {
+			b := makeBook(id, title, "Author")
+			b.Meta.Tags = keys
+			return b
+		},
+		keyless: func(id int64, title string) *model.Book {
+			b := makeBook(id, title, "Author")
+			b.Meta.Tags = nil
+			return b
+		},
+		multiKey: true,
+	},
+	{
+		name:   "by-status",
+		newDir: func(reg *registry.BookRegistry) fs.Dir { return NewByStatusDir(reg) },
+		withKeys: func(id int64, title string, keys ...string) *model.Book {
+			b := makeBook(id, title, "Author")
+			b.Meta.Status = keys[0]
+			return b
+		},
+		// Every book carries a status, so there is no keyless case.
+	},
+}
+
+// groupEntries returns the entries filed under the group directory named key,
+// and whether that group exists at all.
+func groupEntries(t *testing.T, d fs.Dir, key string) ([]string, bool) {
+	t.Helper()
+	child, ok := d.Children()[key]
 	if !ok {
-		t.Fatal("by-author should have 'Alice' subdir")
+		return nil, false
 	}
-	ald := ad.(*bookListDir)
-	if _, ok := ald.Children()["My Book"]; !ok {
-		t.Error("Alice's dir should contain 'My Book'")
-	}
-}
-
-func TestByAuthorDirMultiAuthor(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewByAuthorDir(reg)
-
-	b := makeBook(1, "Joint Work", "Alice", "Bob")
-	reg.Add(b)
-
-	for _, name := range []string{"Alice", "Bob"} {
-		ad, ok := d.Children()[name]
-		if !ok {
-			t.Fatalf("by-author should have %q subdir", name)
-		}
-		ald := ad.(*bookListDir)
-		if _, ok := ald.Children()["Joint Work"]; !ok {
-			t.Errorf("%s's dir should contain 'Joint Work'", name)
-		}
-	}
-}
-
-func TestByAuthorDirRemoveLastBookPrunesDir(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewByAuthorDir(reg)
-
-	b := makeBook(1, "Only Book", "Charlie")
-	reg.Add(b)
-
-	reg.Remove(1)
-
-	if _, ok := d.Children()["Charlie"]; ok {
-		t.Error("Charlie's dir should be pruned after last book removed")
-	}
-}
-
-func TestByAuthorDirMultipleBooksSameAuthor(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewByAuthorDir(reg)
-
-	reg.Add(makeBook(1, "Book A", "Dana"))
-	reg.Add(makeBook(2, "Book B", "Dana"))
-
-	ad, ok := d.Children()["Dana"]
+	group, ok := child.(fs.Dir)
 	if !ok {
-		t.Fatal("by-author should have 'Dana' subdir")
+		t.Fatalf("group %q is a %T, want a directory", key, child)
 	}
-	ald := ad.(*bookListDir)
-	children := dirChildNames(ald)
-	if len(children) != 2 {
-		t.Errorf("expected 2 books under Dana, got %d: %v", len(children), children)
-	}
+	names := dirChildNames(group)
+	slices.Sort(names)
+	return names, true
 }
 
-func TestByAuthorDirRemoveOneOfTwo(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewByAuthorDir(reg)
-
-	reg.Add(makeBook(1, "Keep", "Dana"))
-	reg.Add(makeBook(2, "Remove", "Dana"))
-
-	reg.Remove(2)
-
-	ad := d.Children()["Dana"].(*bookListDir)
-	if _, ok := ad.Children()["Remove"]; ok {
-		t.Error("'Remove' should be gone from Dana's dir")
-	}
-	if _, ok := ad.Children()["Keep"]; !ok {
-		t.Error("'Keep' should remain in Dana's dir")
-	}
-}
-
-func TestByAuthorDirBookNoAuthors(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewByAuthorDir(reg)
-
-	b := makeBook(1, "No Author")
-	b.Authors = nil // force nil authors
-	reg.Add(b)
-
-	if n := len(d.Children()); n != 0 {
-		t.Errorf("expected 0 children for authorless book, got %d", n)
-	}
-}
-
-func TestByAuthorDirRemoveAuthorlessBook(t *testing.T) {
-	reg := newTestRegistry(t)
-	NewByAuthorDir(reg)
-
-	b := makeBook(1, "No Author")
-	b.Authors = nil
-	reg.Add(b)
-	reg.Remove(1) // should not panic
-}
-
-// ---- BySeriesDir ----
-
-func TestBySeriesDirAddWithSeries(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewBySeriesDir(reg)
-
-	b := makeBook(1, "The Hobbit", "Tolkien")
-	b.Series = &model.SeriesRef{Name: "Middle-earth", Index: 1.0}
-
-	reg.Add(b)
-
-	sd, ok := d.Children()["Middle-earth"]
+// mustGroupEntries is groupEntries where a missing group fails the test.
+func mustGroupEntries(t *testing.T, d fs.Dir, key string) []string {
+	t.Helper()
+	names, ok := groupEntries(t, d, key)
 	if !ok {
-		t.Fatal("by-series should have 'Middle-earth' subdir")
+		t.Fatalf("no %q group; view holds %v", key, dirChildNames(d))
 	}
-	sld := sd.(*seriesBookListDir)
-	children := dirChildNames(sld)
-	if len(children) != 1 {
-		t.Fatalf("expected 1 book in series, got %d: %v", len(children), children)
-	}
+	return names
 }
 
-func TestBySeriesDirNoSeries(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewBySeriesDir(reg)
+func TestGroupingViews(t *testing.T) {
+	for _, v := range groupingViews {
+		t.Run(v.name, func(t *testing.T) {
+			setup := func(t *testing.T) (*registry.BookRegistry, fs.Dir) {
+				t.Helper()
+				reg := newTestRegistry(t)
+				return reg, v.newDir(reg)
+			}
 
-	b := makeBook(1, "Standalone", "Author")
-	reg.Add(b)
+			t.Run("a book creates its group", func(t *testing.T) {
+				reg, d := setup(t)
+				reg.Add(v.withKeys(1, "My Book", "alpha"))
 
-	if n := len(d.Children()); n != 0 {
-		t.Errorf("by-series should have no children for series-less book, got %d", n)
-	}
-}
+				want := []string{v.entry(1, "My Book")}
+				if got := mustGroupEntries(t, d, "alpha"); !slices.Equal(got, want) {
+					t.Errorf("alpha group = %v, want %v", got, want)
+				}
+			})
 
-func TestBySeriesDirRemoveLastBookPrunesDir(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewBySeriesDir(reg)
+			t.Run("distinct keys make distinct groups", func(t *testing.T) {
+				reg, d := setup(t)
+				reg.Add(v.withKeys(1, "First", "alpha"))
+				reg.Add(v.withKeys(2, "Second", "beta"))
 
-	b := makeBook(1, "Only in Series", "Author")
-	b.Series = &model.SeriesRef{Name: "S", Index: 1.0}
-	reg.Add(b)
+				want := []string{v.entry(1, "First")}
+				if got := mustGroupEntries(t, d, "alpha"); !slices.Equal(got, want) {
+					t.Errorf("alpha group = %v, want %v", got, want)
+				}
+				want = []string{v.entry(2, "Second")}
+				if got := mustGroupEntries(t, d, "beta"); !slices.Equal(got, want) {
+					t.Errorf("beta group = %v, want %v", got, want)
+				}
+			})
 
-	reg.Remove(1)
+			t.Run("one key gathers several books", func(t *testing.T) {
+				reg, d := setup(t)
+				reg.Add(v.withKeys(1, "Book A", "alpha"))
+				reg.Add(v.withKeys(2, "Book B", "alpha"))
 
-	if _, ok := d.Children()["S"]; ok {
-		t.Error("series dir should be pruned after last book removed")
-	}
-}
+				want := []string{v.entry(1, "Book A"), v.entry(2, "Book B")}
+				slices.Sort(want)
+				if got := mustGroupEntries(t, d, "alpha"); !slices.Equal(got, want) {
+					t.Errorf("alpha group = %v, want %v", got, want)
+				}
+			})
 
-func TestBySeriesDirMultipleBooksSameSeries(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewBySeriesDir(reg)
+			t.Run("the last book out prunes the group", func(t *testing.T) {
+				reg, d := setup(t)
+				reg.Add(v.withKeys(1, "Only Book", "alpha"))
+				reg.Remove(1)
 
-	b1 := makeBook(1, "Book One", "Author")
-	b1.Series = &model.SeriesRef{Name: "Saga", Index: 1.0}
-	b2 := makeBook(2, "Book Two", "Author")
-	b2.Series = &model.SeriesRef{Name: "Saga", Index: 2.0}
+				if _, ok := groupEntries(t, d, "alpha"); ok {
+					t.Errorf("alpha group outlived its last book; view holds %v", dirChildNames(d))
+				}
+			})
 
-	reg.Add(b1)
-	reg.Add(b2)
+			t.Run("removing one book leaves the rest", func(t *testing.T) {
+				reg, d := setup(t)
+				reg.Add(v.withKeys(1, "Keep", "alpha"))
+				reg.Add(v.withKeys(2, "Remove", "alpha"))
+				reg.Remove(2)
 
-	sd := d.Children()["Saga"].(*seriesBookListDir)
-	children := dirChildNames(sd)
-	if len(children) != 2 {
-		t.Fatalf("expected 2 books in Saga, got %d: %v", len(children), children)
-	}
-}
+				want := []string{v.entry(1, "Keep")}
+				if got := mustGroupEntries(t, d, "alpha"); !slices.Equal(got, want) {
+					t.Errorf("alpha group = %v, want %v", got, want)
+				}
+			})
 
-func TestBySeriesDirRemoveOneOfTwo(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewBySeriesDir(reg)
+			t.Run("re-keying moves the book", func(t *testing.T) {
+				reg, d := setup(t)
+				reg.Add(v.withKeys(1, "Moved", "alpha"))
+				// An edit reaches the views as a remove followed by an add.
+				reg.Remove(1)
+				reg.Add(v.withKeys(1, "Moved", "beta"))
 
-	b1 := makeBook(1, "Keep", "Author")
-	b1.Series = &model.SeriesRef{Name: "S", Index: 1.0}
-	b2 := makeBook(2, "Remove", "Author")
-	b2.Series = &model.SeriesRef{Name: "S", Index: 2.0}
+				if _, ok := groupEntries(t, d, "alpha"); ok {
+					t.Errorf("alpha group outlived the re-key; view holds %v", dirChildNames(d))
+				}
+				want := []string{v.entry(1, "Moved")}
+				if got := mustGroupEntries(t, d, "beta"); !slices.Equal(got, want) {
+					t.Errorf("beta group = %v, want %v", got, want)
+				}
+			})
 
-	reg.Add(b1)
-	reg.Add(b2)
-	reg.Remove(2)
+			if v.multiKey {
+				t.Run("a book joins every group it keys into", func(t *testing.T) {
+					reg, d := setup(t)
+					reg.Add(v.withKeys(1, "Joint Work", "alpha", "beta"))
 
-	sd := d.Children()["S"].(*seriesBookListDir)
-	if _, ok := sd.Children()["Remove"]; ok {
-		t.Error("'Remove' entry should be gone")
-	}
-}
+					want := []string{v.entry(1, "Joint Work")}
+					for _, key := range []string{"alpha", "beta"} {
+						if got := mustGroupEntries(t, d, key); !slices.Equal(got, want) {
+							t.Errorf("%s group = %v, want %v", key, got, want)
+						}
+					}
+				})
+			}
 
-func TestBySeriesDirNilSeriesNotAdded(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewBySeriesDir(reg)
+			if v.keyless != nil {
+				t.Run("a book with no key joins nothing", func(t *testing.T) {
+					reg, d := setup(t)
+					reg.Add(v.keyless(1, "Unfiled"))
 
-	b1 := makeBook(1, "Has Series", "Author")
-	b1.Series = &model.SeriesRef{Name: "S", Index: 1.0}
-	b2 := makeBook(2, "No Series", "Author")
+					if got := dirChildNames(d); len(got) != 0 {
+						t.Errorf("view holds %v, want nothing filed for a book with no key", got)
+					}
+				})
 
-	reg.Add(b1)
-	reg.Add(b2)
-
-	if n := len(d.Children()); n != 1 {
-		t.Errorf("expected 1 series child, got %d", n)
-	}
-}
-
-func TestBySeriesDirReaddAfterRemove(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewBySeriesDir(reg)
-
-	b := makeBook(1, "Back and Forth", "Author")
-	b.Series = &model.SeriesRef{Name: "S", Index: 1.0}
-	reg.Add(b)
-	reg.Remove(1)
-
-	if _, ok := d.Children()["S"]; ok {
-		t.Error("series dir should be gone after remove")
-	}
-
-	reg.Add(b)
-	if _, ok := d.Children()["S"]; !ok {
-		t.Error("series dir should be back after re-add")
+				t.Run("removing a book with no key is a no-op", func(t *testing.T) {
+					reg, _ := setup(t)
+					reg.Add(v.keyless(1, "Unfiled"))
+					reg.Remove(1) // must not panic
+				})
+			}
+		})
 	}
 }
 
@@ -372,11 +378,18 @@ func TestByIDDirMultipleBooks(t *testing.T) {
 	}
 }
 
+// TestByIDDirRemoveUnknown: as above, with a book present so the no-op is
+// observable rather than inferred from the absence of a panic.
 func TestByIDDirRemoveUnknown(t *testing.T) {
 	reg := newTestRegistry(t)
-	NewByIDDir(reg)
+	d := NewByIDDir(reg)
+	reg.Add(makeBook(1, "Kept", "Author"))
 
-	reg.Remove(999) // should not panic
+	reg.Remove(999)
+
+	if _, ok := d.Children()["1. Kept"]; !ok {
+		t.Errorf("removing an unknown id disturbed the registered books: %v", dirChildNames(d))
+	}
 }
 
 func TestByIDDirTitleChangeReflected(t *testing.T) {
@@ -566,94 +579,6 @@ func TestBySeriesDirRemoveNilSeriesNoOp(t *testing.T) {
 
 // ---- ByTagDir ----
 
-func TestByTagDirAddBookWithTags(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewByTagDir(reg)
-
-	b := makeBook(1, "Tagged Book", "Author")
-	b.Meta.Tags = []string{"fiction", "fantasy"}
-	reg.Add(b)
-
-	for _, tag := range []string{"fiction", "fantasy"} {
-		td, ok := d.Children()[tag]
-		if !ok {
-			t.Fatalf("by-tag should have %q subdir", tag)
-		}
-		bld := td.(*bookListDir)
-		if _, ok := bld.Children()["Tagged Book"]; !ok {
-			t.Errorf("%s's dir should contain 'Tagged Book'", tag)
-		}
-	}
-}
-
-func TestByTagDirNoTags(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewByTagDir(reg)
-
-	b := makeBook(1, "Untagged", "Author")
-	b.Meta.Tags = nil
-	reg.Add(b)
-
-	if n := len(d.Children()); n != 0 {
-		t.Errorf("by-tag should have no children for tagless book, got %d", n)
-	}
-}
-
-func TestByTagDirRemoveLastPrunesDir(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewByTagDir(reg)
-
-	b := makeBook(1, "Only Tagged", "Author")
-	b.Meta.Tags = []string{"ephemeral"}
-	reg.Add(b)
-	reg.Remove(1)
-
-	if _, ok := d.Children()["ephemeral"]; ok {
-		t.Error("tag subdir should be pruned after last book removed")
-	}
-}
-
-func TestByTagDirMultipleBooksSameTag(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewByTagDir(reg)
-
-	b1 := makeBook(1, "Book A", "Author")
-	b1.Meta.Tags = []string{"scifi"}
-	b2 := makeBook(2, "Book B", "Author")
-	b2.Meta.Tags = []string{"scifi"}
-
-	reg.Add(b1)
-	reg.Add(b2)
-
-	td := d.Children()["scifi"].(*bookListDir)
-	children := dirChildNames(td)
-	if len(children) != 2 {
-		t.Fatalf("expected 2 books under scifi, got %d: %v", len(children), children)
-	}
-}
-
-func TestByTagDirRemoveOneOfTwo(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewByTagDir(reg)
-
-	b1 := makeBook(1, "Keep", "Author")
-	b1.Meta.Tags = []string{"tag"}
-	b2 := makeBook(2, "Remove", "Author")
-	b2.Meta.Tags = []string{"tag"}
-
-	reg.Add(b1)
-	reg.Add(b2)
-	reg.Remove(2)
-
-	td := d.Children()["tag"].(*bookListDir)
-	if _, ok := td.Children()["Remove"]; ok {
-		t.Error("'Remove' book should be gone from tag dir")
-	}
-	if _, ok := td.Children()["Keep"]; !ok {
-		t.Error("'Keep' book should remain in tag dir")
-	}
-}
-
 func TestByTagDirTagWithSlash(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewByTagDir(reg)
@@ -681,153 +606,6 @@ func TestByTagDirRemoveWithSlashTag(t *testing.T) {
 
 	if _, ok := d.Children()["x_y"]; ok {
 		t.Error("tag subdir should be pruned after remove")
-	}
-}
-
-func TestByTagDirEditTags(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewByTagDir(reg)
-
-	b := makeBook(1, "Retagged", "Author")
-	b.Meta.Tags = []string{"oldtag"}
-	reg.Add(b)
-
-	if _, ok := d.Children()["oldtag"]; !ok {
-		t.Fatal("by-tag should have 'oldtag' subdir")
-	}
-
-	reg.Remove(1)
-	b.Meta.Tags = []string{"newtag"}
-	reg.Add(b)
-
-	if _, ok := d.Children()["oldtag"]; ok {
-		t.Error("'oldtag' subdir should be pruned after retag")
-	}
-	td, ok := d.Children()["newtag"]
-	if !ok {
-		t.Fatal("by-tag should have 'newtag' subdir after retag")
-	}
-	if _, ok := td.(*bookListDir).Children()["Retagged"]; !ok {
-		t.Error("'Retagged' should appear under 'newtag'")
-	}
-}
-
-// ---- ByStatusDir ----
-
-func TestByStatusDirAddBook(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewByStatusDir(reg)
-
-	b := makeBook(1, "My Book", "Author")
-	reg.Add(b)
-
-	sd, ok := d.Children()["unread"]
-	if !ok {
-		t.Fatal("by-status should have 'unread' subdir")
-	}
-	bld := sd.(*bookListDir)
-	if _, ok := bld.Children()["My Book"]; !ok {
-		t.Error("unread dir should contain 'My Book'")
-	}
-}
-
-func TestByStatusDirDifferentStatuses(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewByStatusDir(reg)
-
-	b1 := makeBook(1, "Unread Book", "Author")
-	b1.Meta.Status = "unread"
-	b2 := makeBook(2, "Read Book", "Author")
-	b2.Meta.Status = "read"
-
-	reg.Add(b1)
-	reg.Add(b2)
-
-	for _, status := range []string{"unread", "read"} {
-		sd, ok := d.Children()[status]
-		if !ok {
-			t.Fatalf("by-status should have %q subdir", status)
-		}
-		bld := sd.(*bookListDir)
-		if n := len(bld.Children()); n != 1 {
-			t.Errorf("expected 1 book in %q, got %d", status, n)
-		}
-	}
-}
-
-func TestByStatusDirRemoveLastPrunesDir(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewByStatusDir(reg)
-
-	b := makeBook(1, "Only", "Author")
-	b.Meta.Status = "reading"
-	reg.Add(b)
-	reg.Remove(1)
-
-	if _, ok := d.Children()["reading"]; ok {
-		t.Error("status subdir should be pruned after last book removed")
-	}
-}
-
-func TestByStatusDirMultipleBooksSameStatus(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewByStatusDir(reg)
-
-	reg.Add(makeBook(1, "Book A", "Author"))
-	reg.Add(makeBook(2, "Book B", "Author"))
-
-	sd := d.Children()["unread"].(*bookListDir)
-	children := dirChildNames(sd)
-	if len(children) != 2 {
-		t.Fatalf("expected 2 books under unread, got %d: %v", len(children), children)
-	}
-}
-
-func TestByStatusDirRemoveOneOfTwo(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewByStatusDir(reg)
-
-	b1 := makeBook(1, "Keep", "Author")
-	b2 := makeBook(2, "Remove", "Author")
-
-	reg.Add(b1)
-	reg.Add(b2)
-	reg.Remove(2)
-
-	sd := d.Children()["unread"].(*bookListDir)
-	if _, ok := sd.Children()["Remove"]; ok {
-		t.Error("'Remove' book should be gone from status dir")
-	}
-	if _, ok := sd.Children()["Keep"]; !ok {
-		t.Error("'Keep' book should remain in status dir")
-	}
-}
-
-func TestByStatusDirEditStatus(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewByStatusDir(reg)
-
-	b := makeBook(1, "Status Change", "Author")
-	b.Meta.Status = "unread"
-	reg.Add(b)
-
-	if _, ok := d.Children()["unread"]; !ok {
-		t.Fatal("by-status should have 'unread' subdir")
-	}
-
-	reg.Remove(1)
-	b.Meta.Status = "read"
-	reg.Add(b)
-
-	if _, ok := d.Children()["unread"]; ok {
-		t.Error("'unread' subdir should be pruned after status change")
-	}
-	sd, ok := d.Children()["read"]
-	if !ok {
-		t.Fatal("by-status should have 'read' subdir after status change")
-	}
-	if _, ok := sd.(*bookListDir).Children()["Status Change"]; !ok {
-		t.Error("'Status Change' should appear under 'read'")
 	}
 }
 

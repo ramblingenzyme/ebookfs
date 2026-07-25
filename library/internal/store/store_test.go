@@ -522,3 +522,72 @@ func TestIDFromPath(t *testing.T) {
 		}
 	}
 }
+
+// TestIngestCleansUpAfterFailedMeta covers the rollback in Ingest. The staged
+// epub has already been renamed into the book directory by the time the sidecar
+// write is attempted, so a failure there leaves a directory holding an epub and
+// no meta.toml — which store.Walk still reports as a book. Removing it is what
+// lets the caller retry from a clean slate.
+func TestIngestCleansUpAfterFailedMeta(t *testing.T) {
+	s, root := newStore(t)
+
+	staged := filepath.Join(t.TempDir(), "staged.epub")
+	if err := os.WriteFile(staged, []byte("epub"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	loc := model.Location{LibraryPath: "Alice/Title (1)", EpubFilename: "Title - Alice.epub"}
+	// Occupy meta.toml's name with a directory, so the sidecar write fails
+	// after the epub is already in place.
+	bookDir := filepath.Join(root, loc.LibraryPath)
+	if err := os.MkdirAll(filepath.Join(bookDir, metaFilename), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.Ingest(staged, loc, &model.Meta{ID: 1}); err == nil {
+		t.Fatal("Ingest succeeded with an unwritable meta.toml, want the failure surfaced")
+	}
+	if _, err := os.Stat(bookDir); !os.IsNotExist(err) {
+		t.Errorf("book directory survived a failed ingest (stat err = %v); a retry would trip the exists check", err)
+	}
+}
+
+// TestIngestMissingStagedEpub is the earlier failure: nothing to move into
+// place. The book directory is created before the rename is attempted, so this
+// pins that the error is surfaced rather than leaving a half-built book behind.
+func TestIngestMissingStagedEpub(t *testing.T) {
+	s, root := newStore(t)
+
+	loc := model.Location{LibraryPath: "Alice/Title (1)", EpubFilename: "Title - Alice.epub"}
+	err := s.Ingest(filepath.Join(t.TempDir(), "does-not-exist.epub"), loc, &model.Meta{ID: 1})
+	if err == nil {
+		t.Fatal("Ingest succeeded with no staged epub, want the failure surfaced")
+	}
+	if _, err := os.Stat(filepath.Join(root, loc.LibraryPath, metaFilename)); !os.IsNotExist(err) {
+		t.Error("meta.toml was written despite the epub never arriving")
+	}
+}
+
+// TestMoveRollsBackWhenEpubRenameFails covers Move's compensating rename. The
+// directory move lands first; if the epub rename inside it then fails, the
+// directory has to go back where it was — otherwise the book sits at a path
+// the index doesn't know, invisible until the next drift-triggered rebuild.
+func TestMoveRollsBackWhenEpubRenameFails(t *testing.T) {
+	s, root := newStore(t)
+
+	// The directory holds an epub under a different name than `from` claims,
+	// so the directory move succeeds and the rename inside it cannot.
+	writeBook(t, root, "Alice/Title (1)", "actual.epub", "data", &model.Meta{ID: 1})
+	from := model.Location{LibraryPath: "Alice/Title (1)", EpubFilename: "claimed.epub"}
+	to := model.Location{LibraryPath: "Bob/Title (1)", EpubFilename: "renamed.epub"}
+
+	if err := s.Move(from, to); err == nil {
+		t.Fatal("Move succeeded with a missing source epub, want the failure surfaced")
+	}
+
+	if _, err := os.Stat(filepath.Join(root, from.LibraryPath, "actual.epub")); err != nil {
+		t.Errorf("book did not return to %q after the failed rename: %v", from.LibraryPath, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, to.LibraryPath)); !os.IsNotExist(err) {
+		t.Errorf("destination %q still exists after rollback", to.LibraryPath)
+	}
+}

@@ -344,7 +344,7 @@ func (d *searchDir) allocateHandle() *searchHandleDir {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	d.cleanupLocked()
+	d.cleanupLocked(1)
 
 	id := d.nextID
 	d.nextID++
@@ -373,7 +373,13 @@ func (d *searchDir) removeHandleLocked(id int64) {
 	delete(d.handles, id)
 }
 
-func (d *searchDir) cleanupLocked() {
+// cleanupLocked reclaims handles: first any idle longer than the TTL, then the
+// least recently queried until maxHandles-headroom remain. headroom is how many
+// handles the caller is about to add — allocateHandle passes 1 so the handle it
+// then inserts still fits under the cap, while the periodic sweep, which adds
+// nothing, passes 0. Counting only what is already in the map would leave the
+// cap admitting maxHandles+1.
+func (d *searchDir) cleanupLocked(headroom int) {
 	now := time.Now()
 
 	if d.ttl > 0 {
@@ -384,7 +390,7 @@ func (d *searchDir) cleanupLocked() {
 		}
 	}
 
-	if d.maxHandles > 0 && len(d.handles) >= d.maxHandles {
+	if d.maxHandles > 0 && len(d.handles)+headroom > d.maxHandles {
 		sorted := make([]*searchHandleDir, 0, len(d.handles))
 		for _, h := range d.handles {
 			sorted = append(sorted, h)
@@ -392,7 +398,7 @@ func (d *searchDir) cleanupLocked() {
 		sort.Slice(sorted, func(i, j int) bool {
 			return sorted[i].lastQuery().Before(sorted[j].lastQuery())
 		})
-		toRemove := len(sorted) - d.maxHandles
+		toRemove := len(sorted) + headroom - d.maxHandles
 		for _, h := range sorted[:toRemove] {
 			d.removeHandleLocked(h.id)
 		}
@@ -410,7 +416,7 @@ func (d *searchDir) cleanupLoop() {
 		select {
 		case <-ticker.C:
 			d.mu.Lock()
-			d.cleanupLocked()
+			d.cleanupLocked(0)
 			d.mu.Unlock()
 		case <-d.cleanupDone:
 			return

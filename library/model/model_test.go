@@ -389,3 +389,101 @@ func TestJoinAuthors(t *testing.T) {
 		})
 	}
 }
+
+// TestEditsNormalized pins the rounding policy. It is applied once, by
+// Library.Edit, precisely so no frontend re-implements it — which also means
+// nothing else would notice if it stopped happening.
+func TestEditsNormalized(t *testing.T) {
+	tests := []struct {
+		name  string
+		edits Edits
+		// nil means the field must come back nil.
+		wantRating *float64
+		wantIndex  *float64
+	}{
+		{"nil fields stay nil", Edits{}, nil, nil},
+
+		// Ratings are stored to 2 decimal places.
+		{"rating rounds down", Edits{Rating: ptr(4.564)}, ptr(4.56), nil},
+		{"rating rounds up", Edits{Rating: ptr(4.567)}, ptr(4.57), nil},
+		{"rating at the halfway point rounds away from zero", Edits{Rating: ptr(4.565)}, ptr(4.57), nil},
+		{"rating already exact", Edits{Rating: ptr(4.5)}, ptr(4.5), nil},
+		{"rating zero", Edits{Rating: ptr(0.0)}, ptr(0.0), nil},
+
+		// Series indices are stored to 1 decimal place.
+		{"index rounds down", Edits{SeriesIndex: ptr(1.54)}, nil, ptr(1.5)},
+		{"index rounds up", Edits{SeriesIndex: ptr(1.56)}, nil, ptr(1.6)},
+		{"index already exact", Edits{SeriesIndex: ptr(2.0)}, nil, ptr(2.0)},
+
+		{"both fields", Edits{Rating: ptr(3.999), SeriesIndex: ptr(0.04)}, ptr(4.0), ptr(0.0)},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.edits.Normalized()
+
+			assertRounded(t, "Rating", got.Rating, tc.wantRating)
+			assertRounded(t, "SeriesIndex", got.SeriesIndex, tc.wantIndex)
+		})
+	}
+}
+
+func assertRounded(t *testing.T, field string, got, want *float64) {
+	t.Helper()
+	switch {
+	case want == nil && got != nil:
+		t.Errorf("%s = %v, want nil — an absent edit must stay absent", field, *got)
+	case want == nil:
+	case got == nil:
+		t.Errorf("%s = nil, want %v", field, *want)
+	case *got != *want:
+		t.Errorf("%s = %v, want %v", field, *got, *want)
+	}
+}
+
+// TestEditsNormalizedKeepsNonFinite pins the interaction Normalized's doc
+// comment relies on: rounding must leave NaN and ±Inf intact so Validate is
+// still the thing that rejects them. Were rounding to fold them to a finite
+// number, an unusable value would pass validation and reach the sidecar.
+func TestEditsNormalizedKeepsNonFinite(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		v    float64
+	}{
+		{"NaN", math.NaN()},
+		{"+Inf", math.Inf(1)},
+		{"-Inf", math.Inf(-1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Edits{Rating: ptr(tc.v), SeriesIndex: ptr(tc.v)}.Normalized()
+
+			if r := *got.Rating; !math.IsNaN(r) && !math.IsInf(r, 0) {
+				t.Errorf("Rating = %v, want it left non-finite for Validate to reject", r)
+			}
+			if i := *got.SeriesIndex; !math.IsNaN(i) && !math.IsInf(i, 0) {
+				t.Errorf("SeriesIndex = %v, want it left non-finite for Validate to reject", i)
+			}
+			// The pairing that matters: Validate still refuses it afterwards.
+			book := &Book{Bib: Bib{Series: &SeriesRef{Name: "S"}}}
+			if err := got.Validate(book); err == nil {
+				t.Error("Validate accepted a non-finite value that survived rounding")
+			}
+		})
+	}
+}
+
+// TestEditsNormalizedDoesNotMutateItsReceiver: Edits is taken by value, but it
+// carries pointers, so rewriting through them would reach back into the
+// caller's copy.
+func TestEditsNormalizedDoesNotMutateItsReceiver(t *testing.T) {
+	rating, index := 4.567, 1.56
+	e := Edits{Rating: &rating, SeriesIndex: &index}
+
+	e.Normalized()
+
+	if rating != 4.567 {
+		t.Errorf("caller's Rating = %v, want it untouched at 4.567", rating)
+	}
+	if index != 1.56 {
+		t.Errorf("caller's SeriesIndex = %v, want it untouched at 1.56", index)
+	}
+}

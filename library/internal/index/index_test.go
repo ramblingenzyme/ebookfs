@@ -178,18 +178,36 @@ func TestRebuildRecordsSkippedPaths(t *testing.T) {
 	}
 }
 
-// newBook builds a minimal valid book for insertion.
-func newBook(id int64, title string) *model.Book {
-	return makeAuthoredBook(id, title, model.Author{Name: "Alice", SortName: "Alice"})
-}
-
-// makeAuthoredBook is newBook for tests that care which authors a book carries.
+// makeAuthoredBook builds a minimal valid book for insertion. It is the one
+// place the book literal lives; newBook and makeTestBook narrow it for the
+// tests that don't care about every field.
 func makeAuthoredBook(id int64, title string, authors ...model.Author) *model.Book {
 	return model.NewBook(
 		model.Bib{Title: title, Authors: authors},
 		model.Meta{ID: id},
 		model.Location{LibraryPath: title, EpubFilename: "book.epub"},
 	)
+}
+
+// newBook is makeAuthoredBook for tests that don't care who wrote it.
+func newBook(id int64, title string) *model.Book {
+	return makeAuthoredBook(id, title, model.Author{Name: "Alice", SortName: "Alice"})
+}
+
+// makeTestBook is makeAuthoredBook for the query and search tests, which filter
+// on author name, tag and status but never on sort name. An empty tag leaves
+// the book untagged rather than carrying one named "".
+func makeTestBook(id int64, title string, authors []string, tag string, status string) *model.Book {
+	auths := make([]model.Author, len(authors))
+	for i, name := range authors {
+		auths[i] = model.Author{Name: name}
+	}
+	b := makeAuthoredBook(id, title, auths...)
+	b.Meta.Status = status
+	if tag != "" {
+		b.Meta.Tags = []string{tag}
+	}
+	return b
 }
 
 // pendingCount reports how many rows are in pending_ops (white-box access).
@@ -873,22 +891,6 @@ func TestStatsExcludesOrphans(t *testing.T) {
 	}
 }
 
-func makeTestBook(id int64, title string, authors []string, tag string, status string) *model.Book {
-	authorObjs := make([]model.Author, len(authors))
-	for i, name := range authors {
-		authorObjs[i] = model.Author{Name: name}
-	}
-	meta := model.Meta{ID: id, Status: status}
-	if tag != "" {
-		meta.Tags = []string{tag}
-	}
-	return model.NewBook(
-		model.Bib{Title: title, Authors: authorObjs},
-		meta,
-		model.Location{LibraryPath: title, EpubFilename: "book.epub"},
-	)
-}
-
 func TestSearch(t *testing.T) {
 	idx := openTestIndex(t)
 
@@ -1059,74 +1061,70 @@ func TestPutBookWithSeriesAndTags(t *testing.T) {
 	}
 }
 
-func TestNextIDClosedDB(t *testing.T) {
-	idx := openTestIndex(t)
-	idx.Close()
-	_, err := idx.NextID()
-	if err == nil {
-		t.Fatal("expected error from NextID after db closed")
+// mustMarkPending arms an op, for tests whose subject is the call after it.
+func mustMarkPending(t *testing.T, op *Op) {
+	t.Helper()
+	if err := op.MarkPending(); err != nil {
+		t.Fatalf("MarkPending: %v", err)
 	}
 }
 
-func TestMarkPendingClosedDB(t *testing.T) {
-	idx := openTestIndex(t)
-	op := idx.BeginOp()
-	idx.Close()
-	err := op.MarkPending()
-	if err == nil {
-		t.Fatal("expected error from MarkPending after db closed")
+// TestClosedIndexSurfacesErrors checks that every entry point reports the
+// failure rather than swallowing it, so a mutation that cannot reach the
+// database fails loudly instead of leaving the index quietly wrong.
+//
+// It asserts only that an error comes back — not which one, and not what state
+// survives. Anything stronger belongs with the test that owns that behaviour.
+func TestClosedIndexSurfacesErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		// arm runs against the still-open index and returns the call to make
+		// once it is closed. Entry points that need a pending op, or a book to
+		// act on, set that up here.
+		arm func(*testing.T, *Index) func() error
+	}{
+		{"NextID", func(t *testing.T, idx *Index) func() error {
+			return func() error { _, err := idx.NextID(); return err }
+		}},
+		{"MarkPending", func(t *testing.T, idx *Index) func() error {
+			return idx.BeginOp().MarkPending
+		}},
+		{"Put", func(t *testing.T, idx *Index) func() error {
+			op := idx.BeginOp()
+			mustMarkPending(t, op)
+			return func() error { return op.Put(newBook(1, "T"), drift.PathInfo{}) }
+		}},
+		{"Delete", func(t *testing.T, idx *Index) func() error {
+			storeInIndex(t, idx, newBook(1, "T"))
+			op := idx.BeginOp()
+			mustMarkPending(t, op)
+			return func() error { return op.Delete(1) }
+		}},
+		{"Rebuild", func(t *testing.T, idx *Index) func() error {
+			return func() error { return idx.Rebuild(nil, nil, 0) }
+		}},
+		{"NeedsReindex", func(t *testing.T, idx *Index) func() error {
+			return func() error { _, err := idx.NeedsReindex(); return err }
+		}},
+		{"dropAllTables", func(t *testing.T, idx *Index) func() error {
+			return idx.dropAllTables
+		}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			idx := openTestIndex(t)
+			call := tc.arm(t, idx)
+			idx.Close()
+
+			if err := call(); err == nil {
+				t.Errorf("%s on a closed index returned nil, want the failure surfaced", tc.name)
+			}
+		})
 	}
 }
 
-func TestPutClosedDB(t *testing.T) {
-	idx := openTestIndex(t)
-	op := idx.BeginOp()
-	op.MarkPending()
-	idx.Close()
-	err := op.Put(newBook(1, "T"), drift.PathInfo{})
-	if err == nil {
-		t.Fatal("expected error from Put after db closed")
-	}
-}
-
-func TestDeleteClosedDB(t *testing.T) {
-	idx := openTestIndex(t)
-
-	op1 := idx.BeginOp()
-	op1.MarkPending()
-	if err := op1.Put(newBook(1, "T"), drift.PathInfo{}); err != nil {
-		t.Fatalf("Put: %v", err)
-	}
-
-	op2 := idx.BeginOp()
-	op2.MarkPending()
-	idx.Close()
-	err := op2.Delete(1)
-	if err == nil {
-		t.Fatal("expected error from Delete after db closed")
-	}
-}
-
-func TestRebuildClosedDB(t *testing.T) {
-	idx := openTestIndex(t)
-	idx.Close()
-	err := idx.Rebuild(nil, nil, 0)
-	if err == nil {
-		t.Fatal("expected error from Rebuild after db closed")
-	}
-}
-
-func TestNeedsReindexClosedDB(t *testing.T) {
-	idx := openTestIndex(t)
-	idx.Close()
-	_, err := idx.NeedsReindex()
-	if err == nil {
-		t.Fatal("expected error from NeedsReindex after db closed")
-	}
-}
-
-// rolledBackTx returns a *sql.Tx that has been rolled back, so any subsequent
-// operation on it returns sql.ErrTxDone. Tests tx-level error branches.
+// rolledBackTX returns a *sql.Tx that has been rolled back, so any subsequent
+// operation on it returns sql.ErrTxDone.
 func rolledBackTX(t *testing.T, idx *Index) *sql.Tx {
 	t.Helper()
 	tx, err := idx.db.Begin()
@@ -1137,94 +1135,51 @@ func rolledBackTX(t *testing.T, idx *Index) *sql.Tx {
 	return tx
 }
 
-func TestFinishBookRolledBackTx(t *testing.T) {
-	idx := openTestIndex(t)
-	tx := rolledBackTX(t, idx)
-	q := dbsqlc.New(tx)
-	err := idx.finishBook(q, newBook(1, "Test"))
-	if err == nil {
-		t.Fatal("expected error from finishBook on rolled-back tx")
+// TestRolledBackTxSurfacesErrors is TestClosedIndexSurfacesErrors one layer
+// down: the helpers that write through a *dbsqlc.Queries must propagate a
+// failed statement rather than returning nil and letting the caller commit a
+// half-written book. Same caveat — presence of an error is all it asserts.
+func TestRolledBackTxSurfacesErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		call func(*Index, *dbsqlc.Queries) error
+	}{
+		{"finishBook", func(idx *Index, q *dbsqlc.Queries) error {
+			return idx.finishBook(q, newBook(1, "Test"))
+		}},
+		{"upsertAuthors", func(idx *Index, q *dbsqlc.Queries) error {
+			return idx.upsertAuthors(q, 1, []model.Author{{Name: "Alice", SortName: "Alice"}})
+		}},
+		{"upsertTags", func(idx *Index, q *dbsqlc.Queries) error {
+			return idx.upsertTags(q, 1, []string{"sci-fi"})
+		}},
+		{"upsertSeries", func(idx *Index, q *dbsqlc.Queries) error {
+			b := newBook(1, "Test")
+			b.Series = &model.SeriesRef{Name: "S", Index: 1}
+			return idx.upsertSeries(q, b)
+		}},
+		{"putBook", func(idx *Index, q *dbsqlc.Queries) error {
+			return idx.putBook(q, newBook(1, "Test"), drift.PathInfo{})
+		}},
+		{"insertBook", func(idx *Index, q *dbsqlc.Queries) error {
+			return idx.insertBook(q, newBook(1, "Test"), drift.PathInfo{})
+		}},
+		{"deleteBook", func(idx *Index, q *dbsqlc.Queries) error {
+			return idx.deleteBook(q, 1)
+		}},
+		{"cleanupOrphans", func(idx *Index, q *dbsqlc.Queries) error {
+			return idx.cleanupOrphans(q)
+		}},
 	}
-}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			idx := openTestIndex(t)
+			q := dbsqlc.New(rolledBackTX(t, idx))
 
-func TestUpsertAuthorsRolledBackTx(t *testing.T) {
-	idx := openTestIndex(t)
-	tx := rolledBackTX(t, idx)
-	q := dbsqlc.New(tx)
-	err := idx.upsertAuthors(q, 1, []model.Author{{Name: "Alice", SortName: "Alice"}})
-	if err == nil {
-		t.Fatal("expected error from upsertAuthors on rolled-back tx")
-	}
-}
-
-func TestUpsertTagsRolledBackTx(t *testing.T) {
-	idx := openTestIndex(t)
-	tx := rolledBackTX(t, idx)
-	q := dbsqlc.New(tx)
-	err := idx.upsertTags(q, 1, []string{"sci-fi"})
-	if err == nil {
-		t.Fatal("expected error from upsertTags on rolled-back tx")
-	}
-}
-
-func TestUpsertSeriesRolledBackTx(t *testing.T) {
-	idx := openTestIndex(t)
-	tx := rolledBackTX(t, idx)
-	q := dbsqlc.New(tx)
-	b := newBook(1, "Test")
-	b.Series = &model.SeriesRef{Name: "S", Index: 1}
-	err := idx.upsertSeries(q, b)
-	if err == nil {
-		t.Fatal("expected error from upsertSeries on rolled-back tx")
-	}
-}
-
-func TestPutBookRolledBackTx(t *testing.T) {
-	idx := openTestIndex(t)
-	tx := rolledBackTX(t, idx)
-	q := dbsqlc.New(tx)
-	err := idx.putBook(q, newBook(1, "Test"), drift.PathInfo{})
-	if err == nil {
-		t.Fatal("expected error from putBook on rolled-back tx")
-	}
-}
-
-func TestInsertBookRolledBackTx(t *testing.T) {
-	idx := openTestIndex(t)
-	tx := rolledBackTX(t, idx)
-	q := dbsqlc.New(tx)
-	err := idx.insertBook(q, newBook(1, "Test"), drift.PathInfo{})
-	if err == nil {
-		t.Fatal("expected error from insertBook on rolled-back tx")
-	}
-}
-
-func TestDeleteBookRolledBackTx(t *testing.T) {
-	idx := openTestIndex(t)
-	tx := rolledBackTX(t, idx)
-	q := dbsqlc.New(tx)
-	err := idx.deleteBook(q, 1)
-	if err == nil {
-		t.Fatal("expected error from deleteBook on rolled-back tx")
-	}
-}
-
-func TestCleanupOrphansRolledBackTx(t *testing.T) {
-	idx := openTestIndex(t)
-	tx := rolledBackTX(t, idx)
-	q := dbsqlc.New(tx)
-	err := idx.cleanupOrphans(q)
-	if err == nil {
-		t.Fatal("expected error from cleanupOrphans on rolled-back tx")
-	}
-}
-
-func TestDropAllTablesClosedDB(t *testing.T) {
-	idx := openTestIndex(t)
-	idx.Close()
-	err := idx.dropAllTables()
-	if err == nil {
-		t.Fatal("expected error from dropAllTables after db closed")
+			if err := tc.call(idx, q); err == nil {
+				t.Errorf("%s on a rolled-back tx returned nil, want the failure surfaced", tc.name)
+			}
+		})
 	}
 }
 

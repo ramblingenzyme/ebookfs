@@ -16,7 +16,10 @@ import (
 
 func TestCacheClose(t *testing.T) {
 	c := NewCache(t.TempDir(), noopSource{})
-	c.Close()
+
+	if err := c.Close(); err != nil {
+		t.Errorf("Close: %v", err)
+	}
 }
 
 type noopSource struct{}

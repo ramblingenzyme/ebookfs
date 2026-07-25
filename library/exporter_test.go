@@ -120,7 +120,17 @@ func TestEpubExporter_Warm(t *testing.T) {
 	exp.Warm(nil) // no-op, must not panic
 }
 
-func TestEpubExporter_Includes(t *testing.T) {
+// TestExporterIncludes runs the status filter over both exporters. They carry
+// separate copies of the same one-line rule, and it decides what a reader mount
+// can see, so a divergence between them is a mount quietly serving the wrong
+// set of books. The kepub cache is built without its converter: Includes reads
+// only the configured statuses.
+func TestExporterIncludes(t *testing.T) {
+	exporters := map[string]func(statuses []string) Exporter{
+		"epub":  func(s []string) Exporter { return epubExporter{statuses: s} },
+		"kepub": func(s []string) Exporter { return &kepubCache{statuses: s} },
+	}
+
 	tests := []struct {
 		name     string
 		statuses []string
@@ -133,13 +143,16 @@ func TestEpubExporter_Includes(t *testing.T) {
 		{"empty book status", []string{"unread"}, "", false},
 		{"empty book status with empty in statuses", []string{""}, "", true},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			exp := epubExporter{statuses: tt.statuses}
-			book := makeBook(1, "Test", "Author")
-			book.Meta.Status = tt.status
-			if got := exp.Includes(book); got != tt.want {
-				t.Errorf("Includes = %v, want %v", got, tt.want)
+	for kind, newExp := range exporters {
+		t.Run(kind, func(t *testing.T) {
+			for _, tt := range tests {
+				t.Run(tt.name, func(t *testing.T) {
+					book := makeBook(1, "Test", "Author")
+					book.Meta.Status = tt.status
+					if got := newExp(tt.statuses).Includes(book); got != tt.want {
+						t.Errorf("Includes = %v, want %v", got, tt.want)
+					}
+				})
 			}
 		})
 	}

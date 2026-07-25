@@ -176,3 +176,38 @@ func TestReadAtFileCloseReleasesReader(t *testing.T) {
 		t.Error("reader should be closed after Close")
 	}
 }
+
+// ---- Snapshot ----
+
+// TestSnapshotFileSnapshot covers the accessor embedders use to seed a write
+// buffer from the value the client opened, so an edit builds on what was read
+// rather than on whatever the file says by the time the write lands.
+func TestSnapshotFileSnapshot(t *testing.T) {
+	sf := newTestSnapshotFile(t, []byte("current value"))
+
+	if _, ok := sf.Snapshot(1); ok {
+		t.Error("Snapshot reported data for an unopened fid")
+	}
+
+	if err := sf.Open(1, proto.Mode(0)); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	data, ok := sf.Snapshot(1)
+	if !ok {
+		t.Fatal("Snapshot reported no data for an open fid")
+	}
+	if !bytes.Equal(data, []byte("current value")) {
+		t.Errorf("Snapshot = %q, want %q", data, "current value")
+	}
+
+	// Other fids are unaffected, and a clunked fid releases its snapshot.
+	if _, ok := sf.Snapshot(2); ok {
+		t.Error("Snapshot reported data for a different, unopened fid")
+	}
+	if err := sf.Close(1); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if _, ok := sf.Snapshot(1); ok {
+		t.Error("Snapshot still reported data after the fid was clunked")
+	}
+}

@@ -1,6 +1,8 @@
 package ctl
 
 import (
+	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -203,8 +205,8 @@ func TestAddTag(t *testing.T) {
 	cmdLog := NewCommandLog(10)
 	result := execute(`add-tag "newtag" *`, lib, reg, cmdLog)
 
-	if result == "" {
-		t.Fatal("expected non-empty result")
+	if result != "ok: 1 books edited" {
+		t.Errorf("result = %q, want %q", result, "ok: 1 books edited")
 	}
 }
 
@@ -233,8 +235,8 @@ func TestRemoveTag(t *testing.T) {
 
 	cmdLog := NewCommandLog(10)
 	result := execute(`remove-tag "remove" *`, lib, reg, cmdLog)
-	if result == "" {
-		t.Fatal("expected non-empty result")
+	if result != "ok: 1 books edited" {
+		t.Errorf("result = %q, want %q", result, "ok: 1 books edited")
 	}
 }
 
@@ -286,8 +288,8 @@ func TestSetStatus(t *testing.T) {
 
 	cmdLog := NewCommandLog(10)
 	result := execute("set-status reading *", lib, reg, cmdLog)
-	if result == "" {
-		t.Fatal("expected non-empty result")
+	if result != "ok: 1 books edited" {
+		t.Errorf("result = %q, want %q", result, "ok: 1 books edited")
 	}
 }
 
@@ -317,8 +319,8 @@ func TestRenameTag(t *testing.T) {
 
 	cmdLog := NewCommandLog(10)
 	result := execute(`rename-tag "scifi" "sci-fi"`, lib, reg, cmdLog)
-	if result == "" {
-		t.Fatal("expected non-empty result")
+	if result != "ok: 1 books renamed" {
+		t.Errorf("result = %q, want %q", result, "ok: 1 books renamed")
 	}
 }
 
@@ -348,8 +350,8 @@ func TestRenameTagBothTags(t *testing.T) {
 
 	cmdLog := NewCommandLog(10)
 	result := execute(`rename-tag "old" "new"`, lib, reg, cmdLog)
-	if result == "" {
-		t.Fatal("expected non-empty result")
+	if result != "ok: 1 books renamed" {
+		t.Errorf("result = %q, want %q", result, "ok: 1 books renamed")
 	}
 }
 
@@ -381,8 +383,8 @@ func TestRenameAuthor(t *testing.T) {
 
 	cmdLog := NewCommandLog(10)
 	result := execute(`rename-author "Asimov" "Isaac Asimov|Asimov, Isaac"`, lib, reg, cmdLog)
-	if result == "" {
-		t.Fatal("expected non-empty result")
+	if result != "ok: 1 books renamed" {
+		t.Errorf("result = %q, want %q", result, "ok: 1 books renamed")
 	}
 }
 
@@ -416,8 +418,8 @@ func TestRenameAuthorMatchSortName(t *testing.T) {
 
 	cmdLog := NewCommandLog(10)
 	result := execute(`rename-author "Asimov, Isaac" "I. Asimov"`, lib, reg, cmdLog)
-	if result == "" {
-		t.Fatal("expected non-empty result")
+	if result != "ok: 1 books renamed" {
+		t.Errorf("result = %q, want %q", result, "ok: 1 books renamed")
 	}
 }
 
@@ -446,8 +448,8 @@ func TestRenameSeries(t *testing.T) {
 
 	cmdLog := NewCommandLog(10)
 	result := execute(`rename-series "Old" "New"`, lib, reg, cmdLog)
-	if result == "" {
-		t.Fatal("expected non-empty result")
+	if result != "ok: 1 books renamed" {
+		t.Errorf("result = %q, want %q", result, "ok: 1 books renamed")
 	}
 }
 
@@ -481,8 +483,8 @@ func TestRenameAuthorMerge(t *testing.T) {
 
 	cmdLog := NewCommandLog(10)
 	result := execute(`rename-author "Paul French" "Isaac Asimov"`, lib, reg, cmdLog)
-	if result == "" {
-		t.Fatal("expected non-empty result")
+	if result != "ok: 1 books renamed" {
+		t.Errorf("result = %q, want %q", result, "ok: 1 books renamed")
 	}
 }
 
@@ -509,16 +511,8 @@ func TestSetRatingUnchanged(t *testing.T) {
 
 	cmdLog := NewCommandLog(10)
 	result := execute("set-rating 4 *", lib, reg, cmdLog)
-	if result == "" {
-		t.Fatal("expected non-empty result")
-	}
-}
-
-func TestUnknownCommand(t *testing.T) {
-	cmdLog := NewCommandLog(10)
-	result := execute("nonsense", libfake.Lib{}, registry.NewBookRegistry(testutil.NewTestFS(t), libfake.Lib{}), cmdLog)
-	if result == "" {
-		t.Fatal("expected error message")
+	if result != "ok: no books edited\n1 skipped" {
+		t.Errorf("result = %q, want %q", result, "ok: no books edited\n1 skipped")
 	}
 }
 
@@ -536,35 +530,307 @@ func TestReindex(t *testing.T) {
 	if !called {
 		t.Fatal("Reindex not called")
 	}
-	if result == "" {
-		t.Fatal("expected non-empty result")
+	if result != "ok: index rebuilt" {
+		t.Errorf("result = %q, want %q", result, "ok: index rebuilt")
 	}
 }
 
+// TestDispatch pins that every command name routes to its handler rather than
+// falling through to the unknown-command default. Against an empty library the
+// results are determinate, so each row asserts the string its handler produces
+// — a name that silently stopped being routed would otherwise still look fine.
 func TestDispatch(t *testing.T) {
+	const notFound = "ok: no books edited\nerrors: 1 book(s)\n  book 1: not found"
+
 	tests := []struct {
-		cmd string
+		cmd  string
+		want string
 	}{
-		{"add-tag foo 1"},
-		{"remove-tag foo 1"},
-		{"set-status reading 1"},
-		{"set-rating 4 1"},
-		{"delete 1"},
-		{"reindex"},
-		{"rename-tag old new"},
-		{"rename-author old new"},
-		{"rename-series old new"},
+		{"add-tag foo 1", notFound},
+		{"remove-tag foo 1", notFound},
+		{"set-status reading 1", notFound},
+		{"set-rating 4 1", notFound},
+		{"delete 1", "ok: book 1 deleted"},
+		{"reindex", "ok: index rebuilt"},
+		{"rename-tag old new", "ok: no books renamed"},
+		{"rename-author old new", "ok: no books renamed"},
+		{"rename-series old new", "ok: no books renamed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.cmd, func(t *testing.T) {
+			p, err := parseCommand(tt.cmd)
+			if err != nil {
+				t.Fatalf("unexpected parse error for %q: %v", tt.cmd, err)
+			}
+			got := dispatch(p, libfake.Lib{}, registry.NewBookRegistry(testutil.NewTestFS(t), libfake.Lib{}))
+			if got != tt.want {
+				t.Errorf("dispatch(%q) = %q, want %q", tt.cmd, got, tt.want)
+			}
+		})
+	}
+}
+
+// --- command result strings ---
+
+// newTestCtl returns the pieces execute needs, over an empty library.
+func newTestCtl(t *testing.T, lib libfake.Lib) (*registry.BookRegistry, *CommandLog) {
+	t.Helper()
+	return registry.NewBookRegistry(testutil.NewTestFS(t), lib), NewCommandLog(10)
+}
+
+// TestCommandRejections pins what a client reads back from ctl when a command
+// cannot run: the usage line for a wrong argument count, and the specific error
+// for an argument that will not parse. These strings are the whole interface —
+// the write succeeds either way, so the result text is the only feedback there
+// is — and none of them were asserted before.
+func TestCommandRejections(t *testing.T) {
+	tests := []struct {
+		name string
+		cmd  string
+		want string
+	}{
+		// Wrong argument counts: every command answers with its own usage line.
+		{"add-tag no args", "add-tag", "usage: add-tag <tag> <id-spec>"},
+		{"add-tag one arg", "add-tag onlytag", "usage: add-tag <tag> <id-spec>"},
+		{"add-tag three args", "add-tag a b c", "usage: add-tag <tag> <id-spec>"},
+		{"remove-tag no args", "remove-tag", "usage: remove-tag <tag> <id-spec>"},
+		{"set-status one arg", "set-status read", "usage: set-status <status> <id-spec>"},
+		{"set-rating one arg", "set-rating 4", "usage: set-rating <rating> <id-spec>"},
+		{"delete no args", "delete", "usage: delete <id>"},
+		{"delete two args", "delete 1 2", "usage: delete <id>"},
+		{"reindex with args", "reindex now", "usage: reindex"},
+		{"rename-tag one arg", "rename-tag old", "usage: rename-tag <old> <new>"},
+		{"rename-author one arg", "rename-author old", "usage: rename-author <old> <new>"},
+		{"rename-series one arg", "rename-series old", "usage: rename-series <old> <new>"},
+
+		// Arguments that parse-check before any library call.
+		{"invalid rating", "set-rating high *", `error: invalid rating "high"`},
+		{"invalid delete id", "delete abc", `error: invalid id "abc"`},
+		// ParseAuthor splits on "|", so a spec that supplies only a sort name
+		// leaves the display name empty. A bare "" never gets this far —
+		// parseCommand drops empty arguments, which lands on the usage line.
+		{"sort name but no display name", `rename-author "Old" "|Doe, Jane"`, "error: new author name must not be empty"},
+		{"whitespace-only new author", `rename-author "Old" " "`, "error: new author name must not be empty"},
+
+		{"unknown command", "frobnicate", `error: unknown command "frobnicate"`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// EditFn and DeleteFn are left unstubbed: a rejected command must
+			// not reach the library at all, and libfake errors if it does.
+			lib := libfake.Lib{
+				EditFn: func(id int64, _ model.Edits) (*model.Book, error) {
+					t.Fatalf("rejected command still edited book %d", id)
+					return nil, nil
+				},
+				DeleteFn: func(id int64) error {
+					t.Fatalf("rejected command still deleted book %d", id)
+					return nil
+				},
+			}
+			reg, cmdLog := newTestCtl(t, lib)
+
+			if got := execute(tc.cmd, lib, reg, cmdLog); got != tc.want {
+				t.Errorf("execute(%q) = %q, want %q", tc.cmd, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestCommandRejectionsAreLogged pins that a refusal is recorded like any other
+// command. The log is how a client sees what happened after the fact, so a
+// rejection that never reaches it is a command that silently did nothing.
+func TestCommandRejectionsAreLogged(t *testing.T) {
+	lib := libfake.Lib{}
+	reg, cmdLog := newTestCtl(t, lib)
+
+	execute("delete abc", lib, reg, cmdLog)
+
+	entries := cmdLog.Entries()
+	if len(entries) != 1 {
+		t.Fatalf("log holds %d entries, want the rejected command recorded", len(entries))
+	}
+	if entries[0].Command != "delete abc" {
+		t.Errorf("logged command = %q, want %q", entries[0].Command, "delete abc")
+	}
+	if !strings.Contains(entries[0].Result, "invalid id") {
+		t.Errorf("logged result = %q, want the rejection reason", entries[0].Result)
+	}
+}
+
+// TestCommandSuccessStrings pins the other half: what a command reports when it
+// works. The counts are the only signal that a bulk edit did what was asked, so
+// "ok: no books edited" must not read the same as "ok: 2 books edited".
+func TestCommandSuccessStrings(t *testing.T) {
+	tagged := func(id int64, tags ...string) *model.Book {
+		b := testutil.MakeBook(id, "Title", "Author")
+		b.Meta.Tags = tags
+		return b
 	}
 
-	for _, tt := range tests {
-		p, err := parseCommand(tt.cmd)
-		if err != nil {
-			t.Fatalf("unexpected parse error for %q: %v", tt.cmd, err)
-		}
-		// dispatch should not panic; we just check it handles every command.
-		got := dispatch(p, libfake.Lib{}, registry.NewBookRegistry(testutil.NewTestFS(t), libfake.Lib{}))
-		if got == "" {
-			t.Errorf("dispatch(%q) returned empty result", tt.cmd)
-		}
+	tests := []struct {
+		name  string
+		books []*model.Book
+		cmd   string
+		want  string
+	}{
+		{
+			"one book edited",
+			[]*model.Book{tagged(1)},
+			`add-tag "new" *`,
+			"ok: 1 books edited",
+		},
+		{
+			"several books edited",
+			[]*model.Book{tagged(1), tagged(2)},
+			`add-tag "new" *`,
+			"ok: 2 books edited",
+		},
+		{
+			// Already in the requested state: reported as skipped, not edited,
+			// so a no-op is distinguishable from a change.
+			"book already tagged",
+			[]*model.Book{tagged(1, "new")},
+			`add-tag "new" *`,
+			"ok: no books edited\n1 skipped",
+		},
+		{
+			"mixed edited and skipped",
+			[]*model.Book{tagged(1), tagged(2, "new")},
+			`add-tag "new" *`,
+			"ok: 1 books edited\n1 skipped",
+		},
+		{
+			"selection matches nothing",
+			nil,
+			`add-tag "new" *`,
+			"ok: no books edited",
+		},
 	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			lib := libfake.Lib{
+				SearchFn: func(model.Query) ([]*model.Book, error) { return tc.books, nil },
+				EditFn: func(id int64, e model.Edits) (*model.Book, error) {
+					for _, b := range tc.books {
+						if b.Meta.ID == id {
+							updated := *b
+							if e.Tags != nil {
+								updated.Meta.Tags = *e.Tags
+							}
+							return &updated, nil
+						}
+					}
+					return nil, fmt.Errorf("no book %d", id)
+				},
+			}
+			reg, cmdLog := newTestCtl(t, lib)
+			for _, b := range tc.books {
+				reg.Add(b)
+			}
+
+			if got := execute(tc.cmd, lib, reg, cmdLog); got != tc.want {
+				t.Errorf("execute(%q) = %q, want %q", tc.cmd, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestCommandFailureStrings pins the reporting when the library refuses the
+// work. A per-book failure must be named and counted rather than folded into
+// the success line, or a bulk edit that half-failed reads as a clean run.
+func TestCommandFailureStrings(t *testing.T) {
+	t.Run("edit fails for one book", func(t *testing.T) {
+		books := []*model.Book{testutil.MakeBook(1, "A", "Author"), testutil.MakeBook(2, "B", "Author")}
+		lib := libfake.Lib{
+			SearchFn: func(model.Query) ([]*model.Book, error) { return books, nil },
+			EditFn: func(id int64, e model.Edits) (*model.Book, error) {
+				if id == 2 {
+					return nil, errors.New("disk on fire")
+				}
+				updated := *books[0]
+				updated.Meta.Tags = *e.Tags
+				return &updated, nil
+			},
+		}
+		reg, cmdLog := newTestCtl(t, lib)
+		for _, b := range books {
+			reg.Add(b)
+		}
+
+		got := execute(`add-tag "new" *`, lib, reg, cmdLog)
+
+		want := "ok: 1 books edited\nerrors: 1 book(s)\n  book 2: disk on fire"
+		if got != want {
+			t.Errorf("execute = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("search fails", func(t *testing.T) {
+		lib := libfake.Lib{
+			SearchFn: func(model.Query) ([]*model.Book, error) { return nil, errors.New("index closed") },
+		}
+		reg, cmdLog := newTestCtl(t, lib)
+
+		if got := execute(`add-tag "new" *`, lib, reg, cmdLog); got != "error: query failed: index closed" {
+			t.Errorf("execute = %q, want the query failure surfaced", got)
+		}
+	})
+
+	t.Run("delete fails", func(t *testing.T) {
+		lib := libfake.Lib{DeleteFn: func(int64) error { return errors.New("still open") }}
+		reg, cmdLog := newTestCtl(t, lib)
+
+		if got := execute("delete 7", lib, reg, cmdLog); got != "error: book 7: still open" {
+			t.Errorf("execute = %q, want the delete failure surfaced", got)
+		}
+	})
+
+	t.Run("reindex fails", func(t *testing.T) {
+		lib := libfake.Lib{ReindexFn: func() error { return errors.New("duplicate id 3") }}
+		reg, cmdLog := newTestCtl(t, lib)
+
+		if got := execute("reindex", lib, reg, cmdLog); got != "error: duplicate id 3" {
+			t.Errorf("execute = %q, want the reindex failure surfaced", got)
+		}
+	})
+
+	t.Run("rename query fails", func(t *testing.T) {
+		lib := libfake.Lib{
+			QueryFn: func(model.Filter) ([]*model.Book, error) { return nil, errors.New("index closed") },
+		}
+		reg, cmdLog := newTestCtl(t, lib)
+
+		for _, cmd := range []string{`rename-tag "a" "b"`, `rename-author "a" "b"`, `rename-series "a" "b"`} {
+			if got := execute(cmd, lib, reg, cmdLog); got != "error: query failed: index closed" {
+				t.Errorf("execute(%q) = %q, want the query failure surfaced", cmd, got)
+			}
+		}
+	})
+}
+
+// TestSingleBookCommandSuccessStrings covers the two commands that report on
+// one book rather than a selection.
+func TestSingleBookCommandSuccessStrings(t *testing.T) {
+	t.Run("delete", func(t *testing.T) {
+		var deleted int64
+		lib := libfake.Lib{DeleteFn: func(id int64) error { deleted = id; return nil }}
+		reg, cmdLog := newTestCtl(t, lib)
+
+		if got := execute("delete 7", lib, reg, cmdLog); got != "ok: book 7 deleted" {
+			t.Errorf("execute = %q, want %q", got, "ok: book 7 deleted")
+		}
+		if deleted != 7 {
+			t.Errorf("Delete called with id %d, want 7", deleted)
+		}
+	})
+
+	t.Run("reindex", func(t *testing.T) {
+		lib := libfake.Lib{ReindexFn: func() error { return nil }}
+		reg, cmdLog := newTestCtl(t, lib)
+
+		if got := execute("reindex", lib, reg, cmdLog); got != "ok: index rebuilt" {
+			t.Errorf("execute = %q, want %q", got, "ok: index rebuilt")
+		}
+	})
 }

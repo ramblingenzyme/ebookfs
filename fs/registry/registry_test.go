@@ -1,6 +1,8 @@
 package registry
 
 import (
+	"errors"
+	"slices"
 	"sync"
 	"testing"
 
@@ -91,3 +93,186 @@ func TestEditConcurrentSnapshotSwap(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// recordingView logs the Add/Remove notifications it receives, so tests can
+// assert the registry's fan-out rather than inferring it from a view's state.
+type recordingView struct {
+	added   []int64
+	removed []int64
+}
+
+func (v *recordingView) Add(d *book.BookDir)    { v.added = append(v.added, d.Book().Meta.ID) }
+func (v *recordingView) Remove(d *book.BookDir) { v.removed = append(v.removed, d.Book().Meta.ID) }
+
+func newTestRegistry(t *testing.T, lib libfake.Lib) (*BookRegistry, *recordingView) {
+	t.Helper()
+	reg := NewBookRegistry(testutil.NewTestFS(t), lib)
+	v := &recordingView{}
+	reg.AddView(v)
+	return reg, v
+}
+
+func TestFSReturnsTheServingFilesystem(t *testing.T) {
+	f := testutil.NewTestFS(t)
+	reg := NewBookRegistry(f, libfake.Lib{})
+
+	if reg.FS() != f {
+		t.Error("FS() returned a different filesystem than the registry was built on")
+	}
+}
+
+func TestAddNotifiesEveryView(t *testing.T) {
+	reg, v := newTestRegistry(t, libfake.Lib{})
+
+	reg.Add(testutil.MakeBook(1, "First", "Alice"))
+	reg.Add(testutil.MakeBook(2, "Second", "Bob"))
+
+	if !slices.Equal(v.added, []int64{1, 2}) {
+		t.Errorf("view saw adds %v, want [1 2]", v.added)
+	}
+}
+
+// TestAddSameIDReusesTheBookDir pins that a re-add keeps the same BookDir. Open
+// 9P fids point at it, so replacing the object would strand every open handle.
+func TestAddSameIDReusesTheBookDir(t *testing.T) {
+	reg, _ := newTestRegistry(t, libfake.Lib{})
+
+	reg.Add(testutil.MakeBook(1, "First", "Alice"))
+	first := reg.books[1]
+	reg.Add(testutil.MakeBook(1, "First", "Alice"))
+
+	if reg.books[1] != first {
+		t.Error("re-adding an id built a new BookDir, want the existing one reused")
+	}
+}
+
+func TestRemove(t *testing.T) {
+	t.Run("notifies views and forgets the book", func(t *testing.T) {
+		reg, v := newTestRegistry(t, libfake.Lib{})
+		reg.Add(testutil.MakeBook(1, "Doomed", "Alice"))
+
+		reg.Remove(1)
+
+		if !slices.Equal(v.removed, []int64{1}) {
+			t.Errorf("view saw removes %v, want [1]", v.removed)
+		}
+		if _, ok := reg.books[1]; ok {
+			t.Error("registry still holds the book after Remove")
+		}
+	})
+
+	t.Run("unknown id is a no-op", func(t *testing.T) {
+		reg, v := newTestRegistry(t, libfake.Lib{})
+		reg.Add(testutil.MakeBook(1, "Kept", "Alice"))
+
+		reg.Remove(999)
+
+		if len(v.removed) != 0 {
+			t.Errorf("view saw removes %v for an id that was never added, want none", v.removed)
+		}
+		if _, ok := reg.books[1]; !ok {
+			t.Error("Remove of an unknown id dropped a registered book")
+		}
+	})
+}
+
+func TestRemoveViewStopsNotifications(t *testing.T) {
+	reg, v := newTestRegistry(t, libfake.Lib{})
+	reg.Add(testutil.MakeBook(1, "Before", "Alice"))
+
+	reg.RemoveView(v)
+	reg.Add(testutil.MakeBook(2, "After", "Bob"))
+	reg.Remove(1)
+
+	if !slices.Equal(v.added, []int64{1}) {
+		t.Errorf("view saw adds %v after being removed, want only the pre-removal [1]", v.added)
+	}
+	if len(v.removed) != 0 {
+		t.Errorf("view saw removes %v after being removed, want none", v.removed)
+	}
+}
+
+// TestResyncViewReplaysEveryBook covers the primitive the search directory is
+// built on: a view that attaches after books exist — or changes its filter —
+// converges on the registry's current state. reset runs first, then every
+// registered book is offered, all under the registry lock.
+func TestResyncViewReplaysEveryBook(t *testing.T) {
+	reg, _ := newTestRegistry(t, libfake.Lib{})
+	reg.Add(testutil.MakeBook(1, "First", "Alice"))
+	reg.Add(testutil.MakeBook(2, "Second", "Bob"))
+
+	late := &recordingView{}
+	var resetRan bool
+	reg.ResyncView(late, func() {
+		if len(late.added) != 0 {
+			t.Error("reset ran after books were replayed, want it first")
+		}
+		resetRan = true
+	})
+
+	if !resetRan {
+		t.Error("reset was never called")
+	}
+	got := slices.Clone(late.added)
+	slices.Sort(got)
+	if !slices.Equal(got, []int64{1, 2}) {
+		t.Errorf("resynced view saw %v, want every registered book [1 2]", got)
+	}
+}
+
+func TestCommitEdit(t *testing.T) {
+	t.Run("persists and rehomes the book", func(t *testing.T) {
+		current := testutil.MakeBook(1, "Old Title", "Alice")
+		lib := libfake.Lib{
+			EditFn: func(_ int64, e model.Edits) (*model.Book, error) {
+				updated := *current
+				updated.Title = *e.Title
+				return &updated, nil
+			},
+		}
+		reg, v := newTestRegistry(t, lib)
+		reg.Add(current)
+
+		if err := reg.CommitEdit(1, model.Edits{Title: ptr("New Title")}); err != nil {
+			t.Fatalf("CommitEdit: %v", err)
+		}
+
+		// The commit brackets the snapshot swap with remove/add so views refile
+		// the book under its new name.
+		if !slices.Equal(v.removed, []int64{1}) || !slices.Equal(v.added, []int64{1, 1}) {
+			t.Errorf("view saw adds %v / removes %v, want the edit bracketed by one remove and one re-add", v.added, v.removed)
+		}
+		if got := reg.books[1].Book().Title; got != "New Title" {
+			t.Errorf("BookDir snapshot title = %q, want the edited title", got)
+		}
+	})
+
+	t.Run("unknown id", func(t *testing.T) {
+		reg, _ := newTestRegistry(t, libfake.Lib{})
+
+		if err := reg.CommitEdit(999, model.Edits{Status: ptr("read")}); err == nil {
+			t.Error("CommitEdit on an unknown id returned nil, want an error")
+		}
+	})
+
+	t.Run("library failure leaves the tree untouched", func(t *testing.T) {
+		lib := libfake.Lib{
+			EditFn: func(int64, model.Edits) (*model.Book, error) { return nil, errors.New("disk full") },
+		}
+		reg, v := newTestRegistry(t, lib)
+		reg.Add(testutil.MakeBook(1, "Unchanged", "Alice"))
+
+		if err := reg.CommitEdit(1, model.Edits{Title: ptr("Never Written")}); err == nil {
+			t.Fatal("CommitEdit returned nil despite the library failing")
+		}
+
+		if len(v.removed) != 0 {
+			t.Errorf("view saw removes %v after a failed edit, want the tree untouched", v.removed)
+		}
+		if got := reg.books[1].Book().Title; got != "Unchanged" {
+			t.Errorf("snapshot title = %q, want it unchanged after a failed edit", got)
+		}
+	})
+}
+
+func ptr[T any](v T) *T { return &v }
