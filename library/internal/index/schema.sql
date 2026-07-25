@@ -101,5 +101,7 @@ CREATE TABLE pending_ops (
 CREATE INDEX idx_books_status     ON books(status);
 CREATE INDEX idx_books_pubdate    ON books(pubdate);
 CREATE INDEX idx_books_date_added ON books(date_added);
+CREATE INDEX idx_books_sort_title ON books(sort_title);
+CREATE INDEX idx_books_series_id  ON books(series_id);
 CREATE INDEX idx_authors_sort     ON authors(sort_name);
 CREATE INDEX idx_book_authors_aid ON book_authors(author_id);

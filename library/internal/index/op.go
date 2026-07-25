@@ -32,7 +32,7 @@ func (o *Op) MarkPending() error {
 		return nil
 	}
 	id := newOpID()
-	if err := o.idx.queries.InsertPendingOp(o.idx.ctx, id); err != nil {
+	if err := o.idx.wq.InsertPendingOp(o.idx.ctx, id); err != nil {
 		return err
 	}
 	o.opID = id

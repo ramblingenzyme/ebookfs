@@ -57,7 +57,7 @@ func (idx *Index) Rebuild(books []BookPath, skipped map[string]drift.PathInfo, m
 	}
 
 	opID := newOpID()
-	if err := idx.queries.InsertPendingOp(idx.ctx, opID); err != nil {
+	if err := idx.wq.InsertPendingOp(idx.ctx, opID); err != nil {
 		return err
 	}
 
@@ -101,5 +101,16 @@ func (idx *Index) Rebuild(books []BookPath, skipped map[string]drift.PathInfo, m
 		return err
 	}
 
-	return idx.setSchemaVersion(schemaVersion)
+	if err := idx.setSchemaVersion(schemaVersion); err != nil {
+		return err
+	}
+
+	// Build query planner statistics so JOIN-heavy queries (every listing,
+	// search, browse view) don't make catastrophically bad plan choices.
+	// Without this ANALYZE, a 4000-row query went from 0.05s → 5s in one
+	// published report (jvns.ca). It's cheap and runs only on rebuild.
+	if _, err := idx.db.ExecContext(idx.ctx, "ANALYZE"); err != nil {
+		return fmt.Errorf("analyzing: %w", err)
+	}
+	return nil
 }

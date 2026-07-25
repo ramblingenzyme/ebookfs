@@ -7,6 +7,7 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"fmt"
+	"net/url"
 
 	"github.com/ramblingenzyme/ebookfs/library/internal/index/dbsqlc"
 	_ "modernc.org/sqlite"
@@ -17,32 +18,78 @@ var schema string
 
 // Index is a SQLite-backed cache of the library. It is derived from the
 // filesystem and can be fully rebuilt via Reindex.
+//
+// Two database connections are held in WAL mode: one writer (db) and one
+// reader (readDB). Reads are routed through the reader connection so they
+// never block each other or contend with the single writer slot.
 type Index struct {
-	db      *sql.DB
-	queries *dbsqlc.Queries
+	db      *sql.DB          // writer connection (single writer with SetMaxOpenConns(1))
+	wq      *dbsqlc.Queries  // writer queries wrapping db (used by NextID, pending_ops)
+	readDB  *sql.DB          // reader connection (up to 4 concurrent readers)
+	queries *dbsqlc.Queries  // reader queries wrapping readDB (used for all read-only queries)
 	ctx     context.Context
 }
 
-const schemaVersion = 9
+const schemaVersion = 10
+
+// dsn returns a sqlite DSN for path with the given per-connection PRAGMAs
+// applied via _pragma query parameters.  Each pragma uses key(value) syntax
+// which modernc.org/sqlite translates to "PRAGMA key=value" on every new
+// connection the pool creates.
+func dsn(path string, pragmas ...string) string {
+	q := url.Values{}
+	for _, p := range pragmas {
+		q.Add("_pragma", p)
+	}
+	return path + "?" + q.Encode()
+}
+
+// writerPragmas are applied to every writer connection.
+func writerPragmas() []string {
+	return []string{
+		"journal_mode(WAL)",
+		// In WAL mode, NORMAL is crash-safe and avoids an extra fsync per write.
+		"synchronous(NORMAL)",
+		"busy_timeout(5000)",
+		"journal_size_limit(27103364)",
+		"mmap_size(134217728)",
+		"cache_size(-8000)",
+		"temp_store(memory)",
+		"foreign_keys(ON)",
+	}
+}
+
+// readerPragmas are applied to every reader connection.
+func readerPragmas() []string {
+	return []string{
+		"journal_mode(WAL)",
+		"busy_timeout(5000)",
+		"query_only",
+		"mmap_size(134217728)",
+		"cache_size(-8000)",
+		"temp_store(memory)",
+	}
+}
 
 // Open opens or creates the index at path.
 func Open(path string) (*Index, error) {
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", dsn(path, writerPragmas()...))
 	if err != nil {
 		return nil, err
 	}
-
 	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 
-	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
+	// Open a second connection pool for reads.  WAL mode allows concurrent
+	// readers without blocking writers, so read queries never contend with
+	// each other or stall behind a write in progress.
+	readDB, err := sql.Open("sqlite", dsn(path, readerPragmas()...))
+	if err != nil {
 		db.Close()
 		return nil, err
 	}
-
-	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
-		db.Close()
-		return nil, err
-	}
+	readDB.SetMaxOpenConns(4)
+	readDB.SetMaxIdleConns(4)
 
 	var v int64
 	if err := db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
@@ -56,6 +103,7 @@ func Open(path string) (*Index, error) {
 		// the normal clean state and cannot distinguish a fresh index from a
 		// completed one, so Rebuild is left as the sole version-stamper.
 		if _, err := db.Exec(schema); err != nil {
+			readDB.Close()
 			db.Close()
 			return nil, fmt.Errorf("applying schema: %w", err)
 		}
@@ -63,7 +111,9 @@ func Open(path string) (*Index, error) {
 
 	return &Index{
 		db:      db,
-		queries: dbsqlc.New(db),
+		wq:      dbsqlc.New(db),
+		readDB:  readDB,
+		queries: dbsqlc.New(readDB),
 		ctx:     context.Background(),
 	}, nil
 }
@@ -101,13 +151,17 @@ func (idx *Index) dropAllTables() error {
 }
 
 func (idx *Index) Close() error {
+	// Let SQLite analyze schema usage and update planner statistics before
+	// closing — an inexpensive operation that improves long-term query plans.
+	_, _ = idx.db.ExecContext(idx.ctx, "PRAGMA optimize")
+	idx.readDB.Close()
 	return idx.db.Close()
 }
 
 // NextID reserves and returns a new unique book ID. Must be called before
 // Put so the id is available for canonical path construction.
 func (idx *Index) NextID() (int64, error) {
-	return idx.queries.NextBookID(idx.ctx)
+	return idx.wq.NextBookID(idx.ctx)
 }
 
 // newOpID returns a random hex string used as a unique pending-op identifier.
@@ -134,7 +188,7 @@ func (idx *Index) withTx(fn func(*dbsqlc.Queries, *sql.Tx) error) error {
 
 func (idx *Index) getSchemaVersion() (int64, error) {
 	var v int64
-	err := idx.db.QueryRowContext(idx.ctx, "PRAGMA user_version").Scan(&v)
+	err := idx.readDB.QueryRowContext(idx.ctx, "PRAGMA user_version").Scan(&v)
 	return v, err
 }
 

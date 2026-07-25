@@ -64,7 +64,7 @@ func (idx *Index) queryBooks(where string, args []any, order string, limit int) 
 		args = append(args, limit)
 	}
 
-	rows, err := idx.db.QueryContext(idx.ctx, q, args...)
+	rows, err := idx.readDB.QueryContext(idx.ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
