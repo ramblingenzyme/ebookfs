@@ -1,7 +1,6 @@
 package book
 
 import (
-	"bytes"
 	"os"
 	"testing"
 
@@ -23,8 +22,8 @@ func newTestEpubFile(t *testing.T, name string, lib libfake.Lib, get func() *mod
 
 func TestEpubFileOpenRead(t *testing.T) {
 	lib := libfake.Lib{
-		OpenEpubFn: func(_ int64) (model.EpubReader, error) {
-			return &libfake.EpubReader{Reader: bytes.NewReader([]byte("epub content"))}, nil
+		ContentFn: func(_ int64) (model.EpubReader, error) {
+			return libfake.NewEpubReader([]byte("epub content"), nil, nil), nil
 		},
 	}
 	ef := newTestEpubFile(t, "test.epub", lib, testutil.Fixed(testutil.MakeBook(1, "Test", "Author")))

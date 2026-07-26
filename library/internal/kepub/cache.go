@@ -15,13 +15,15 @@ import (
 	"sync"
 
 	"github.com/ramblingenzyme/ebookfs/internal/syncutil"
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-// EpubSource provides read access to a book's source epub. library.Library
-// satisfies it via OpenEpub, which is the cache's only inbound dependency.
+// EpubSource provides read access to a book's source epub content.
+// library.Library satisfies it via Content, which is the cache's only
+// inbound dependency.
 type EpubSource interface {
-	OpenEpub(int64) (model.EpubReader, error)
+	Content(int64) (model.EpubReader, error)
 }
 
 // Cache builds kepub renditions on demand and stores them on disk, so repeat
@@ -92,13 +94,13 @@ func (c *Cache) Ensure(b *model.Book) error {
 }
 
 // Open ensures b's kepub is fresh, then opens it for reading. The returned
-// *os.File satisfies model.EpubReader. This is the read-path backstop when the
-// proactive warmer hasn't run (or its conversion is still in flight).
+// *epub.Reader satisfies model.EpubReader. This is the read-path backstop when
+// the proactive warmer hasn't run (or its conversion is still in flight).
 func (c *Cache) Open(b *model.Book) (model.EpubReader, error) {
 	if err := c.Ensure(b); err != nil {
 		return nil, err
 	}
-	return os.Open(c.path(b))
+	return epub.OpenReader(c.path(b), b.CoverPath)
 }
 
 func (c *Cache) ensureLocked(b *model.Book) error {
@@ -109,13 +111,13 @@ func (c *Cache) ensureLocked(b *model.Book) error {
 		return nil
 	}
 
-	src, err := c.src.OpenEpub(b.Meta.ID)
+	content, err := c.src.Content(b.Meta.ID)
 	if err != nil {
 		return err
 	}
-	defer src.Close()
+	defer content.Close()
 
-	return c.write(b, src)
+	return c.write(b, content)
 }
 
 // write converts src into a temp file in the cache dir, then atomically renames

@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/ramblingenzyme/ebookfs/library/config"
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/internal/kepub"
 	"github.com/ramblingenzyme/ebookfs/library/internal/naming"
 	"github.com/ramblingenzyme/ebookfs/library/model"
@@ -18,7 +19,7 @@ func newExporter(cfg config.ReaderConfig, lib Library) (Exporter, error) {
 		}
 		return &kepubCache{statuses: cfg.Statuses, c: kepub.NewCache(cfg.CacheDir, lib)}, nil
 	}
-	return epubExporter{statuses: cfg.Statuses, lib: lib}, nil
+	return epubExporter{statuses: cfg.Statuses}, nil
 }
 
 type kepubCache struct {
@@ -36,11 +37,10 @@ func (k *kepubCache) Dirname(b *model.Book) string           { return exportDirn
 
 type epubExporter struct {
 	statuses []string
-	lib      Library
 }
 
 func (e epubExporter) Open(b *model.Book) (model.EpubReader, error) {
-	return e.lib.OpenEpub(b.Meta.ID)
+	return epub.OpenReader(b.EpubPath, b.CoverPath)
 }
 
 func (e epubExporter) Close() error { return nil }

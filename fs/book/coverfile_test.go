@@ -41,7 +41,9 @@ func TestCoverFileStatLengthNilLib(t *testing.T) {
 
 func TestCoverFileOpenRead(t *testing.T) {
 	lib := libfake.Lib{
-		ExtractCoverFn: func(_ int64) ([]byte, error) { return []byte("cover image data"), nil },
+		ContentFn: func(_ int64) (model.EpubReader, error) {
+			return libfake.NewEpubReader(nil, nil, func() ([]byte, error) { return []byte("cover image data"), nil }), nil
+		},
 	}
 	cf := newTestCoverFile(t, lib, func(int64, model.Edits) error { return nil })
 
@@ -61,7 +63,9 @@ func TestCoverFileOpenRead(t *testing.T) {
 func TestCoverFileWriteClose(t *testing.T) {
 	var written *[]byte
 	lib := libfake.Lib{
-		ExtractCoverFn: func(_ int64) ([]byte, error) { return []byte("original"), nil },
+		ContentFn: func(_ int64) (model.EpubReader, error) {
+			return libfake.NewEpubReader(nil, nil, func() ([]byte, error) { return []byte("original"), nil }), nil
+		},
 	}
 	cf := newTestCoverFile(t, lib, func(id int64, edits model.Edits) error {
 		written = edits.Cover
@@ -87,7 +91,9 @@ func TestCoverFileWriteClose(t *testing.T) {
 func TestCoverFileWriteEmptyDoesNotCallEdit(t *testing.T) {
 	called := false
 	lib := libfake.Lib{
-		ExtractCoverFn: func(_ int64) ([]byte, error) { return []byte("original"), nil },
+		ContentFn: func(_ int64) (model.EpubReader, error) {
+			return libfake.NewEpubReader(nil, nil, func() ([]byte, error) { return []byte("original"), nil }), nil
+		},
 	}
 	cf := newTestCoverFile(t, lib, func(int64, model.Edits) error {
 		called = true
@@ -109,7 +115,9 @@ func TestCoverFileWriteEmptyDoesNotCallEdit(t *testing.T) {
 
 func TestCoverFilePerFidBuffers(t *testing.T) {
 	lib := libfake.Lib{
-		ExtractCoverFn: func(_ int64) ([]byte, error) { return []byte("shared"), nil },
+		ContentFn: func(_ int64) (model.EpubReader, error) {
+			return libfake.NewEpubReader(nil, nil, func() ([]byte, error) { return []byte("shared"), nil }), nil
+		},
 	}
 	cf := newTestCoverFile(t, lib, func(int64, model.Edits) error { return nil })
 
@@ -129,7 +137,9 @@ func TestCoverFilePerFidBuffers(t *testing.T) {
 
 func TestCoverFileWriteErrorPassesThrough(t *testing.T) {
 	lib := libfake.Lib{
-		ExtractCoverFn: func(_ int64) ([]byte, error) { return []byte("original"), nil },
+		ContentFn: func(_ int64) (model.EpubReader, error) {
+			return libfake.NewEpubReader(nil, nil, func() ([]byte, error) { return []byte("original"), nil }), nil
+		},
 	}
 	cf := newTestCoverFile(t, lib, func(int64, model.Edits) error { return testutil.ErrTest })
 

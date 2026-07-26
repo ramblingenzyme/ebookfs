@@ -12,7 +12,6 @@ package libfake
 import (
 	"bytes"
 	"errors"
-	"io"
 	"slices"
 
 	"github.com/ramblingenzyme/ebookfs/library"
@@ -20,11 +19,14 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-// EpubReader is a fake library.EpubReader over an in-memory buffer. Closed
-// records whether Close has been called.
+// EpubReader is a fake model.EpubReader backed by an in-memory buffer. Closed
+// records whether Close has been called. OPFFn and CoverFn supply the OPF and
+// cover extraction results.
 type EpubReader struct {
 	*bytes.Reader
-	Closed bool
+	Closed  bool
+	OPFFn   func() ([]byte, error)
+	CoverFn func() ([]byte, error)
 }
 
 func (r *EpubReader) Close() error {
@@ -32,8 +34,32 @@ func (r *EpubReader) Close() error {
 	return nil
 }
 
+func (r *EpubReader) OPF() ([]byte, error) {
+	if r.OPFFn != nil {
+		return r.OPFFn()
+	}
+	return nil, nil
+}
+
+func (r *EpubReader) Cover() ([]byte, error) {
+	if r.CoverFn != nil {
+		return r.CoverFn()
+	}
+	return nil, nil
+}
+
 var _ model.EpubReader = (*EpubReader)(nil)
-var _ io.ReaderAt = (*EpubReader)(nil)
+
+// NewEpubReader returns a fake EpubReader serving data as its raw epub bytes
+// and opf/cover from the provided functions. When opfFn or coverFn is nil the
+// corresponding method returns (nil, nil).
+func NewEpubReader(data []byte, opfFn, coverFn func() ([]byte, error)) *EpubReader {
+	return &EpubReader{
+		Reader:  bytes.NewReader(data),
+		OPFFn:   opfFn,
+		CoverFn: coverFn,
+	}
+}
 
 // Lib is a fake library.Library whose behavior is injected per method; a nil
 // hook yields a benign zero result (except Edit, which errors to catch
@@ -42,9 +68,7 @@ type Lib struct {
 	EditFn         func(int64, model.Edits) (*model.Book, error)
 	IngestFn       func(string) (*model.Book, error)
 	CreateIngestFn func() (library.IngestHandle, error)
-	ExtractCoverFn func(int64) ([]byte, error)
-	ExtractOPFFn   func(int64) ([]byte, error)
-	OpenEpubFn     func(int64) (model.EpubReader, error)
+	ContentFn      func(int64) (model.EpubReader, error)
 	QueryFn        func(model.Filter) ([]*model.Book, error)
 	SearchFn       func(model.Query) ([]*model.Book, error)
 	StatsFn        func() (*model.Stats, error)
@@ -71,23 +95,9 @@ func (l Lib) CreateIngest() (library.IngestHandle, error) {
 	return IngestHandle{IngestFn: l.IngestFn}, nil
 }
 
-func (l Lib) ExtractCover(id int64) ([]byte, error) {
-	if l.ExtractCoverFn != nil {
-		return l.ExtractCoverFn(id)
-	}
-	return nil, nil
-}
-
-func (l Lib) ExtractOPF(id int64) ([]byte, error) {
-	if l.ExtractOPFFn != nil {
-		return l.ExtractOPFFn(id)
-	}
-	return nil, nil
-}
-
-func (l Lib) OpenEpub(id int64) (model.EpubReader, error) {
-	if l.OpenEpubFn != nil {
-		return l.OpenEpubFn(id)
+func (l Lib) Content(id int64) (model.EpubReader, error) {
+	if l.ContentFn != nil {
+		return l.ContentFn(id)
 	}
 	return nil, nil
 }

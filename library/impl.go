@@ -18,9 +18,10 @@ import (
 )
 
 type libraryImpl struct {
-	store     *store.Store
-	index     *index.Index
-	inboxTemp string
+	store            *store.Store
+	index            *index.Index
+	inboxTemp        string
+	defaultExporter  Exporter
 	exporters []Exporter
 	expMu     sync.Mutex
 	// Dedup of exporters by config is not implemented. If needed in the
@@ -172,38 +173,14 @@ func (l *libraryImpl) Stats() (*model.Stats, error) {
 	return l.index.Stats()
 }
 
-// OpenEpub returns a handle to the epub content of book id. The caller must
-// close it. The book's current location is resolved fresh, so the handle always
-// tracks the live file even if a concurrent edit moved it.
-func (l *libraryImpl) OpenEpub(id int64) (model.EpubReader, error) {
+// Content returns an open handle to the book's epub content. The caller must
+// close it.
+func (l *libraryImpl) Content(id int64) (model.EpubReader, error) {
 	b, err := l.get(id)
 	if err != nil {
 		return nil, err
 	}
-	f, err := l.store.OpenEpub(b.Location)
-	if err != nil {
-		log.Printf("open: book %d (%q): %v", b.Meta.ID, b.Title, err)
-		return nil, err
-	}
-	return f, nil
-}
-
-// ExtractCover returns the cover image bytes from book id's epub.
-func (l *libraryImpl) ExtractCover(id int64) ([]byte, error) {
-	b, err := l.get(id)
-	if err != nil {
-		return nil, err
-	}
-	return epub.ExtractCover(b.EpubPath, b.CoverPath)
-}
-
-// ExtractOPF returns the raw OPF XML bytes from book id's epub.
-func (l *libraryImpl) ExtractOPF(id int64) ([]byte, error) {
-	b, err := l.get(id)
-	if err != nil {
-		return nil, err
-	}
-	return epub.ExtractOPF(b.EpubPath)
+	return l.defaultExporter.Open(b)
 }
 
 // Edit applies edits to the book with the given id, persists everything, and

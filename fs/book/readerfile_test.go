@@ -1,7 +1,6 @@
 package book
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/knusbaum/go9p/proto"
@@ -26,7 +25,7 @@ func testReaderFile(t *testing.T, exp library.Exporter) *ReaderFile {
 func TestReaderFileOpenRead(t *testing.T) {
 	rf := testReaderFile(t, libfake.Exporter{
 		OpenFn: func(b *model.Book) (model.EpubReader, error) {
-			return &libfake.EpubReader{Reader: bytes.NewReader([]byte("hello epub"))}, nil
+			return libfake.NewEpubReader([]byte("hello epub"), nil, nil), nil
 		},
 	})
 

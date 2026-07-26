@@ -20,9 +20,9 @@ import (
 // *model.Book values that are immutable snapshots — the library never mutates a
 // Book after returning it. Every other operation addresses a book by id and
 // resolves its current state fresh, so callers never pass stale snapshots back
-// in: content reads (OpenEpub, ExtractCover, ExtractOPF) open the book's live
-// on-disk file, and mutations (Edit, Delete) run as an atomic read-modify-write
-// per book under a per-book lock, so callers cannot revert other callers' changes.
+// in: Content opens the book's live on-disk file, and mutations (Edit, Delete)
+// run as an atomic read-modify-write per book under a per-book lock, so callers
+// cannot revert other callers' changes.
 type Library interface {
 	Close() error
 	CreateIngest() (IngestHandle, error)
@@ -34,9 +34,10 @@ type Library interface {
 	Search(model.Query) ([]*model.Book, error)
 	Stats() (*model.Stats, error)
 	Reindex() error
-	OpenEpub(id int64) (model.EpubReader, error)
-	ExtractCover(id int64) ([]byte, error)
-	ExtractOPF(id int64) ([]byte, error)
+	// Content returns an open handle to the book's epub content. The caller
+	// must close it. The handle reflects the book at the time of the call;
+	// after a concurrent Edit, call Content again to read updated content.
+	Content(id int64) (model.EpubReader, error)
 	Edit(id int64, e model.Edits) (*model.Book, error)
 	Delete(id int64) error
 }
@@ -52,7 +53,9 @@ type Library interface {
 // exposed status list so the policy can change (tag-based, size caps, …)
 // without touching the frontend.
 type Exporter interface {
-	Open(*model.Book) (model.EpubReader, error) // bytes for reads
+	// Open returns a handle to the book's export rendition. The handle is a
+	// snapshot — after the book is edited, call Open again for updated content.
+	Open(*model.Book) (model.EpubReader, error)
 	Size(*model.Book) (int64, bool)             // cheap; 9P stat length, false when cold
 	Close() error                               // releases exporter resources; called by Library.Close
 	Warm(*model.Book)                           // non-blocking proactive warm hint
@@ -104,6 +107,7 @@ func Open(cfg config.LibraryConfig, forceReindex bool) (Library, error) {
 	} else {
 		log.Printf("reindex: index is clean, skipping")
 	}
+	lib.defaultExporter = epubExporter{}
 	return lib, nil
 }
 

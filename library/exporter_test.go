@@ -1,74 +1,15 @@
 package library
 
 import (
-	"bytes"
 	"errors"
-	"io"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
-	"github.com/ramblingenzyme/ebookfs/library/config"
 	"github.com/ramblingenzyme/ebookfs/library/internal/kepub"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-type fakeEpubReader struct {
-	*bytes.Reader
-	closed bool
-}
-
-func (r *fakeEpubReader) Close() error {
-	r.closed = true
-	return nil
-}
-
-var _ model.EpubReader = (*fakeEpubReader)(nil)
-var _ io.ReaderAt = (*fakeEpubReader)(nil)
-
-type testLib struct {
-	openEpubFn func(int64) (model.EpubReader, error)
-}
-
-func (l testLib) Close() error                                     { return nil }
-func (l testLib) Exporter(_ config.ReaderConfig) (Exporter, error) { return nil, nil }
-func (l testLib) CreateIngest() (IngestHandle, error)              { return nil, nil }
-func (l testLib) Query(_ model.Filter) ([]*model.Book, error)      { return nil, nil }
-func (l testLib) Stats() (*model.Stats, error)                     { return nil, nil }
-func (l testLib) Reindex() error                                   { return nil }
-func (l testLib) OpenEpub(id int64) (model.EpubReader, error) {
-	if l.openEpubFn != nil {
-		return l.openEpubFn(id)
-	}
-	return nil, nil
-}
-func (l testLib) ExtractCover(id int64) ([]byte, error) { return nil, nil }
-func (l testLib) ExtractOPF(id int64) ([]byte, error)   { return nil, nil }
-func (l testLib) Edit(id int64, e model.Edits) (*model.Book, error) {
-	return nil, nil
-}
-func (l testLib) Search(_ model.Query) ([]*model.Book, error) { return nil, nil }
-func (l testLib) Delete(id int64) error                       { return nil }
-
 var makeBook = testutil.MakeBook
-
-func TestEpubExporter_Open(t *testing.T) {
-	lib := testLib{
-		openEpubFn: func(_ int64) (model.EpubReader, error) {
-			return &fakeEpubReader{Reader: bytes.NewReader([]byte("data"))}, nil
-		},
-	}
-	exp := epubExporter{lib: lib}
-	book := makeBook(1, "Test", "Author")
-
-	r, err := exp.Open(book)
-	if err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-	if r == nil {
-		t.Fatal("Open returned nil reader")
-	}
-	r.Close()
-}
 
 // TestEpubExporter_Size_ReportsRecordedSize pins that Size answers from the size
 // recorded at index time rather than the filesystem — the book's path points at
@@ -80,7 +21,7 @@ func TestEpubExporter_Size_ReportsRecordedSize(t *testing.T) {
 	book.EpubPath = "/nonexistent/missing.epub"
 	book.EpubSize = 4242
 
-	exp := epubExporter{lib: testLib{}}
+	exp := epubExporter{}
 	size, ok := exp.Size(book)
 	if !ok {
 		t.Error("Size should be known for any indexed book")
@@ -97,7 +38,7 @@ func TestEpubExporter_Size_ReportsRecordedSize(t *testing.T) {
 func TestEpubExporter_Size_Unrecorded(t *testing.T) {
 	book := makeBook(1, "Test", "Author") // EpubSize left at its zero value
 
-	exp := epubExporter{lib: testLib{}}
+	exp := epubExporter{}
 	size, ok := exp.Size(book)
 	if ok {
 		t.Errorf("Size = (%d, true) for a book with no recorded size, want it reported as unknown", size)
@@ -105,7 +46,7 @@ func TestEpubExporter_Size_Unrecorded(t *testing.T) {
 }
 
 func TestEpubExporter_Filename(t *testing.T) {
-	exp := epubExporter{lib: testLib{}}
+	exp := epubExporter{}
 	book := makeBook(1, "Test", "Author")
 	book.EpubFilename = "mybook.epub"
 
@@ -160,7 +101,7 @@ func TestExporterIncludes(t *testing.T) {
 
 type dummyKepubSource struct{}
 
-func (dummyKepubSource) OpenEpub(int64) (model.EpubReader, error) {
+func (dummyKepubSource) Content(int64) (model.EpubReader, error) {
 	return nil, errors.New("dummy source: no epub")
 }
 

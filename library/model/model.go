@@ -12,9 +12,18 @@ import (
 	"golang.org/x/text/language"
 )
 
+// EpubReader provides access to a book's epub content from an open handle.
+// The handle keeps the file and zip central directory open so repeated calls
+// to OPF or Cover avoid re-reading. Close when done.
+//
+// An EpubReader is a snapshot of the book at open time — it does not track
+// edits. After a concurrent Edit, call Library.Content again for a handle
+// that reads from the updated file.
 type EpubReader interface {
 	io.ReaderAt
 	io.Closer
+	OPF() ([]byte, error)     // OPF XML from the open epub
+	Cover() ([]byte, error)   // cover image from the open epub
 }
 
 // Reading-status vocabulary. This package owns the set: Edits.Validate, the

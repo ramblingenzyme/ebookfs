@@ -51,11 +51,6 @@ func (s *Store) Exists(authors []model.Author, title string) bool {
 	return false
 }
 
-// OpenEpub opens the epub file at loc for reading. The caller closes it.
-func (s *Store) OpenEpub(loc model.Location) (*os.File, error) {
-	return os.Open(s.AbsPath(loc.LibraryPath, loc.EpubFilename))
-}
-
 // Stat observes the on-disk state of a book's epub and meta.toml — both sizes
 // and both modification times — for drift detection. A stat failure is returned
 // rather than defaulted away: a zero mtime can never match a real file, so

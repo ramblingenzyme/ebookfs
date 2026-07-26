@@ -16,9 +16,9 @@ func TestLibraryImplOpenEpub(t *testing.T) {
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Open Read"))
 	id := book.Meta.ID
 
-	r, err := lib.OpenEpub(id)
+	r, err := lib.Content(id)
 	if err != nil {
-		t.Fatalf("OpenEpub: %v", err)
+		t.Fatalf("Content: %v", err)
 	}
 	defer r.Close()
 
@@ -34,7 +34,7 @@ func TestLibraryImplOpenEpub(t *testing.T) {
 func TestLibraryImplOpenEpubNotFound(t *testing.T) {
 	lib := openTestLibrary(t)
 
-	_, err := lib.OpenEpub(99999)
+	_, err := lib.Content(99999)
 	if err == nil {
 		t.Fatal("expected error for non-existent book")
 	}
@@ -45,9 +45,14 @@ func TestLibraryImplExtractCover(t *testing.T) {
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Cover Test"))
 	id := book.Meta.ID
 
-	data, err := lib.ExtractCover(id)
+	r, err := lib.Content(id)
 	if err != nil {
-		t.Fatalf("ExtractCover: %v", err)
+		t.Fatalf("Content: %v", err)
+	}
+	defer r.Close()
+	data, err := r.Cover()
+	if err != nil {
+		t.Fatalf("Cover: %v", err)
 	}
 	if string(data) != "placeholder-cover-bytes" {
 		t.Errorf("cover data = %q, want %q", string(data), "placeholder-cover-bytes")
@@ -59,9 +64,14 @@ func TestLibraryImplExtractOPF(t *testing.T) {
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "OPF Title"))
 	id := book.Meta.ID
 
-	data, err := lib.ExtractOPF(id)
+	r, err := lib.Content(id)
 	if err != nil {
-		t.Fatalf("ExtractOPF: %v", err)
+		t.Fatalf("Content: %v", err)
+	}
+	defer r.Close()
+	data, err := r.OPF()
+	if err != nil {
+		t.Fatalf("OPF: %v", err)
 	}
 	if !strings.Contains(string(data), "OPF Title") {
 		t.Errorf("OPF should contain title, got: %s", string(data))

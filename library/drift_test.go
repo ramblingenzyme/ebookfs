@@ -164,8 +164,8 @@ func TestRenamedEpubHealedOnRestart(t *testing.T) {
 
 	lib2 := openLib(t, cfg, false) // plain restart, no -reindex
 
-	if _, err := lib2.OpenEpub(book.Meta.ID); err != nil {
-		t.Errorf("OpenEpub after restart: %v (index still points at a stale filename)", err)
+	if _, err := lib2.Content(book.Meta.ID); err != nil {
+		t.Errorf("Content after restart: %v (index still points at a stale filename)", err)
 	}
 	got, err := lib2.Query(model.Filter{ID: book.Meta.ID})
 	if err != nil {

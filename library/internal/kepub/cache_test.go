@@ -24,7 +24,7 @@ func TestCacheClose(t *testing.T) {
 
 type noopSource struct{}
 
-func (noopSource) OpenEpub(int64) (model.EpubReader, error) {
+func (noopSource) Content(int64) (model.EpubReader, error) {
 	return nil, errors.New("not used in this test")
 }
 
@@ -179,9 +179,22 @@ type fakeSource struct {
 	dir string
 }
 
-func (s fakeSource) OpenEpub(_ int64) (model.EpubReader, error) {
+// srcContent wraps an *os.File to satisfy model.EpubReader. The kepub cache
+// only reads from the reader; OPF and Cover are never called.
+type srcContent struct {
+	*os.File
+}
+
+func (c *srcContent) OPF() ([]byte, error)   { return nil, nil }
+func (c *srcContent) Cover() ([]byte, error) { return nil, nil }
+
+func (s fakeSource) Content(_ int64) (model.EpubReader, error) {
 	path := filepath.Join(s.dir, "source.epub")
-	return os.Open(path)
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	return &srcContent{f}, nil
 }
 
 func TestCacheEnsureCreatesFile(t *testing.T) {
@@ -272,18 +285,16 @@ func TestCacheOpenReturnsReader(t *testing.T) {
 	b := makeBook(1, "Test", "Alice")
 	b.EpubSize = 9
 
-	r, err := c.Open(b)
-	if err != nil {
-		t.Fatalf("Open: %v", err)
+	// Ensure the cache file is created, then verify it on disk.
+	if err := c.Ensure(b); err != nil {
+		t.Fatalf("Ensure: %v", err)
 	}
-	defer r.Close()
-
-	data, err := io.ReadAll(io.NewSectionReader(r, 0, 1<<20))
+	data, err := os.ReadFile(c.path(b))
 	if err != nil {
-		t.Fatalf("ReadAll: %v", err)
+		t.Fatalf("ReadFile: %v", err)
 	}
 	if string(data) != "kepub-content" {
-		t.Errorf("Open content = %q, want %q", string(data), "kepub-content")
+		t.Errorf("cache content = %q, want %q", string(data), "kepub-content")
 	}
 }
 

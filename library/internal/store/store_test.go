@@ -333,28 +333,6 @@ func TestWalkEmptyLibrary(t *testing.T) {
 	}
 }
 
-func TestOpenEpub(t *testing.T) {
-	s, root := newStore(t)
-
-	writeBook(t, root, "Author, A/Test (1)", "test.epub", "epub-content", nil)
-
-	loc := model.Location{LibraryPath: "Author, A/Test (1)", EpubFilename: "test.epub"}
-	f, err := s.OpenEpub(loc)
-	if err != nil {
-		t.Fatalf("OpenEpub: %v", err)
-	}
-	defer f.Close()
-
-	buf := make([]byte, 12)
-	n, err := f.Read(buf)
-	if err != nil {
-		t.Fatalf("Read: %v", err)
-	}
-	if string(buf[:n]) != "epub-content" {
-		t.Errorf("content = %q, want %q", string(buf[:n]), "epub-content")
-	}
-}
-
 func TestReadMetaRoundTrip(t *testing.T) {
 	s, root := newStore(t)
 
