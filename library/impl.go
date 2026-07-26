@@ -53,7 +53,9 @@ func (l *libraryImpl) get(id int64) (*model.Book, error) {
 func (l *libraryImpl) Close() error {
 	l.expMu.Lock()
 	for _, e := range l.exporters {
-		_ = e.Close()
+		if err := e.Close(); err != nil {
+			log.Printf("close: exporter: %v", err)
+		}
 	}
 	l.expMu.Unlock()
 	return l.index.Close()

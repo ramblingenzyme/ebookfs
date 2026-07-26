@@ -235,10 +235,20 @@ func (idx *Index) Stats() (*model.Stats, error) {
 	}
 
 	if dateStr, ok := stats.LastAdded.(string); ok && dateStr != "" {
-		s.LastAdded, _ = time.Parse(time.RFC3339, dateStr)
+		t, err := time.Parse(time.RFC3339, dateStr)
+		if err != nil {
+			log.Printf("stats: invalid last_added %q: %v", dateStr, err)
+		} else {
+			s.LastAdded = t
+		}
 	}
 	if dateStr, ok := stats.LastModified.(string); ok && dateStr != "" {
-		s.LastModified, _ = time.Parse(time.RFC3339, dateStr)
+		t, err := time.Parse(time.RFC3339, dateStr)
+		if err != nil {
+			log.Printf("stats: invalid last_modified %q: %v", dateStr, err)
+		} else {
+			s.LastModified = t
+		}
 	}
 
 	return s, nil

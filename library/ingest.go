@@ -2,6 +2,7 @@ package library
 
 import (
 	"io"
+	"log"
 	"os"
 
 	"github.com/ramblingenzyme/ebookfs/library/model"
@@ -26,8 +27,12 @@ func (h *ingestHandle) WriteAt(p []byte, off int64) (int, error) { return h.file
 
 func (h *ingestHandle) Ingest() (*model.Book, error) {
 	path := h.file.Name()
-	h.file.Close()
+	if err := h.file.Close(); err != nil {
+		log.Printf("ingest: close temp file %q: %v", path, err)
+	}
 	b, err := h.ingestFn(path)
-	os.Remove(path)
+	if rmErr := os.Remove(path); rmErr != nil && !os.IsNotExist(rmErr) {
+		log.Printf("ingest: remove temp file %q: %v", path, rmErr)
+	}
 	return b, err
 }

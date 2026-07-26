@@ -146,6 +146,8 @@ func checkSameFilesystem(a, b string) error {
 		os.Remove(dst)
 		return err
 	}
-	os.Remove(dst)
+	if err := os.Remove(dst); err != nil {
+		log.Printf("warning: checkSameFilesystem cleanup: %v", err)
+	}
 	return nil
 }
