@@ -4,6 +4,7 @@ package store
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -109,7 +110,10 @@ func (s *Store) Move(from, to model.Location) error {
 
 	if to.EpubFilename != from.EpubFilename {
 		if err := os.Rename(filepath.Join(apath, from.EpubFilename), filepath.Join(apath, to.EpubFilename)); err != nil {
-			_ = os.Rename(apath, oldPath)
+			if rollbackErr := os.Rename(apath, oldPath); rollbackErr != nil {
+				slog.Error("rollback failed after epub rename error; directory left in inconsistent state, will be repaired by reindex on next startup",
+					"old_path", oldPath, "new_path", apath, "rollback_error", rollbackErr, "original_error", err)
+			}
 			return err
 		}
 	}

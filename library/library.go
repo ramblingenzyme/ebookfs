@@ -56,12 +56,12 @@ type Exporter interface {
 	// Open returns a handle to the book's export rendition. The handle is a
 	// snapshot — after the book is edited, call Open again for updated content.
 	Open(*model.Book) (model.EpubReader, error)
-	Size(*model.Book) (int64, bool)             // cheap; 9P stat length, false when cold
-	Close() error                               // releases exporter resources; called by Library.Close
-	Warm(*model.Book)                           // non-blocking proactive warm hint
-	Filename(*model.Book) string                // FAT-safe export name
-	Dirname(*model.Book) string                 // FAT-safe export directory name
-	Includes(*model.Book) bool                  // whether the book appears in the reader view
+	Size(*model.Book) (int64, bool) // cheap; 9P stat length, false when cold
+	Close() error                   // releases exporter resources; called by Library.Close
+	Warm(*model.Book)               // non-blocking proactive warm hint
+	Filename(*model.Book) string    // FAT-safe export name
+	Dirname(*model.Book) string     // FAT-safe export directory name
+	Includes(*model.Book) bool      // whether the book appears in the reader view
 }
 
 func Open(cfg config.LibraryConfig, forceReindex bool) (Library, error) {

@@ -4,6 +4,7 @@ package fs
 
 import (
 	"bufio"
+	"context"
 	"io"
 	"net"
 	"strings"
@@ -37,7 +38,7 @@ func startTestServer(t *testing.T) (addr string) {
 	if err != nil {
 		t.Fatalf("SetupServer: %v", err)
 	}
-	t.Cleanup(func() { srv.Close() })
+	t.Cleanup(func() { srv.Shutdown(context.Background()) })
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

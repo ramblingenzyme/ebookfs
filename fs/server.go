@@ -5,10 +5,9 @@
 package fs
 
 import (
+	"context"
 	"fmt"
 	"log"
-	"log/slog"
-	"os"
 	"time"
 
 	"github.com/knusbaum/go9p"
@@ -22,29 +21,29 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-// Server wraps an *fs.FS with Close and Start methods for lifecycle
-// management.
+// Server wraps a go9p.Server with lifecycle management.
 type Server struct {
 	ebookfs  *fs.FS
 	root     *fs.StaticDir
-	shutdown func()
+	go9pSrv  *go9p.Server
+	shutdown func() // closes frontend resources (search cleanup)
 }
 
-func (s *Server) Close() { s.shutdown() }
-
-// Start begins serving the 9P filesystem on listen and blocks until the
-// listener returns. It should be called from the main goroutine.
+// Start begins serving the 9P filesystem on listen and blocks until
+// Shutdown is called or the listener fails. It should be called from
+// a background goroutine; the main goroutine handles signals.
 func (s *Server) Start(listen string) error {
 	log.Printf("serving 9P on %s", listen)
-	return go9p.Serve(listen, s.ebookfs.Server())
+	return s.go9pSrv.Serve(listen)
 }
 
-// fatal logs at error level — never filtered by any configured log.level — and
-// exits. log.Fatalf would be bridged through slog at info level and could be
-// silenced by the level filter.
-func fatal(msg string, err error) {
-	slog.Error(msg, "error", err)
-	os.Exit(1)
+// Shutdown triggers graceful shutdown: frontend resources are closed first,
+// then the 9P listener is closed and active connections are waited on with
+// a deadline from ctx.
+func (s *Server) Shutdown(ctx context.Context) error {
+	err := s.go9pSrv.Shutdown(ctx)
+	s.shutdown()
+	return err
 }
 
 // SetupServer wires the FS, registry, and views without starting the 9P
@@ -92,5 +91,10 @@ func SetupServer(lib library.Library, exp library.Exporter, searchTTL time.Durat
 	search := views.NewSearchDir(ebookfs, reg, searchTTL, searchMaxHandles)
 	root.AddChild(search)
 
-	return &Server{ebookfs: ebookfs, root: root, shutdown: search.Close}, nil
+	return &Server{
+		ebookfs:  ebookfs,
+		root:     root,
+		go9pSrv:  go9p.NewServer(ebookfs.Server()),
+		shutdown: search.Close,
+	}, nil
 }

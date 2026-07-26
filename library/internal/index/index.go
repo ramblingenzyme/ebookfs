@@ -23,10 +23,10 @@ var schema string
 // reader (readDB). Reads are routed through the reader connection so they
 // never block each other or contend with the single writer slot.
 type Index struct {
-	db      *sql.DB          // writer connection (single writer with SetMaxOpenConns(1))
-	wq      *dbsqlc.Queries  // writer queries wrapping db (used by NextID, pending_ops)
-	readDB  *sql.DB          // reader connection (up to 4 concurrent readers)
-	queries *dbsqlc.Queries  // reader queries wrapping readDB (used for all read-only queries)
+	db      *sql.DB         // writer connection (single writer with SetMaxOpenConns(1))
+	wq      *dbsqlc.Queries // writer queries wrapping db (used by NextID, pending_ops)
+	readDB  *sql.DB         // reader connection (up to 4 concurrent readers)
+	queries *dbsqlc.Queries // reader queries wrapping readDB (used for all read-only queries)
 	ctx     context.Context
 }
 

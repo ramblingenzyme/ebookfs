@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/ramblingenzyme/ebookfs/fs"
 	"github.com/ramblingenzyme/ebookfs/library"
@@ -67,17 +69,36 @@ func main() {
 		fatal("setting up server", err)
 	}
 
+	// Start the 9P listener in a background goroutine so the main
+	// goroutine can receive signals. Serve returns without error
+	// when Shutdown is called.
+	errCh := make(chan error, 1)
 	go func() {
-		sig := make(chan os.Signal, 1)
-		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-		<-sig
-		log.Print("shutting down…")
-		srv.Close()
-		lib.Close()
-		os.Exit(0)
+		errCh <- srv.Start(cfg.Server.Listen)
 	}()
 
-	if err := srv.Start(cfg.Server.Listen); err != nil {
-		fatal("9P server", err)
+	// Main goroutine: wait for a signal, then initiate graceful
+	// shutdown with a deadline.
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	<-sig
+	slog.Info("shutting down…")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		slog.Warn("9P shutdown deadline exceeded, forcing close", "error", err)
 	}
+
+	// Wait for Serve to return (confirming the listener is fully down).
+	if err := <-errCh; err != nil {
+		slog.Error("9P server exited with error", "error", err)
+	}
+
+	// Close the library after the server is fully down.
+	if err := lib.Close(); err != nil {
+		slog.Error("closing library", "error", err)
+	}
+
+	slog.Info("server stopped")
 }

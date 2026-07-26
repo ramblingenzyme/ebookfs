@@ -22,8 +22,8 @@ import (
 type EpubReader interface {
 	io.ReaderAt
 	io.Closer
-	OPF() ([]byte, error)     // OPF XML from the open epub
-	Cover() ([]byte, error)   // cover image from the open epub
+	OPF() ([]byte, error)   // OPF XML from the open epub
+	Cover() ([]byte, error) // cover image from the open epub
 }
 
 // Reading-status vocabulary. This package owns the set: Edits.Validate, the

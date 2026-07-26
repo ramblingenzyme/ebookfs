@@ -18,12 +18,12 @@ import (
 )
 
 type libraryImpl struct {
-	store            *store.Store
-	index            *index.Index
-	inboxTemp        string
-	defaultExporter  Exporter
-	exporters []Exporter
-	expMu     sync.Mutex
+	store           *store.Store
+	index           *index.Index
+	inboxTemp       string
+	defaultExporter Exporter
+	exporters       []Exporter
+	expMu           sync.Mutex
 	// Dedup of exporters by config is not implemented. If needed in the
 	// future, hash/comparable-key the ReaderConfig fields and store in a map.
 

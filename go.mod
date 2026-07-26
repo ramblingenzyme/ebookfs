@@ -11,7 +11,7 @@ require (
 	modernc.org/sqlite v1.51.0
 )
 
-replace github.com/knusbaum/go9p => github.com/ramblingenzyme/go9p v0.0.0-20260704103015-f29dd8d8a599
+replace github.com/knusbaum/go9p => github.com/ramblingenzyme/go9p v0.0.0-20260726083331-ead72e9f3571
 
 require (
 	9fans.net/go v0.0.2 // indirect

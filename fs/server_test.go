@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -29,7 +30,7 @@ func TestSetupServer(t *testing.T) {
 	if srv.root == nil {
 		t.Fatal("SetupServer returned nil root")
 	}
-	srv.Close()
+	srv.Shutdown(context.Background())
 
 	wantChildren := []string{"inbox", "books", "by-author", "by-id", "by-series", "reader", "recent", "stats", "search"}
 	for _, name := range wantChildren {
@@ -63,7 +64,7 @@ func TestSetupServer_BooksPopulated(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SetupServer: %v", err)
 	}
-	srv.Close()
+	srv.Shutdown(context.Background())
 
 	allBooks := srv.root.Children()["books"].(fs.Dir)
 	if _, ok := allBooks.Children()["Present"]; !ok {
