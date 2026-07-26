@@ -125,20 +125,28 @@ func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 	if err := op.MarkPending(); err != nil {
 		return nil, err
 	}
+
+	cleanup := func() {
+		if rmErr := l.store.Delete(loc); rmErr != nil {
+			log.Printf("store: Ingest cleanup failed for %s: %v", loc.LibraryPath, rmErr)
+		} else {
+			// Clean up: nothing was written to disk, so there is no state to heal.
+			op.Cancel()
+		}
+	}
+
 	if err := l.store.Ingest(epubPath, loc, &meta); err != nil {
-		// Ingest failed; the pending row stays (forcing a healing reindex) and
-		// we clean up the store so a retry starts fresh.
-		_ = l.store.Delete(loc)
+		cleanup()
 		return nil, err
 	}
 	mt, err := l.store.Stat(loc)
 	if err != nil {
-		_ = l.store.Delete(loc)
+		cleanup()
 		return nil, err
 	}
 	b := bookFromBib(bib, meta, loc, mt)
 	if err := op.Put(b, mt); err != nil {
-		_ = l.store.Delete(b.Location)
+		cleanup()
 		return nil, err
 	}
 

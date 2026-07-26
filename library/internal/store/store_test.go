@@ -501,12 +501,10 @@ func TestIDFromPath(t *testing.T) {
 	}
 }
 
-// TestIngestCleansUpAfterFailedMeta covers the rollback in Ingest. The staged
-// epub has already been renamed into the book directory by the time the sidecar
-// write is attempted, so a failure there leaves a directory holding an epub and
-// no meta.toml — which store.Walk still reports as a book. Removing it is what
-// lets the caller retry from a clean slate.
-func TestIngestCleansUpAfterFailedMeta(t *testing.T) {
+// TestIngestSurfacesWriteMetaFailure verifies that Ingest returns an error
+// when the sidecar write fails, but does NOT clean up — the caller is
+// responsible for deciding whether to delete the partial directory.
+func TestIngestSurfacesWriteMetaFailure(t *testing.T) {
 	s, root := newStore(t)
 
 	staged := filepath.Join(t.TempDir(), "staged.epub")
@@ -524,8 +522,8 @@ func TestIngestCleansUpAfterFailedMeta(t *testing.T) {
 	if err := s.Ingest(staged, loc, &model.Meta{ID: 1}); err == nil {
 		t.Fatal("Ingest succeeded with an unwritable meta.toml, want the failure surfaced")
 	}
-	if _, err := os.Stat(bookDir); !os.IsNotExist(err) {
-		t.Errorf("book directory survived a failed ingest (stat err = %v); a retry would trip the exists check", err)
+	if _, err := os.Stat(bookDir); os.IsNotExist(err) {
+		t.Error("Ingest cleaned up the book directory; caller is responsible for cleanup")
 	}
 }
 

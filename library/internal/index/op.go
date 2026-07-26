@@ -54,6 +54,18 @@ func (o *Op) finish(fn func(*dbsqlc.Queries, *sql.Tx) error) error {
 	})
 }
 
+// Cancel deletes the pending-op row without touching store data. Call it when
+// an operation fails after MarkPending, so the next startup skips the reindex.
+func (o *Op) Cancel() {
+	if o.opID == "" {
+		return
+	}
+
+	if err := o.idx.wq.DeletePendingOp(o.idx.ctx, o.opID); err == nil {
+		o.opID = ""
+	}
+}
+
 // Put writes b into the index, inserting or replacing the record for b.Meta.ID.
 // mt carries the on-disk file state used for drift detection.
 func (o *Op) Put(b *model.Book, mt drift.PathInfo) error {

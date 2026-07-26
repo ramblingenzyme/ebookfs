@@ -3,6 +3,7 @@ package index
 import (
 	"database/sql"
 	"errors"
+	"os"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -1323,5 +1324,46 @@ func TestRebuildWithMultipleBooks(t *testing.T) {
 	}
 	if got.Series == nil || got.Series.Name != "Series A" {
 		t.Errorf("book 2 series = %+v", got.Series)
+	}
+}
+
+func TestCancelClearsPendingRow(t *testing.T) {
+	idx := openTestIndex(t)
+
+	op := idx.BeginOp()
+	if err := op.MarkPending(); err != nil {
+		t.Fatalf("MarkPending: %v", err)
+	}
+	if n := pendingCount(t, idx); n != 1 {
+		t.Fatalf("pending_ops after MarkPending = %d, want 1", n)
+	}
+
+	op.Cancel()
+	if n := pendingCount(t, idx); n != 0 {
+		t.Fatalf("pending_ops after Cancel = %d, want 0", n)
+	}
+	mustNeedReindex(t, idx, false)
+}
+
+func TestCancelWithoutMarkPendingIsNoop(t *testing.T) {
+	idx := openTestIndex(t)
+
+	op := idx.BeginOp()
+	op.Cancel()
+	if n := pendingCount(t, idx); n != 0 {
+		t.Errorf("pending_ops = %d, want 0", n)
+	}
+}
+
+func TestOpenFailsCleanlyWhenDBPathIsDirectory(t *testing.T) {
+	dir := t.TempDir()
+	// Create a directory at the path where sqlite would create the db file.
+	dbPath := filepath.Join(dir, "index.db")
+	if err := os.Mkdir(dbPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Open(dbPath)
+	if err == nil {
+		t.Fatal("expected error opening index at a directory path")
 	}
 }
