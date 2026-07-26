@@ -93,6 +93,7 @@ func Open(path string) (*Index, error) {
 
 	var v int64
 	if err := db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
+		readDB.Close()
 		db.Close()
 		return nil, err
 	}
