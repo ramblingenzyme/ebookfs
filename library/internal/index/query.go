@@ -18,13 +18,13 @@ func (idx *Index) Query(f model.Filter) ([]*model.Book, error) {
 	conds := []struct {
 		on   bool
 		expr string
-		arg  any
+		args []any
 	}{
-		{f.ID != 0, "b.id = ?", f.ID},
-		{f.Status != "", "b.status = ?", f.Status},
-		{f.Author != "", "b.id IN (SELECT ba.book_id FROM book_authors ba JOIN authors a ON a.id = ba.author_id WHERE a.name = ?)", f.Author},
-		{f.Tag != "", "b.id IN (SELECT bt.book_id FROM book_tags bt JOIN tags t ON t.id = bt.tag_id WHERE t.name = ?)", f.Tag},
-		{f.Series != "", "b.series_id IN (SELECT id FROM series WHERE name = ?)", f.Series},
+		{f.ID != 0, "b.id = ?", []any{f.ID}},
+		{f.Status != "", "b.status = ?", []any{f.Status}},
+		{f.Author != "", "b.id IN (SELECT ba.book_id FROM book_authors ba JOIN authors a ON a.id = ba.author_id WHERE a.name = ? OR a.sort_name = ?)", []any{f.Author, f.Author}},
+		{f.Tag != "", "b.id IN (SELECT bt.book_id FROM book_tags bt JOIN tags t ON t.id = bt.tag_id WHERE t.name = ?)", []any{f.Tag}},
+		{f.Series != "", "b.series_id IN (SELECT id FROM series WHERE name = ?)", []any{f.Series}},
 	}
 
 	var (
@@ -34,7 +34,7 @@ func (idx *Index) Query(f model.Filter) ([]*model.Book, error) {
 	for _, c := range conds {
 		if c.on {
 			where = append(where, c.expr)
-			args = append(args, c.arg)
+			args = append(args, c.args...)
 		}
 	}
 
@@ -217,24 +217,6 @@ func (idx *Index) Get(bookID int64) (*model.Book, error) {
 		return nil, sql.ErrNoRows
 	}
 	return books[0], nil
-}
-
-// ListAuthors returns all authors in the index, ordered by sort_name.
-func (idx *Index) ListAuthors() ([]*model.Author, error) {
-	authors, err := idx.queries.ListAuthors(idx.ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	result := make([]*model.Author, len(authors))
-	for i, a := range authors {
-		result[i] = &model.Author{
-			ID:       a.ID,
-			Name:     a.Name,
-			SortName: a.SortName,
-		}
-	}
-	return result, nil
 }
 
 // Stats returns aggregate library statistics.

@@ -362,6 +362,9 @@ func TestRenameAuthor(t *testing.T) {
 
 	lib := libfake.Lib{
 		QueryFn: func(f model.Filter) ([]*model.Book, error) {
+			if f.Author != "Asimov" {
+				t.Errorf("Filter.Author = %q, want %q", f.Author, "Asimov")
+			}
 			return []*model.Book{book}, nil
 		},
 		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
@@ -396,6 +399,9 @@ func TestRenameAuthorMatchSortName(t *testing.T) {
 
 	lib := libfake.Lib{
 		QueryFn: func(f model.Filter) ([]*model.Book, error) {
+			if f.Author != "Asimov, Isaac" {
+				t.Errorf("Filter.Author = %q, want %q", f.Author, "Asimov, Isaac")
+			}
 			return []*model.Book{book}, nil
 		},
 		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
@@ -463,6 +469,9 @@ func TestRenameAuthorMerge(t *testing.T) {
 
 	lib := libfake.Lib{
 		QueryFn: func(f model.Filter) ([]*model.Book, error) {
+			if f.Author != "Paul French" {
+				t.Errorf("Filter.Author = %q, want %q", f.Author, "Paul French")
+			}
 			return []*model.Book{book}, nil
 		},
 		EditFn: func(id int64, e model.Edits) (*model.Book, error) {

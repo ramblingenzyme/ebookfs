@@ -225,7 +225,7 @@ func renameAuthor(args []string, lib library.Library, reg *registry.BookRegistry
 		return "error: new author name must not be empty"
 	}
 
-	books, err := lib.Query(model.Filter{})
+	books, err := lib.Query(model.Filter{Author: old})
 	if err != nil {
 		return fmt.Sprintf("error: query failed: %v", err)
 	}

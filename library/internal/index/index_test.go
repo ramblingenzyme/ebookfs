@@ -850,44 +850,6 @@ func TestNextID(t *testing.T) {
 	}
 }
 
-// TestListAuthors covers the author list the by-author view is built from. The
-// third book deliberately reuses Alice: authors is a shared table joined through
-// book_authors, so listing it must yield one row per author rather than one per
-// authorship. Sort order is by sort_name, which is why Carol sorts last despite
-// being written second.
-func TestListAuthors(t *testing.T) {
-	idx := openTestIndex(t)
-
-	books := []*model.Book{
-		makeAuthoredBook(1, "Book1", model.Author{Name: "Alice", SortName: "Alice"}),
-		makeAuthoredBook(2, "Book2", model.Author{Name: "Carol", SortName: "Carol"}),
-		// Alice again, plus a co-author: one new authors row, two new book_authors rows.
-		makeAuthoredBook(3, "Book3",
-			model.Author{Name: "Alice", SortName: "Alice"},
-			model.Author{Name: "Bob", SortName: "Bob"},
-		),
-	}
-	for _, b := range books {
-		storeInIndex(t, idx, b)
-	}
-
-	authors, err := idx.ListAuthors()
-	if err != nil {
-		t.Fatalf("ListAuthors: %v", err)
-	}
-	var names []string
-	for _, a := range authors {
-		if a.ID == 0 {
-			t.Errorf("author %q has no ID, so nothing can reference it", a.Name)
-		}
-		names = append(names, a.Name)
-	}
-	want := []string{"Alice", "Bob", "Carol"}
-	if !slices.Equal(names, want) {
-		t.Errorf("authors = %v, want %v (deduped, ordered by sort_name)", names, want)
-	}
-}
-
 func TestStatsEmptyIndex(t *testing.T) {
 	idx := openTestIndex(t)
 
