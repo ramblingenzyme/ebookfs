@@ -110,12 +110,10 @@ func setTitleSort(pkg, md *etree.Element, value string) {
 	}
 	titleID := title.SelectAttrValue("id", "")
 
-	for _, m := range md.SelectElements("meta") {
-		if titleID != "" && m.SelectAttrValue("property", "") == "file-as" &&
-			strings.TrimPrefix(m.SelectAttrValue("refines", ""), "#") == titleID {
-			md.RemoveChild(m)
-		}
-	}
+	removeRefinements(md, func(m *etree.Element) bool {
+		return titleID != "" && m.SelectAttrValue("property", "") == "file-as" &&
+			strings.TrimPrefix(m.SelectAttrValue("refines", ""), "#") == titleID
+	})
 
 	if strings.TrimSpace(value) == "" {
 		return // sort title cleared
@@ -128,6 +126,30 @@ func setTitleSort(pkg, md *etree.Element, value string) {
 	addRefine(md, titleID, "file-as", value, "")
 }
 
+// removeElements removes elements matching selector and match, returning their IDs.
+func removeElements(md *etree.Element, selector string, match func(*etree.Element) bool) []string {
+	var removedIDs []string
+	for _, el := range md.SelectElements(selector) {
+		if !match(el) {
+			continue
+		}
+		if id := el.SelectAttrValue("id", ""); id != "" {
+			removedIDs = append(removedIDs, id)
+		}
+		md.RemoveChild(el)
+	}
+	return removedIDs
+}
+
+// removeRefinements removes meta elements matching the predicate.
+func removeRefinements(md *etree.Element, predicate func(*etree.Element) bool) {
+	for _, m := range md.SelectElements("meta") {
+		if predicate(m) {
+			md.RemoveChild(m)
+		}
+	}
+}
+
 // setAuthors replaces the author creators (role "aut", or no role per the EPUB
 // default) and their refinements, leaving any non-author creators — editors,
 // illustrators — in place. New creators are written in the shape this package's
@@ -136,23 +158,13 @@ func setTitleSort(pkg, md *etree.Element, value string) {
 func setAuthors(pkg, md *etree.Element, dc string, authors []model.Author) {
 	epub3 := strings.HasPrefix(packageVersion(pkg), "3")
 
-	var removedIDs []string
-	for _, c := range md.SelectElements("creator") {
-		if !isAuthorCreator(md, c) {
-			continue
-		}
-		if id := c.SelectAttrValue("id", ""); id != "" {
-			removedIDs = append(removedIDs, id)
-		}
-		md.RemoveChild(c)
-	}
-	// Drop refinements (role/file-as/etc.) that pointed at the removed creators.
-	for _, m := range md.SelectElements("meta") {
+	removedIDs := removeElements(md, "creator", func(c *etree.Element) bool {
+		return isAuthorCreator(md, c)
+	})
+	removeRefinements(md, func(m *etree.Element) bool {
 		ref := strings.TrimPrefix(m.SelectAttrValue("refines", ""), "#")
-		if ref != "" && slices.Contains(removedIDs, ref) {
-			md.RemoveChild(m)
-		}
-	}
+		return ref != "" && slices.Contains(removedIDs, ref)
+	})
 
 	for i, a := range authors {
 		id := fmt.Sprintf("ebookfs-creator-%d", i+1)
@@ -184,38 +196,25 @@ func isAuthorCreator(md, c *etree.Element) bool {
 	return role == "" || role == "aut"
 }
 
-// setSeries removes any existing series representation (EPUB 3
-// belongs-to-collection plus its refines, or the EPUB 2 calibre:series metas)
-// and, unless name is empty, writes a fresh one in the version-appropriate shape
-// that translateSeries reads back.
-//
-// Note: unlike the title sort (EPUB 3 only — see setTitleSort), we do write
-// calibre's proprietary calibre:series / calibre:series_index metas for EPUB 2.
-// Series is exposed for editing in the frontend, EPUB 2 has no standard
-// collection model, and those metas are its de-facto convention, so we need that
-// fallback. The sort title is not exposed in the frontend, so it needs no EPUB 2
-// equivalent and stays EPUB 3 only.
+// setSeries replaces the existing series with name and index, or clears it if
+// name is empty. EPUB 3 uses belongs-to-collection; EPUB 2 uses calibre:series.
+// Unlike setTitleSort, we write calibre:series for EPUB 2 because series is
+// exposed in the frontend.
 func setSeries(pkg, md *etree.Element, name string, index *float64) {
-	var collectionIDs []string
-	for _, m := range md.SelectElements("meta") {
-		if m.SelectAttrValue("property", "") == "belongs-to-collection" {
-			if id := m.SelectAttrValue("id", ""); id != "" {
-				collectionIDs = append(collectionIDs, id)
-			}
-			md.RemoveChild(m)
-		}
-	}
-	for _, m := range md.SelectElements("meta") {
+	collectionIDs := removeElements(md, "meta", func(m *etree.Element) bool {
+		return m.SelectAttrValue("property", "") == "belongs-to-collection"
+	})
+	removeRefinements(md, func(m *etree.Element) bool {
 		ref := strings.TrimPrefix(m.SelectAttrValue("refines", ""), "#")
 		if ref != "" && slices.Contains(collectionIDs, ref) {
-			md.RemoveChild(m)
-			continue
+			return true
 		}
 		switch m.SelectAttrValue("name", "") {
 		case "calibre:series", "calibre:series_index":
-			md.RemoveChild(m)
+			return true
 		}
-	}
+		return false
+	})
 
 	if strings.TrimSpace(name) == "" {
 		return // series cleared
