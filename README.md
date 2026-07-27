@@ -41,6 +41,9 @@ sudo umount /mnt/ebookfs
 ## Limitations
 - No PDF, mobi, cbz support, only epub
 - No DRM removal
+- Editing authors loses third-party metadata (e.g. alternate-script from Calibre/publishers)
+- Renaming a series resets all book positions to 1 (doesn't preserve existing index)
+- Editing series metadata removes all collections, including sets/bundles (not just series)
 
 ## Project goals
 - Network transparency

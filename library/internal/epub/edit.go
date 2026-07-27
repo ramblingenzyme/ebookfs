@@ -54,6 +54,8 @@ func editOPF(opfBytes []byte, e model.Edits) ([]byte, error) {
 	}
 
 	if e.Series != nil {
+		// TODO: preserve the existing index when SeriesIndex is nil, so
+		// rename-series doesn't reset positions to 1.
 		setSeries(pkg, md, *e.Series, e.SeriesIndex)
 	} else if e.SeriesIndex != nil {
 		// Index-only update: preserve the current series name from the OPF
@@ -161,6 +163,11 @@ func setAuthors(pkg, md *etree.Element, dc string, authors []model.Author) {
 	removedIDs := removeElements(md, "creator", func(c *etree.Element) bool {
 		return isAuthorCreator(md, c)
 	})
+	// Drop all refinements that pointed at the removed creators. This is
+	// a known limitation: we lose third-party metadata (e.g. alternate-script
+	// from Calibre/publishers) because we regenerate IDs on every write.
+	// TODO: track author identity by name and preserve non-ebookfs refinements
+	// when an author is edited rather than replaced.
 	removeRefinements(md, func(m *etree.Element) bool {
 		ref := strings.TrimPrefix(m.SelectAttrValue("refines", ""), "#")
 		return ref != "" && slices.Contains(removedIDs, ref)
@@ -186,6 +193,10 @@ func setAuthors(pkg, md *etree.Element, dc string, authors []model.Author) {
 	}
 }
 
+// TODO: DRY — isAuthorCreator and translateAuthor both encode the same rule
+// ("aut" or unspecified). Extract a shared isAuthorRole helper so the logic
+// cannot drift out of sync.
+//
 // isAuthorCreator mirrors translateAuthor: a creator counts as an author when
 // its effective role is "aut" or unspecified.
 func isAuthorCreator(md, c *etree.Element) bool {
@@ -201,6 +212,8 @@ func isAuthorCreator(md, c *etree.Element) bool {
 // Unlike setTitleSort, we write calibre:series for EPUB 2 because series is
 // exposed in the frontend.
 func setSeries(pkg, md *etree.Element, name string, index *float64) {
+	// TODO: only remove belongs-to-collection elements with collection-type="series",
+	// not all collections (sets/bundles should be preserved).
 	collectionIDs := removeElements(md, "meta", func(m *etree.Element) bool {
 		return m.SelectAttrValue("property", "") == "belongs-to-collection"
 	})

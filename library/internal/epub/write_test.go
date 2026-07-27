@@ -614,3 +614,131 @@ func TestCommitDiscard(t *testing.T) {
 		}
 	})
 }
+
+// --- Known limitations (TODOs) --------------------------------------------
+
+func TestSetSeriesPreservesExistingIndex(t *testing.T) {
+	t.Skip("TODO: setSeries doesn't preserve existing index when only Series is set")
+
+	path := writeEpub(t, baseEntries(opf3))
+	// First, set up a series with index 3
+	if _, err := writeBib(path, model.Edits{Series: ptr("The Trilogy"), SeriesIndex: ptr(3.0)}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Now rename the series without setting index
+	book, err := writeBib(path, model.Edits{Series: ptr("The Quartet")})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The index should be preserved as 3, not reset to 1
+	if book.SeriesIndex != 3.0 {
+		t.Errorf("series index = %v, want 3.0 (preserved from before rename)", book.SeriesIndex)
+	}
+}
+
+func TestSetAuthorsPreservesNonAuthorMetadata(t *testing.T) {
+	t.Skip("TODO: setAuthors removes all creator metadata, not just ebookfs-managed fields")
+
+	// Create an OPF with an author that has alternate-script metadata
+	opfWithAlternateScript := `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="bookid">urn:uuid:1234</dc:identifier>
+    <dc:title>Original Title</dc:title>
+    <dc:creator id="creator1">Jane Doe</dc:creator>
+    <meta refines="#creator1" property="role" scheme="marc:relators">aut</meta>
+    <meta refines="#creator1" property="file-as">Doe, Jane</meta>
+    <meta refines="#creator1" property="alternate-script" xml:lang="ja">ドゥ・ジェーン</meta>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="cover-img" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine><itemref idref="ch1"/></spine>
+</package>`
+
+	path := writeEpub(t, baseEntries(opfWithAlternateScript))
+
+	// Edit the author
+	authors := []model.Author{{Name: "Jane Doe", SortName: "Doe, Jane"}}
+	book, err := writeBib(path, model.Edits{Authors: &authors})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The alternate-script metadata should be preserved
+	opfBytes, ok, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
+	if !ok {
+		t.Fatal("OPF entry not found")
+	}
+
+	if !bytes.Contains(opfBytes, []byte(`property="alternate-script"`)) {
+		t.Error("alternate-script metadata was removed, should be preserved")
+	}
+
+	// Also verify the author was updated correctly
+	if len(book.Authors) != 1 || book.Authors[0].Name != "Jane Doe" {
+		t.Errorf("author not updated correctly: %+v", book.Authors)
+	}
+}
+
+func TestSetSeriesPreservesSets(t *testing.T) {
+	t.Skip("TODO: setSeries removes all belongs-to-collection elements, not just series")
+
+	// Create an OPF with both a series and a set
+	opfWithSet := `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="bookid">urn:uuid:1234</dc:identifier>
+    <dc:title>Original Title</dc:title>
+    <dc:creator id="creator1">Jane Doe</dc:creator>
+    <meta refines="#creator1" property="role" scheme="marc:relators">aut</meta>
+    <dc:language>en</dc:language>
+
+    <!-- Series -->
+    <meta property="belongs-to-collection" id="series1">The Trilogy</meta>
+    <meta refines="#series1" property="collection-type">series</meta>
+    <meta refines="#series1" property="group-position">2</meta>
+
+    <!-- Set (bundle) -->
+    <meta property="belongs-to-collection" id="set1">Complete Works</meta>
+    <meta refines="#set1" property="collection-type">set</meta>
+
+  </metadata>
+  <manifest>
+    <item id="cover-img" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine><itemref idref="ch1"/></spine>
+</package>`
+
+	path := writeEpub(t, baseEntries(opfWithSet))
+
+	// Edit the series
+	book, err := writeBib(path, model.Edits{Series: ptr("The Quartet"), SeriesIndex: ptr(1.0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The series should be updated
+	if book.Series != "The Quartet" {
+		t.Errorf("series = %q, want The Quartet", book.Series)
+	}
+
+	// The set should still be present in the OPF
+	opfBytes, ok, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
+	if !ok {
+		t.Fatal("OPF entry not found")
+	}
+
+	if !bytes.Contains(opfBytes, []byte("Complete Works")) {
+		t.Error("set (Complete Works) was removed, should be preserved")
+	}
+
+	if !bytes.Contains(opfBytes, []byte(`collection-type">set`)) {
+		t.Error("set collection-type was removed, should be preserved")
+	}
+}
