@@ -66,12 +66,6 @@
 └── stats                        ← read-only aggregate library statistics
 ```
 
-### Remaining V1 work
-
-| Feature | Description | Dependencies |
-|---------|-------------|--------------|
-| End-to-end test | A fixture library of sample epubs, spinning up `ebookfs` against a temp directory and driving it via real 9P client calls. Exercises the full edit → rewrite path. | None |
-
 ---
 
 ## V2 — Standalone Library Module
