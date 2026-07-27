@@ -3,7 +3,7 @@ package index
 import (
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -89,12 +89,12 @@ func (idx *Index) queryBooks(where string, args []any, order string, limit int) 
 			return nil, err
 		}
 		if t, err := time.Parse(time.RFC3339, dateAdded); err != nil {
-			log.Printf("book %d: invalid date_added %q: %v", b.Meta.ID, dateAdded, err)
+			slog.Warn("invalid date_added", "book_id", b.Meta.ID, "date_added", dateAdded, "error", err)
 		} else {
 			b.Meta.DateAdded = t
 		}
 		if t, err := time.Parse(time.RFC3339, dateModified); err != nil {
-			log.Printf("book %d: invalid date_modified %q: %v", b.Meta.ID, dateModified, err)
+			slog.Warn("invalid date_modified", "book_id", b.Meta.ID, "date_modified", dateModified, "error", err)
 		} else {
 			b.Meta.DateModified = t
 		}
@@ -237,7 +237,7 @@ func (idx *Index) Stats() (*model.Stats, error) {
 	if dateStr, ok := stats.LastAdded.(string); ok && dateStr != "" {
 		t, err := time.Parse(time.RFC3339, dateStr)
 		if err != nil {
-			log.Printf("stats: invalid last_added %q: %v", dateStr, err)
+			slog.Warn("stats: invalid last_added", "last_added", dateStr, "error", err)
 		} else {
 			s.LastAdded = t
 		}
@@ -245,7 +245,7 @@ func (idx *Index) Stats() (*model.Stats, error) {
 	if dateStr, ok := stats.LastModified.(string); ok && dateStr != "" {
 		t, err := time.Parse(time.RFC3339, dateStr)
 		if err != nil {
-			log.Printf("stats: invalid last_modified %q: %v", dateStr, err)
+			slog.Warn("stats: invalid last_modified", "last_modified", dateStr, "error", err)
 		} else {
 			s.LastModified = t
 		}

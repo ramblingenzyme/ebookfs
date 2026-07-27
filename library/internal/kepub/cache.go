@@ -8,7 +8,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -201,7 +201,7 @@ func (w *warmer) run() {
 	defer w.wg.Done()
 	for b := range w.ch {
 		if err := w.ensure(b); err != nil {
-			log.Printf("kepub: warm book %d: %v", b.Meta.ID, err)
+			slog.Warn("kepub: warm book failed", "book_id", b.Meta.ID, "error", err)
 		}
 	}
 }

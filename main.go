@@ -16,8 +16,8 @@ import (
 )
 
 // setupLogging installs a slog handler built from cfg as the default logger.
-// The stdlib log calls throughout the codebase route through it at info level,
-// so log.level filters them and log.format = "json" applies to them too.
+// Every slog call in the codebase goes through it, so log.level filters by
+// severity and log.format = "json" applies uniformly.
 func setupLogging(cfg config.LogConfig) {
 	levels := map[string]slog.Level{
 		"debug": slog.LevelDebug,

@@ -2,7 +2,7 @@ package library
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"slices"
 	"sync"
@@ -54,7 +54,7 @@ func (l *libraryImpl) Close() error {
 	l.expMu.Lock()
 	for _, e := range l.exporters {
 		if err := e.Close(); err != nil {
-			log.Printf("close: exporter: %v", err)
+			slog.Error("close: exporter failed", "error", err)
 		}
 	}
 	l.expMu.Unlock()
@@ -73,7 +73,7 @@ func (l *libraryImpl) Exporter(cfg config.ReaderConfig) (Exporter, error) {
 	if cfg.Convert {
 		kind = "kepub"
 	}
-	log.Printf("export: %s for statuses %v", kind, cfg.Statuses)
+	slog.Info("export configured", "kind", kind, "statuses", cfg.Statuses)
 	return e, nil
 }
 
@@ -130,7 +130,7 @@ func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 
 	cleanup := func() {
 		if rmErr := l.store.Delete(loc); rmErr != nil {
-			log.Printf("store: Ingest cleanup failed for %s: %v", loc.LibraryPath, rmErr)
+			slog.Error("ingest cleanup failed", "path", loc.LibraryPath, "error", rmErr)
 		} else {
 			// Clean up: nothing was written to disk, so there is no state to heal.
 			op.Cancel()
@@ -152,7 +152,7 @@ func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 		return nil, err
 	}
 
-	log.Printf("ingest: book %d (%q) by %s", b.Meta.ID, b.Title, model.JoinAuthors(bib.Authors, ", "))
+	slog.Info("ingest: book added", "book_id", b.Meta.ID, "title", b.Title, "authors", model.JoinAuthors(bib.Authors, ", "))
 	return b, nil
 }
 
@@ -220,7 +220,7 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 
 	c, err := epub.Prepare(b, e)
 	if err != nil {
-		log.Printf("edit: book %d (%q): prepare rewrite: %v", b.Meta.ID, b.Title, err)
+		slog.Error("edit: prepare rewrite failed", "book_id", b.Meta.ID, "title", b.Title, "error", err)
 		return nil, err
 	}
 	if err := op.MarkPending(); err != nil {
@@ -229,7 +229,7 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 	}
 	if err := c.Commit(); err != nil {
 		c.Discard()
-		log.Printf("edit: book %d (%q): commit rewrite: %v", b.Meta.ID, b.Title, err)
+		slog.Error("edit: commit rewrite failed", "book_id", b.Meta.ID, "title", b.Title, "error", err)
 		return nil, err
 	}
 
@@ -242,18 +242,18 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 	location := l.store.Layout(bib.Authors, bib.Title, meta.ID)
 	if location.LibraryPath != b.Location.LibraryPath || location.EpubFilename != b.Location.EpubFilename {
 		if err := l.store.Move(b.Location, location); err != nil {
-			log.Printf("edit: book %d (%q): move directory: %v", b.Meta.ID, b.Title, err)
+			slog.Error("edit: move directory failed", "book_id", b.Meta.ID, "title", b.Title, "error", err)
 			return nil, err
 		}
 	}
 	if err := l.store.WriteMeta(location, &meta); err != nil {
-		log.Printf("edit: book %d (%q): write meta: %v", b.Meta.ID, b.Title, err)
+		slog.Error("edit: write meta failed", "book_id", b.Meta.ID, "title", b.Title, "error", err)
 		return nil, err
 	}
 
 	mt, err := l.store.Stat(location)
 	if err != nil {
-		log.Printf("edit: book %d (%q): stat: %v", b.Meta.ID, b.Title, err)
+		slog.Error("edit: stat failed", "book_id", b.Meta.ID, "title", b.Title, "error", err)
 		return nil, err
 	}
 
@@ -343,13 +343,13 @@ func (l *libraryImpl) Delete(id int64) error {
 	// Store is authoritative; a ghost index row is cleaned up by reindex.
 	err = l.store.Delete(b.Location)
 	if err != nil {
-		log.Printf("delete: book %d (%q): %v", id, b.Title, err)
+		slog.Error("delete: store delete failed", "book_id", id, "title", b.Title, "error", err)
 		return err
 	}
 	if err := op.Delete(id); err != nil {
-		log.Printf("delete: book %d (%q): %v", id, b.Title, err)
+		slog.Error("delete: index delete failed", "book_id", id, "title", b.Title, "error", err)
 		return err
 	}
-	log.Printf("delete: book %d (%q): ok", id, b.Title)
+	slog.Info("delete: book removed", "book_id", id, "title", b.Title)
 	return nil
 }

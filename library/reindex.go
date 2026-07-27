@@ -2,7 +2,7 @@ package library
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"runtime"
 	"slices"
 	"strings"
@@ -71,7 +71,7 @@ type storeScan struct {
 func (l *libraryImpl) storeDrifted() (*storeScan, bool) {
 	entries, err := l.store.Walk()
 	if err != nil {
-		log.Printf("reindex: could not walk store (%v), forcing rebuild", err)
+		slog.Warn("reindex: could not walk store, forcing rebuild", "error", err)
 		return nil, true
 	}
 
@@ -82,7 +82,7 @@ func (l *libraryImpl) storeDrifted() (*storeScan, bool) {
 			// Recorded as unobserved rather than forcing a rebuild: the rebuild
 			// records the same marker, so the two agree and one unreadable book
 			// stops meaning a full reindex on every startup (see drift.Unobserved).
-			log.Printf("reindex: could not stat %s (%v), recording as unreadable", e.LibraryPath, err)
+			slog.Warn("reindex: could not stat, recording as unreadable", "path", e.LibraryPath, "error", err)
 			mt = drift.Unobserved(e.EpubFilename)
 		}
 		onDisk.info[e.LibraryPath] = mt
@@ -90,7 +90,7 @@ func (l *libraryImpl) storeDrifted() (*storeScan, bool) {
 
 	indexed, err := l.index.AllPathInfo()
 	if err != nil {
-		log.Printf("reindex: could not read indexed path info (%v), forcing rebuild", err)
+		slog.Warn("reindex: could not read indexed path info, forcing rebuild", "error", err)
 		return onDisk, true
 	}
 
@@ -140,7 +140,7 @@ func (l *libraryImpl) reindex(scan *storeScan) error {
 	if err := l.index.Rebuild(s.indexed, s.unindexed, s.maxID); err != nil {
 		return err
 	}
-	log.Printf("reindex: indexed %d of %d books", len(s.indexed), len(scan.entries))
+	slog.Info("reindex: indexed books", "indexed", len(s.indexed), "total", len(scan.entries))
 	return nil
 }
 
@@ -188,7 +188,7 @@ func (l *libraryImpl) scanEntry(s *scanState, known map[string]drift.PathInfo, e
 
 	meta, err := l.store.ReadMeta(e)
 	if err != nil {
-		log.Printf("reindex: skip %s: read meta: %v", e.LibraryPath, err)
+		slog.Warn("reindex: skip, read meta failed", "path", e.LibraryPath, "error", err)
 		// The sidecar is unreadable, but the layout encodes the id in the
 		// directory name. Reserve it anyway: this book still holds that id, and
 		// reissuing it would collide the moment the sidecar is repaired — a
@@ -207,14 +207,14 @@ func (l *libraryImpl) scanEntry(s *scanState, known map[string]drift.PathInfo, e
 	// against — but recorded as unobserved so drift detection agrees with the
 	// same verdict next startup instead of rebuilding forever.
 	if statErr != nil {
-		log.Printf("reindex: skip %s: stat: %v", e.LibraryPath, statErr)
+		slog.Warn("reindex: skip, stat failed", "path", e.LibraryPath, "error", statErr)
 		s.skip(e.LibraryPath, pi)
 		return
 	}
 
 	book, err := epub.Parse(e.EpubPath)
 	if err != nil {
-		log.Printf("reindex: skip %s: parse epub: %v", e.LibraryPath, err)
+		slog.Warn("reindex: skip, parse epub failed", "path", e.LibraryPath, "error", err)
 		s.skip(e.LibraryPath, pi)
 		return
 	}
@@ -263,7 +263,7 @@ func (l *libraryImpl) moveToCanonical(indexed []index.BookPath) {
 		canonical := l.store.Layout(b.Authors, b.Title, b.Meta.ID)
 		if canonical.LibraryPath != b.Location.LibraryPath || canonical.EpubFilename != b.Location.EpubFilename {
 			if err := l.store.Move(b.Location, canonical); err != nil {
-				log.Printf("reindex: move %s -> %s: %v", b.Location.LibraryPath, canonical.LibraryPath, err)
+				slog.Warn("reindex: move to canonical location failed", "from", b.Location.LibraryPath, "to", canonical.LibraryPath, "error", err)
 				continue
 			}
 			b.Location = canonical
@@ -289,7 +289,7 @@ func (l *libraryImpl) pathInfo(known map[string]drift.PathInfo, loc model.Locati
 func (l *libraryImpl) needsReindex() bool {
 	needs, err := l.index.NeedsReindex()
 	if err != nil {
-		log.Printf("reindex: could not check index state (%v), forcing rebuild", err)
+		slog.Warn("reindex: could not check index state, forcing rebuild", "error", err)
 		return true
 	}
 	return needs

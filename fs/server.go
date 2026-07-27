@@ -7,7 +7,7 @@ package fs
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/knusbaum/go9p"
@@ -33,7 +33,7 @@ type Server struct {
 // Shutdown is called or the listener fails. It should be called from
 // a background goroutine; the main goroutine handles signals.
 func (s *Server) Start(listen string) error {
-	log.Printf("serving 9P on %s", listen)
+	slog.Info("serving 9P", "listen", listen)
 	return s.go9pSrv.Serve(listen)
 }
 

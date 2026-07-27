@@ -2,7 +2,7 @@ package library
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -105,7 +105,7 @@ func Open(cfg config.LibraryConfig, forceReindex bool) (Library, error) {
 			return nil, fmt.Errorf("reindexing library: %w", err)
 		}
 	} else {
-		log.Printf("reindex: index is clean, skipping")
+		slog.Info("reindex: index is clean, skipping")
 	}
 	lib.defaultExporter = epubExporter{}
 	return lib, nil
@@ -122,9 +122,9 @@ func cleanInboxTemp(dir string) error {
 		}
 		path := filepath.Join(dir, e.Name())
 		if err := os.Remove(path); err != nil {
-			log.Printf("warning: removing stale inbox temp %q: %v", path, err)
+			slog.Warn("removing stale inbox temp failed", "path", path, "error", err)
 		} else {
-			log.Printf("removed stale inbox temp %q", path)
+			slog.Info("removed stale inbox temp", "path", path)
 		}
 	}
 	return nil
@@ -147,7 +147,7 @@ func checkSameFilesystem(a, b string) error {
 		return err
 	}
 	if err := os.Remove(dst); err != nil {
-		log.Printf("warning: checkSameFilesystem cleanup: %v", err)
+		slog.Warn("checkSameFilesystem cleanup failed", "path", dst, "error", err)
 	}
 	return nil
 }

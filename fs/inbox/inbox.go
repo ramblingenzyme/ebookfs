@@ -7,7 +7,7 @@ package inbox
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
@@ -39,11 +39,11 @@ func NewInboxDir(f *fs.FS, lib library.Library, onIngest func(*model.Book)) *Inb
 // vfile.DispatchCreate hook routes creates here, so this package owns only its
 // own create behavior, not the whole tree's create policy.
 func (d *InboxDir) Create(f *fs.FS, name string, perm uint32, mode uint8) (fs.File, error) {
-	log.Printf("inbox: create %q perm=%o mode=%d", name, perm, mode)
+	slog.Debug("inbox: create", "name", name, "perm", perm, "mode", mode)
 	file := NewInboxFile(f, d.lib, name, perm, d.onIngest)
 	d.DeleteChild(name)
 	if err := d.AddChild(file); err != nil {
-		log.Printf("inbox: AddChild %q: %v", name, err)
+		slog.Error("inbox: AddChild failed", "name", name, "error", err)
 		return nil, err
 	}
 	return file, nil
@@ -66,18 +66,18 @@ func NewInboxFile(f *fs.FS, lib library.Library, name string, perm uint32, onIng
 }
 
 func (i *InboxFile) Open(fid uint64, omode proto.Mode) error {
-	log.Printf("inbox: open %q fid=%d omode=%d", i.Stat().Name, fid, omode)
+	slog.Debug("inbox: open", "name", i.Stat().Name, "fid", fid, "omode", omode)
 	name := i.Stat().Name // cache before Lock — Stat() acquires RLock, deadlocking if already write-locked
 	i.Lock()
 	defer i.Unlock()
 	if i.handle != nil {
-		log.Printf("already open")
+		slog.Warn("inbox: open on already-open file", "name", name)
 		return errors.New("file already open")
 	}
 
 	h, err := i.lib.CreateIngest()
 	if err != nil {
-		log.Printf("inbox: open %q: %v", name, err)
+		slog.Error("inbox: open failed", "name", name, "error", err)
 		return err
 	}
 	i.handle = h
@@ -90,7 +90,7 @@ func (i *InboxFile) Write(fid uint64, offset uint64, data []byte) (uint32, error
 	i.Lock()
 	defer i.Unlock()
 	if i.handle == nil || i.fid != fid {
-		log.Printf("inbox: write file was not opened")
+		slog.Warn("inbox: write on file that was not opened", "fid", fid)
 		return 0, errors.New("file not opened with this fid")
 	}
 
@@ -112,7 +112,7 @@ func (i *InboxFile) teardown() library.IngestHandle {
 }
 
 func (i *InboxFile) Close(fid uint64) error {
-	log.Printf("inbox: close %q fid=%d", i.Stat().Name, fid)
+	slog.Debug("inbox: close", "name", i.Stat().Name, "fid", fid)
 
 	h := i.teardown()
 	if h == nil {
@@ -126,10 +126,10 @@ func (i *InboxFile) Close(fid uint64) error {
 
 	b, err := h.Ingest()
 	if err != nil {
-		log.Printf("inbox: ingest %q: %v", i.Stat().Name, err)
+		slog.Error("inbox: ingest failed", "name", i.Stat().Name, "error", err)
 		return err
 	}
 	i.onIngest(b)
-	log.Printf("inbox: ingested %q as book %d", i.Stat().Name, b.Meta.ID)
+	slog.Info("inbox: ingested", "name", i.Stat().Name, "book_id", b.Meta.ID)
 	return nil
 }
