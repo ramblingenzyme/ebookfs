@@ -384,7 +384,12 @@ func TestWriteCoverWithDirectoryEntries(t *testing.T) {
 	if _, err := writeCover(path, "OEBPS/cover.jpg", newCover); err != nil {
 		t.Fatal(err)
 	}
-	got, err := ExtractCover(path, "OEBPS/cover.jpg")
+	r, err := OpenReader(path, "OEBPS/cover.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	got, err := r.Cover()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -418,7 +423,12 @@ func TestWriteCoverReplaces(t *testing.T) {
 	if _, err := writeCover(path, "OEBPS/cover.jpg", newCover); err != nil {
 		t.Fatal(err)
 	}
-	got, err := ExtractCover(path, "OEBPS/cover.jpg")
+	r, err := OpenReader(path, "OEBPS/cover.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	got, err := r.Cover()
 	if err != nil {
 		t.Fatal(err)
 	}

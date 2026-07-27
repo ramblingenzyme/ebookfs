@@ -190,7 +190,7 @@ func TestCoverUrl(t *testing.T) {
 }
 
 // A percent-encoded cover href must resolve to the literal zip entry so the
-// cover is found by both Parse and the WriteCover/ExtractCover lookups.
+// cover is found by both Parse and the WriteCover/Reader lookups.
 func TestParseResolvesEncodedCoverHref(t *testing.T) {
 	opfEncoded := opf3Meta(`
     <dc:title>Original Title</dc:title>
@@ -215,9 +215,14 @@ func TestParseResolvesEncodedCoverHref(t *testing.T) {
 	if book.CoverPath != "OEBPS/cover image.jpg" {
 		t.Fatalf("cover path = %q, want OEBPS/cover image.jpg", book.CoverPath)
 	}
-	got, err := ExtractCover(path, book.CoverPath)
+	r, err := OpenReader(path, book.CoverPath)
 	if err != nil {
-		t.Fatalf("ExtractCover failed for an encoded-href cover: %v", err)
+		t.Fatalf("OpenReader failed for an encoded-href cover: %v", err)
+	}
+	defer r.Close()
+	got, err := r.Cover()
+	if err != nil {
+		t.Fatalf("Reader.Cover failed for an encoded-href cover: %v", err)
 	}
 	if !bytes.Equal(got, coverBytes) {
 		t.Errorf("extracted cover bytes mismatch")

@@ -40,7 +40,7 @@ func TestLibraryImplOpenEpubNotFound(t *testing.T) {
 	}
 }
 
-func TestLibraryImplExtractCover(t *testing.T) {
+func TestLibraryImplCover(t *testing.T) {
 	lib := openTestLibrary(t)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Cover Test"))
 	id := book.Meta.ID

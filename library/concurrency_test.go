@@ -69,9 +69,14 @@ func TestEditWriteCoverConcurrentSameBook(t *testing.T) {
 		if parsed.Title != title {
 			t.Fatalf("iteration %d: title = %q, want %q (Edit's change was lost)", i, parsed.Title, title)
 		}
-		got, err := epub.ExtractCover(book.EpubPath, book.CoverPath)
+		reader, err := epub.OpenReader(book.EpubPath, book.CoverPath)
 		if err != nil {
-			t.Fatalf("iteration %d: ExtractCover: %v", i, err)
+			t.Fatalf("iteration %d: OpenReader: %v", i, err)
+		}
+		defer reader.Close()
+		got, err := reader.Cover()
+		if err != nil {
+			t.Fatalf("iteration %d: Cover: %v", i, err)
 		}
 		if !bytes.Equal(got, newCover.Bytes()) {
 			t.Fatalf("iteration %d: WriteCover reported success but cover bytes were lost", i)
