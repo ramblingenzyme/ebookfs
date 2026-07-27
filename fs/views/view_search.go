@@ -274,20 +274,32 @@ type cloneFile struct {
 }
 
 func (f *cloneFile) Open(fid uint64, mode proto.Mode) error {
-	handle := f.search.allocateHandle()
 	f.Lock()
-	f.handles[fid] = handle.id
+	if _, exists := f.handles[fid]; !exists {
+		f.handles[fid] = 0
+	}
 	f.Unlock()
 	return nil
 }
 
 func (f *cloneFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error) {
-	f.RLock()
+	f.Lock()
 	id, ok := f.handles[fid]
-	f.RUnlock()
 	if !ok {
+		f.Unlock()
 		return nil, fmt.Errorf("not open")
 	}
+	needAlloc := id == 0
+	f.Unlock()
+
+	if needAlloc {
+		handle := f.search.allocateHandle()
+		f.Lock()
+		id = handle.id
+		f.handles[fid] = id
+		f.Unlock()
+	}
+
 	data := []byte(strconv.FormatInt(id, 10) + "\n")
 	return vfile.ClampRead(data, offset, count), nil
 }
