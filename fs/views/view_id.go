@@ -2,30 +2,60 @@ package views
 
 import (
 	"fmt"
-	"github.com/ramblingenzyme/ebookfs/fs/book"
-	"github.com/ramblingenzyme/ebookfs/fs/registry"
+	"sync/atomic"
 
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/fs/book"
+	"github.com/ramblingenzyme/ebookfs/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-type byIDDir struct{ groupingDir }
+func idEntryName(b *model.Book, pad int) string {
+	if pad > 0 {
+		return fmt.Sprintf("%0*d. %s", pad, b.Meta.ID, b.Title)
+	}
+	return fmt.Sprintf("%d. %s", b.Meta.ID, b.Title)
+}
+
+type byIDDir struct {
+	groupingDir
+	maxID atomic.Int64
+	pad   atomic.Int32
+}
 
 func NewByIDDir(reg *registry.BookRegistry) *byIDDir {
-	d := &byIDDir{newGroupingDir(reg.FS(), "by-id")}
+	d := &byIDDir{
+		groupingDir: newGroupingDir(reg.FS(), "by-id"),
+	}
 	reg.AddView(d)
 	return d
 }
 
-func idEntryName(b *model.Book) string {
-	return fmt.Sprintf("%d. %s", b.Meta.ID, b.Title)
-}
-
 func (d *byIDDir) Add(dir *book.BookDir) {
-	stat := newStat(d.f, idEntryName(dir.Book()), 0555|proto.DMDIR)
-	d.StaticDir.AddChild(&namedBookDir{BookDir: dir, baseStat: *stat, name: idEntryName})
+	id := dir.Book().Meta.ID
+	if id > d.maxID.Load() {
+		d.maxID.Store(id)
+		d.updatePad(id)
+	}
+	n := &namedBookDir{
+		BookDir:  dir,
+		baseStat: *newStat(d.f, "", 0555|proto.DMDIR),
+		name:     func(b *model.Book) string { return idEntryName(b, int(d.pad.Load())) },
+	}
+	d.StaticDir.AddChild(n)
 }
 
 func (d *byIDDir) Remove(dir *book.BookDir) {
-	d.StaticDir.DeleteChild(idEntryName(dir.Book()))
+	d.StaticDir.DeleteChild(idEntryName(dir.Book(), int(d.pad.Load())))
+}
+
+func (d *byIDDir) updatePad(maxID int64) {
+	var pad int32
+	if maxID >= 10 {
+		pad = 2
+		for n := maxID / 10; n >= 10; n /= 10 {
+			pad++
+		}
+	}
+	d.pad.Store(pad)
 }
