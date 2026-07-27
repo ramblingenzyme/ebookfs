@@ -25,14 +25,14 @@ func TestApplyMeta(t *testing.T) {
 		tags   []string
 	}{
 		{"no edits", model.Edits{}, "unread", 2.5, []string{"keep"}},
-		{"status only", model.Edits{Status: ptr("read")}, "read", 2.5, []string{"keep"}},
-		{"rating only", model.Edits{Rating: ptr(4.5)}, "unread", 4.5, []string{"keep"}},
-		{"tags only", model.Edits{Tags: ptr([]string{"new", "tags"})}, "unread", 2.5, []string{"new", "tags"}},
+		{"status only", model.Edits{Status: new("read")}, "read", 2.5, []string{"keep"}},
+		{"rating only", model.Edits{Rating: new(4.5)}, "unread", 4.5, []string{"keep"}},
+		{"tags only", model.Edits{Tags: new([]string{"new", "tags"})}, "unread", 2.5, []string{"new", "tags"}},
 		// Clearing tags is a set edit to an empty slice, not an absent one.
-		{"tags cleared", model.Edits{Tags: ptr([]string{})}, "unread", 2.5, nil},
+		{"tags cleared", model.Edits{Tags: new([]string{})}, "unread", 2.5, nil},
 		{
 			"all fields",
-			model.Edits{Status: ptr("read"), Rating: ptr(5.0), Tags: ptr([]string{"all"})},
+			model.Edits{Status: new("read"), Rating: new(5.0), Tags: new([]string{"all"})},
 			"read", 5.0, []string{"all"},
 		},
 	}

@@ -7,8 +7,6 @@ import (
 	"testing"
 )
 
-func ptr[T any](v T) *T { return &v }
-
 // assertSingleFieldError asserts err is a *ValidationError carrying exactly one
 // entry, on the named field.
 func assertSingleFieldError(t *testing.T, err error, field string) {
@@ -53,7 +51,7 @@ func TestValidateStatus(t *testing.T) {
 		{"empty", "", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			e := Edits{Status: ptr(tc.status)}
+			e := Edits{Status: new(tc.status)}
 			err := e.Validate(book)
 			if (err != nil) != tc.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
@@ -83,7 +81,7 @@ func TestValidateRating(t *testing.T) {
 		{"negative infinity", math.Inf(-1), true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			e := Edits{Rating: ptr(tc.rating)}
+			e := Edits{Rating: new(tc.rating)}
 			err := e.Validate(book)
 			if (err != nil) != tc.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
@@ -108,7 +106,7 @@ func TestValidateTitle(t *testing.T) {
 		{"tabs", "\t\n", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			e := Edits{Title: ptr(tc.title)}
+			e := Edits{Title: new(tc.title)}
 			err := e.Validate(book)
 			if (err != nil) != tc.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
@@ -165,7 +163,7 @@ func TestValidateLanguage(t *testing.T) {
 		{"gibberish", "xyz123abc", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			e := Edits{Language: ptr(tc.lang)}
+			e := Edits{Language: new(tc.lang)}
 			err := e.Validate(book)
 			if (err != nil) != tc.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
@@ -213,12 +211,12 @@ func TestValidateSeriesIndex(t *testing.T) {
 		wantErr    bool
 	}{
 		{"nil series index", nil, Edits{}, false},
-		{"with series in edits", nil, Edits{Series: ptr("New Series"), SeriesIndex: ptr(1.0)}, false},
-		{"book has series, nil in edits", &SeriesRef{Name: "Existing"}, Edits{SeriesIndex: ptr(2.5)}, false},
-		{"no series anywhere", nil, Edits{SeriesIndex: ptr(1.0)}, true},
-		{"book has series, empty series edit", &SeriesRef{Name: "Existing"}, Edits{Series: ptr(""), SeriesIndex: ptr(1.0)}, false},
-		{"NaN index", &SeriesRef{Name: "Existing"}, Edits{SeriesIndex: ptr(math.NaN())}, true},
-		{"infinite index", &SeriesRef{Name: "Existing"}, Edits{SeriesIndex: ptr(math.Inf(1))}, true},
+		{"with series in edits", nil, Edits{Series: new("New Series"), SeriesIndex: new(1.0)}, false},
+		{"book has series, nil in edits", &SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new(2.5)}, false},
+		{"no series anywhere", nil, Edits{SeriesIndex: new(1.0)}, true},
+		{"book has series, empty series edit", &SeriesRef{Name: "Existing"}, Edits{Series: new(string), SeriesIndex: new(1.0)}, false},
+		{"NaN index", &SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new(math.NaN())}, true},
+		{"infinite index", &SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new(math.Inf(1))}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			book := &Book{Bib: Bib{Series: tc.bookSeries}}
@@ -236,9 +234,9 @@ func TestValidateSeriesIndex(t *testing.T) {
 func TestValidateMultipleErrors(t *testing.T) {
 	book := &Book{}
 	e := Edits{
-		Status: ptr("invalid"),
-		Rating: ptr(-1.0),
-		Title:  ptr(""),
+		Status: new("invalid"),
+		Rating: new(-1.0),
+		Title:  new(string),
 	}
 	err := e.Validate(book)
 	if err == nil {
@@ -265,13 +263,13 @@ func TestValidateMultipleErrors(t *testing.T) {
 func TestValidateNoErrors(t *testing.T) {
 	book := &Book{Bib: Bib{Series: &SeriesRef{Name: "Series"}}}
 	e := Edits{
-		Status:      ptr("reading"),
-		Rating:      ptr(4.0),
-		Title:       ptr("Valid Title"),
+		Status:      new("reading"),
+		Rating:      new(4.0),
+		Title:       new("Valid Title"),
 		Authors:     &[]Author{{Name: "Author"}},
-		Language:    ptr("en"),
-		Series:      ptr("New Series"),
-		SeriesIndex: ptr(2.0),
+		Language:    new("en"),
+		Series:      new("New Series"),
+		SeriesIndex: new(2.0),
 	}
 	err := e.Validate(book)
 	if err != nil {
@@ -323,7 +321,7 @@ func TestValidationErrorMultiple(t *testing.T) {
 
 func TestValidateCoverNoCoverPath(t *testing.T) {
 	book := &Book{}
-	e := Edits{Cover: ptr([]byte("image-data"))}
+	e := Edits{Cover: new([]byte("image-data"))}
 	err := e.Validate(book)
 	if err == nil {
 		t.Fatal("expected error: book has no cover to replace")
@@ -333,7 +331,7 @@ func TestValidateCoverNoCoverPath(t *testing.T) {
 
 func TestValidateCoverEmptyBytes(t *testing.T) {
 	book := &Book{Bib: Bib{CoverPath: "cover.jpg"}}
-	e := Edits{Cover: ptr([]byte{})}
+	e := Edits{Cover: new([]byte{})}
 	err := e.Validate(book)
 	if err == nil {
 		t.Fatal("expected error: empty cover bytes")
@@ -404,18 +402,18 @@ func TestEditsNormalized(t *testing.T) {
 		{"nil fields stay nil", Edits{}, nil, nil},
 
 		// Ratings are stored to 2 decimal places.
-		{"rating rounds down", Edits{Rating: ptr(4.564)}, ptr(4.56), nil},
-		{"rating rounds up", Edits{Rating: ptr(4.567)}, ptr(4.57), nil},
-		{"rating at the halfway point rounds away from zero", Edits{Rating: ptr(4.565)}, ptr(4.57), nil},
-		{"rating already exact", Edits{Rating: ptr(4.5)}, ptr(4.5), nil},
-		{"rating zero", Edits{Rating: ptr(0.0)}, ptr(0.0), nil},
+		{"rating rounds down", Edits{Rating: new(4.564)}, new(4.56), nil},
+		{"rating rounds up", Edits{Rating: new(4.567)}, new(4.57), nil},
+		{"rating at the halfway point rounds away from zero", Edits{Rating: new(4.565)}, new(4.57), nil},
+		{"rating already exact", Edits{Rating: new(4.5)}, new(4.5), nil},
+		{"rating zero", Edits{Rating: new(0.0)}, new(0.0), nil},
 
 		// Series indices are stored to 1 decimal place.
-		{"index rounds down", Edits{SeriesIndex: ptr(1.54)}, nil, ptr(1.5)},
-		{"index rounds up", Edits{SeriesIndex: ptr(1.56)}, nil, ptr(1.6)},
-		{"index already exact", Edits{SeriesIndex: ptr(2.0)}, nil, ptr(2.0)},
+		{"index rounds down", Edits{SeriesIndex: new(1.54)}, nil, new(1.5)},
+		{"index rounds up", Edits{SeriesIndex: new(1.56)}, nil, new(1.6)},
+		{"index already exact", Edits{SeriesIndex: new(2.0)}, nil, new(2.0)},
 
-		{"both fields", Edits{Rating: ptr(3.999), SeriesIndex: ptr(0.04)}, ptr(4.0), ptr(0.0)},
+		{"both fields", Edits{Rating: new(3.999), SeriesIndex: new(0.04)}, new(4.0), new(0.0)},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -454,7 +452,7 @@ func TestEditsNormalizedKeepsNonFinite(t *testing.T) {
 		{"-Inf", math.Inf(-1)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := Edits{Rating: ptr(tc.v), SeriesIndex: ptr(tc.v)}.Normalized()
+			got := Edits{Rating: new(tc.v), SeriesIndex: new(tc.v)}.Normalized()
 
 			if r := *got.Rating; !math.IsNaN(r) && !math.IsInf(r, 0) {
 				t.Errorf("Rating = %v, want it left non-finite for Validate to reject", r)

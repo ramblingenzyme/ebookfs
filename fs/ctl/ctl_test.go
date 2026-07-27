@@ -131,12 +131,10 @@ func TestCommandLog(t *testing.T) {
 // checks that the command runs and its outcome is recorded in the log, while
 // reads return only a usage hint (ctl does not echo command results).
 func TestCtlFileWriteExecutes(t *testing.T) {
-	f := testutil.NewTestFS(t)
 	called := false
 	lib := libfake.Lib{ReindexFn: func() error { called = true; return nil }}
-	reg := registry.NewBookRegistry(f, lib)
-	cmdLog := NewCommandLog(10)
-	cf := NewCtlFile(f, lib, reg, cmdLog)
+	reg, cmdLog := newTestCtl(t, lib)
+	cf := NewCtlFile(reg.FS(), lib, reg, cmdLog)
 
 	// Reading returns a usage hint, not command output.
 	got, err := cf.Read(1, 0, 4096)
@@ -174,8 +172,6 @@ func TestCtlFileWriteExecutes(t *testing.T) {
 // --- execution ---
 
 func TestAddTag(t *testing.T) {
-	f := testutil.NewTestFS(t)
-
 	book := testutil.MakeBook(1, "Title", "Author")
 	book.Meta.Tags = []string{"existing"}
 
@@ -199,20 +195,16 @@ func TestAddTag(t *testing.T) {
 		},
 	}
 
-	reg := registry.NewBookRegistry(f, lib)
+	reg, cmdLog := newTestCtl(t, lib)
 	reg.Add(book)
 
-	cmdLog := NewCommandLog(10)
 	result := execute(`add-tag "newtag" *`, lib, reg, cmdLog)
-
 	if result != "ok: 1 books edited" {
 		t.Errorf("result = %q, want %q", result, "ok: 1 books edited")
 	}
 }
 
 func TestRemoveTag(t *testing.T) {
-	f := testutil.NewTestFS(t)
-
 	book := testutil.MakeBook(2, "Title", "Author")
 	book.Meta.Tags = []string{"keep", "remove"}
 
@@ -230,10 +222,9 @@ func TestRemoveTag(t *testing.T) {
 		},
 	}
 
-	reg := registry.NewBookRegistry(f, lib)
+	reg, cmdLog := newTestCtl(t, lib)
 	reg.Add(book)
 
-	cmdLog := NewCommandLog(10)
 	result := execute(`remove-tag "remove" *`, lib, reg, cmdLog)
 	if result != "ok: 1 books edited" {
 		t.Errorf("result = %q, want %q", result, "ok: 1 books edited")
@@ -241,8 +232,6 @@ func TestRemoveTag(t *testing.T) {
 }
 
 func TestEditUnknownID(t *testing.T) {
-	f := testutil.NewTestFS(t)
-
 	book := testutil.MakeBook(1, "Title", "Author")
 
 	lib := libfake.Lib{
@@ -255,10 +244,9 @@ func TestEditUnknownID(t *testing.T) {
 		},
 	}
 
-	reg := registry.NewBookRegistry(f, lib)
+	reg, cmdLog := newTestCtl(t, lib)
 	reg.Add(book)
 
-	cmdLog := NewCommandLog(10)
 	result := execute("add-tag foo 999", lib, reg, cmdLog)
 	if !strings.Contains(result, "book 999: not found") {
 		t.Fatalf("expected a not-found error for id 999, got %q", result)
@@ -266,7 +254,6 @@ func TestEditUnknownID(t *testing.T) {
 }
 
 func TestSetStatus(t *testing.T) {
-	f := testutil.NewTestFS(t)
 	book := testutil.MakeBook(3, "Title", "Author")
 
 	lib := libfake.Lib{
@@ -283,10 +270,9 @@ func TestSetStatus(t *testing.T) {
 		},
 	}
 
-	reg := registry.NewBookRegistry(f, lib)
+	reg, cmdLog := newTestCtl(t, lib)
 	reg.Add(book)
 
-	cmdLog := NewCommandLog(10)
 	result := execute("set-status reading *", lib, reg, cmdLog)
 	if result != "ok: 1 books edited" {
 		t.Errorf("result = %q, want %q", result, "ok: 1 books edited")
@@ -294,14 +280,11 @@ func TestSetStatus(t *testing.T) {
 }
 
 func TestRenameTag(t *testing.T) {
-	f := testutil.NewTestFS(t)
-
 	book := testutil.MakeBook(4, "Title", "Author")
 	book.Meta.Tags = []string{"scifi"}
 
 	lib := libfake.Lib{
 		QueryFn: func(f model.Filter) ([]*model.Book, error) {
-			// renameTag queries by tag filter.
 			return []*model.Book{book}, nil
 		},
 		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
@@ -314,10 +297,9 @@ func TestRenameTag(t *testing.T) {
 		},
 	}
 
-	reg := registry.NewBookRegistry(f, lib)
+	reg, cmdLog := newTestCtl(t, lib)
 	reg.Add(book)
 
-	cmdLog := NewCommandLog(10)
 	result := execute(`rename-tag "scifi" "sci-fi"`, lib, reg, cmdLog)
 	if result != "ok: 1 books renamed" {
 		t.Errorf("result = %q, want %q", result, "ok: 1 books renamed")
@@ -325,8 +307,6 @@ func TestRenameTag(t *testing.T) {
 }
 
 func TestRenameTagBothTags(t *testing.T) {
-	f := testutil.NewTestFS(t)
-
 	book := testutil.MakeBook(5, "Title", "Author")
 	book.Meta.Tags = []string{"old", "other", "new"}
 
@@ -335,7 +315,6 @@ func TestRenameTagBothTags(t *testing.T) {
 			return []*model.Book{book}, nil
 		},
 		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
-			// Should remove "old" but keep "new" and "other".
 			if len(*e.Tags) != 2 || !slices.Contains(*e.Tags, "new") || !slices.Contains(*e.Tags, "other") || slices.Contains(*e.Tags, "old") {
 				t.Fatalf("rename both: unexpected Tags = %v, want [new other]", *e.Tags)
 			}
@@ -345,10 +324,9 @@ func TestRenameTagBothTags(t *testing.T) {
 		},
 	}
 
-	reg := registry.NewBookRegistry(f, lib)
+	reg, cmdLog := newTestCtl(t, lib)
 	reg.Add(book)
 
-	cmdLog := NewCommandLog(10)
 	result := execute(`rename-tag "old" "new"`, lib, reg, cmdLog)
 	if result != "ok: 1 books renamed" {
 		t.Errorf("result = %q, want %q", result, "ok: 1 books renamed")
@@ -356,8 +334,6 @@ func TestRenameTagBothTags(t *testing.T) {
 }
 
 func TestRenameAuthor(t *testing.T) {
-	f := testutil.NewTestFS(t)
-
 	book := testutil.MakeBook(7, "Title", "Asimov")
 
 	lib := libfake.Lib{
@@ -381,10 +357,9 @@ func TestRenameAuthor(t *testing.T) {
 		},
 	}
 
-	reg := registry.NewBookRegistry(f, lib)
+	reg, cmdLog := newTestCtl(t, lib)
 	reg.Add(book)
 
-	cmdLog := NewCommandLog(10)
 	result := execute(`rename-author "Asimov" "Isaac Asimov|Asimov, Isaac"`, lib, reg, cmdLog)
 	if result != "ok: 1 books renamed" {
 		t.Errorf("result = %q, want %q", result, "ok: 1 books renamed")
@@ -392,8 +367,6 @@ func TestRenameAuthor(t *testing.T) {
 }
 
 func TestRenameAuthorMatchSortName(t *testing.T) {
-	f := testutil.NewTestFS(t)
-
 	book := testutil.MakeBook(8, "Title", "Isaac Asimov")
 	book.Authors[0].SortName = "Asimov, Isaac"
 
@@ -409,7 +382,6 @@ func TestRenameAuthorMatchSortName(t *testing.T) {
 				t.Fatalf("expected one author")
 			}
 			a := (*e.Authors)[0]
-			// Sort name is cleared when not specified in the new value.
 			if a.Name != "I. Asimov" || a.SortName != "" {
 				t.Fatalf("got %+v, want Name=I. Asimov SortName=\"\"", a)
 			}
@@ -419,10 +391,9 @@ func TestRenameAuthorMatchSortName(t *testing.T) {
 		},
 	}
 
-	reg := registry.NewBookRegistry(f, lib)
+	reg, cmdLog := newTestCtl(t, lib)
 	reg.Add(book)
 
-	cmdLog := NewCommandLog(10)
 	result := execute(`rename-author "Asimov, Isaac" "I. Asimov"`, lib, reg, cmdLog)
 	if result != "ok: 1 books renamed" {
 		t.Errorf("result = %q, want %q", result, "ok: 1 books renamed")
@@ -430,8 +401,6 @@ func TestRenameAuthorMatchSortName(t *testing.T) {
 }
 
 func TestRenameSeries(t *testing.T) {
-	f := testutil.NewTestFS(t)
-
 	book := testutil.MakeBook(9, "Title", "Author")
 	book.Series = &model.SeriesRef{Name: "Old", Index: 1.0}
 
@@ -449,10 +418,9 @@ func TestRenameSeries(t *testing.T) {
 		},
 	}
 
-	reg := registry.NewBookRegistry(f, lib)
+	reg, cmdLog := newTestCtl(t, lib)
 	reg.Add(book)
 
-	cmdLog := NewCommandLog(10)
 	result := execute(`rename-series "Old" "New"`, lib, reg, cmdLog)
 	if result != "ok: 1 books renamed" {
 		t.Errorf("result = %q, want %q", result, "ok: 1 books renamed")
@@ -462,8 +430,6 @@ func TestRenameSeries(t *testing.T) {
 // TestRenameAuthorMerge renames an author onto one the book already carries;
 // the result must collapse to a single author rather than duplicating it.
 func TestRenameAuthorMerge(t *testing.T) {
-	f := testutil.NewTestFS(t)
-
 	book := testutil.MakeBook(11, "Title", "Isaac Asimov")
 	book.Authors = append(book.Authors, model.Author{Name: "Paul French"})
 
@@ -487,10 +453,9 @@ func TestRenameAuthorMerge(t *testing.T) {
 		},
 	}
 
-	reg := registry.NewBookRegistry(f, lib)
+	reg, cmdLog := newTestCtl(t, lib)
 	reg.Add(book)
 
-	cmdLog := NewCommandLog(10)
 	result := execute(`rename-author "Paul French" "Isaac Asimov"`, lib, reg, cmdLog)
 	if result != "ok: 1 books renamed" {
 		t.Errorf("result = %q, want %q", result, "ok: 1 books renamed")
@@ -500,8 +465,6 @@ func TestRenameAuthorMerge(t *testing.T) {
 // TestSetRatingUnchanged verifies that setting a rating already in place is a
 // no-op: the book is skipped rather than rewritten.
 func TestSetRatingUnchanged(t *testing.T) {
-	f := testutil.NewTestFS(t)
-
 	book := testutil.MakeBook(12, "Title", "Author")
 	book.Meta.Rating = 4
 
@@ -515,10 +478,9 @@ func TestSetRatingUnchanged(t *testing.T) {
 		},
 	}
 
-	reg := registry.NewBookRegistry(f, lib)
+	reg, cmdLog := newTestCtl(t, lib)
 	reg.Add(book)
 
-	cmdLog := NewCommandLog(10)
 	result := execute("set-rating 4 *", lib, reg, cmdLog)
 	if result != "ok: no books edited\n1 skipped" {
 		t.Errorf("result = %q, want %q", result, "ok: no books edited\n1 skipped")
@@ -534,8 +496,8 @@ func TestReindex(t *testing.T) {
 		},
 	}
 
-	cmdLog := NewCommandLog(10)
-	result := execute("reindex", lib, registry.NewBookRegistry(testutil.NewTestFS(t), libfake.Lib{}), cmdLog)
+	reg, cmdLog := newTestCtl(t, libfake.Lib{})
+	result := execute("reindex", lib, reg, cmdLog)
 	if !called {
 		t.Fatal("Reindex not called")
 	}
@@ -585,6 +547,13 @@ func TestDispatch(t *testing.T) {
 func newTestCtl(t *testing.T, lib libfake.Lib) (*registry.BookRegistry, *CommandLog) {
 	t.Helper()
 	return registry.NewBookRegistry(testutil.NewTestFS(t), lib), NewCommandLog(10)
+}
+
+// taggedBook builds a minimal book with the given tags, for bulk-edit tests.
+func taggedBook(id int64, tags ...string) *model.Book {
+	b := testutil.MakeBook(id, "Title", "Author")
+	b.Meta.Tags = tags
+	return b
 }
 
 // TestCommandRejections pins what a client reads back from ctl when a command
@@ -671,12 +640,6 @@ func TestCommandRejectionsAreLogged(t *testing.T) {
 // works. The counts are the only signal that a bulk edit did what was asked, so
 // "ok: no books edited" must not read the same as "ok: 2 books edited".
 func TestCommandSuccessStrings(t *testing.T) {
-	tagged := func(id int64, tags ...string) *model.Book {
-		b := testutil.MakeBook(id, "Title", "Author")
-		b.Meta.Tags = tags
-		return b
-	}
-
 	tests := []struct {
 		name  string
 		books []*model.Book
@@ -685,27 +648,25 @@ func TestCommandSuccessStrings(t *testing.T) {
 	}{
 		{
 			"one book edited",
-			[]*model.Book{tagged(1)},
+			[]*model.Book{taggedBook(1)},
 			`add-tag "new" *`,
 			"ok: 1 books edited",
 		},
 		{
 			"several books edited",
-			[]*model.Book{tagged(1), tagged(2)},
+			[]*model.Book{taggedBook(1), taggedBook(2)},
 			`add-tag "new" *`,
 			"ok: 2 books edited",
 		},
 		{
-			// Already in the requested state: reported as skipped, not edited,
-			// so a no-op is distinguishable from a change.
 			"book already tagged",
-			[]*model.Book{tagged(1, "new")},
+			[]*model.Book{taggedBook(1, "new")},
 			`add-tag "new" *`,
 			"ok: no books edited\n1 skipped",
 		},
 		{
 			"mixed edited and skipped",
-			[]*model.Book{tagged(1), tagged(2, "new")},
+			[]*model.Book{taggedBook(1), taggedBook(2, "new")},
 			`add-tag "new" *`,
 			"ok: 1 books edited\n1 skipped",
 		},

@@ -1234,14 +1234,6 @@ func TestRolledBackTxSurfacesErrors(t *testing.T) {
 	}
 }
 
-func TestOpenDirectoryPath(t *testing.T) {
-	dir := t.TempDir()
-	_, err := Open(dir)
-	if err == nil {
-		t.Fatal("expected error opening a directory as a database")
-	}
-}
-
 // TestRebuildClearsLeakedRowsAndInsertsBooks verifies that Rebuild both
 // clears leaked rows and inserts the given books, exercising the full
 // Rebuild path through dropAllTables → insertBook → version stamp.
@@ -1357,12 +1349,17 @@ func TestCancelWithoutMarkPendingIsNoop(t *testing.T) {
 
 func TestOpenFailsCleanlyWhenDBPathIsDirectory(t *testing.T) {
 	dir := t.TempDir()
-	// Create a directory at the path where sqlite would create the db file.
+	_, err := Open(dir)
+	if err == nil {
+		t.Fatal("expected error opening a directory as a database")
+	}
+
+	// Same check when the path looks like a db file but is a directory.
 	dbPath := filepath.Join(dir, "index.db")
 	if err := os.Mkdir(dbPath, 0755); err != nil {
 		t.Fatal(err)
 	}
-	_, err := Open(dbPath)
+	_, err = Open(dbPath)
 	if err == nil {
 		t.Fatal("expected error opening index at a directory path")
 	}

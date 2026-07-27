@@ -294,11 +294,9 @@ func TestWalk(t *testing.T) {
 	s, root := newStore(t)
 
 	writeBook(t, root, "Author, A/Book One (1)", "Book One - A.epub", "book1", &model.Meta{ID: 1})
-	// Same author as Book One.
 	writeBook(t, root, "Author, A/Book Two (2)", "Book Two - A.epub", "book2", &model.Meta{ID: 2})
-	// Different author.
 	writeBook(t, root, "Author, B/Book Three (3)", "Book Three - B.epub", "book3", &model.Meta{ID: 3})
-	// Directory with meta.toml but no epub — should be skipped gracefully.
+	// meta.toml present but no epub — should be skipped gracefully.
 	writeBook(t, root, "Author, C/Stale (4)", "", "", &model.Meta{ID: 4})
 
 	results, err := s.Walk()
@@ -372,7 +370,6 @@ func TestReadMetaRoundTrip(t *testing.T) {
 func TestMoveDestinationAlreadyExistsError(t *testing.T) {
 	s, root := newStore(t)
 
-	// Two authors, each with one book directory (Bob's has no epub of its own).
 	writeBook(t, root, "Alice/Book (1)", "Book - Alice.epub", "data", nil)
 	writeBook(t, root, "Bob/Book (1)", "", "", nil)
 

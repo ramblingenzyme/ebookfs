@@ -39,9 +39,6 @@ func openLib(t *testing.T, cfg config.LibraryConfig, forceReindex bool) Library 
 	return lib
 }
 
-// ptr matches the helper the model and epub test packages already use.
-func ptr[T any](v T) *T { return &v }
-
 // drifted reports storeDrifted's verdict, discarding the store scan it returns
 // for the reindex path to reuse.
 func drifted(t *testing.T, lib Library) bool {

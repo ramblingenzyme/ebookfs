@@ -11,7 +11,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-func TestLibraryImplOpenEpub(t *testing.T) {
+func TestLibraryContentReadsEpub(t *testing.T) {
 	lib := openTestLibrary(t)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Open Read"))
 	id := book.Meta.ID
@@ -31,7 +31,7 @@ func TestLibraryImplOpenEpub(t *testing.T) {
 	}
 }
 
-func TestLibraryImplOpenEpubNotFound(t *testing.T) {
+func TestLibraryContentNotFound(t *testing.T) {
 	lib := openTestLibrary(t)
 
 	_, err := lib.Content(99999)
@@ -117,8 +117,7 @@ func TestLibraryImplExporter(t *testing.T) {
 func TestLibraryImplExporterConvertRequiresCacheDir(t *testing.T) {
 	lib := openTestLibrary(t)
 
-	// convert=true without a cache_dir — newExporter accepts it (the validation
-	// is in config.Load, not here), but the Exporter should still succeed.
+	// Exporter succeeds with a cache_dir supplied alongside convert=true.
 	e, err := lib.Exporter(config.ReaderConfig{
 		Statuses: []string{"unread", "reading"},
 		Convert:  true,

@@ -16,8 +16,6 @@ import (
 
 // --- writer-only helpers ---------------------------------------------------
 
-func ptr[T any](v T) *T { return &v }
-
 func tinyJPEG(t *testing.T) []byte {
 	t.Helper()
 	var buf bytes.Buffer
@@ -70,9 +68,9 @@ func TestWriteBibSimpleFields(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEpub(t, baseEntries(tc.opf))
 			book, err := writeBib(path, model.Edits{
-				Title:       ptr("New Title"),
-				Description: ptr("New description."),
-				Language:    ptr("fr"),
+				Title:       new("New Title"),
+				Description: new("New description."),
+				Language:    new("fr"),
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -100,7 +98,7 @@ func TestWriteBibSimpleFields(t *testing.T) {
 
 func TestWriteBibPreservesContainerLayout(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
-	if _, err := writeBib(path, model.Edits{Title: ptr("Another Title")}); err != nil {
+	if _, err := writeBib(path, model.Edits{Title: new("Another Title")}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -164,7 +162,7 @@ func TestWriteBibSeriesRoundTrip(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEpub(t, baseEntries(tc.opf))
 			// A fractional index (e.g. a 1.5 novella) must round-trip, not truncate.
-			book, err := writeBib(path, model.Edits{Series: ptr("The Saga"), SeriesIndex: ptr(1.5)})
+			book, err := writeBib(path, model.Edits{Series: new("The Saga"), SeriesIndex: new(1.5)})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -176,7 +174,7 @@ func TestWriteBibSeriesRoundTrip(t *testing.T) {
 			}
 
 			// Clearing it removes the series.
-			book, err = writeBib(path, model.Edits{Series: ptr("")})
+			book, err = writeBib(path, model.Edits{Series: new(string)})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -190,8 +188,8 @@ func TestWriteBibSeriesRoundTrip(t *testing.T) {
 func TestWriteBibSetsSortTitle(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
 	book, err := writeBib(path, model.Edits{
-		Title:     ptr("New Title"),
-		SortTitle: ptr("New Title, A"),
+		Title:     new("New Title"),
+		SortTitle: new("New Title, A"),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -219,7 +217,7 @@ func TestWriteBibSetsSortTitle(t *testing.T) {
 func TestWriteBibSortTitleAloneLeavesTitle(t *testing.T) {
 	// Setting only the sort title must not disturb the title.
 	path := writeEpub(t, baseEntries(opf3))
-	book, err := writeBib(path, model.Edits{SortTitle: ptr("Sorted, Just")})
+	book, err := writeBib(path, model.Edits{SortTitle: new("Sorted, Just")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +242,7 @@ func TestWriteBibTitleChangeClearsStaleSortTitle(t *testing.T) {
 		t.Fatalf("precondition: sort title = %q, want Title, Original", before.SortTitle)
 	}
 
-	book, err := writeBib(path, model.Edits{Title: ptr("Wuthering Heights")})
+	book, err := writeBib(path, model.Edits{Title: new("Wuthering Heights")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +255,7 @@ func TestWriteBibSortTitleIgnoredForEpub2(t *testing.T) {
 	// Sort titles are an EPUB 3 feature; setting one on an EPUB 2 file is a no-op
 	// and must not introduce a file-as refine or a calibre:title_sort meta.
 	path := writeEpub(t, baseEntries(opf2))
-	book, err := writeBib(path, model.Edits{SortTitle: ptr("Ignored, This")})
+	book, err := writeBib(path, model.Edits{SortTitle: new("Ignored, This")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,7 +279,7 @@ func TestWriteBibAcceptsValidLanguageVerbatim(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
 	// A recognised tag is accepted and written through verbatim — validated, not
 	// canonicalised (calibre would rewrite "pt-BR" to a 3-letter code).
-	book, err := writeBib(path, model.Edits{Language: ptr("pt-BR")})
+	book, err := writeBib(path, model.Edits{Language: new("pt-BR")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -292,7 +290,7 @@ func TestWriteBibAcceptsValidLanguageVerbatim(t *testing.T) {
 
 func TestWriteBibBlankTitleRejected(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
-	if _, err := writeBib(path, model.Edits{Title: ptr("   ")}); err == nil {
+	if _, err := writeBib(path, model.Edits{Title: new("   ")}); err == nil {
 		t.Fatal("expected error blanking title, got nil")
 	}
 	// Original must be untouched and still valid.
@@ -313,7 +311,7 @@ func TestWriteBibRefusesEncryptedOPF(t *testing.T) {
   </enc:EncryptedData>
 </encryption>`
 	path := writeEpub(t, baseEntries(opf3, entry{name: "META-INF/encryption.xml", data: []byte(enc)}))
-	if _, err := writeBib(path, model.Edits{Title: ptr("Hack")}); err == nil {
+	if _, err := writeBib(path, model.Edits{Title: new("Hack")}); err == nil {
 		t.Fatal("expected refusal on encrypted OPF, got nil")
 	}
 }
@@ -331,7 +329,7 @@ func TestWriteBibAllowsFontObfuscation(t *testing.T) {
 		entry{name: "OEBPS/fonts/x.otf", data: []byte("obfuscated-font")},
 	)
 	path := writeEpub(t, entries)
-	book, err := writeBib(path, model.Edits{Title: ptr("Obfuscated OK")})
+	book, err := writeBib(path, model.Edits{Title: new("Obfuscated OK")})
 	if err != nil {
 		t.Fatalf("font obfuscation should not block edits: %v", err)
 	}
@@ -348,7 +346,7 @@ func TestWriteBibWithDirectoryEntries(t *testing.T) {
 		entry{name: "text/", data: nil},
 	)
 	path := writeEpub(t, entries)
-	book, err := writeBib(path, model.Edits{Title: ptr("New Title")})
+	book, err := writeBib(path, model.Edits{Title: new("New Title")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -487,7 +485,7 @@ func reindexSeries(t *testing.T, path, series string, index float64) *Book {
 		Location: model.Location{EpubPath: path},
 		Bib:      model.Bib{Series: &model.SeriesRef{Name: series, Index: 1}},
 	}
-	c, err := Prepare(b, model.Edits{SeriesIndex: ptr(index)})
+	c, err := Prepare(b, model.Edits{SeriesIndex: new(index)})
 	if err != nil {
 		t.Fatalf("Prepare: %v", err)
 	}
@@ -509,7 +507,7 @@ func TestWriteBibSeriesIndexOnlyKeepsName(t *testing.T) {
 	}{{"epub3", opf3}, {"epub2", opf2}} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEpub(t, baseEntries(tc.opf))
-			if _, err := writeBib(path, model.Edits{Series: ptr("The Saga"), SeriesIndex: ptr(1.0)}); err != nil {
+			if _, err := writeBib(path, model.Edits{Series: new("The Saga"), SeriesIndex: new(1.0)}); err != nil {
 				t.Fatal(err)
 			}
 
@@ -555,7 +553,7 @@ func TestCommitDiscard(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		c, err := Prepare(&model.Book{Location: model.Location{EpubPath: path}}, model.Edits{Title: ptr("Rewritten")})
+		c, err := Prepare(&model.Book{Location: model.Location{EpubPath: path}}, model.Edits{Title: new("Rewritten")})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -598,7 +596,7 @@ func TestCommitDiscard(t *testing.T) {
 
 		// A meta-only edit never reaches the epub, so Prepare short-circuits
 		// and there is no temp file for Discard to remove.
-		c, err := Prepare(&model.Book{Location: model.Location{EpubPath: path}}, model.Edits{Status: ptr("read")})
+		c, err := Prepare(&model.Book{Location: model.Location{EpubPath: path}}, model.Edits{Status: new("read")})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -622,12 +620,12 @@ func TestSetSeriesPreservesExistingIndex(t *testing.T) {
 
 	path := writeEpub(t, baseEntries(opf3))
 	// First, set up a series with index 3
-	if _, err := writeBib(path, model.Edits{Series: ptr("The Trilogy"), SeriesIndex: ptr(3.0)}); err != nil {
+	if _, err := writeBib(path, model.Edits{Series: new("The Trilogy"), SeriesIndex: new(3.0)}); err != nil {
 		t.Fatal(err)
 	}
 
 	// Now rename the series without setting index
-	book, err := writeBib(path, model.Edits{Series: ptr("The Quartet")})
+	book, err := writeBib(path, model.Edits{Series: new("The Quartet")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -718,7 +716,7 @@ func TestSetSeriesPreservesSets(t *testing.T) {
 	path := writeEpub(t, baseEntries(opfWithSet))
 
 	// Edit the series
-	book, err := writeBib(path, model.Edits{Series: ptr("The Quartet"), SeriesIndex: ptr(1.0)})
+	book, err := writeBib(path, model.Edits{Series: new("The Quartet"), SeriesIndex: new(1.0)})
 	if err != nil {
 		t.Fatal(err)
 	}

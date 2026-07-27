@@ -47,14 +47,11 @@ func writeConfig(t *testing.T, content string) string {
 	return path
 }
 
+const reqLibSection = "[library]\nroot = \"/l\"\ninbox_temp = \"/t\"\nindex_path = \"/i\"\n\n"
+
 func TestLoad(t *testing.T) {
 	t.Run("minimal valid", func(t *testing.T) {
-		path := writeConfig(t, `
-[library]
-root = "/l"
-inbox_temp = "/t"
-index_path = "/i"
-`)
+		path := writeConfig(t, reqLibSection)
 		cfg, err := Load(path)
 		if err != nil {
 			t.Fatalf("Load: %v", err)
@@ -112,12 +109,7 @@ format = "json"
 	})
 
 	t.Run("reader defaults", func(t *testing.T) {
-		path := writeConfig(t, `
-[library]
-root = "/l"
-inbox_temp = "/t"
-index_path = "/i"
-`)
+		path := writeConfig(t, reqLibSection)
 		cfg, err := Load(path)
 		if err != nil {
 			t.Fatalf("Load: %v", err)
@@ -128,12 +120,7 @@ index_path = "/i"
 	})
 
 	t.Run("invalid reader status", func(t *testing.T) {
-		path := writeConfig(t, `
-[library]
-root = "/l"
-inbox_temp = "/t"
-index_path = "/i"
-
+		path := writeConfig(t, reqLibSection+`
 [reader]
 statuses = ["invalid_status"]
 `)
@@ -144,12 +131,7 @@ statuses = ["invalid_status"]
 	})
 
 	t.Run("convert without cache dir", func(t *testing.T) {
-		path := writeConfig(t, `
-[library]
-root = "/l"
-inbox_temp = "/t"
-index_path = "/i"
-
+		path := writeConfig(t, reqLibSection+`
 [reader]
 convert = true
 cache_dir = ""
@@ -161,12 +143,7 @@ cache_dir = ""
 	})
 
 	t.Run("convert with cache dir", func(t *testing.T) {
-		path := writeConfig(t, `
-[library]
-root = "/l"
-inbox_temp = "/t"
-index_path = "/i"
-
+		path := writeConfig(t, reqLibSection+`
 [reader]
 convert = true
 cache_dir = "/cache"
@@ -178,12 +155,7 @@ cache_dir = "/cache"
 	})
 
 	t.Run("shared-secret auth rejected", func(t *testing.T) {
-		path := writeConfig(t, `
-[library]
-root = "/l"
-inbox_temp = "/t"
-index_path = "/i"
-
+		path := writeConfig(t, reqLibSection+`
 [server]
 auth = "shared-secret"
 `)
@@ -194,12 +166,7 @@ auth = "shared-secret"
 	})
 
 	t.Run("invalid auth", func(t *testing.T) {
-		path := writeConfig(t, `
-[library]
-root = "/l"
-inbox_temp = "/t"
-index_path = "/i"
-
+		path := writeConfig(t, reqLibSection+`
 [server]
 auth = "kerberos"
 `)
@@ -211,12 +178,7 @@ auth = "kerberos"
 
 	t.Run("valid log level", func(t *testing.T) {
 		for _, level := range []string{"debug", "info", "warn", "error"} {
-			path := writeConfig(t, `
-[library]
-root = "/l"
-inbox_temp = "/t"
-index_path = "/i"
-
+			path := writeConfig(t, reqLibSection+`
 [log]
 level = "`+level+`"
 `)
@@ -228,12 +190,7 @@ level = "`+level+`"
 	})
 
 	t.Run("invalid log level", func(t *testing.T) {
-		path := writeConfig(t, `
-[library]
-root = "/l"
-inbox_temp = "/t"
-index_path = "/i"
-
+		path := writeConfig(t, reqLibSection+`
 [log]
 level = "verbose"
 `)
@@ -245,12 +202,7 @@ level = "verbose"
 
 	t.Run("valid log format", func(t *testing.T) {
 		for _, format := range []string{"text", "json"} {
-			path := writeConfig(t, `
-[library]
-root = "/l"
-inbox_temp = "/t"
-index_path = "/i"
-
+			path := writeConfig(t, reqLibSection+`
 [log]
 format = "`+format+`"
 `)
@@ -262,12 +214,7 @@ format = "`+format+`"
 	})
 
 	t.Run("invalid log format", func(t *testing.T) {
-		path := writeConfig(t, `
-[library]
-root = "/l"
-inbox_temp = "/t"
-index_path = "/i"
-
+		path := writeConfig(t, reqLibSection+`
 [log]
 format = "xml"
 `)

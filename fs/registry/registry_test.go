@@ -233,7 +233,7 @@ func TestCommitEdit(t *testing.T) {
 		reg, v := newTestRegistry(t, lib)
 		reg.Add(current)
 
-		if err := reg.CommitEdit(1, model.Edits{Title: ptr("New Title")}); err != nil {
+		if err := reg.CommitEdit(1, model.Edits{Title: new("New Title")}); err != nil {
 			t.Fatalf("CommitEdit: %v", err)
 		}
 
@@ -250,7 +250,7 @@ func TestCommitEdit(t *testing.T) {
 	t.Run("unknown id", func(t *testing.T) {
 		reg, _ := newTestRegistry(t, libfake.Lib{})
 
-		if err := reg.CommitEdit(999, model.Edits{Status: ptr("read")}); err == nil {
+		if err := reg.CommitEdit(999, model.Edits{Status: new("read")}); err == nil {
 			t.Error("CommitEdit on an unknown id returned nil, want an error")
 		}
 	})
@@ -262,7 +262,7 @@ func TestCommitEdit(t *testing.T) {
 		reg, v := newTestRegistry(t, lib)
 		reg.Add(testutil.MakeBook(1, "Unchanged", "Alice"))
 
-		if err := reg.CommitEdit(1, model.Edits{Title: ptr("Never Written")}); err == nil {
+		if err := reg.CommitEdit(1, model.Edits{Title: new("Never Written")}); err == nil {
 			t.Fatal("CommitEdit returned nil despite the library failing")
 		}
 
@@ -274,5 +274,3 @@ func TestCommitEdit(t *testing.T) {
 		}
 	})
 }
-
-func ptr[T any](v T) *T { return &v }

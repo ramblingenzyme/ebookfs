@@ -100,7 +100,7 @@ func TestWarmerErrorDoesNotPanic(t *testing.T) {
 func TestWarmAfterStopNoPanic(t *testing.T) {
 	w := newWarmer(func(*model.Book) error { return nil })
 	w.stop()
-	w.warm(makeBook(1, "Test", "Author")) // must not panic
+	w.warm(makeBook(1, "Test", "Author"))
 }
 
 // Warm called concurrently with stop must never panic. Run under -race.
@@ -268,7 +268,7 @@ func TestCacheEnsureFreshIsNoop(t *testing.T) {
 	}
 }
 
-func TestCacheOpenReturnsReader(t *testing.T) {
+func TestCacheEnsureWithZeroDateModified(t *testing.T) {
 	dir := t.TempDir()
 	src := fakeSource{t: t, dir: dir}
 	c := NewCache(dir, src)

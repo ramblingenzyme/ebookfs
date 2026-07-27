@@ -58,7 +58,7 @@ func TestEpubExporter_Filename(t *testing.T) {
 
 func TestEpubExporter_Warm(t *testing.T) {
 	exp := epubExporter{}
-	exp.Warm(nil) // no-op, must not panic
+	exp.Warm(nil)
 }
 
 // TestExporterIncludes runs the status filter over both exporters. They carry
@@ -115,22 +115,18 @@ func TestKepubCacheDelegates(t *testing.T) {
 	b := makeBook(1, "Test", "Alice")
 	b.EpubFilename = "mybook.epub"
 
-	// statuses has the configured slice.
 	if s := kc.statuses; len(s) != 1 || s[0] != "reading" {
 		t.Errorf("Statuses = %v, want [reading]", s)
 	}
 
-	// Filename delegates to k.c.Filename.
 	if fn := kc.Filename(b); fn != "mybook.kepub.epub" {
 		t.Errorf("Filename = %q, want %q", fn, "mybook.kepub.epub")
 	}
 
-	// Dirname delegates to exportDirname.
 	if dn := kc.Dirname(b); dn != "Alice" {
 		t.Errorf("Dirname = %q, want %q", dn, "Alice")
 	}
 
-	// Size reports cold when no cache file exists.
 	_, ok := kc.Size(b)
 	if ok {
 		t.Error("Size should report cold for missing cache file")

@@ -394,8 +394,8 @@ func TestStoreCleanAfterEdit(t *testing.T) {
 		name  string
 		edits model.Edits
 	}{
-		{"meta only", model.Edits{Status: ptr(string(model.StatusRead))}},
-		{"title change", model.Edits{Title: ptr("A Thoroughly Different Title")}},
+		{"meta only", model.Edits{Status: new(string(model.StatusRead))}},
+		{"title change", model.Edits{Title: new("A Thoroughly Different Title")}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
