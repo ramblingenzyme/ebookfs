@@ -1,4 +1,6 @@
-FROM golang:1.26-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
+
+ARG TARGETARCH
 
 WORKDIR /app
 
@@ -6,7 +8,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -o ebookfs .
+RUN CGO_ENABLED=0 GOARCH=$TARGETARCH go build -trimpath -o ebookfs .
 
 FROM alpine:3.21
 
