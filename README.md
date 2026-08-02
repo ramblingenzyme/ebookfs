@@ -2,6 +2,8 @@
 
 A self-hosted ebook library server that exposes your collection as a synthetic filesystem over the 9P protocol — a lightweight, network-transparent alternative to Calibre.
 
+![basic demo](./images/basic-demo.png)
+
 ## Quick Start
 
 ```bash
