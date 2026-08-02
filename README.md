@@ -75,11 +75,16 @@ See [ROADMAP.md](./ROADMAP.md) for more details
 CGO_ENABLED=0 go build -trimpath -o ebookfs .
 
 # Docker (prebuilt image from GHCR)
-docker run -p 5640:5640 -v /path/to/library:/var/lib/ebookfs/library ghcr.io/ramblingenzyme/ebookfs:latest
-
+docker run -p 5640:5640 \
+  -v /path/to/library:/var/lib/ebookfs/library \
+  -v /path/to/config.toml:/etc/ebookfs/config.toml:ro \
+  ghcr.io/ramblingenzyme/ebookfs:<latest|vX...>
 # Docker (build locally)
 docker build -t ebookfs .
-docker run -p 5640:5640 -v /path/to/library:/var/lib/ebookfs/library ebookfs
+docker run -p 5640:5640 \
+  -v /path/to/library:/var/lib/ebookfs/library \
+  -v /path/to/config.toml:/etc/ebookfs/config.toml:ro \
+  ebookfs
 ```
 
 See `config.example.toml` for all options.
