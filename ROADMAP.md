@@ -68,6 +68,61 @@
 
 ---
 
+## Also planned — independent of V1/V2
+
+Neither of these blocks V1 shipping, and neither depends on the V2 module
+split; they can land whenever there's time.
+
+### Persist the `ctl` command log
+
+`CommandLog` (`fs/ctl/log.go`) is currently an in-memory ring buffer —
+server-lifetime only, lost on restart. Append each entry to a plain file on
+disk (outside the 9P namespace) as well, and load existing entries back into
+the ring buffer on startup. No schema, no index involvement: the log isn't
+derived from or checked against anything the store or index tracks, so
+nothing about drift detection changes. No size or count cap — usage is
+human-paced (an admin running `ctl` commands), nowhere near high-volume
+enough to need one.
+
+### Per-book edit history log
+
+A `history.log` (or similar) sidecar file per book directory, alongside
+`meta.toml`, recording edits (title/author/status/rating/etc. changes) as
+they happen. A transparent passthrough — written to and read from directly,
+never parsed back into the index — so it needs no store or drift-detection
+changes: `Store.Walk` and `Store.Stat` (`library/internal/store/walk.go`,
+`store.go`) only ever look at `meta.toml` and the epub by name, never
+enumerate directory contents generically, so an extra file sitting alongside
+them is invisible to both. No cap, same reasoning as the `ctl` log above.
+
+Could be built now as its own sidecar-writing code, following the same
+pattern as `meta.toml`, or as the first real consumer of the `BookSidecar`
+interface (V2 §5) once that lands — worth deciding at build time rather than
+now, since building it twice would be wasted work.
+
+### Lossy edit bugs
+
+Three known cases where an OPF edit loses data that was present before the
+edit, each with a `TODO` at the site in `library/internal/epub/edit.go`:
+
+- **Editing authors drops third-party refinements** (`setAuthors`, line
+  ~169). Author IDs are regenerated on every write, so refinements a
+  third-party tool attached to the old IDs — e.g. Calibre's or a publisher's
+  alternate-script name — are dropped along with them. Fix requires tracking
+  author identity by name so an edit can preserve refinements that don't
+  belong to ebookfs, instead of clearing and rewriting from scratch.
+- **Renaming a series resets every book's position to 1** (`Edit`, line
+  ~57). `setSeries` is always called with the caller-supplied index; a
+  rename-only call (no explicit index) should preserve each book's existing
+  position instead of defaulting it away.
+- **Editing series metadata removes all collections, not just the series**
+  (`setSeries`, line ~215). `belongs-to-collection` elements are removed
+  unconditionally; the removal should be scoped to
+  `collection-type="series"` so sets/bundles survive a series edit.
+
+
+---
+
 ## V2 — Standalone Library Module
 
 Refactor `library/` into a standalone Go module with well-defined extension points so third-party code can implement custom frontends, exporters, and import pipelines without forking the project.

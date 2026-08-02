@@ -26,6 +26,17 @@ cp some-book.epub /mnt/ebookfs/inbox/
 echo "reading" > /mnt/ebookfs/books/"A Title"/status
 echo "4" > /mnt/ebookfs/books/"A Title"/rating
 
+# Search
+cat /mnt/ebookfs/search/clone      # allocates a handle, e.g. "0"
+echo "author:tolkien+tag:fantasy" > /mnt/ebookfs/search/0/ctl
+ls /mnt/ebookfs/search/0/results/
+
+# Bulk operations via the root control file
+echo "add-tag favourite author:tolkien" > /mnt/ebookfs/ctl
+cat /mnt/ebookfs/ctl               # last command's result
+cat /mnt/ebookfs/log               # timestamped history of past commands
+cat /mnt/ebookfs/help              # full command reference
+
 # Unmount
 sudo umount /mnt/ebookfs
 ```
@@ -35,12 +46,16 @@ sudo umount /mnt/ebookfs
 - **9P is the only protocol**
 - **Metadata as files** — read/write title, authors, series, tags, status, rating, cover via the filesystem
 - **Synthetic inbox** — `cp` an epub into `inbox/`; the server parses, validates, and files it atomically on close
+- **Live search** — Plan 9 clone-style API under `search/`: allocate a handle, write a query (`title:`, `author:`, `tag:`, `series:`, `status:`, `id:`, combinable with `+`), read live results back
+- **Bulk operations via `ctl`** — a root control file for renaming/merging authors, tags, and series, and for tagging or setting status/rating across many books at once, without a round-trip per book. `log` keeps a timestamped history of past commands and results; `help` documents every command
 - **KEPUB conversion** — optional on-the-fly conversion for Kobo e-readers via [kepubify](https://github.com/pgaskin/kepubify)
 - **Zero runtime deps** — single static binary, clean ARM cross-compile, ~15 MB Docker image
 
 ## Limitations
 - No PDF, mobi, cbz support, only epub
 - No DRM removal
+- No authentication or transport encryption — see [docs/security.md](./docs/security.md) before exposing the server beyond a trusted network
+## Bugs
 - Editing authors loses third-party metadata (e.g. alternate-script from Calibre/publishers)
 - Renaming a series resets all book positions to 1 (doesn't preserve existing index)
 - Editing series metadata removes all collections, including sets/bundles (not just series)
@@ -59,7 +74,10 @@ See [ROADMAP.md](./ROADMAP.md) for more details
 # From source
 CGO_ENABLED=0 go build -trimpath -o ebookfs .
 
-# Docker
+# Docker (prebuilt image from GHCR)
+docker run -p 5640:5640 -v /path/to/library:/var/lib/ebookfs/library ghcr.io/ramblingenzyme/ebookfs:latest
+
+# Docker (build locally)
 docker build -t ebookfs .
 docker run -p 5640:5640 -v /path/to/library:/var/lib/ebookfs/library ebookfs
 ```
