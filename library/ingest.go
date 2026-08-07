@@ -59,13 +59,6 @@ func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 		return nil, err
 	}
 
-	if bib.Title == "" {
-		return nil, fmt.Errorf("epub has no title")
-	}
-	if len(bib.Authors) == 0 {
-		bib.Authors = []model.Author{{Name: model.UnknownAuthor, SortName: model.UnknownAuthor}}
-	}
-
 	l.ingestMu.Lock()
 	defer l.ingestMu.Unlock()
 
@@ -91,24 +84,28 @@ func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 		return nil, err
 	}
 
-	cleanup := func() {
-		if rmErr := l.store.Delete(loc); rmErr != nil {
-			slog.Error("ingest cleanup failed", "path", loc.Dir(), "error", rmErr)
-		} else {
+	b, err := func() (*model.Book, error) {
+		mt, err := l.store.Ingest(epubPath, loc, &meta)
+		if err != nil {
+			return nil, err
+		}
+
+		b := bookFromBib(*bib, meta, loc, mt)
+		if err := op.Put(b, mt); err != nil {
+			return nil, err
+		}
+
+		return b, nil
+	}()
+
+	if err != nil {
+		if rmErr := l.store.Delete(loc); rmErr == nil {
 			// Clean up: nothing was written to disk, so there is no state to heal.
 			op.Cancel()
+		} else {
+			slog.Error("ingest cleanup failed", "path", loc.Dir(), "error", rmErr)
 		}
-	}
 
-	mt, err := l.store.Ingest(epubPath, loc, &meta)
-	if err != nil {
-		cleanup()
-		return nil, err
-	}
-
-	b := bookFromBib(*bib, meta, loc, mt)
-	if err := op.Put(b, mt); err != nil {
-		cleanup()
 		return nil, err
 	}
 
