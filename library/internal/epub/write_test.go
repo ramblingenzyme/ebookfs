@@ -166,11 +166,11 @@ func TestWriteBibSeriesRoundTrip(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if book.Series != "The Saga" {
-				t.Errorf("series = %q, want The Saga", book.Series)
+			if book.Series == nil || book.Series.Name != "The Saga" {
+				t.Errorf("series = %v, want The Saga", book.Series)
 			}
-			if book.SeriesIndex != 1.5 {
-				t.Errorf("series index = %v, want 1.5", book.SeriesIndex)
+			if book.Series == nil || book.Series.Index != 1.5 {
+				t.Errorf("series index = %v, want 1.5", book.Series.Index)
 			}
 
 			// Clearing it removes the series.
@@ -178,8 +178,8 @@ func TestWriteBibSeriesRoundTrip(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if book.Series != "" {
-				t.Errorf("series after clear = %q, want empty", book.Series)
+			if book.Series != nil {
+				t.Errorf("series after clear = %+v, want nil", book.Series)
 			}
 		})
 	}
@@ -479,7 +479,7 @@ func TestWriteCoverRejectsFormatMismatch(t *testing.T) {
 // book model claiming series. Validate refuses a SeriesIndex edit on a book
 // with no series at all, so the model has to carry one — which is exactly the
 // shape library.Edit hands in, having read the book from the index.
-func reindexSeries(t *testing.T, path, series string, index float64) *Book {
+func reindexSeries(t *testing.T, path, series string, index float64) *model.Bib {
 	t.Helper()
 	b := &model.Book{
 		Location: model.Location{EpubPath: path},
@@ -493,7 +493,7 @@ func reindexSeries(t *testing.T, path, series string, index float64) *Book {
 		c.Discard()
 		t.Fatalf("Commit: %v", err)
 	}
-	return c.Book()
+	return c.Bib()
 }
 
 // TestWriteBibSeriesIndexOnlyKeepsName covers the index-only series edit. With
@@ -513,11 +513,11 @@ func TestWriteBibSeriesIndexOnlyKeepsName(t *testing.T) {
 
 			book := reindexSeries(t, path, "The Saga", 4)
 
-			if book.Series != "The Saga" {
-				t.Errorf("series = %q after an index-only edit, want it carried over from the OPF", book.Series)
+			if book.Series == nil || book.Series.Name != "The Saga" {
+				t.Errorf("series = %v after an index-only edit, want it carried over from the OPF", book.Series)
 			}
-			if book.SeriesIndex != 4 {
-				t.Errorf("series index = %v, want 4", book.SeriesIndex)
+			if book.Series == nil || book.Series.Index != 4 {
+				t.Errorf("series index = %v, want 4", book.Series.Index)
 			}
 		})
 	}
@@ -532,12 +532,12 @@ func TestWriteBibSeriesIndexOnlyWithoutSeriesInOPF(t *testing.T) {
 
 	book := reindexSeries(t, path, "Phantom Saga", 4)
 
-	if book.Series != "" {
-		t.Errorf("series = %q, want empty — the OPF has none to carry over, and the edit must not invent one", book.Series)
+	if book.Series != nil {
+		t.Errorf("series = %+v, want nil — the OPF has none to carry over, and the edit must not invent one", book.Series)
 	}
 	// SeriesIndex is deliberately not asserted: translateSeries defaults it to
-	// 1 for every book (see its doc comment), and bibFromEpub only builds a
-	// SeriesRef when the name is non-empty, so the position never escapes.
+	// 1 for every book with a series, and only sets Series when the name is
+	// non-empty, so the position never escapes.
 }
 
 // TestCommitDiscard covers the rollback half of the prepare/commit protocol.
@@ -631,8 +631,8 @@ func TestSetSeriesPreservesExistingIndex(t *testing.T) {
 	}
 
 	// The index should be preserved as 3, not reset to 1
-	if book.SeriesIndex != 3.0 {
-		t.Errorf("series index = %v, want 3.0 (preserved from before rename)", book.SeriesIndex)
+	if book.Series == nil || book.Series.Index != 3.0 {
+		t.Errorf("series index = %v, want 3.0 (preserved from before rename)", book.Series.Index)
 	}
 }
 
@@ -722,8 +722,8 @@ func TestSetSeriesPreservesSets(t *testing.T) {
 	}
 
 	// The series should be updated
-	if book.Series != "The Quartet" {
-		t.Errorf("series = %q, want The Quartet", book.Series)
+	if book.Series == nil || book.Series.Name != "The Quartet" {
+		t.Errorf("series = %v, want The Quartet", book.Series)
 	}
 
 	// The set should still be present in the OPF

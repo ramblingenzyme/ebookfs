@@ -8,6 +8,8 @@ import (
 	"io"
 	"path"
 	"strings"
+
+	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 const (
@@ -107,7 +109,7 @@ func parsePackage(f *zip.File) (*opfPackage, error) {
 	return &pkg, err
 }
 
-func Parse(bpath string) (*Book, error) {
+func Parse(bpath string) (*model.Bib, error) {
 	// zip.OpenReader opens the file and validates the zip structure: a missing or
 	// unreadable path surfaces its os error verbatim, while a non-zip file is
 	// reported as zip.ErrFormat, which we translate into ErrNotEpub.
@@ -159,10 +161,10 @@ func Parse(bpath string) (*Book, error) {
 	}
 
 	// Capture OPF and cover sizes from the zip central directory, without
-	// decompressing the entries. Both are carried on epub.Book and propagated to
-	// model.Bib via bibFromEpub. The epub file's own size is not read here: the
-	// library stats it anyway for drift detection, and a second stat could only
-	// disagree with that one or fail where it succeeded.
+	// decompressing the entries. Both are carried on model.Bib. The epub file's
+	// own size is not read here: the library stats it anyway for drift detection,
+	// and a second stat could only disagree with that one or fail where it
+	// succeeded.
 	book.OpfSize = int64(mfile.UncompressedSize64)
 	if book.CoverPath != "" {
 		if cf := filemap[book.CoverPath]; cf != nil {

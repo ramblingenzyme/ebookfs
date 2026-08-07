@@ -11,12 +11,12 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-func translate(pkg *opfPackage) (*Book, error) {
+func translate(pkg *opfPackage) (*model.Bib, error) {
 	if pkg == nil {
 		return nil, errors.New("nil package")
 	}
 
-	b := &Book{}
+	b := &model.Bib{}
 
 	if err := translateTitle(&pkg.Metadata, b); err != nil {
 		return nil, err
@@ -30,7 +30,10 @@ func translate(pkg *opfPackage) (*Book, error) {
 	translateCover(pkg, b)
 
 	b.Description = strings.TrimSpace(pkg.Metadata.Description)
-	b.Identifiers = pkg.Metadata.Identifiers
+	b.Identifiers = make(map[string]string, len(pkg.Metadata.Identifiers))
+	for _, ident := range pkg.Metadata.Identifiers {
+		b.Identifiers[ident.ID] = ident.Value
+	}
 	translateLanguage(&pkg.Metadata, b)
 	translateDate(&pkg.Metadata, b)
 
@@ -51,7 +54,7 @@ func findRefine(meta []opfMeta, id, property string) string {
 	return ""
 }
 
-func translateLanguage(meta *opfMetadata, b *Book) {
+func translateLanguage(meta *opfMetadata, b *model.Bib) {
 	for _, l := range meta.Languages {
 		if l = strings.TrimSpace(l); l != "" {
 			b.Language = l
@@ -75,7 +78,7 @@ func translateLanguage(meta *opfMetadata, b *Book) {
 // <meta property="dcterms:modified">, not a <dc:date>, so it never reaches here),
 // falling through to the step-2 single-date case. Empty <dc:date> elements are
 // ignored throughout.
-func translateDate(meta *opfMetadata, b *Book) {
+func translateDate(meta *opfMetadata, b *model.Bib) {
 	var (
 		untagged string
 		count    int
@@ -87,7 +90,7 @@ func translateDate(meta *opfMetadata, b *Book) {
 			continue
 		}
 		if strings.ToLower(event) == "publication" {
-			b.PubDate = val
+			b.Pubdate = val
 			return
 		}
 		if event == "" {
@@ -96,11 +99,11 @@ func translateDate(meta *opfMetadata, b *Book) {
 		}
 	}
 	if count == 1 {
-		b.PubDate = untagged
+		b.Pubdate = untagged
 	}
 }
 
-func translateTitle(meta *opfMetadata, b *Book) error {
+func translateTitle(meta *opfMetadata, b *model.Bib) error {
 	if len(meta.Titles) == 0 {
 		return errors.New("no title")
 	}
@@ -123,7 +126,7 @@ func translateTitle(meta *opfMetadata, b *Book) error {
 	return nil
 }
 
-func translateAuthor(meta *opfMetadata, b *Book) error {
+func translateAuthor(meta *opfMetadata, b *model.Bib) error {
 	for _, c := range meta.Creators {
 		role := c.Role
 		if role == "" {
@@ -178,35 +181,41 @@ func translateAuthor(meta *opfMetadata, b *Book) error {
 // The index defaults to 1 (calibre's convention) whenever a series is present
 // but carries no parseable position — a 0 would surface as "0. Title" in the
 // by-series view and sort ahead of the real, numbered entries.
-func translateSeries(meta *opfMetadata, b *Book) {
-	b.SeriesIndex = 1
+func translateSeries(meta *opfMetadata, b *model.Bib) {
+	var name string
+	var index float64 = 1
 
 	for _, m := range meta.Metas {
 		if m.Property != "belongs-to-collection" || m.ID == "" {
 			continue
 		}
-		name := strings.TrimSpace(m.Value)
-		if name == "" || findRefine(meta.Metas, m.ID, "collection-type") != "series" {
+		collName := strings.TrimSpace(m.Value)
+		if collName == "" || findRefine(meta.Metas, m.ID, "collection-type") != "series" {
 			continue
 		}
-		b.Series = name
+		name = collName
 		if pos := findRefine(meta.Metas, m.ID, "group-position"); pos != "" {
 			if idx, err := strconv.ParseFloat(pos, 64); err == nil {
-				b.SeriesIndex = idx
+				index = idx
 			}
 		}
+		b.Series = &model.SeriesRef{Name: name, Index: index}
 		return
 	}
 
 	for _, m := range meta.Metas {
 		switch m.Name {
 		case "calibre:series":
-			b.Series = strings.TrimSpace(m.Content)
+			name = strings.TrimSpace(m.Content)
 		case "calibre:series_index":
 			if idx, err := strconv.ParseFloat(m.Content, 64); err == nil {
-				b.SeriesIndex = idx
+				index = idx
 			}
 		}
+	}
+
+	if name != "" {
+		b.Series = &model.SeriesRef{Name: name, Index: index}
 	}
 }
 
@@ -245,7 +254,7 @@ func isRasterCoverType(mediaType string) bool {
 	return mt != "" && !strings.Contains(mt, "xml") && !strings.Contains(mt, "html")
 }
 
-func translateCover(pkg *opfPackage, b *Book) {
+func translateCover(pkg *opfPackage, b *model.Bib) {
 	for _, item := range pkg.Manifest {
 		if strings.Contains(item.Properties, "cover-image") && isRasterCoverType(item.MediaType) {
 			b.CoverPath = coverUrl(pkg.BasePath, item.Href)

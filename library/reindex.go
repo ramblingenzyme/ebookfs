@@ -212,14 +212,14 @@ func (l *libraryImpl) scanEntry(s *scanState, known map[string]drift.PathInfo, e
 		return
 	}
 
-	book, err := epub.Parse(l.store.AbsPath(e.EpubPath))
+	bib, err := epub.Parse(l.store.AbsPath(e.EpubPath))
 	if err != nil {
 		slog.Warn("reindex: skip, parse epub failed", "path", e.Dir(), "error", err)
 		s.skip(e.EpubPath, pi)
 		return
 	}
 
-	b := bookFromBib(bibFromEpub(book), *meta, e, pi)
+	b := bookFromBib(*bib, *meta, e, pi)
 	s.add(index.BookPath{Book: b, Info: pi})
 }
 

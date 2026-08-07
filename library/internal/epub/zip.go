@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 const (
@@ -233,13 +235,13 @@ func prepareEpub(srcPath string, replace map[string][]byte) (*Commit, error) {
 type Commit struct {
 	srcPath string
 	tmpPath string
-	book    *Book
+	book    *model.Bib
 	noop    bool
 }
 
-// Book returns the reparsed book from the prepared epub, or nil for a no-op
+// Bib returns the reparsed book from the prepared epub, or nil for a no-op
 // commit.
-func (c *Commit) Book() *Book { return c.book }
+func (c *Commit) Bib() *model.Bib { return c.book }
 
 // Commit applies the rewrite by atomically replacing the original with the
 // prepared file. For a no-op commit this is a no-op.

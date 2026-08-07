@@ -299,11 +299,11 @@ func TestTranslateSeriesSetCollectionIgnored(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if book.Series != "Real Series" {
-		t.Errorf("series = %q, want Real Series (set collection should be ignored)", book.Series)
+	if book.Series == nil || book.Series.Name != "Real Series" {
+		t.Errorf("series = %v, want Real Series (set collection should be ignored)", book.Series)
 	}
-	if book.SeriesIndex != 3 {
-		t.Errorf("series index = %v, want 3", book.SeriesIndex)
+	if book.Series == nil || book.Series.Index != 3 {
+		t.Errorf("series index = %v, want 3", book.Series.Index)
 	}
 }
 
@@ -368,8 +368,8 @@ func TestTranslateDateSelection(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if book.PubDate != tc.want {
-				t.Errorf("pubdate = %q, want %q", book.PubDate, tc.want)
+			if book.Pubdate != tc.want {
+				t.Errorf("pubdate = %q, want %q", book.Pubdate, tc.want)
 			}
 		})
 	}
@@ -383,8 +383,8 @@ func TestTranslateDateIgnoresDctermsModified(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if book.PubDate != "2015-06-01" {
-		t.Errorf("pubdate = %q, want 2015-06-01 (dcterms:modified must be ignored)", book.PubDate)
+	if book.Pubdate != "2015-06-01" {
+		t.Errorf("pubdate = %q, want 2015-06-01 (dcterms:modified must be ignored)", book.Pubdate)
 	}
 }
 
@@ -404,11 +404,11 @@ func TestTranslateSeriesDefaultsIndexToOne(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if book.Series != "Lonely Series" {
-				t.Fatalf("series = %q, want Lonely Series", book.Series)
+			if book.Series == nil || book.Series.Name != "Lonely Series" {
+				t.Fatalf("series = %v, want Lonely Series", book.Series)
 			}
-			if book.SeriesIndex != 1 {
-				t.Errorf("series index = %v, want 1 (calibre default)", book.SeriesIndex)
+			if book.Series == nil || book.Series.Index != 1 {
+				t.Errorf("series index = %v, want 1 (calibre default)", book.Series.Index)
 			}
 		})
 	}

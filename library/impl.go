@@ -89,12 +89,11 @@ func (l *libraryImpl) CreateIngest() (IngestHandle, error) {
 func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 	// Parse before taking ingestMu: it touches only this upload's staged temp
 	// file, so bulk uploads overlap their parsing instead of serializing on it.
-	book, err := epub.Parse(epubPath)
+	bib, err := epub.Parse(epubPath)
 	if err != nil {
 		return nil, err
 	}
 
-	bib := bibFromEpub(book)
 	if bib.Title == "" {
 		return nil, fmt.Errorf("epub has no title")
 	}
@@ -145,7 +144,7 @@ func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 		cleanup()
 		return nil, err
 	}
-	b := bookFromBib(bib, meta, loc, mt)
+	b := bookFromBib(*bib, meta, loc, mt)
 	if err := op.Put(b, mt); err != nil {
 		cleanup()
 		return nil, err
@@ -227,8 +226,8 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 	}
 
 	bib := b.Bib
-	if book := c.Book(); book != nil {
-		bib = bibFromEpub(book)
+	if book := c.Bib(); book != nil {
+		bib = *book
 	}
 
 	meta := applyMeta(b.Meta, e)
@@ -280,33 +279,6 @@ func applyMeta(m model.Meta, e model.Edits) model.Meta {
 	m.Tags = slices.Clone(m.Tags)
 	m.DateModified = time.Now()
 	return m
-}
-
-// bibFromEpub converts a parsed epub.Book into a model.Bib.
-func bibFromEpub(src *epub.Book) model.Bib {
-	var series *model.SeriesRef
-	if src.Series != "" {
-		series = &model.SeriesRef{Name: src.Series, Index: src.SeriesIndex}
-	}
-
-	identifiers := make(map[string]string, len(src.Identifiers))
-	for _, ident := range src.Identifiers {
-		identifiers[ident.ID] = ident.Value
-	}
-
-	return model.Bib{
-		Title:       src.Title,
-		SortTitle:   src.SortTitle,
-		Authors:     src.Authors,
-		Series:      series,
-		Language:    src.Language,
-		Pubdate:     src.PubDate,
-		Description: src.Description,
-		Identifiers: identifiers,
-		CoverPath:   src.CoverPath,
-		OpfSize:     src.OpfSize,
-		CoverSize:   src.CoverSize,
-	}
 }
 
 // bookFromBib creates a complete Book from a bib, meta, location, and observation.

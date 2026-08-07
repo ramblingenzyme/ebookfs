@@ -1,10 +1,6 @@
 package epub
 
-import (
-	"encoding/xml"
-
-	"github.com/ramblingenzyme/ebookfs/library/model"
-)
+import "encoding/xml"
 
 // --- container.xml ---
 // This is the entry to the epub. It has rootfile elements which point to real
@@ -77,17 +73,3 @@ type opfMeta struct {
 	Value    string `xml:",chardata"`     // value for refines
 }
 
-type Book struct {
-	Title       string
-	SortTitle   string
-	Description string
-	Authors     []model.Author
-	Language    string
-	PubDate     string
-	CoverPath   string
-	Series      string
-	SeriesIndex float64
-	Identifiers []Identifier
-	OpfSize     int64 // uncompressed OPF size from zip central directory; 0 if unavailable
-	CoverSize   int64 // uncompressed cover size from zip central directory; 0 if unavailable
-}

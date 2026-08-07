@@ -121,7 +121,7 @@ func NewBook(bib Bib, meta Meta, loc Location) *Book {
 // while Location and Meta remain intact.
 //
 // OpfSize and CoverSize are captured during epub.Parse, from the zip central
-// directory, propagated through bibFromEpub, and persisted in the index. They
+// directory, propagated from epub.Parse, and persisted in the index. They
 // let the 9P Stat path report file lengths without touching the disk (no zip
 // decompression on directory listings). The epub's own size is not among them —
 // it describes the file rather than its contents, so it lives on Book.
