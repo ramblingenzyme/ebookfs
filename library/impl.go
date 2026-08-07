@@ -36,17 +36,6 @@ type libraryImpl struct {
 	ingestMu sync.Mutex
 }
 
-// get returns the current state of book id from the index, hydrated with its
-// absolute epub path. Mutations fetch their base through it under the per-book
-// lock, so they always operate on the book's authoritative current state.
-func (l *libraryImpl) get(id int64) (*model.Book, error) {
-	b, err := l.index.Get(id)
-	if err != nil {
-		return nil, fmt.Errorf("no book with id %d: %w", id, err)
-	}
-	return b, nil
-}
-
 func (l *libraryImpl) Close() error {
 	l.expMu.Lock()
 	for _, e := range l.exporters {
@@ -77,6 +66,17 @@ func (l *libraryImpl) Search(q model.Query) ([]*model.Book, error) {
 // Stats returns aggregate library statistics.
 func (l *libraryImpl) Stats() (*model.Stats, error) {
 	return l.index.Stats()
+}
+
+// get returns the current state of book id from the index, hydrated with its
+// absolute epub path. Mutations fetch their base through it under the per-book
+// lock, so they always operate on the book's authoritative current state.
+func (l *libraryImpl) get(id int64) (*model.Book, error) {
+	b, err := l.index.Get(id)
+	if err != nil {
+		return nil, fmt.Errorf("no book with id %d: %w", id, err)
+	}
+	return b, nil
 }
 
 // Content returns an open handle to the book's epub content. The caller must
@@ -153,11 +153,40 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 		return nil, err
 	}
 
-	updated := bookFromBib(bib, meta, location, mt)
+	updated := bookFromBib(*bib, meta, location, mt)
 	if err := op.Put(updated, mt); err != nil {
 		return nil, err
 	}
 	return updated, nil
+}
+
+// Delete removes the book with the given id from the store and the index,
+// resolving its current location under the per-book lock.
+func (l *libraryImpl) Delete(id int64) error {
+	mu := l.bookMu.For(id)
+	mu.Lock()
+	defer mu.Unlock()
+
+	b, err := l.get(id)
+	if err != nil {
+		return err
+	}
+	op := l.index.BeginOp()
+	if err := op.MarkPending(); err != nil {
+		return err
+	}
+	// Store is authoritative; a ghost index row is cleaned up by reindex.
+	err = l.store.Delete(b.Location)
+	if err != nil {
+		slog.Error("delete: store delete failed", "book_id", id, "title", b.Title, "error", err)
+		return err
+	}
+	if err := op.Delete(id); err != nil {
+		slog.Error("delete: index delete failed", "book_id", id, "title", b.Title, "error", err)
+		return err
+	}
+	slog.Info("delete: book removed", "book_id", id, "title", b.Title)
+	return nil
 }
 
 // applyMeta returns a copy of m with the meta edits in e applied and the
@@ -192,33 +221,4 @@ func bookFromBib(bib model.Bib, meta model.Meta, loc model.Location, obs drift.P
 	b := model.NewBook(bib, meta, loc)
 	b.EpubSize = obs.Size
 	return b
-}
-
-// Delete removes the book with the given id from the store and the index,
-// resolving its current location under the per-book lock.
-func (l *libraryImpl) Delete(id int64) error {
-	mu := l.bookMu.For(id)
-	mu.Lock()
-	defer mu.Unlock()
-
-	b, err := l.get(id)
-	if err != nil {
-		return err
-	}
-	op := l.index.BeginOp()
-	if err := op.MarkPending(); err != nil {
-		return err
-	}
-	// Store is authoritative; a ghost index row is cleaned up by reindex.
-	err = l.store.Delete(b.Location)
-	if err != nil {
-		slog.Error("delete: store delete failed", "book_id", id, "title", b.Title, "error", err)
-		return err
-	}
-	if err := op.Delete(id); err != nil {
-		slog.Error("delete: index delete failed", "book_id", id, "title", b.Title, "error", err)
-		return err
-	}
-	slog.Info("delete: book removed", "book_id", id, "title", b.Title)
-	return nil
 }
