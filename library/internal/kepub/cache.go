@@ -70,7 +70,7 @@ func (c *Cache) path(b *model.Book) string {
 // Filename is the FAT-safe export name for b's kepub: the epub filename (already
 // sanitized by the store) with its .epub suffix replaced by .kepub.epub.
 func (c *Cache) Filename(b *model.Book) string {
-	return strings.TrimSuffix(b.EpubFilename, ".epub") + ".kepub.epub"
+	return strings.TrimSuffix(b.Filename(), ".epub") + ".kepub.epub"
 }
 
 // Size reports the cached kepub's size without converting; ok is false when the

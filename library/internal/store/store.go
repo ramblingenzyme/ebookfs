@@ -23,9 +23,14 @@ func New(root, inboxTemp string) *Store {
 	return &Store{root: root, inboxTemp: inboxTemp}
 }
 
-func (s *Store) AbsPath(libraryPath, filename string) string {
-	return filepath.Join(s.root, libraryPath, filename)
+// AbsPath resolves a relative path (the EpubPath stored in a book's Location)
+// to an absolute path on disk.
+func (s *Store) AbsPath(relPath string) string {
+	return filepath.Join(s.root, relPath)
 }
+
+// Root returns the absolute path to the library root directory.
+func (s *Store) Root() string { return s.root }
 
 // Exists reports whether a book with the given authors and title is already
 // in the library, regardless of its database ID. Each book lives in a
@@ -59,7 +64,7 @@ func (s *Store) Exists(authors []model.Author, title string) bool {
 // Callers that need to record a directory they could not observe use
 // drift.Unobserved instead.
 func (s *Store) Stat(loc model.Location) (drift.PathInfo, error) {
-	epubFI, err := os.Stat(s.AbsPath(loc.LibraryPath, loc.EpubFilename))
+	epubFI, err := os.Stat(s.AbsPath(loc.EpubPath))
 	if err != nil {
 		return drift.PathInfo{}, err
 	}
@@ -68,11 +73,10 @@ func (s *Store) Stat(loc model.Location) (drift.PathInfo, error) {
 		return drift.PathInfo{}, err
 	}
 	return drift.PathInfo{
-		EpubFilename: loc.EpubFilename,
-		Size:         epubFI.Size(),
-		EpubMtime:    epubFI.ModTime(),
-		MetaSize:     metaFI.Size(),
-		MetaMtime:    metaFI.ModTime(),
+		Size:      epubFI.Size(),
+		EpubMtime: epubFI.ModTime(),
+		MetaSize:  metaFI.Size(),
+		MetaMtime: metaFI.ModTime(),
 	}, nil
 }
 
@@ -80,22 +84,27 @@ func (s *Store) Stat(loc model.Location) (drift.PathInfo, error) {
 // the directory if its filename differs. The caller decides the destination
 // (see Layout); the store just performs the move.
 func (s *Store) Move(from, to model.Location) error {
-	oldPath := filepath.Join(s.root, from.LibraryPath)
+	oldPath := filepath.Join(s.root, from.Dir())
+
+	fromDir := from.Dir()
+	toDir := to.Dir()
+	fromName := from.Filename()
+	toName := to.Filename()
 
 	// Same directory, only the epub filename changed (e.g. re-sanitized on a
 	// later edit): nothing to move, and the "destination" directory below
 	// would just be the book's own current one — skip straight to the
 	// in-place rename.
-	if to.LibraryPath == from.LibraryPath {
-		if to.EpubFilename == from.EpubFilename {
+	if toDir == fromDir {
+		if toName == fromName {
 			return nil
 		}
-		return os.Rename(filepath.Join(oldPath, from.EpubFilename), filepath.Join(oldPath, to.EpubFilename))
+		return os.Rename(filepath.Join(oldPath, fromName), filepath.Join(oldPath, toName))
 	}
 
-	apath := filepath.Join(s.root, to.LibraryPath)
+	apath := filepath.Join(s.root, toDir)
 	if _, err := os.Stat(apath); err == nil {
-		return fmt.Errorf("destination already exists: %s", to.LibraryPath)
+		return fmt.Errorf("destination already exists: %s", toDir)
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
@@ -108,8 +117,8 @@ func (s *Store) Move(from, to model.Location) error {
 		return err
 	}
 
-	if to.EpubFilename != from.EpubFilename {
-		if err := os.Rename(filepath.Join(apath, from.EpubFilename), filepath.Join(apath, to.EpubFilename)); err != nil {
+	if toName != fromName {
+		if err := os.Rename(filepath.Join(apath, fromName), filepath.Join(apath, toName)); err != nil {
 			if rollbackErr := os.Rename(apath, oldPath); rollbackErr != nil {
 				slog.Error("rollback failed after epub rename error; directory left in inconsistent state, will be repaired by reindex on next startup",
 					"old_path", oldPath, "new_path", apath, "rollback_error", rollbackErr, "original_error", err)
@@ -132,7 +141,7 @@ func removeIfEmpty(dir string) error {
 
 // Delete removes the book directory at loc from the library.
 func (s *Store) Delete(loc model.Location) error {
-	path := filepath.Join(s.root, loc.LibraryPath)
+	path := filepath.Join(s.root, loc.Dir())
 	if err := os.RemoveAll(path); err != nil {
 		return err
 	}

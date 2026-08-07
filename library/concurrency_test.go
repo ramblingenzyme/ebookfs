@@ -31,6 +31,7 @@ func TestEditWriteCoverConcurrentSameBook(t *testing.T) {
 	}
 
 	titles := [2]string{"Race Book Alpha", "Race Book Beta"}
+	root := lib.(*libraryImpl).store.Root()
 	for i := range 10 {
 		title := titles[i%2]
 
@@ -62,14 +63,14 @@ func TestEditWriteCoverConcurrentSameBook(t *testing.T) {
 
 		// The book must still be a valid epub at its new location, carrying
 		// both changes.
-		parsed, err := epub.Parse(book.EpubPath)
+		parsed, err := epub.Parse(filepath.Join(root, book.EpubPath))
 		if err != nil {
 			t.Fatalf("iteration %d: final epub does not parse: %v", i, err)
 		}
 		if parsed.Title != title {
 			t.Fatalf("iteration %d: title = %q, want %q (Edit's change was lost)", i, parsed.Title, title)
 		}
-		reader, err := epub.OpenReader(book.EpubPath, book.CoverPath)
+		reader, err := epub.OpenReader(filepath.Join(root, book.EpubPath), book.CoverPath)
 		if err != nil {
 			t.Fatalf("iteration %d: OpenReader: %v", i, err)
 		}
@@ -83,12 +84,12 @@ func TestEditWriteCoverConcurrentSameBook(t *testing.T) {
 		}
 
 		// No stray temp files may accumulate in the book directory.
-		entries, err := os.ReadDir(filepath.Dir(book.EpubPath))
+		entries, err := os.ReadDir(filepath.Join(root, filepath.Dir(book.EpubPath)))
 		if err != nil {
 			t.Fatalf("iteration %d: %v", i, err)
 		}
 		for _, e := range entries {
-			if name := e.Name(); name != book.EpubFilename && name != "meta.toml" {
+			if name := e.Name(); name != filepath.Base(book.EpubPath) && name != "meta.toml" {
 				t.Fatalf("iteration %d: unexpected file in book dir: %q", i, name)
 			}
 		}

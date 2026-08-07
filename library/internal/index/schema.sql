@@ -5,8 +5,7 @@ CREATE TABLE books (
     pubdate       TEXT,
     description   TEXT    NOT NULL DEFAULT '',
     language      TEXT    NOT NULL DEFAULT '',
-    library_path  TEXT    NOT NULL,
-    epub_filename TEXT    NOT NULL,
+    epub_path     TEXT    NOT NULL,
     cover_path    TEXT    NOT NULL DEFAULT '',
     status        TEXT    NOT NULL DEFAULT 'unread',
     rating        REAL    NOT NULL DEFAULT 0, -- validated as 0–5 float (e.g. 4.75) in model.Edits.Validate; rounded to 2dp on write
@@ -19,7 +18,7 @@ CREATE TABLE books (
     opf_size      INTEGER NOT NULL DEFAULT 0,
     cover_size    INTEGER NOT NULL DEFAULT 0,
     -- Drift bookkeeping: both files' sizes and mtimes as observed by one stat
-    -- per file. The epub's name is compared too, via epub_filename above —
+    -- per file. The epub's name is compared too, via epub_path above —
     -- rename preserves size and mtime, so those alone cannot see it.
     -- mtimes in Unix nanoseconds because that round-trips a
     -- time.Time losslessly (RFC3339, used for the date columns above, truncates
@@ -81,10 +80,7 @@ CREATE TABLE book_id_seq (id INTEGER PRIMARY KEY AUTOINCREMENT);
 -- Recording the file state keeps it self-healing: repair the epub and its mtime
 -- changes, which reads as drift and earns the book another indexing attempt.
 CREATE TABLE skipped_books (
-    library_path  TEXT PRIMARY KEY,
-    -- Mirrors books.epub_filename so drift detection can compare the on-disk
-    -- epub name for indexed and skipped directories through one code path.
-    epub_filename TEXT    NOT NULL DEFAULT '',
+    epub_path  TEXT PRIMARY KEY,
     epub_size  INTEGER NOT NULL DEFAULT 0,
     epub_mtime INTEGER NOT NULL DEFAULT 0,
     meta_mtime INTEGER NOT NULL DEFAULT 0,

@@ -107,7 +107,7 @@ func Open(cfg config.LibraryConfig, forceReindex bool) (Library, error) {
 	} else {
 		slog.Info("reindex: index is clean, skipping")
 	}
-	lib.defaultExporter = epubExporter{}
+	lib.defaultExporter = epubExporter{lib: lib}
 	return lib, nil
 }
 

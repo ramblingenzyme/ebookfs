@@ -79,12 +79,11 @@ func (idx *Index) Rebuild(books []BookPath, skipped map[string]drift.PathInfo, m
 
 		for path, info := range skipped {
 			if err := q.InsertSkippedBook(idx.ctx, dbsqlc.InsertSkippedBookParams{
-				LibraryPath:  path,
-				EpubFilename: info.EpubFilename,
-				EpubSize:     info.Size,
-				EpubMtime:    toUnixNano(info.EpubMtime),
-				MetaMtime:    toUnixNano(info.MetaMtime),
-				MetaSize:     info.MetaSize,
+				EpubPath:  path,
+				EpubSize:  info.Size,
+				EpubMtime: toUnixNano(info.EpubMtime),
+				MetaMtime: toUnixNano(info.MetaMtime),
+				MetaSize:  info.MetaSize,
 			}); err != nil {
 				return err
 			}

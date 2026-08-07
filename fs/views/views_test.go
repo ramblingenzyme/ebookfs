@@ -423,7 +423,7 @@ func TestReaderDirAddIncludedStatus(t *testing.T) {
 	d := NewReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
 
 	b := makeBook(1, "To Read", "Author1")
-	b.EpubFilename = "To Read.epub"
+	b.EpubPath = "To Read.epub"
 	b.Meta.Status = "unread"
 	reg.Add(b)
 
@@ -455,7 +455,7 @@ func TestReaderDirRemoveLastPrunesDir(t *testing.T) {
 	d := NewReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
 
 	b := makeBook(1, "Only", "Author3")
-	b.EpubFilename = "Only.epub"
+	b.EpubPath = "Only.epub"
 	b.Meta.Status = "unread"
 	reg.Add(b)
 	reg.Remove(1)
@@ -470,7 +470,7 @@ func TestReaderDirCoAuthorSingleDir(t *testing.T) {
 	d := NewReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
 
 	b := makeBook(1, "Joint", "Alice", "Bob")
-	b.EpubFilename = "Joint.epub"
+	b.EpubPath = "Joint.epub"
 	b.Meta.Status = "unread"
 	reg.Add(b)
 
@@ -490,7 +490,7 @@ func TestReaderDirCoAuthorRemove(t *testing.T) {
 	d := NewReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
 
 	b := makeBook(1, "Joint", "Alice", "Bob")
-	b.EpubFilename = "Joint.epub"
+	b.EpubPath = "Joint.epub"
 	b.Meta.Status = "unread"
 	reg.Add(b)
 	reg.Remove(1)
@@ -505,11 +505,11 @@ func TestReaderDirMultipleBooksSameAuthor(t *testing.T) {
 	d := NewReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
 
 	b1 := makeBook(1, "Book A", "SameAuthor")
-	b1.EpubFilename = "A.epub"
+	b1.EpubPath = "A.epub"
 	b1.Meta.Status = "unread"
 
 	b2 := makeBook(2, "Book B", "SameAuthor")
-	b2.EpubFilename = "B.epub"
+	b2.EpubPath = "B.epub"
 	b2.Meta.Status = "unread"
 
 	reg.Add(b1)
@@ -531,7 +531,7 @@ func TestReaderDirWithConvertEnabled(t *testing.T) {
 	d := NewReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
 
 	b := makeBook(1, "Convert Me", "AuthorX")
-	b.EpubFilename = "Convert.epub"
+	b.EpubPath = "Convert.epub"
 	b.Meta.Status = "unread"
 	reg.Add(b)
 

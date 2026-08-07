@@ -46,7 +46,6 @@ func TestEpubFileOpenRead(t *testing.T) {
 
 func TestEpubFileStatSize(t *testing.T) {
 	book := testutil.MakeBook(1, "Test", "Author")
-	book.EpubFilename = "test.epub"
 	book.EpubPath = "/nonexistent/test.epub"
 	ef := newTestEpubFile(t, "test.epub", libfake.Lib{}, testutil.Fixed(book))
 
@@ -80,7 +79,6 @@ func TestEpubFileStatWithRealFile(t *testing.T) {
 	}
 
 	book := testutil.MakeBook(1, "Test", "Author")
-	book.EpubFilename = "book.epub"
 	book.EpubPath = path
 	book.EpubSize = int64(len(content))
 

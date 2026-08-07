@@ -30,7 +30,7 @@ type Index struct {
 	ctx     context.Context
 }
 
-const schemaVersion = 10
+const schemaVersion = 11
 
 // dsn returns a sqlite DSN for path with the given per-connection PRAGMAs
 // applied via _pragma query parameters.  Each pragma uses key(value) syntax

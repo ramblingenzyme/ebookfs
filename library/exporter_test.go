@@ -48,7 +48,7 @@ func TestEpubExporter_Size_Unrecorded(t *testing.T) {
 func TestEpubExporter_Filename(t *testing.T) {
 	exp := epubExporter{}
 	book := makeBook(1, "Test", "Author")
-	book.EpubFilename = "mybook.epub"
+	book.EpubPath = "mybook.epub"
 
 	name := exp.Filename(book)
 	if name != "mybook.epub" {
@@ -113,7 +113,7 @@ func TestKepubCacheDelegates(t *testing.T) {
 	}
 
 	b := makeBook(1, "Test", "Alice")
-	b.EpubFilename = "mybook.epub"
+	b.EpubPath = "mybook.epub"
 
 	if s := kc.statuses; len(s) != 1 || s[0] != "reading" {
 		t.Errorf("Statuses = %v, want [reading]", s)

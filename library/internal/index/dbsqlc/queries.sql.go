@@ -109,18 +109,17 @@ func (q *Queries) DeletePendingOp(ctx context.Context, opID string) error {
 
 const getAllPathInfo = `-- name: GetAllPathInfo :many
 
-SELECT library_path, epub_filename, epub_size, epub_mtime, meta_mtime, meta_size FROM books
+SELECT epub_path, epub_size, epub_mtime, meta_mtime, meta_size FROM books
 UNION ALL
-SELECT library_path, epub_filename, epub_size, epub_mtime, meta_mtime, meta_size FROM skipped_books
+SELECT epub_path, epub_size, epub_mtime, meta_mtime, meta_size FROM skipped_books
 `
 
 type GetAllPathInfoRow struct {
-	LibraryPath  string
-	EpubFilename string
-	EpubSize     int64
-	EpubMtime    int64
-	MetaMtime    int64
-	MetaSize     int64
+	EpubPath  string
+	EpubSize  int64
+	EpubMtime int64
+	MetaMtime int64
+	MetaSize  int64
 }
 
 // Drift detection
@@ -134,8 +133,7 @@ func (q *Queries) GetAllPathInfo(ctx context.Context) ([]GetAllPathInfoRow, erro
 	for rows.Next() {
 		var i GetAllPathInfoRow
 		if err := rows.Scan(
-			&i.LibraryPath,
-			&i.EpubFilename,
+			&i.EpubPath,
 			&i.EpubSize,
 			&i.EpubMtime,
 			&i.MetaMtime,
@@ -487,10 +485,10 @@ const insertBook = `-- name: InsertBook :exec
 
 INSERT INTO books (
     id, title, sort_title, pubdate, description, language,
-    library_path, epub_filename, cover_path, status, rating,
+    epub_path, cover_path, status, rating,
     date_added, date_modified, series_id, series_index,
     opf_size, cover_size, epub_size, epub_mtime, meta_mtime, meta_size
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertBookParams struct {
@@ -500,8 +498,7 @@ type InsertBookParams struct {
 	Pubdate      sql.NullString
 	Description  string
 	Language     string
-	LibraryPath  string
-	EpubFilename string
+	EpubPath     string
 	CoverPath    string
 	Status       string
 	Rating       float64
@@ -526,8 +523,7 @@ func (q *Queries) InsertBook(ctx context.Context, arg InsertBookParams) error {
 		arg.Pubdate,
 		arg.Description,
 		arg.Language,
-		arg.LibraryPath,
-		arg.EpubFilename,
+		arg.EpubPath,
 		arg.CoverPath,
 		arg.Status,
 		arg.Rating,
@@ -612,23 +608,21 @@ func (q *Queries) InsertSeries(ctx context.Context, name string) error {
 }
 
 const insertSkippedBook = `-- name: InsertSkippedBook :exec
-INSERT INTO skipped_books (library_path, epub_filename, epub_size, epub_mtime, meta_mtime, meta_size)
-VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO skipped_books (epub_path, epub_size, epub_mtime, meta_mtime, meta_size)
+VALUES (?, ?, ?, ?, ?)
 `
 
 type InsertSkippedBookParams struct {
-	LibraryPath  string
-	EpubFilename string
-	EpubSize     int64
-	EpubMtime    int64
-	MetaMtime    int64
-	MetaSize     int64
+	EpubPath  string
+	EpubSize  int64
+	EpubMtime int64
+	MetaMtime int64
+	MetaSize  int64
 }
 
 func (q *Queries) InsertSkippedBook(ctx context.Context, arg InsertSkippedBookParams) error {
 	_, err := q.db.ExecContext(ctx, insertSkippedBook,
-		arg.LibraryPath,
-		arg.EpubFilename,
+		arg.EpubPath,
 		arg.EpubSize,
 		arg.EpubMtime,
 		arg.MetaMtime,
@@ -717,14 +711,14 @@ func (q *Queries) UpdateBookSeries(ctx context.Context, arg UpdateBookSeriesPara
 const upsertBook = `-- name: UpsertBook :exec
 INSERT INTO books (
     id, title, sort_title, pubdate, description, language,
-    library_path, epub_filename, cover_path, status, rating,
+    epub_path, cover_path, status, rating,
     date_added, date_modified, series_id, series_index,
     opf_size, cover_size, epub_size, epub_mtime, meta_mtime, meta_size
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     title=excluded.title, sort_title=excluded.sort_title, pubdate=excluded.pubdate,
     description=excluded.description, language=excluded.language,
-    library_path=excluded.library_path, epub_filename=excluded.epub_filename,
+    epub_path=excluded.epub_path,
     cover_path=excluded.cover_path, status=excluded.status, rating=excluded.rating,
     date_added=excluded.date_added, date_modified=excluded.date_modified,
     opf_size=excluded.opf_size, cover_size=excluded.cover_size,
@@ -739,8 +733,7 @@ type UpsertBookParams struct {
 	Pubdate      sql.NullString
 	Description  string
 	Language     string
-	LibraryPath  string
-	EpubFilename string
+	EpubPath     string
 	CoverPath    string
 	Status       string
 	Rating       float64
@@ -764,8 +757,7 @@ func (q *Queries) UpsertBook(ctx context.Context, arg UpsertBookParams) error {
 		arg.Pubdate,
 		arg.Description,
 		arg.Language,
-		arg.LibraryPath,
-		arg.EpubFilename,
+		arg.EpubPath,
 		arg.CoverPath,
 		arg.Status,
 		arg.Rating,

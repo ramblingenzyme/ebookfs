@@ -485,7 +485,7 @@ func reindexSeries(t *testing.T, path, series string, index float64) *Book {
 		Location: model.Location{EpubPath: path},
 		Bib:      model.Bib{Series: &model.SeriesRef{Name: series, Index: 1}},
 	}
-	c, err := Prepare(b, model.Edits{SeriesIndex: new(index)})
+	c, err := Prepare(path, b, model.Edits{SeriesIndex: new(index)})
 	if err != nil {
 		t.Fatalf("Prepare: %v", err)
 	}
@@ -553,7 +553,7 @@ func TestCommitDiscard(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		c, err := Prepare(&model.Book{Location: model.Location{EpubPath: path}}, model.Edits{Title: new("Rewritten")})
+		c, err := Prepare(path, &model.Book{Location: model.Location{EpubPath: path}}, model.Edits{Title: new("Rewritten")})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -596,7 +596,7 @@ func TestCommitDiscard(t *testing.T) {
 
 		// A meta-only edit never reaches the epub, so Prepare short-circuits
 		// and there is no temp file for Discard to remove.
-		c, err := Prepare(&model.Book{Location: model.Location{EpubPath: path}}, model.Edits{Status: new("read")})
+		c, err := Prepare(path, &model.Book{Location: model.Location{EpubPath: path}}, model.Edits{Status: new("read")})
 		if err != nil {
 			t.Fatal(err)
 		}

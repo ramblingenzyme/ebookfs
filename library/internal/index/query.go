@@ -49,7 +49,7 @@ func (idx *Index) Query(f model.Filter) ([]*model.Book, error) {
 func (idx *Index) queryBooks(where string, args []any, order string, limit int) ([]*model.Book, error) {
 	q := `
 		SELECT b.id, b.title, b.sort_title, COALESCE(b.pubdate, ''), b.description, b.language,
-		       b.library_path, b.epub_filename, b.cover_path,
+		       b.epub_path, b.cover_path,
 		       b.status, b.rating, b.date_added, b.date_modified,
 		       s.id, s.name, b.series_index,
 		       b.opf_size, b.cover_size, b.epub_size
@@ -81,7 +81,7 @@ func (idx *Index) queryBooks(where string, args []any, order string, limit int) 
 		var seriesIndex sql.NullFloat64
 		if err := rows.Scan(
 			&b.Meta.ID, &b.Title, &sortTitle, &b.Pubdate, &b.Description, &b.Language,
-			&b.LibraryPath, &b.EpubFilename, &b.CoverPath,
+			&b.EpubPath, &b.CoverPath,
 			&b.Meta.Status, &b.Meta.Rating, &dateAdded, &dateModified,
 			&seriesID, &seriesName, &seriesIndex,
 			&b.OpfSize, &b.CoverSize, &b.EpubSize,
@@ -193,15 +193,14 @@ func (idx *Index) AllPathInfo() (map[string]drift.PathInfo, error) {
 		// enforces it across tables. A path in both would collapse in this map
 		// and silently satisfy the caller's count comparison, masking real
 		// drift — so refuse rather than return a half-truth.
-		if _, dup := info[row.LibraryPath]; dup {
-			return nil, fmt.Errorf("index inconsistency: %q recorded as both indexed and skipped", row.LibraryPath)
+		if _, dup := info[row.EpubPath]; dup {
+			return nil, fmt.Errorf("index inconsistency: %q recorded as both indexed and skipped", row.EpubPath)
 		}
-		info[row.LibraryPath] = drift.PathInfo{
-			EpubFilename: row.EpubFilename,
-			Size:         row.EpubSize,
-			EpubMtime:    fromUnixNano(row.EpubMtime),
-			MetaSize:     row.MetaSize,
-			MetaMtime:    fromUnixNano(row.MetaMtime),
+		info[row.EpubPath] = drift.PathInfo{
+			Size:      row.EpubSize,
+			EpubMtime: fromUnixNano(row.EpubMtime),
+			MetaSize:  row.MetaSize,
+			MetaMtime: fromUnixNano(row.MetaMtime),
 		}
 	}
 	return info, nil

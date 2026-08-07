@@ -48,10 +48,6 @@ func openTestIndex(t *testing.T) *Index {
 // Both write paths are covered because each maps the observation onto its own
 // query params — Put through UpsertBook, Rebuild through InsertBook — so an
 // encoding fixed in one can stay broken in the other.
-//
-// EpubFilename is expected back as newBook's "book.epub" whatever the writer was
-// handed: for an indexed book the name is read from books.epub_filename, the
-// row's own authoritative copy, rather than stored a second time.
 func TestPathInfoRoundTrip(t *testing.T) {
 	writers := map[string]func(*testing.T, *Index, *model.Book, drift.PathInfo){
 		"put": func(t *testing.T, idx *Index, b *model.Book, pi drift.PathInfo) {
@@ -76,15 +72,14 @@ func TestPathInfoRoundTrip(t *testing.T) {
 		// A whole second (zero nanoseconds) alongside sub-millisecond precision
 		// that a second-granularity format would silently truncate.
 		{"recorded", drift.PathInfo{
-			EpubFilename: "book.epub",
-			Size:         4242,
-			EpubMtime:    time.Unix(1700000000, 0),
-			MetaSize:     17,
-			MetaMtime:    time.Unix(1700000000, 123456789),
+			Size:      4242,
+			EpubMtime: time.Unix(1700000000, 0),
+			MetaSize:  17,
+			MetaMtime: time.Unix(1700000000, 123456789),
 		}},
 		// Never observed: stores as 0 and must decode back to the zero time, not
 		// to the Unix epoch, which would read as a real (and wrong) timestamp.
-		{"zero", drift.PathInfo{EpubFilename: "book.epub"}},
+		{"zero", drift.PathInfo{}},
 	}
 	for writer, write := range writers {
 		for _, tc := range tests {
@@ -96,7 +91,7 @@ func TestPathInfoRoundTrip(t *testing.T) {
 				if err != nil {
 					t.Fatalf("AllPathInfo: %v", err)
 				}
-				got, ok := all[tc.name]
+				got, ok := all[tc.name+"/book.epub"]
 				if !ok {
 					t.Fatalf("AllPathInfo missing %q, got %v", tc.name, all)
 				}
@@ -133,9 +128,9 @@ func TestEpubSizeComesFromObservation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AllPathInfo: %v", err)
 	}
-	if info[got.LibraryPath].Size != got.EpubSize {
+	if info[got.EpubPath].Size != got.EpubSize {
 		t.Errorf("drift size = %d but book size = %d; they must be one column",
-			info[got.LibraryPath].Size, got.EpubSize)
+			info[got.EpubPath].Size, got.EpubSize)
 	}
 }
 
@@ -145,7 +140,7 @@ func TestRebuildRecordsSkippedPaths(t *testing.T) {
 	idx := openTestIndex(t)
 
 	skipped := map[string]drift.PathInfo{
-		"Corrupt/Bad Book (7)": {Size: 99, EpubMtime: time.Unix(1700000000, 5)},
+		"Corrupt/Bad Book (7)/book.epub": {Size: 99, EpubMtime: time.Unix(1700000000, 5)},
 	}
 	if err := idx.Rebuild(bookPaths(newBook(1, "Good")), skipped, 7); err != nil {
 		t.Fatalf("Rebuild: %v", err)
@@ -158,7 +153,7 @@ func TestRebuildRecordsSkippedPaths(t *testing.T) {
 	if len(all) != 2 {
 		t.Fatalf("AllPathInfo has %d paths, want 2 (1 indexed + 1 skipped): %v", len(all), all)
 	}
-	got, ok := all["Corrupt/Bad Book (7)"]
+	got, ok := all["Corrupt/Bad Book (7)/book.epub"]
 	if !ok {
 		t.Fatalf("skipped path missing from AllPathInfo: %v", all)
 	}
@@ -174,7 +169,7 @@ func TestRebuildRecordsSkippedPaths(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AllPathInfo: %v", err)
 	}
-	if _, ok := all["Corrupt/Bad Book (7)"]; ok {
+	if _, ok := all["Corrupt/Bad Book (7)/book.epub"]; ok {
 		t.Errorf("stale skipped path survived a rebuild that did not skip it: %v", all)
 	}
 }
@@ -186,7 +181,7 @@ func makeAuthoredBook(id int64, title string, authors ...model.Author) *model.Bo
 	return model.NewBook(
 		model.Bib{Title: title, Authors: authors},
 		model.Meta{ID: id},
-		model.Location{LibraryPath: title, EpubFilename: "book.epub"},
+		model.Location{EpubPath: title + "/book.epub"},
 	)
 }
 
@@ -433,7 +428,7 @@ func storeInIndexSized(t *testing.T, idx *Index, b *model.Book, size int64) {
 	if err := op.MarkPending(); err != nil {
 		t.Fatalf("MarkPending: %v", err)
 	}
-	if err := op.Put(b, drift.PathInfo{EpubFilename: b.EpubFilename, Size: size}); err != nil {
+	if err := op.Put(b, drift.PathInfo{Size: size}); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 }
@@ -476,12 +471,12 @@ func TestQueryByAuthor(t *testing.T) {
 	bob := model.NewBook(
 		model.Bib{Title: "Bob's Book", Authors: []model.Author{{Name: "Bob", SortName: "Bob"}}},
 		model.Meta{ID: 1},
-		model.Location{LibraryPath: "Bob/Bob's Book (1)", EpubFilename: "book.epub"},
+		model.Location{EpubPath: "Bob/Bob's Book (1)/book.epub"},
 	)
 	aliceBook := model.NewBook(
 		model.Bib{Title: "Alice's Book", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
 		model.Meta{ID: 2},
-		model.Location{LibraryPath: "Alice/Alice's Book (2)", EpubFilename: "book.epub"},
+		model.Location{EpubPath: "Alice/Alice's Book (2)/book.epub"},
 	)
 
 	storeInIndex(t, idx, bob)
@@ -505,12 +500,12 @@ func TestQueryByStatus(t *testing.T) {
 	readBook := model.NewBook(
 		model.Bib{Title: "Read Book", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
 		model.Meta{ID: 1, Status: "read"},
-		model.Location{LibraryPath: "A/Read Book (1)", EpubFilename: "book.epub"},
+		model.Location{EpubPath: "A/Read Book (1)/book.epub"},
 	)
 	unreadBook := model.NewBook(
 		model.Bib{Title: "Unread Book", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
 		model.Meta{ID: 2, Status: "unread"},
-		model.Location{LibraryPath: "A/Unread Book (2)", EpubFilename: "book.epub"},
+		model.Location{EpubPath: "A/Unread Book (2)/book.epub"},
 	)
 
 	storeInIndex(t, idx, readBook)
@@ -534,12 +529,12 @@ func TestQueryByTag(t *testing.T) {
 	tagged := model.NewBook(
 		model.Bib{Title: "Tagged", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
 		model.Meta{ID: 1, Tags: []string{"sci-fi"}},
-		model.Location{LibraryPath: "A/Tagged (1)", EpubFilename: "book.epub"},
+		model.Location{EpubPath: "A/Tagged (1)/book.epub"},
 	)
 	untagged := model.NewBook(
 		model.Bib{Title: "Plain", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
 		model.Meta{ID: 2},
-		model.Location{LibraryPath: "A/Plain (2)", EpubFilename: "book.epub"},
+		model.Location{EpubPath: "A/Plain (2)/book.epub"},
 	)
 
 	storeInIndex(t, idx, tagged)
@@ -566,12 +561,12 @@ func TestQueryBySeries(t *testing.T) {
 			Series: &model.SeriesRef{Name: "My Series", Index: 1},
 		},
 		model.Meta{ID: 1},
-		model.Location{LibraryPath: "A/Series Book (1)", EpubFilename: "book.epub"},
+		model.Location{EpubPath: "A/Series Book (1)/book.epub"},
 	)
 	standalone := model.NewBook(
 		model.Bib{Title: "Standalone", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
 		model.Meta{ID: 2},
-		model.Location{LibraryPath: "A/Standalone (2)", EpubFilename: "book.epub"},
+		model.Location{EpubPath: "A/Standalone (2)/book.epub"},
 	)
 
 	storeInIndex(t, idx, seriesBook)
@@ -595,17 +590,17 @@ func TestQueryMultipleFilters(t *testing.T) {
 	bobRead := model.NewBook(
 		model.Bib{Title: "Bob Read", Authors: []model.Author{{Name: "Bob", SortName: "Bob"}}},
 		model.Meta{ID: 1, Status: "read"},
-		model.Location{LibraryPath: "B/Bob Read (1)", EpubFilename: "book.epub"},
+		model.Location{EpubPath: "B/Bob Read (1)/book.epub"},
 	)
 	bobUnread := model.NewBook(
 		model.Bib{Title: "Bob Unread", Authors: []model.Author{{Name: "Bob", SortName: "Bob"}}},
 		model.Meta{ID: 2, Status: "unread"},
-		model.Location{LibraryPath: "B/Bob Unread (2)", EpubFilename: "book.epub"},
+		model.Location{EpubPath: "B/Bob Unread (2)/book.epub"},
 	)
 	aliceRead := model.NewBook(
 		model.Bib{Title: "Alice Read", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
 		model.Meta{ID: 3, Status: "read"},
-		model.Location{LibraryPath: "A/Alice Read (3)", EpubFilename: "book.epub"},
+		model.Location{EpubPath: "A/Alice Read (3)/book.epub"},
 	)
 
 	storeInIndex(t, idx, bobRead)
@@ -646,12 +641,12 @@ func TestQueryRecentOrder(t *testing.T) {
 	old := model.NewBook(
 		model.Bib{Title: "Old", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
 		model.Meta{ID: 1},
-		model.Location{LibraryPath: "A/Old (1)", EpubFilename: "book.epub"},
+		model.Location{EpubPath: "A/Old (1)/book.epub"},
 	)
 	new := model.NewBook(
 		model.Bib{Title: "New", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
 		model.Meta{ID: 2},
-		model.Location{LibraryPath: "A/New (2)", EpubFilename: "book.epub"},
+		model.Location{EpubPath: "A/New (2)/book.epub"},
 	)
 
 	storeInIndex(t, idx, old)
@@ -706,7 +701,7 @@ func TestQueryLoadsIdentifiers(t *testing.T) {
 			Identifiers: map[string]string{"isbn": "978-3-16-148410-0", "uuid": "abc-def"},
 		},
 		model.Meta{ID: 1},
-		model.Location{LibraryPath: "A/Identified (1)", EpubFilename: "book.epub"},
+		model.Location{EpubPath: "A/Identified (1)/book.epub"},
 	)
 	storeInIndex(t, idx, b)
 
@@ -739,7 +734,7 @@ func TestQueryBatchLoadsMultipleBooks(t *testing.T) {
 				Identifiers: map[string]string{"isbn": "111"},
 			},
 			model.Meta{ID: 1, Tags: []string{"fiction", "sci-fi"}},
-			model.Location{LibraryPath: "A/Alpha (1)", EpubFilename: "alpha.epub"},
+			model.Location{EpubPath: "A/Alpha (1)/alpha.epub"},
 		),
 		model.NewBook(
 			model.Bib{
@@ -748,7 +743,7 @@ func TestQueryBatchLoadsMultipleBooks(t *testing.T) {
 				Identifiers: map[string]string{"isbn": "222", "doi": "10.1234/beta"},
 			},
 			model.Meta{ID: 2, Tags: []string{"non-fiction"}},
-			model.Location{LibraryPath: "B/Beta (2)", EpubFilename: "beta.epub"},
+			model.Location{EpubPath: "B/Beta (2)/beta.epub"},
 		),
 		model.NewBook(
 			model.Bib{
@@ -757,7 +752,7 @@ func TestQueryBatchLoadsMultipleBooks(t *testing.T) {
 				Identifiers: map[string]string{},
 			},
 			model.Meta{ID: 3},
-			model.Location{LibraryPath: "C/Gamma (3)", EpubFilename: "gamma.epub"},
+			model.Location{EpubPath: "C/Gamma (3)/gamma.epub"},
 		),
 	}
 	for _, b := range books {
@@ -823,7 +818,7 @@ func TestGetReturnsIdentifiers(t *testing.T) {
 			Identifiers: map[string]string{"isbn": "978-1-234-56789-0"},
 		},
 		model.Meta{ID: 1},
-		model.Location{LibraryPath: "A/Getter (1)", EpubFilename: "book.epub"},
+		model.Location{EpubPath: "A/Getter (1)/book.epub"},
 	)
 	storeInIndex(t, idx, b)
 
@@ -876,7 +871,7 @@ func TestStatsAggregates(t *testing.T) {
 			Series:  &model.SeriesRef{Name: "EPIC", Index: 1},
 		},
 		model.Meta{ID: 1, Tags: []string{"sci-fi", "space"}},
-		model.Location{LibraryPath: "A/First (1)", EpubFilename: "book.epub"},
+		model.Location{EpubPath: "A/First (1)/book.epub"},
 	)
 	b2 := model.NewBook(
 		model.Bib{
@@ -885,7 +880,7 @@ func TestStatsAggregates(t *testing.T) {
 			Series:  &model.SeriesRef{Name: "EPIC", Index: 2},
 		},
 		model.Meta{ID: 2, Tags: []string{"sci-fi"}},
-		model.Location{LibraryPath: "A/Second (2)", EpubFilename: "book.epub"},
+		model.Location{EpubPath: "A/Second (2)/book.epub"},
 	)
 	storeInIndexSized(t, idx, b1, 100)
 	storeInIndexSized(t, idx, b2, 250)
@@ -922,14 +917,14 @@ func TestStatsExcludesOrphans(t *testing.T) {
 	b := model.NewBook(
 		model.Bib{Title: "Book", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
 		model.Meta{ID: 1, Tags: []string{"stale"}},
-		model.Location{LibraryPath: "A/Book (1)", EpubFilename: "book.epub"},
+		model.Location{EpubPath: "A/Book (1)/book.epub"},
 	)
 	storeInIndex(t, idx, b)
 
 	updated := model.NewBook(
 		model.Bib{Title: "Book", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
 		model.Meta{ID: 1, Tags: []string{"fresh"}},
-		model.Location{LibraryPath: "A/Book (1)", EpubFilename: "book.epub"},
+		model.Location{EpubPath: "A/Book (1)/book.epub"},
 	)
 	storeInIndex(t, idx, updated)
 
@@ -1065,7 +1060,7 @@ func TestPutAuthorsWithExistingName(t *testing.T) {
 	b1 := model.NewBook(
 		model.Bib{Title: "First", Authors: authors},
 		model.Meta{ID: 1},
-		model.Location{LibraryPath: "A/First (1)", EpubFilename: "book.epub"},
+		model.Location{EpubPath: "A/First (1)/book.epub"},
 	)
 	storeInIndex(t, idx, b1)
 
@@ -1073,7 +1068,7 @@ func TestPutAuthorsWithExistingName(t *testing.T) {
 	b2 := model.NewBook(
 		model.Bib{Title: "Second", Authors: authors},
 		model.Meta{ID: 2},
-		model.Location{LibraryPath: "A/Second (2)", EpubFilename: "book.epub"},
+		model.Location{EpubPath: "A/Second (2)/book.epub"},
 	)
 	storeInIndex(t, idx, b2)
 
@@ -1096,7 +1091,7 @@ func TestPutBookWithSeriesAndTags(t *testing.T) {
 			Series:  &model.SeriesRef{Name: "EPIC", Index: 1},
 		},
 		model.Meta{ID: 1, Tags: []string{"sci-fi", "space"}},
-		model.Location{LibraryPath: "A/Series Book (1)", EpubFilename: "book.epub"},
+		model.Location{EpubPath: "A/Series Book (1)/book.epub"},
 	)
 	storeInIndex(t, idx, b)
 
@@ -1282,7 +1277,7 @@ func TestRebuildWithMultipleBooks(t *testing.T) {
 		model.NewBook(
 			model.Bib{Title: "First", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
 			model.Meta{ID: 1},
-			model.Location{LibraryPath: "A/First (1)", EpubFilename: "book.epub"},
+			model.Location{EpubPath: "A/First (1)/book.epub"},
 		),
 		model.NewBook(
 			model.Bib{
@@ -1291,7 +1286,7 @@ func TestRebuildWithMultipleBooks(t *testing.T) {
 				Series:  &model.SeriesRef{Name: "Series A", Index: 2},
 			},
 			model.Meta{ID: 2},
-			model.Location{LibraryPath: "B/Second (2)", EpubFilename: "book.epub"},
+			model.Location{EpubPath: "B/Second (2)/book.epub"},
 		),
 	}
 

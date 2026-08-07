@@ -172,7 +172,7 @@ func NewBookDir(f *fs.FS, lib library.Library, edit func(int64, model.Edits) err
 	// Child files read through d.Book so they always see the current snapshot,
 	// not the one captured at construction.
 	d.StaticDir.AddChild(newEpubFile(
-		newStat(f, book.EpubFilename, 0444),
+		newStat(f, book.Filename(), 0444),
 		lib,
 		d.Book,
 	))

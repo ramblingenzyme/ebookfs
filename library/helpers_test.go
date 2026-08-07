@@ -49,21 +49,22 @@ func drifted(t *testing.T, lib Library) bool {
 
 // metaPathOf returns the path of book's meta.toml sidecar. The store keeps the
 // filename private, so tests that reach around the library restate it here once.
-func metaPathOf(book *model.Book) string {
-	return filepath.Join(filepath.Dir(book.EpubPath), "meta.toml")
+func metaPathOf(book *model.Book, root string) string {
+	return filepath.Join(root, book.Dir(), "meta.toml")
 }
 
 // breakEpub replaces book's epub with a symlink to nothing. store.Walk still
 // reports the directory — findEpub only reads the directory entry — while
 // os.Stat follows the link and fails, which is the one way to reach the
 // rebuild's "could not observe this book at all" path from a test.
-func breakEpub(t *testing.T, book *model.Book) {
+func breakEpub(t *testing.T, book *model.Book, root string) {
 	t.Helper()
-	if err := os.Remove(book.EpubPath); err != nil {
+	absEpub := filepath.Join(root, book.EpubPath)
+	if err := os.Remove(absEpub); err != nil {
 		t.Fatalf("remove epub: %v", err)
 	}
-	dangling := filepath.Join(filepath.Dir(book.EpubPath), "nowhere.epub")
-	if err := os.Symlink(dangling, book.EpubPath); err != nil {
+	dangling := filepath.Join(filepath.Dir(absEpub), "nowhere.epub")
+	if err := os.Symlink(dangling, absEpub); err != nil {
 		t.Fatalf("symlink: %v", err)
 	}
 }

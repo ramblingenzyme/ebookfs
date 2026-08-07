@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -55,7 +56,7 @@ func StatusList() string {
 
 // Book is the complete record for a book in the library: where it lives
 // (Location), what it is (Bib), and its mutable sidecar state (Meta). Location
-// and Bib are embedded so their fields read flat (b.Title, b.LibraryPath); Meta
+// and Bib are embedded so their fields read flat (b.Title, b.EpubPath); Meta
 // stays named so sidecar state is explicitly addressed as b.Meta.
 //
 // Book is a plain data record. It does not carry transform methods: applying an
@@ -194,12 +195,21 @@ type SeriesRef struct {
 	Index float64
 }
 
-// Location identifies where a book lives on disk.
+// Location identifies where a book lives on disk. EpubPath is relative to
+// the store root (e.g. "Author/Title (42)/Title - Author.epub"). The Store
+// resolves it to an absolute path internally when touching the filesystem;
+// every other package uses the fields here without knowing about the root.
 type Location struct {
-	LibraryPath  string
-	EpubFilename string
-	EpubPath     string // absolute path to the epub file; set when Location is created
+	EpubPath string
 }
+
+// Dir returns the directory portion of the location's relative path,
+// equivalent to what was LibraryPath before the two were consolidated.
+func (l Location) Dir() string { return filepath.Dir(l.EpubPath) }
+
+// Filename returns the epub's basename within its directory,
+// equivalent to what was EpubFilename before the two were consolidated.
+func (l Location) Filename() string { return filepath.Base(l.EpubPath) }
 
 // Meta mirrors the meta.toml sidecar schema.
 type Meta struct {

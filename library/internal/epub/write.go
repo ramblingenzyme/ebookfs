@@ -14,10 +14,15 @@ import (
 )
 
 // Prepare creates a temporary epub with the requested changes from e applied
-// to the epub at b.EpubPath. Every refusal check runs before the temp file is
+// to the epub at epubPath. Every refusal check runs before the temp file is
 // written — the original is never touched on error. The returned Commit can be
 // applied atomically via Commit() or discarded via Discard().
-func Prepare(b *model.Book, e model.Edits) (*Commit, error) {
+//
+// b is used only for validation and for locating the cover entry within the
+// zip; its EpubPath field is not read — the caller provides the resolved
+// absolute path separately so the epub package does not need to know the store
+// root.
+func Prepare(epubPath string, b *model.Book, e model.Edits) (*Commit, error) {
 	if !e.HasCoverEdit() && !e.HasBibEdits() {
 		return &Commit{noop: true}, nil
 	}
@@ -31,7 +36,7 @@ func Prepare(b *model.Book, e model.Edits) (*Commit, error) {
 
 	replace := make(map[string][]byte)
 
-	zrc, err := zip.OpenReader(b.EpubPath)
+	zrc, err := zip.OpenReader(epubPath)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +87,7 @@ func Prepare(b *model.Book, e model.Edits) (*Commit, error) {
 		replace[opf] = newOPF
 	}
 
-	return prepareEpub(b.EpubPath, replace)
+	return prepareEpub(epubPath, replace)
 }
 
 // coverFormat maps a cover entry's path to the image format name (as reported by

@@ -14,7 +14,6 @@ func testReaderFile(t *testing.T, exp library.Exporter) *ReaderFile {
 	t.Helper()
 	f := testutil.NewTestFS(t)
 	book := testutil.MakeBook(1, "Test", "Author")
-	book.EpubFilename = "test.epub"
 	return NewReaderFile(newStat(f, "test.epub", 0444), exp, testutil.Fixed(book))
 }
 

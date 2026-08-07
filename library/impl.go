@@ -46,7 +46,6 @@ func (l *libraryImpl) get(id int64) (*model.Book, error) {
 	if err != nil {
 		return nil, fmt.Errorf("no book with id %d: %w", id, err)
 	}
-	b.EpubPath = l.store.AbsPath(b.LibraryPath, b.EpubFilename)
 	return b, nil
 }
 
@@ -130,7 +129,7 @@ func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 
 	cleanup := func() {
 		if rmErr := l.store.Delete(loc); rmErr != nil {
-			slog.Error("ingest cleanup failed", "path", loc.LibraryPath, "error", rmErr)
+			slog.Error("ingest cleanup failed", "path", loc.Dir(), "error", rmErr)
 		} else {
 			// Clean up: nothing was written to disk, so there is no state to heal.
 			op.Cancel()
@@ -161,9 +160,6 @@ func (l *libraryImpl) Query(f model.Filter) ([]*model.Book, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, b := range books {
-		b.EpubPath = l.store.AbsPath(b.LibraryPath, b.EpubFilename)
-	}
 	return books, nil
 }
 
@@ -171,9 +167,6 @@ func (l *libraryImpl) Search(q model.Query) ([]*model.Book, error) {
 	books, err := l.index.Search(q)
 	if err != nil {
 		return nil, err
-	}
-	for _, b := range books {
-		b.EpubPath = l.store.AbsPath(b.LibraryPath, b.EpubFilename)
 	}
 	return books, nil
 }
@@ -218,7 +211,7 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 
 	op := l.index.BeginOp()
 
-	c, err := epub.Prepare(b, e)
+	c, err := epub.Prepare(l.store.AbsPath(b.EpubPath), b, e)
 	if err != nil {
 		slog.Error("edit: prepare rewrite failed", "book_id", b.Meta.ID, "title", b.Title, "error", err)
 		return nil, err
@@ -240,7 +233,7 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 
 	meta := applyMeta(b.Meta, e)
 	location := l.store.Layout(bib.Authors, bib.Title, meta.ID)
-	if location.LibraryPath != b.Location.LibraryPath || location.EpubFilename != b.Location.EpubFilename {
+	if location.Dir() != b.Location.Dir() || location.Filename() != b.Location.Filename() {
 		if err := l.store.Move(b.Location, location); err != nil {
 			slog.Error("edit: move directory failed", "book_id", b.Meta.ID, "title", b.Title, "error", err)
 			return nil, err

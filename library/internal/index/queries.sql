@@ -3,22 +3,22 @@
 -- name: InsertBook :exec
 INSERT INTO books (
     id, title, sort_title, pubdate, description, language,
-    library_path, epub_filename, cover_path, status, rating,
+    epub_path, cover_path, status, rating,
     date_added, date_modified, series_id, series_index,
     opf_size, cover_size, epub_size, epub_mtime, meta_mtime, meta_size
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpsertBook :exec
 INSERT INTO books (
     id, title, sort_title, pubdate, description, language,
-    library_path, epub_filename, cover_path, status, rating,
+    epub_path, cover_path, status, rating,
     date_added, date_modified, series_id, series_index,
     opf_size, cover_size, epub_size, epub_mtime, meta_mtime, meta_size
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     title=excluded.title, sort_title=excluded.sort_title, pubdate=excluded.pubdate,
     description=excluded.description, language=excluded.language,
-    library_path=excluded.library_path, epub_filename=excluded.epub_filename,
+    epub_path=excluded.epub_path,
     cover_path=excluded.cover_path, status=excluded.status, rating=excluded.rating,
     date_added=excluded.date_added, date_modified=excluded.date_modified,
     opf_size=excluded.opf_size, cover_size=excluded.cover_size,
@@ -130,9 +130,9 @@ FROM books;
 -- Drift detection
 
 -- name: GetAllPathInfo :many
-SELECT library_path, epub_filename, epub_size, epub_mtime, meta_mtime, meta_size FROM books
+SELECT epub_path, epub_size, epub_mtime, meta_mtime, meta_size FROM books
 UNION ALL
-SELECT library_path, epub_filename, epub_size, epub_mtime, meta_mtime, meta_size FROM skipped_books;
+SELECT epub_path, epub_size, epub_mtime, meta_mtime, meta_size FROM skipped_books;
 
 -- Cleanup
 
@@ -165,8 +165,8 @@ SELECT COUNT(*) FROM pending_ops;
 INSERT INTO book_id_seq DEFAULT VALUES RETURNING id;
 
 -- name: InsertSkippedBook :exec
-INSERT INTO skipped_books (library_path, epub_filename, epub_size, epub_mtime, meta_mtime, meta_size)
-VALUES (?, ?, ?, ?, ?, ?);
+INSERT INTO skipped_books (epub_path, epub_size, epub_mtime, meta_mtime, meta_size)
+VALUES (?, ?, ?, ?, ?);
 
 -- name: SetBookIDSequence :exec
 INSERT INTO book_id_seq(id) VALUES(?) ON CONFLICT(id) DO NOTHING;

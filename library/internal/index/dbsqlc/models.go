@@ -21,8 +21,7 @@ type Book struct {
 	Pubdate      sql.NullString
 	Description  string
 	Language     string
-	LibraryPath  string
-	EpubFilename string
+	EpubPath     string
 	CoverPath    string
 	Status       string
 	Rating       float64
@@ -70,12 +69,11 @@ type Series struct {
 }
 
 type SkippedBook struct {
-	LibraryPath  string
-	EpubFilename string
-	EpubSize     int64
-	EpubMtime    int64
-	MetaMtime    int64
-	MetaSize     int64
+	EpubPath  string
+	EpubSize  int64
+	EpubMtime int64
+	MetaMtime int64
+	MetaSize  int64
 }
 
 type Tag struct {

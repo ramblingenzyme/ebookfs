@@ -127,7 +127,7 @@ func TestRegistryEditAuthorsRehomesInByAuthor(t *testing.T) {
 func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 	f := newTestFS(t)
 	book := makeBook(1, "Test", "Author1")
-	book.EpubFilename = "Test.epub"
+	book.EpubPath = "Test.epub"
 	book.Meta.Status = "unread"
 	lib := libfake.Lib{
 		EditFn: func(id int64, e model.Edits) (*model.Book, error) {

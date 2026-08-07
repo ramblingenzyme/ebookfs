@@ -11,16 +11,15 @@ import (
 )
 
 // Layout returns the canonical on-disk location for a book with the given
-// authors, title, and id: its directory relative to the library root and the
-// epub filename within it. It is the single source of the naming convention;
-// ingest and move both lay books down through it.
+// authors, title, and id: its path relative to the library root (EpubPath) is
+// set; the Store resolves it to an absolute path internally when touching the
+// filesystem. It is the single source of the naming convention; ingest and move
+// both lay books down through it.
 func (s *Store) Layout(authors []model.Author, title string, id int64) model.Location {
 	libPath := canonicalDir(authors, title, id)
 	filename := epubFilename(authors, title)
 	return model.Location{
-		LibraryPath:  libPath,
-		EpubFilename: filename,
-		EpubPath:     filepath.Join(s.root, libPath, filename),
+		EpubPath: filepath.Join(libPath, filename),
 	}
 }
 

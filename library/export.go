@@ -12,14 +12,14 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-func newExporter(cfg config.ReaderConfig, lib Library) (Exporter, error) {
+func newExporter(cfg config.ReaderConfig, lib *libraryImpl) (Exporter, error) {
 	if cfg.Convert {
 		if err := os.MkdirAll(cfg.CacheDir, 0755); err != nil {
 			return nil, fmt.Errorf("creating kepub cache dir: %w", err)
 		}
 		return &kepubCache{statuses: cfg.Statuses, c: kepub.NewCache(cfg.CacheDir, lib)}, nil
 	}
-	return epubExporter{statuses: cfg.Statuses}, nil
+	return epubExporter{statuses: cfg.Statuses, lib: lib}, nil
 }
 
 type kepubCache struct {
@@ -37,10 +37,11 @@ func (k *kepubCache) Dirname(b *model.Book) string                 { return expo
 
 type epubExporter struct {
 	statuses []string
+	lib      *libraryImpl
 }
 
 func (e epubExporter) Open(b *model.Book) (model.EpubReader, error) {
-	return epub.OpenReader(b.EpubPath, b.CoverPath)
+	return epub.OpenReader(e.lib.store.AbsPath(b.EpubPath), b.CoverPath)
 }
 
 func (e epubExporter) Close() error { return nil }
@@ -51,7 +52,7 @@ func (e epubExporter) Size(b *model.Book) (int64, bool) {
 
 func (e epubExporter) Warm(*model.Book)              {}
 func (e epubExporter) Includes(b *model.Book) bool   { return slices.Contains(e.statuses, b.Meta.Status) }
-func (e epubExporter) Filename(b *model.Book) string { return b.EpubFilename }
+func (e epubExporter) Filename(b *model.Book) string { return b.Filename() }
 func (e epubExporter) Dirname(b *model.Book) string  { return exportDirname(b) }
 
 func exportDirname(b *model.Book) string {

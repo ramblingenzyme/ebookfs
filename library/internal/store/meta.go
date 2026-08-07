@@ -16,7 +16,7 @@ const metaFilename = "meta.toml"
 // metaPath returns the absolute path of the meta.toml sidecar for the book at
 // loc.
 func (s *Store) metaPath(loc model.Location) string {
-	return s.AbsPath(loc.LibraryPath, metaFilename)
+	return filepath.Join(s.root, loc.Dir(), metaFilename)
 }
 
 // ReadMeta reads the meta.toml sidecar for the book at loc.

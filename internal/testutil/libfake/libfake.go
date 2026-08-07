@@ -184,7 +184,7 @@ func (e Exporter) Filename(b *model.Book) string {
 	if e.FilenameFn != nil {
 		return e.FilenameFn(b)
 	}
-	return b.EpubFilename
+	return b.Filename()
 }
 
 func (e Exporter) Dirname(b *model.Book) string {

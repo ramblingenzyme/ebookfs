@@ -2,6 +2,7 @@ package book
 
 import (
 	"fmt"
+	"path/filepath"
 	"runtime"
 	"testing"
 	"unsafe"
@@ -41,10 +42,10 @@ func representativeBook(id int64, withCover bool) *model.Book {
 	if withCover {
 		bib.CoverPath = "OEBPS/cover.jpg"
 	}
+	libPath := "Le Guin, Ursula K/The Left Hand of Darkness (1042)"
+	epubName := "The Left Hand of Darkness - Ursula K. Le Guin.epub"
 	return model.NewBook(bib, model.Meta{ID: id, Status: "unread", Tags: []string{"sci-fi", "classic", "feminist"}}, model.Location{
-		LibraryPath:  "Le Guin, Ursula K/The Left Hand of Darkness (1042)",
-		EpubFilename: "The Left Hand of Darkness - Ursula K. Le Guin.epub",
-		EpubPath:     "/var/lib/ebookfs/library/Le Guin, Ursula K/The Left Hand of Darkness (1042)/The Left Hand of Darkness - Ursula K. Le Guin.epub",
+		EpubPath: filepath.Join(libPath, epubName),
 	})
 }
 

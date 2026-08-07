@@ -153,12 +153,13 @@ func TestLibraryImplSearchHydratesEpubPath(t *testing.T) {
 		t.Errorf("id = %d, want %d", got[0].Meta.ID, want.Meta.ID)
 	}
 	if got[0].EpubPath == "" {
-		t.Fatal("EpubPath is empty — the result carries only the index's relative path, so nothing can open it")
+		t.Fatal("EpubPath is empty — the result carries no path, so nothing can open it")
 	}
-	if !filepath.IsAbs(got[0].EpubPath) {
-		t.Errorf("EpubPath = %q, want an absolute path", got[0].EpubPath)
+	if filepath.IsAbs(got[0].EpubPath) {
+		t.Errorf("EpubPath = %q, want a relative path", got[0].EpubPath)
 	}
-	if _, err := os.Stat(got[0].EpubPath); err != nil {
+	absPath := lib.(*libraryImpl).store.AbsPath(got[0].EpubPath)
+	if _, err := os.Stat(absPath); err != nil {
 		t.Errorf("EpubPath %q does not resolve: %v", got[0].EpubPath, err)
 	}
 }

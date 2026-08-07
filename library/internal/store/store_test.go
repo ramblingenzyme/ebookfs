@@ -39,7 +39,7 @@ func writeBook(t *testing.T, root, libPath, epubName, content string, meta *mode
 // TestMoveSameDirectoryRenamesFilename reproduces a production bug: a book
 // ingested before FAT sanitization was consistently applied can have an
 // on-disk epub filename containing FAT-illegal characters (e.g. ':'), while
-// its LibraryPath (built from the raw, unsanitized title) still matches what
+// its directory path (built from the raw, unsanitized title) still matches what
 // Layout() recomputes. Move must treat this as an in-place filename rename,
 // not a directory move — the "destination" directory is the book's own
 // current one, so the old "destination already exists" check falsely tripped
@@ -51,9 +51,9 @@ func TestMoveSameDirectoryRenamesFilename(t *testing.T) {
 	dir := filepath.Join(root, "Author, Some", "Some Title (1)")
 	writeBook(t, root, "Author, Some/Some Title (1)", legacyName, "epub-bytes", &model.Meta{})
 
-	from := model.Location{LibraryPath: "Author, Some/Some Title (1)", EpubFilename: legacyName}
+	from := model.Location{EpubPath: filepath.Join("Author, Some/Some Title (1)", legacyName)}
 	sanitizedName := "Some Title- With Colon - Some Author.epub"
-	to := model.Location{LibraryPath: "Author, Some/Some Title (1)", EpubFilename: sanitizedName}
+	to := model.Location{EpubPath: filepath.Join("Author, Some/Some Title (1)", sanitizedName)}
 
 	if err := s.Move(from, to); err != nil {
 		t.Fatalf("Move: %v", err)
@@ -80,14 +80,14 @@ func TestMoveCleansUpEmptyOldAuthorDir(t *testing.T) {
 	epubName := "Some Title - Wells.epub"
 	writeBook(t, root, "Wells, M/Some Title (1)", epubName, "epub-bytes", nil)
 
-	from := model.Location{LibraryPath: "Wells, M/Some Title (1)", EpubFilename: epubName}
-	to := model.Location{LibraryPath: "Wells, Martha/Some Title (1)", EpubFilename: epubName}
+	from := model.Location{EpubPath: filepath.Join("Wells, M/Some Title (1)", epubName)}
+	to := model.Location{EpubPath: filepath.Join("Wells, Martha/Some Title (1)", epubName)}
 
 	if err := s.Move(from, to); err != nil {
 		t.Fatalf("Move: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(root, "Wells, Martha", "Some Title (1)", epubName)); err != nil {
+	if _, err := os.Stat(filepath.Join(root, to.Dir(), epubName)); err != nil {
 		t.Errorf("book not found at new location: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(root, "Wells, M")); !os.IsNotExist(err) {
@@ -109,8 +109,8 @@ func TestMoveKeepsOldAuthorDirWithRemainingBooks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	from := model.Location{LibraryPath: "Wells, M/Some Title (1)", EpubFilename: epubName}
-	to := model.Location{LibraryPath: "Wells, Martha/Some Title (1)", EpubFilename: epubName}
+	from := model.Location{EpubPath: filepath.Join("Wells, M/Some Title (1)", epubName)}
+	to := model.Location{EpubPath: filepath.Join("Wells, Martha/Some Title (1)", epubName)}
 
 	if err := s.Move(from, to); err != nil {
 		t.Fatalf("Move: %v", err)
@@ -130,7 +130,7 @@ func TestMoveSameLocationNoop(t *testing.T) {
 	dir := filepath.Join(root, "Author, Some", "Some Title (1)")
 	writeBook(t, root, "Author, Some/Some Title (1)", "Some Title - Some Author.epub", "epub-bytes", nil)
 
-	loc := model.Location{LibraryPath: "Author, Some/Some Title (1)", EpubFilename: "Some Title - Some Author.epub"}
+	loc := model.Location{EpubPath: filepath.Join("Author, Some/Some Title (1)", "Some Title - Some Author.epub")}
 	if err := s.Move(loc, loc); err != nil {
 		t.Fatalf("Move: %v", err)
 	}
@@ -188,19 +188,12 @@ func TestCanonicalDir(t *testing.T) {
 }
 
 func TestLayout(t *testing.T) {
-	s, root := newStore(t)
+	s, _ := newStore(t)
 
 	loc := s.Layout([]model.Author{{Name: "Alice"}}, "My Title", 1)
-	wantLibPath := "Alice/My Title (1)"
-	wantEpub := "My Title - Alice.epub"
-	if loc.LibraryPath != wantLibPath {
-		t.Errorf("LibraryPath = %q, want %q", loc.LibraryPath, wantLibPath)
-	}
-	if loc.EpubFilename != wantEpub {
-		t.Errorf("EpubFilename = %q, want %q", loc.EpubFilename, wantEpub)
-	}
-	if loc.EpubPath != filepath.Join(root, wantLibPath, wantEpub) {
-		t.Errorf("EpubPath = %q, want %q", loc.EpubPath, filepath.Join(root, wantLibPath, wantEpub))
+	wantRel := filepath.Join("Alice/My Title (1)", "My Title - Alice.epub")
+	if loc.EpubPath != wantRel {
+		t.Errorf("EpubPath = %q, want %q", loc.EpubPath, wantRel)
 	}
 }
 
@@ -208,11 +201,8 @@ func TestLayoutUnknownAuthor(t *testing.T) {
 	s, _ := newStore(t)
 
 	loc := s.Layout(nil, "Untitled", 99)
-	if loc.LibraryPath != "Unknown/Untitled (99)" {
-		t.Errorf("LibraryPath = %q, want %q", loc.LibraryPath, "Unknown/Untitled (99)")
-	}
-	if loc.EpubFilename != "Untitled.epub" {
-		t.Errorf("EpubFilename = %q, want %q", loc.EpubFilename, "Untitled.epub")
+	if loc.EpubPath != filepath.Join("Unknown/Untitled (99)", "Untitled.epub") {
+		t.Errorf("EpubPath = %q, want %q", loc.EpubPath, filepath.Join("Unknown/Untitled (99)", "Untitled.epub"))
 	}
 }
 
@@ -260,11 +250,11 @@ func TestIngest(t *testing.T) {
 	}
 
 	// Verify the epub landed at the right place.
-	bookDir := filepath.Join(root, loc.LibraryPath)
+	bookDir := filepath.Join(root, loc.Dir())
 	if _, err := os.Stat(bookDir); err != nil {
 		t.Errorf("book directory not created: %v", err)
 	}
-	gotEpub := filepath.Join(bookDir, loc.EpubFilename)
+	gotEpub := filepath.Join(bookDir, loc.Filename())
 	if _, err := os.Stat(gotEpub); err != nil {
 		t.Errorf("epub not found at %s: %v", gotEpub, err)
 	}
@@ -310,7 +300,7 @@ func TestWalk(t *testing.T) {
 
 	found := make(map[string]bool)
 	for _, loc := range results {
-		found[loc.LibraryPath] = true
+		found[loc.Dir()] = true
 	}
 	for _, want := range []string{"Author, A/Book One (1)", "Author, A/Book Two (2)", "Author, B/Book Three (3)"} {
 		if !found[want] {
@@ -336,7 +326,7 @@ func TestReadMetaRoundTrip(t *testing.T) {
 
 	writeBook(t, root, "Author, A/Test (1)", "", "", nil)
 
-	loc := model.Location{LibraryPath: "Author, A/Test (1)", EpubFilename: "test.epub"}
+	loc := model.Location{EpubPath: filepath.Join("Author, A/Test (1)", "test.epub")}
 	original := &model.Meta{
 		ID:     42,
 		Status: "reading",
@@ -373,8 +363,8 @@ func TestMoveDestinationAlreadyExistsError(t *testing.T) {
 	writeBook(t, root, "Alice/Book (1)", "Book - Alice.epub", "data", nil)
 	writeBook(t, root, "Bob/Book (1)", "", "", nil)
 
-	from := model.Location{LibraryPath: "Alice/Book (1)", EpubFilename: "Book - Alice.epub"}
-	to := model.Location{LibraryPath: "Bob/Book (1)", EpubFilename: "Book - Bob.epub"}
+	from := model.Location{EpubPath: filepath.Join("Alice/Book (1)", "Book - Alice.epub")}
+	to := model.Location{EpubPath: filepath.Join("Bob/Book (1)", "Book - Bob.epub")}
 
 	err := s.Move(from, to)
 	if err == nil {
@@ -422,7 +412,7 @@ func TestDeleteRemovesBookDir(t *testing.T) {
 	dir := filepath.Join(root, "Author, A", "Test (1)")
 	writeBook(t, root, "Author, A/Test (1)", "test.epub", "data", nil)
 
-	loc := model.Location{LibraryPath: "Author, A/Test (1)", EpubFilename: "test.epub"}
+	loc := model.Location{EpubPath: filepath.Join("Author, A/Test (1)", "test.epub")}
 	if err := s.Delete(loc); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
@@ -455,7 +445,7 @@ func TestDeleteWithReadOnlyDirError(t *testing.T) {
 	// Restore permissions so TempDir cleanup succeeds.
 	t.Cleanup(func() { os.Chmod(dir, 0755) })
 
-	loc := model.Location{LibraryPath: "Author, A/Test (1)", EpubFilename: "test.epub"}
+	loc := model.Location{EpubPath: filepath.Join("Author, A/Test (1)", "test.epub")}
 	err := s.Delete(loc)
 	if err == nil {
 		t.Error("expected error deleting a read-only book directory")
@@ -508,10 +498,10 @@ func TestIngestSurfacesWriteMetaFailure(t *testing.T) {
 	if err := os.WriteFile(staged, []byte("epub"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	loc := model.Location{LibraryPath: "Alice/Title (1)", EpubFilename: "Title - Alice.epub"}
+	loc := model.Location{EpubPath: filepath.Join("Alice/Title (1)", "Title - Alice.epub")}
 	// Occupy meta.toml's name with a directory, so the sidecar write fails
 	// after the epub is already in place.
-	bookDir := filepath.Join(root, loc.LibraryPath)
+	bookDir := filepath.Join(root, loc.Dir())
 	if err := os.MkdirAll(filepath.Join(bookDir, metaFilename), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -530,12 +520,12 @@ func TestIngestSurfacesWriteMetaFailure(t *testing.T) {
 func TestIngestMissingStagedEpub(t *testing.T) {
 	s, root := newStore(t)
 
-	loc := model.Location{LibraryPath: "Alice/Title (1)", EpubFilename: "Title - Alice.epub"}
+	loc := model.Location{EpubPath: filepath.Join("Alice/Title (1)", "Title - Alice.epub")}
 	err := s.Ingest(filepath.Join(t.TempDir(), "does-not-exist.epub"), loc, &model.Meta{ID: 1})
 	if err == nil {
 		t.Fatal("Ingest succeeded with no staged epub, want the failure surfaced")
 	}
-	if _, err := os.Stat(filepath.Join(root, loc.LibraryPath, metaFilename)); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(root, loc.Dir(), metaFilename)); !os.IsNotExist(err) {
 		t.Error("meta.toml was written despite the epub never arriving")
 	}
 }
@@ -550,17 +540,17 @@ func TestMoveRollsBackWhenEpubRenameFails(t *testing.T) {
 	// The directory holds an epub under a different name than `from` claims,
 	// so the directory move succeeds and the rename inside it cannot.
 	writeBook(t, root, "Alice/Title (1)", "actual.epub", "data", &model.Meta{ID: 1})
-	from := model.Location{LibraryPath: "Alice/Title (1)", EpubFilename: "claimed.epub"}
-	to := model.Location{LibraryPath: "Bob/Title (1)", EpubFilename: "renamed.epub"}
+	from := model.Location{EpubPath: filepath.Join("Alice/Title (1)", "claimed.epub")}
+	to := model.Location{EpubPath: filepath.Join("Bob/Title (1)", "renamed.epub")}
 
 	if err := s.Move(from, to); err == nil {
 		t.Fatal("Move succeeded with a missing source epub, want the failure surfaced")
 	}
 
-	if _, err := os.Stat(filepath.Join(root, from.LibraryPath, "actual.epub")); err != nil {
-		t.Errorf("book did not return to %q after the failed rename: %v", from.LibraryPath, err)
+	if _, err := os.Stat(filepath.Join(root, from.Dir(), "actual.epub")); err != nil {
+		t.Errorf("book did not return to %q after the failed rename: %v", from.Dir(), err)
 	}
-	if _, err := os.Stat(filepath.Join(root, to.LibraryPath)); !os.IsNotExist(err) {
-		t.Errorf("destination %q still exists after rollback", to.LibraryPath)
+	if _, err := os.Stat(filepath.Join(root, to.Dir())); !os.IsNotExist(err) {
+		t.Errorf("destination %q still exists after rollback", to.Dir())
 	}
 }

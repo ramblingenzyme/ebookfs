@@ -82,10 +82,10 @@ func (l *libraryImpl) storeDrifted() (*storeScan, bool) {
 			// Recorded as unobserved rather than forcing a rebuild: the rebuild
 			// records the same marker, so the two agree and one unreadable book
 			// stops meaning a full reindex on every startup (see drift.Unobserved).
-			slog.Warn("reindex: could not stat, recording as unreadable", "path", e.LibraryPath, "error", err)
-			mt = drift.Unobserved(e.EpubFilename)
+			slog.Warn("reindex: could not stat, recording as unreadable", "path", e.Dir(), "error", err)
+			mt = drift.Unobserved()
 		}
-		onDisk.info[e.LibraryPath] = mt
+		onDisk.info[e.EpubPath] = mt
 	}
 
 	indexed, err := l.index.AllPathInfo()
@@ -183,20 +183,20 @@ func (l *libraryImpl) scanEntry(s *scanState, known map[string]drift.PathInfo, e
 		// Replace the failed observation with the unobserved marker so every
 		// skip path records something — otherwise a permanently unstattable
 		// directory triggers drift on every startup (see drift.Unobserved).
-		pi = drift.Unobserved(e.EpubFilename)
+		pi = drift.Unobserved()
 	}
 
 	meta, err := l.store.ReadMeta(e)
 	if err != nil {
-		slog.Warn("reindex: skip, read meta failed", "path", e.LibraryPath, "error", err)
+		slog.Warn("reindex: skip, read meta failed", "path", e.Dir(), "error", err)
 		// The sidecar is unreadable, but the layout encodes the id in the
 		// directory name. Reserve it anyway: this book still holds that id, and
 		// reissuing it would collide the moment the sidecar is repaired — a
 		// collision that now refuses to start.
-		if id, ok := store.IDFromPath(e.LibraryPath); ok {
+		if id, ok := store.IDFromPath(e.Dir()); ok {
 			s.reserveID(id)
 		}
-		s.skip(e.LibraryPath, pi)
+		s.skip(e.EpubPath, pi)
 		return
 	}
 	// Reserve as soon as the meta is readable, even if the epub then fails to
@@ -207,15 +207,15 @@ func (l *libraryImpl) scanEntry(s *scanState, known map[string]drift.PathInfo, e
 	// against — but recorded as unobserved so drift detection agrees with the
 	// same verdict next startup instead of rebuilding forever.
 	if statErr != nil {
-		slog.Warn("reindex: skip, stat failed", "path", e.LibraryPath, "error", statErr)
-		s.skip(e.LibraryPath, pi)
+		slog.Warn("reindex: skip, stat failed", "path", e.Dir(), "error", statErr)
+		s.skip(e.EpubPath, pi)
 		return
 	}
 
-	book, err := epub.Parse(e.EpubPath)
+	book, err := epub.Parse(l.store.AbsPath(e.EpubPath))
 	if err != nil {
-		slog.Warn("reindex: skip, parse epub failed", "path", e.LibraryPath, "error", err)
-		s.skip(e.LibraryPath, pi)
+		slog.Warn("reindex: skip, parse epub failed", "path", e.Dir(), "error", err)
+		s.skip(e.EpubPath, pi)
 		return
 	}
 
@@ -237,7 +237,7 @@ func (l *libraryImpl) scanEntry(s *scanState, known map[string]drift.PathInfo, e
 // stable, since the scan's workers finish in arbitrary order.
 func (s *scanState) checkDuplicateIDs() error {
 	slices.SortFunc(s.indexed, func(a, b index.BookPath) int {
-		return strings.Compare(a.Book.Location.LibraryPath, b.Book.Location.LibraryPath)
+		return strings.Compare(a.Book.EpubPath, b.Book.EpubPath)
 	})
 	owners := make(map[int64]string, len(s.indexed))
 	for _, bp := range s.indexed {
@@ -245,9 +245,9 @@ func (s *scanState) checkDuplicateIDs() error {
 		if owner, dup := owners[id]; dup {
 			return fmt.Errorf("duplicate book id %d claimed by %q and %q: "+
 				"remove one directory, or change its id in meta.toml, then restart",
-				id, owner, bp.Book.Location.LibraryPath)
+				id, owner, bp.Book.EpubPath)
 		}
-		owners[id] = bp.Book.Location.LibraryPath
+		owners[id] = bp.Book.EpubPath
 	}
 	return nil
 }
@@ -261,13 +261,12 @@ func (l *libraryImpl) moveToCanonical(indexed []index.BookPath) {
 	for _, bp := range indexed {
 		b := bp.Book
 		canonical := l.store.Layout(b.Authors, b.Title, b.Meta.ID)
-		if canonical.LibraryPath != b.Location.LibraryPath || canonical.EpubFilename != b.Location.EpubFilename {
+		if canonical.Dir() != b.Dir() || canonical.Filename() != b.Filename() {
 			if err := l.store.Move(b.Location, canonical); err != nil {
-				slog.Warn("reindex: move to canonical location failed", "from", b.Location.LibraryPath, "to", canonical.LibraryPath, "error", err)
+				slog.Warn("reindex: move to canonical location failed", "from", b.Dir(), "to", canonical.Dir(), "error", err)
 				continue
 			}
 			b.Location = canonical
-			b.EpubPath = l.store.AbsPath(canonical.LibraryPath, canonical.EpubFilename)
 		}
 	}
 }
@@ -278,7 +277,7 @@ func (l *libraryImpl) moveToCanonical(indexed []index.BookPath) {
 // being handed back as a successful one — which would index the book against
 // file state that was never actually seen.
 func (l *libraryImpl) pathInfo(known map[string]drift.PathInfo, loc model.Location) (drift.PathInfo, error) {
-	if pi, ok := known[loc.LibraryPath]; ok && !pi.IsUnobserved() {
+	if pi, ok := known[loc.EpubPath]; ok && !pi.IsUnobserved() {
 		return pi, nil
 	}
 	return l.store.Stat(loc)

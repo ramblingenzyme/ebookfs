@@ -34,9 +34,7 @@ func (s *Store) Walk() ([]model.Location, error) {
 			return filepath.SkipDir // directory has meta.toml but no epub; skip it rather than aborting the walk
 		}
 		entries = append(entries, model.Location{
-			LibraryPath:  rel,
-			EpubFilename: epubName,
-			EpubPath:     filepath.Join(path, epubName),
+			EpubPath: filepath.Join(rel, epubName),
 		})
 		return filepath.SkipDir // a book directory has no nested books
 	})

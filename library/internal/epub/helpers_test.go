@@ -17,7 +17,7 @@ import (
 // convenience over Prepare/Commit; production code drives that flow through
 // library.Edit.
 func writeBib(epubPath string, e model.Edits) (*Book, error) {
-	c, err := Prepare(&model.Book{Location: model.Location{EpubPath: epubPath}}, e)
+	c, err := Prepare(epubPath, &model.Book{Location: model.Location{EpubPath: epubPath}}, e)
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +31,7 @@ func writeBib(epubPath string, e model.Edits) (*Book, error) {
 // writeCover replaces the cover image entry (coverPath, as resolved by Parse)
 // with img, rewrites the file in place, and returns the re-parsed Book.
 func writeCover(epubPath, coverPath string, img []byte) (*Book, error) {
-	c, err := Prepare(&model.Book{Location: model.Location{EpubPath: epubPath}, Bib: model.Bib{CoverPath: coverPath}}, model.Edits{Cover: &img})
+	c, err := Prepare(epubPath, &model.Book{Location: model.Location{EpubPath: epubPath}, Bib: model.Bib{CoverPath: coverPath}}, model.Edits{Cover: &img})
 	if err != nil {
 		return nil, err
 	}

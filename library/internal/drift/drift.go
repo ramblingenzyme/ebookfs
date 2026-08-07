@@ -14,29 +14,19 @@ import "time"
 // stamp mtimes from the kernel's coarse clock (tmpfs among them) hand out
 // identical nanosecond values for writes in the same tick.
 type PathInfo struct {
-	// EpubFilename is the epub's name within the book directory. Renaming a
-	// file preserves its size and mtime, so without the name a rename is
-	// invisible to drift detection and the index keeps serving a path that no
-	// longer exists. For an indexed book it is not persisted with the rest —
-	// the index reads the book row's own copy — so Put ignores it; only the
-	// skipped-book record, which has no book row, stores it.
-	EpubFilename string
-	Size         int64 // epub size, from the same stat as EpubMtime
-	EpubMtime    time.Time
-	MetaSize     int64 // meta.toml size, from the same stat as MetaMtime
-	MetaMtime    time.Time
+	Size      int64 // epub size, from the same stat as EpubMtime
+	EpubMtime time.Time
+	MetaSize  int64 // meta.toml size, from the same stat as MetaMtime
+	MetaMtime time.Time
 }
 
 // Unobserved returns the state recorded for a book directory whose files could
 // not be stat'd. It is a definite value rather than an absent one, so both
 // sides of drift detection can record "we looked and could not see it" and
 // agree with each other across restarts — otherwise one unreadable book means a
-// full reindex on every startup, forever. The epub's name is still carried, so
-// the directory is not mistaken for a different one; if the files become
-// readable again the observed state differs from this and the book earns
-// another indexing attempt.
-func Unobserved(epubFilename string) PathInfo {
-	return PathInfo{EpubFilename: epubFilename}
+// full reindex on every startup, forever.
+func Unobserved() PathInfo {
+	return PathInfo{}
 }
 
 // IsUnobserved reports whether p records a failed observation rather than a
@@ -49,8 +39,7 @@ func (p PathInfo) IsUnobserved() bool {
 // times need Time.Equal rather than ==, which also compares location and
 // monotonic reading.
 func (p PathInfo) Equal(o PathInfo) bool {
-	return p.EpubFilename == o.EpubFilename &&
-		p.Size == o.Size && p.MetaSize == o.MetaSize &&
+	return p.Size == o.Size && p.MetaSize == o.MetaSize &&
 		p.EpubMtime.Equal(o.EpubMtime) &&
 		p.MetaMtime.Equal(o.MetaMtime)
 }

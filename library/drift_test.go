@@ -20,7 +20,7 @@ import (
 func writeManualBookDir(t *testing.T, lib Library, libraryPath string) {
 	t.Helper()
 	l := lib.(*libraryImpl)
-	dir := filepath.Dir(l.store.AbsPath(libraryPath, "meta.toml"))
+	dir := filepath.Dir(l.store.AbsPath(filepath.Join(libraryPath, "meta.toml")))
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -57,8 +57,9 @@ func TestStoreDrifted(t *testing.T) {
 		},
 		{
 			"book directory removed by hand",
-			func(t *testing.T, _ Library, book *model.Book) {
-				if err := os.RemoveAll(filepath.Dir(book.EpubPath)); err != nil {
+			func(t *testing.T, lib Library, book *model.Book) {
+				dir := filepath.Join(lib.(*libraryImpl).store.Root(), filepath.Dir(book.EpubPath))
+				if err := os.RemoveAll(dir); err != nil {
 					t.Fatalf("remove book dir: %v", err)
 				}
 			},
@@ -66,9 +67,10 @@ func TestStoreDrifted(t *testing.T) {
 		},
 		{
 			"epub swapped for a different one",
-			func(t *testing.T, _ Library, book *model.Book) {
+			func(t *testing.T, lib Library, book *model.Book) {
+				absEpub := lib.(*libraryImpl).store.AbsPath(book.EpubPath)
 				swapped := buildTestEpub(t, "A Completely Different And Much Longer Title")
-				if err := os.WriteFile(book.EpubPath, swapped, 0644); err != nil {
+				if err := os.WriteFile(absEpub, swapped, 0644); err != nil {
 					t.Fatalf("swap epub: %v", err)
 				}
 			},
@@ -80,16 +82,17 @@ func TestStoreDrifted(t *testing.T) {
 			// explicitly because a fast write can land in the same clock tick
 			// as the recorded one on a coarse-clock filesystem.
 			"epub swapped for one of the same size",
-			func(t *testing.T, _ Library, book *model.Book) {
-				orig, err := os.ReadFile(book.EpubPath)
+			func(t *testing.T, lib Library, book *model.Book) {
+				absEpub := lib.(*libraryImpl).store.AbsPath(book.EpubPath)
+				orig, err := os.ReadFile(absEpub)
 				if err != nil {
 					t.Fatalf("read epub: %v", err)
 				}
-				if err := os.WriteFile(book.EpubPath, bytes.Repeat([]byte("X"), len(orig)), 0644); err != nil {
+				if err := os.WriteFile(absEpub, bytes.Repeat([]byte("X"), len(orig)), 0644); err != nil {
 					t.Fatalf("write same-size blob: %v", err)
 				}
 				mt := book.Meta.DateModified.Add(-time.Hour)
-				if err := os.Chtimes(book.EpubPath, mt, mt); err != nil {
+				if err := os.Chtimes(absEpub, mt, mt); err != nil {
 					t.Fatalf("chtimes: %v", err)
 				}
 			},
@@ -101,16 +104,17 @@ func TestStoreDrifted(t *testing.T) {
 			// writes in one tick, so here the mtime is pinned back to its
 			// recorded value and only the length gives the change away.
 			"epub resized under an unchanged mtime",
-			func(t *testing.T, _ Library, book *model.Book) {
-				fi, err := os.Stat(book.EpubPath)
+			func(t *testing.T, lib Library, book *model.Book) {
+				absEpub := lib.(*libraryImpl).store.AbsPath(book.EpubPath)
+				fi, err := os.Stat(absEpub)
 				if err != nil {
 					t.Fatalf("stat epub: %v", err)
 				}
 				grown := bytes.Repeat([]byte("X"), int(fi.Size())+512)
-				if err := os.WriteFile(book.EpubPath, grown, 0644); err != nil {
+				if err := os.WriteFile(absEpub, grown, 0644); err != nil {
 					t.Fatalf("write longer blob: %v", err)
 				}
-				if err := os.Chtimes(book.EpubPath, fi.ModTime(), fi.ModTime()); err != nil {
+				if err := os.Chtimes(absEpub, fi.ModTime(), fi.ModTime()); err != nil {
 					t.Fatalf("chtimes: %v", err)
 				}
 			},
@@ -122,9 +126,10 @@ func TestStoreDrifted(t *testing.T) {
 			// no longer exists, failing every read with ENOENT until someone
 			// forces a reindex by hand.
 			"epub renamed in place",
-			func(t *testing.T, _ Library, book *model.Book) {
-				renamed := filepath.Join(filepath.Dir(book.EpubPath), "hand-renamed.epub")
-				if err := os.Rename(book.EpubPath, renamed); err != nil {
+			func(t *testing.T, lib Library, book *model.Book) {
+				absEpub := lib.(*libraryImpl).store.AbsPath(book.EpubPath)
+				renamed := filepath.Join(filepath.Dir(absEpub), "hand-renamed.epub")
+				if err := os.Rename(absEpub, renamed); err != nil {
 					t.Fatalf("rename epub: %v", err)
 				}
 			},
@@ -152,13 +157,13 @@ func TestRenamedEpubHealedOnRestart(t *testing.T) {
 	cfg := testConfig(t)
 	lib := openLib(t, cfg, false)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Renamed"))
-	canonical := book.Location.EpubFilename
+	canonical := book.Filename()
 	if err := lib.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 
-	dir := filepath.Dir(book.EpubPath)
-	if err := os.Rename(book.EpubPath, filepath.Join(dir, "hand-renamed.epub")); err != nil {
+	dir := filepath.Dir(filepath.Join(cfg.Root, book.EpubPath))
+	if err := os.Rename(filepath.Join(cfg.Root, book.EpubPath), filepath.Join(dir, "hand-renamed.epub")); err != nil {
 		t.Fatalf("rename epub: %v", err)
 	}
 
@@ -171,7 +176,7 @@ func TestRenamedEpubHealedOnRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
-	if len(got) != 1 || got[0].EpubFilename != canonical {
+	if len(got) != 1 || got[0].Filename() != canonical {
 		t.Errorf("EpubFilename = %v, want the canonical %q restored", got, canonical)
 	}
 	if drifted(t, lib2) {
@@ -193,7 +198,7 @@ func TestUnstattableBookReservesID(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	breakEpub(t, book)
+	breakEpub(t, book, cfg.Root)
 	dropIndex(t, cfg)
 
 	lib2 := openLib(t, cfg, false)
@@ -216,15 +221,15 @@ func TestUnstattableBookSettlesClean(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	breakEpub(t, book)
+	breakEpub(t, book, cfg.Root)
 	assertSettlesClean(t, cfg)
 
 	// Repairing it must still be noticed: real file state differs from the
 	// unobserved marker, so the book earns another indexing attempt.
-	if err := os.Remove(book.EpubPath); err != nil {
+	if err := os.Remove(filepath.Join(cfg.Root, book.EpubPath)); err != nil {
 		t.Fatalf("remove symlink: %v", err)
 	}
-	if err := os.WriteFile(book.EpubPath, buildTestEpub(t, "Ghost"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(cfg.Root, book.EpubPath), buildTestEpub(t, "Ghost"), 0644); err != nil {
 		t.Fatalf("repair epub: %v", err)
 	}
 	lib2 := openLib(t, cfg, false)
@@ -252,10 +257,10 @@ func TestUnreadableMetaAndUnstattableEpubSettlesClean(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	breakEpub(t, book)
+	breakEpub(t, book, cfg.Root)
 	// Present but unparseable, so Walk still sees a book directory while
 	// ReadMeta fails.
-	if err := os.WriteFile(metaPathOf(book), []byte("id = \"not an integer\"\n"), 0644); err != nil {
+	if err := os.WriteFile(metaPathOf(book, cfg.Root), []byte("id = \"not an integer\"\n"), 0644); err != nil {
 		t.Fatalf("corrupt meta.toml: %v", err)
 	}
 
@@ -277,7 +282,7 @@ func TestUnreadableMetaReservesIDFromPath(t *testing.T) {
 	cfg := testConfig(t)
 	lib := openLib(t, cfg, false)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Ghost"))
-	meta, err := os.ReadFile(metaPathOf(book))
+	meta, err := os.ReadFile(metaPathOf(book, cfg.Root))
 	if err != nil {
 		t.Fatalf("read meta.toml: %v", err)
 	}
@@ -285,7 +290,7 @@ func TestUnreadableMetaReservesIDFromPath(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	if err := os.WriteFile(metaPathOf(book), []byte("id = \"not an integer\"\n"), 0644); err != nil {
+	if err := os.WriteFile(metaPathOf(book, cfg.Root), []byte("id = \"not an integer\"\n"), 0644); err != nil {
 		t.Fatalf("corrupt meta.toml: %v", err)
 	}
 	dropIndex(t, cfg)
@@ -301,7 +306,7 @@ func TestUnreadableMetaReservesIDFromPath(t *testing.T) {
 	}
 
 	// Repairing the sidecar must not resurrect a collision.
-	if err := os.WriteFile(metaPathOf(book), meta, 0644); err != nil {
+	if err := os.WriteFile(metaPathOf(book, cfg.Root), meta, 0644); err != nil {
 		t.Fatalf("repair meta.toml: %v", err)
 	}
 	lib3 := openLib(t, cfg, false)
@@ -329,12 +334,12 @@ func TestDuplicateBookIDFailsOpenNamingBothPaths(t *testing.T) {
 	}
 
 	// Copy the whole book directory, meta.toml and all, to a second path.
-	src := filepath.Dir(book.EpubPath)
+	src := filepath.Join(cfg.Root, filepath.Dir(book.EpubPath))
 	dst := filepath.Join(cfg.Root, "Copies", filepath.Base(src))
 	if err := os.MkdirAll(dst, 0755); err != nil {
 		t.Fatalf("mkdir copy: %v", err)
 	}
-	for _, name := range []string{"meta.toml", book.Location.EpubFilename} {
+	for _, name := range []string{"meta.toml", book.Filename()} {
 		data, err := os.ReadFile(filepath.Join(src, name))
 		if err != nil {
 			t.Fatalf("read %s: %v", name, err)
@@ -350,7 +355,7 @@ func TestDuplicateBookIDFailsOpenNamingBothPaths(t *testing.T) {
 		t.Fatal("Open succeeded with two directories claiming one book id, want a fatal error")
 	}
 	// Both directories must appear, or the user has no way to know which to fix.
-	for _, want := range []string{book.Location.LibraryPath, filepath.Join("Copies", filepath.Base(src))} {
+	for _, want := range []string{book.Dir(), filepath.Join("Copies", filepath.Base(src))} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("Open error %q does not name the conflicting directory %q", err, want)
 		}
@@ -364,7 +369,7 @@ func TestStoreDriftedDetectsManualMetaEdit(t *testing.T) {
 	lib := openTestLibrary(t)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Book"))
 
-	metaPath := metaPathOf(book)
+	metaPath := metaPathOf(book, lib.(*libraryImpl).store.Root())
 	// Write a modified meta.toml to simulate hand-editing the sidecar.
 	edited := fmt.Sprintf("id = %d\nstatus = \"read\"\n", book.Meta.ID)
 	if err := os.WriteFile(metaPath, []byte(edited), 0644); err != nil {
@@ -427,7 +432,7 @@ func TestCorruptEpubDoesNotReindexForever(t *testing.T) {
 
 	// Corrupt the epub so it can no longer be parsed. The directory still looks
 	// like a book to store.Walk: meta.toml is intact and an *.epub is present.
-	if err := os.WriteFile(book.EpubPath, []byte("not a zip archive"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(cfg.Root, book.EpubPath), []byte("not a zip archive"), 0644); err != nil {
 		t.Fatalf("corrupt epub: %v", err)
 	}
 
@@ -442,7 +447,7 @@ func TestCorruptEpubDoesNotReindexForever(t *testing.T) {
 
 	// Repairing the book must still be noticed: its file state changes, so the
 	// recorded skip no longer matches and the book earns another attempt.
-	if err := os.WriteFile(book.EpubPath, buildTestEpub(t, "Repaired"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(cfg.Root, book.EpubPath), buildTestEpub(t, "Repaired"), 0644); err != nil {
 		t.Fatalf("repair epub: %v", err)
 	}
 	lib3 := openLib(t, cfg, false)
@@ -470,7 +475,7 @@ func TestOpenReindexesOnDrift(t *testing.T) {
 	}
 
 	swapped := buildTestEpub(t, "A Completely Different And Much Longer Title")
-	if err := os.WriteFile(book.EpubPath, swapped, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(cfg.Root, book.EpubPath), swapped, 0644); err != nil {
 		t.Fatalf("swap epub while server is down: %v", err)
 	}
 
@@ -508,11 +513,11 @@ func stageLegacyLayout(t *testing.T, cfg config.LibraryConfig, title string, aut
 	if err := os.MkdirAll(filepath.Dir(legacyDir), 0755); err != nil {
 		t.Fatalf("mkdir legacy parent: %v", err)
 	}
-	if err := os.Rename(filepath.Join(cfg.Root, canonical.LibraryPath), legacyDir); err != nil {
+	if err := os.Rename(filepath.Join(cfg.Root, canonical.Dir()), legacyDir); err != nil {
 		t.Fatalf("move book dir to %q: %v", legacyAuthorDir, err)
 	}
 	if legacyEpub != "" {
-		if err := os.Rename(filepath.Join(legacyDir, canonical.EpubFilename), filepath.Join(legacyDir, legacyEpub)); err != nil {
+		if err := os.Rename(filepath.Join(legacyDir, canonical.Filename()), filepath.Join(legacyDir, legacyEpub)); err != nil {
 			t.Fatalf("rename epub to %q: %v", legacyEpub, err)
 		}
 	}
@@ -559,13 +564,13 @@ func TestReindexMigratesToCanonicalPath(t *testing.T) {
 			if len(got) != 1 {
 				t.Fatalf("got %d books, want 1", len(got))
 			}
-			if got[0].Location.LibraryPath != canonical.LibraryPath {
-				t.Errorf("LibraryPath = %q, want %q", got[0].Location.LibraryPath, canonical.LibraryPath)
+			if got[0].Dir() != canonical.Dir() {
+				t.Errorf("Dir = %q, want %q", got[0].Dir(), canonical.Dir())
 			}
-			if got[0].Location.EpubFilename != canonical.EpubFilename {
-				t.Errorf("EpubFilename = %q, want %q", got[0].Location.EpubFilename, canonical.EpubFilename)
+			if got[0].Filename() != canonical.Filename() {
+				t.Errorf("Filename = %q, want %q", got[0].Filename(), canonical.Filename())
 			}
-			if _, err := os.Stat(filepath.Join(cfg.Root, canonical.LibraryPath)); err != nil {
+			if _, err := os.Stat(filepath.Join(cfg.Root, canonical.Dir())); err != nil {
 				t.Errorf("canonical dir missing after reindex: %v", err)
 			}
 		})
