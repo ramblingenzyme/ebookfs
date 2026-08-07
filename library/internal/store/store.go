@@ -84,50 +84,56 @@ func (s *Store) Stat(loc model.Location) (drift.PathInfo, error) {
 // the directory if its filename differs. The caller decides the destination
 // (see Layout); the store just performs the move.
 func (s *Store) Move(from, to model.Location) error {
-	oldPath := filepath.Join(s.root, from.Dir())
-
-	fromDir := from.Dir()
-	toDir := to.Dir()
-	fromName := from.Filename()
-	toName := to.Filename()
-
-	// Same directory, only the epub filename changed (e.g. re-sanitized on a
-	// later edit): nothing to move, and the "destination" directory below
-	// would just be the book's own current one — skip straight to the
-	// in-place rename.
-	if toDir == fromDir {
-		if toName == fromName {
-			return nil
-		}
-		return os.Rename(filepath.Join(oldPath, fromName), filepath.Join(oldPath, toName))
+	if from.EpubPath == to.EpubPath {
+		return nil
 	}
 
-	apath := filepath.Join(s.root, toDir)
-	if _, err := os.Stat(apath); err == nil {
-		return fmt.Errorf("destination already exists: %s", toDir)
-	} else if !errors.Is(err, os.ErrNotExist) {
+	fromDir := s.AbsPath(from.Dir())
+	toDir := s.AbsPath(to.Dir())
+
+	rollbackFn, err := s.renameDir(fromDir, toDir)
+	if err != nil {
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(apath), 0755); err != nil {
-		return err
-	}
-
-	if err := os.Rename(oldPath, apath); err != nil {
-		return err
-	}
-
+	fromName := filepath.Join(toDir, from.Filename())
+	toName := filepath.Join(toDir, to.Filename())
 	if toName != fromName {
-		if err := os.Rename(filepath.Join(apath, fromName), filepath.Join(apath, toName)); err != nil {
-			if rollbackErr := os.Rename(apath, oldPath); rollbackErr != nil {
-				slog.Error("rollback failed after epub rename error; directory left in inconsistent state, will be repaired by reindex on next startup",
-					"old_path", oldPath, "new_path", apath, "rollback_error", rollbackErr, "original_error", err)
-			}
+		if err := os.Rename(fromName, toName); err != nil {
+			rollbackFn(err)
 			return err
 		}
 	}
 
-	return removeIfEmpty(filepath.Dir(oldPath))
+	return removeIfEmpty(filepath.Dir(fromDir))
+}
+
+func (s *Store) renameDir(fromDir, toDir string) (func(error), error) {
+	if fromDir == toDir {
+		return func(_ error) {}, nil
+	}
+
+	if _, err := os.Stat(toDir); err == nil {
+		return nil, fmt.Errorf("destination already exists: %s", toDir)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(toDir), 0755); err != nil {
+		return nil, err
+	}
+
+	if err := os.Rename(fromDir, toDir); err != nil {
+		return nil, err
+	}
+
+	return func(err error) {
+		rollbackErr := os.Rename(toDir, fromDir)
+		if rollbackErr != nil {
+			slog.Error("rollback failed after epub rename error; directory left in inconsistent state, will be repaired by reindex on next startup",
+				"old_path", fromDir, "new_path", toDir, "rollback_error", rollbackErr, "original_error", err)
+		}
+	}, nil
 }
 
 // removeIfEmpty tries to delete an author directory that may have just lost its
