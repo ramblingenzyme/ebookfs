@@ -21,61 +21,65 @@ func placeholders(n int) string {
 // including title (LIKE). Within each field values are OR'd; across fields they're
 // AND'd. Empty fields are ignored.
 func (idx *Index) Search(q model.Query) ([]*model.Book, error) {
-	var where []string
-	var args []any
+	bq := &bookQuery{order: "b.sort_title"}
 
 	if len(q.Authors) > 0 {
-		for _, a := range q.Authors {
-			args = append(args, a)
+		args := make([]any, len(q.Authors))
+		for i, a := range q.Authors {
+			args[i] = a
 		}
-		where = append(where, fmt.Sprintf(
+		bq.addCondition(true, fmt.Sprintf(
 			"b.id IN (SELECT ba.book_id FROM book_authors ba JOIN authors a ON a.id = ba.author_id WHERE a.name IN (%s))",
-			placeholders(len(q.Authors))))
+			placeholders(len(q.Authors))), args...)
 	}
 
 	if len(q.Tags) > 0 {
-		for _, t := range q.Tags {
-			args = append(args, t)
+		args := make([]any, len(q.Tags))
+		for i, t := range q.Tags {
+			args[i] = t
 		}
-		where = append(where, fmt.Sprintf(
+		bq.addCondition(true, fmt.Sprintf(
 			"b.id IN (SELECT bt.book_id FROM book_tags bt JOIN tags t ON t.id = bt.tag_id WHERE t.name IN (%s))",
-			placeholders(len(q.Tags))))
+			placeholders(len(q.Tags))), args...)
 	}
 
 	if len(q.Series) > 0 {
-		for _, s := range q.Series {
-			args = append(args, s)
+		args := make([]any, len(q.Series))
+		for i, s := range q.Series {
+			args[i] = s
 		}
-		where = append(where, fmt.Sprintf(
+		bq.addCondition(true, fmt.Sprintf(
 			"b.series_id IN (SELECT id FROM series WHERE name IN (%s))",
-			placeholders(len(q.Series))))
+			placeholders(len(q.Series))), args...)
 	}
 
 	if len(q.Status) > 0 {
-		for _, s := range q.Status {
-			args = append(args, s)
+		args := make([]any, len(q.Status))
+		for i, s := range q.Status {
+			args[i] = s
 		}
-		where = append(where, "b.status IN ("+placeholders(len(q.Status))+")")
+		bq.addCondition(true, "b.status IN ("+placeholders(len(q.Status))+")", args...)
 	}
 
 	if len(q.IDs) > 0 {
-		for _, id := range q.IDs {
-			args = append(args, id)
+		args := make([]any, len(q.IDs))
+		for i, id := range q.IDs {
+			args[i] = id
 		}
-		where = append(where, "b.id IN ("+placeholders(len(q.IDs))+")")
+		bq.addCondition(true, "b.id IN ("+placeholders(len(q.IDs))+")", args...)
 	}
 
 	if len(q.Titles) > 0 {
 		clauses := make([]string, len(q.Titles))
+		args := make([]any, len(q.Titles))
 		for i, t := range q.Titles {
 			clauses[i] = "b.title LIKE ? ESCAPE '\\'"
-			args = append(args, "%"+escapeSQLLike(t)+"%")
+			args[i] = "%" + escapeSQLLike(t) + "%"
 		}
-		where = append(where, "("+strings.Join(clauses, " OR ")+")")
+		bq.addCondition(true, "("+strings.Join(clauses, " OR ")+")", args...)
 	}
 
-	whereClause := strings.Join(where, " AND ")
-	return idx.queryBooks(whereClause, args, "b.sort_title", 0)
+	return idx.queryBooks(bq)
 }
 
 // escapeSQLLike escapes the special LIKE characters % and _ in s.
