@@ -327,78 +327,30 @@ func (ve ValidationError) Error() string {
 	return s.String()
 }
 
+// fieldValidator pairs a field name with its validation function.
+type fieldValidator struct {
+	field    string
+	validate func() string // returns error message or ""
+}
+
 // Validate validates e against b's current state and returns per-field errors.
 // A nil return means all fields are valid.
 func (e Edits) Validate(b *Book) *ValidationError {
+	validators := []fieldValidator{
+		{"status", e.validateStatus},
+		{"rating", e.validateRating},
+		{"title", e.validateTitle},
+		{"authors", e.validateAuthors},
+		{"tags", e.validateTags},
+		{"language", e.validateLanguage},
+		{"cover", func() string { return e.validateCover(b) }},
+		{"series_index", func() string { return e.validateSeriesIndex(b) }},
+	}
+
 	var ve ValidationError
-	add := func(field, msg string) {
-		ve = append(ve, FieldError{Field: field, Message: msg})
-	}
-
-	if e.Status != nil && !IsValidStatus(*e.Status) {
-		add("status", fmt.Sprintf("invalid status %q: must be %s", *e.Status, StatusList()))
-	}
-
-	if e.Rating != nil {
-		// NaN compares false against both bounds, and once persisted it bricks the
-		// index (SQLite binds NaN as NULL, violating the NOT NULL rating column),
-		// so it must be rejected here.
-		if math.IsNaN(*e.Rating) || *e.Rating < 0 || *e.Rating > 5 {
-			add("rating", fmt.Sprintf("invalid rating %g: must be 0-5", *e.Rating))
-		}
-	}
-
-	if e.Title != nil {
-		if strings.TrimSpace(*e.Title) == "" {
-			add("title", "title must not be empty")
-		}
-	}
-
-	if e.Authors != nil {
-		if len(*e.Authors) == 0 {
-			add("authors", "at least one author is required")
-		} else {
-			for i, a := range *e.Authors {
-				if strings.TrimSpace(a.Name) == "" {
-					add("authors", fmt.Sprintf("author %d has an empty name", i+1))
-					break
-				}
-			}
-		}
-	}
-
-	if e.Tags != nil {
-		for i, t := range *e.Tags {
-			if strings.TrimSpace(t) == "" {
-				add("tags", fmt.Sprintf("tag %d is empty", i+1))
-				break
-			}
-		}
-	}
-
-	if e.Language != nil {
-		if v := strings.TrimSpace(*e.Language); v != "" {
-			if _, err := language.Parse(v); err != nil {
-				add("language", fmt.Sprintf("language %q is not a recognised BCP 47 / ISO 639 code", *e.Language))
-			}
-		}
-	}
-
-	if e.Cover != nil {
-		if len(*e.Cover) == 0 {
-			add("cover", "cover image must not be empty")
-		}
-		if b.CoverPath == "" {
-			add("cover", "book has no cover to replace")
-		}
-	}
-
-	if e.SeriesIndex != nil {
-		if math.IsNaN(*e.SeriesIndex) || math.IsInf(*e.SeriesIndex, 0) {
-			add("series_index", fmt.Sprintf("invalid series index %g: must be a finite number", *e.SeriesIndex))
-		}
-		if e.Series == nil && b.Series == nil {
-			add("series_index", "book has no series to set an index on")
+	for _, v := range validators {
+		if msg := v.validate(); msg != "" {
+			ve = append(ve, FieldError{Field: v.field, Message: msg})
 		}
 	}
 
@@ -406,4 +358,96 @@ func (e Edits) Validate(b *Book) *ValidationError {
 		return nil
 	}
 	return &ve
+}
+
+func (e Edits) validateStatus() string {
+	if e.Status != nil && !IsValidStatus(*e.Status) {
+		return fmt.Sprintf("invalid status %q: must be %s", *e.Status, StatusList())
+	}
+	return ""
+}
+
+func (e Edits) validateRating() string {
+	if e.Rating == nil {
+		return ""
+	}
+	// NaN compares false against both bounds, and once persisted it bricks the
+	// index (SQLite binds NaN as NULL, violating the NOT NULL rating column),
+	// so it must be rejected here.
+	if math.IsNaN(*e.Rating) || *e.Rating < 0 || *e.Rating > 5 {
+		return fmt.Sprintf("invalid rating %g: must be 0-5", *e.Rating)
+	}
+	return ""
+}
+
+func (e Edits) validateTitle() string {
+	if e.Title != nil && strings.TrimSpace(*e.Title) == "" {
+		return "title must not be empty"
+	}
+	return ""
+}
+
+func (e Edits) validateAuthors() string {
+	if e.Authors == nil {
+		return ""
+	}
+	if len(*e.Authors) == 0 {
+		return "at least one author is required"
+	}
+	for i, a := range *e.Authors {
+		if strings.TrimSpace(a.Name) == "" {
+			return fmt.Sprintf("author %d has an empty name", i+1)
+		}
+	}
+	return ""
+}
+
+func (e Edits) validateTags() string {
+	if e.Tags == nil {
+		return ""
+	}
+	for i, t := range *e.Tags {
+		if strings.TrimSpace(t) == "" {
+			return fmt.Sprintf("tag %d is empty", i+1)
+		}
+	}
+	return ""
+}
+
+func (e Edits) validateLanguage() string {
+	if e.Language == nil {
+		return ""
+	}
+	if v := strings.TrimSpace(*e.Language); v != "" {
+		if _, err := language.Parse(v); err != nil {
+			return fmt.Sprintf("language %q is not a recognised BCP 47 / ISO 639 code", *e.Language)
+		}
+	}
+	return ""
+}
+
+func (e Edits) validateCover(b *Book) string {
+	if e.Cover == nil {
+		return ""
+	}
+	if len(*e.Cover) == 0 {
+		return "cover image must not be empty"
+	}
+	if b.CoverPath == "" {
+		return "book has no cover to replace"
+	}
+	return ""
+}
+
+func (e Edits) validateSeriesIndex(b *Book) string {
+	if e.SeriesIndex == nil {
+		return ""
+	}
+	if math.IsNaN(*e.SeriesIndex) || math.IsInf(*e.SeriesIndex, 0) {
+		return fmt.Sprintf("invalid series index %g: must be a finite number", *e.SeriesIndex)
+	}
+	if e.Series == nil && b.Series == nil {
+		return "book has no series to set an index on"
+	}
+	return ""
 }
