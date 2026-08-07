@@ -3,12 +3,9 @@ package epub
 import (
 	"archive/zip"
 	"bytes"
-	"errors"
 	"image"
 	"image/jpeg"
 	"image/png"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/library/model"
@@ -485,15 +482,12 @@ func reindexSeries(t *testing.T, path, series string, index float64) *model.Bib 
 		Location: model.Location{EpubPath: path},
 		Bib:      model.Bib{Series: &model.SeriesRef{Name: series, Index: 1}},
 	}
-	c, err := Prepare(path, b, model.Edits{SeriesIndex: new(index)})
+	bib, err := Rewrite(path, b, model.Edits{SeriesIndex: new(index)})
 	if err != nil {
-		t.Fatalf("Prepare: %v", err)
+		t.Fatalf("Rewrite: %v", err)
 	}
-	if err := c.Commit(); err != nil {
-		c.Discard()
-		t.Fatalf("Commit: %v", err)
-	}
-	return c.Bib()
+
+	return bib
 }
 
 // TestWriteBibSeriesIndexOnlyKeepsName covers the index-only series edit. With
@@ -538,79 +532,6 @@ func TestWriteBibSeriesIndexOnlyWithoutSeriesInOPF(t *testing.T) {
 	// SeriesIndex is deliberately not asserted: translateSeries defaults it to
 	// 1 for every book with a series, and only sets Series when the name is
 	// non-empty, so the position never escapes.
-}
-
-// TestCommitDiscard covers the rollback half of the prepare/commit protocol.
-// library.Edit calls Discard on two error paths — a failed MarkPending and a
-// failed Commit — and neither had a test, so a Discard that stranded its temp
-// file in the book directory (where store.Walk would then see it) or damaged
-// the original was invisible.
-func TestCommitDiscard(t *testing.T) {
-	t.Run("removes the temp file and leaves the original", func(t *testing.T) {
-		path := writeEpub(t, baseEntries(opf3))
-		before, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		c, err := Prepare(path, &model.Book{Location: model.Location{EpubPath: path}}, model.Edits{Title: new("Rewritten")})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if c.tmpPath == "" {
-			t.Fatal("prepared commit has no temp file; this test is not exercising the rewrite path")
-		}
-		if _, err := os.Stat(c.tmpPath); err != nil {
-			t.Fatalf("temp file missing before Discard: %v", err)
-		}
-
-		c.Discard()
-
-		if _, err := os.Stat(c.tmpPath); !errors.Is(err, os.ErrNotExist) {
-			t.Errorf("temp file still present after Discard (stat err = %v)", err)
-		}
-		after, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("original epub gone after Discard: %v", err)
-		}
-		if !bytes.Equal(before, after) {
-			t.Error("Discard rewrote the original epub, want it untouched")
-		}
-		// Nothing else may be left behind: the book directory is walked by the
-		// store, and a stray temp would look like part of the book.
-		left, err := filepath.Glob(filepath.Join(filepath.Dir(path), "*"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(left) != 1 || left[0] != path {
-			t.Errorf("book directory holds %v, want only %s", left, path)
-		}
-	})
-
-	t.Run("no-op commit discards nothing", func(t *testing.T) {
-		path := writeEpub(t, baseEntries(opf3))
-		before, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		// A meta-only edit never reaches the epub, so Prepare short-circuits
-		// and there is no temp file for Discard to remove.
-		c, err := Prepare(path, &model.Book{Location: model.Location{EpubPath: path}}, model.Edits{Status: new("read")})
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		c.Discard()
-
-		after, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("original epub gone after a no-op Discard: %v", err)
-		}
-		if !bytes.Equal(before, after) {
-			t.Error("a no-op Discard rewrote the original epub")
-		}
-	})
 }
 
 // --- Known limitations (TODOs) --------------------------------------------

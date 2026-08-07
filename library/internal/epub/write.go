@@ -13,18 +13,17 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-// Prepare creates a temporary epub with the requested changes from e applied
-// to the epub at epubPath. Every refusal check runs before the temp file is
-// written — the original is never touched on error. The returned Commit can be
-// applied atomically via Commit() or discarded via Discard().
+// Rewrite applies the requested changes from e to the epub at epubPath
+// atomically. Every refusal check runs before any file is written — the
+// original is never touched on error.
 //
 // b is used only for validation and for locating the cover entry within the
 // zip; its EpubPath field is not read — the caller provides the resolved
 // absolute path separately so the epub package does not need to know the store
 // root.
-func Prepare(epubPath string, b *model.Book, e model.Edits) (*Commit, error) {
+func Rewrite(epubPath string, b *model.Book, e model.Edits) (*model.Bib, error) {
 	if !e.HasCoverEdit() && !e.HasBibEdits() {
-		return &Commit{noop: true}, nil
+		return nil, nil
 	}
 
 	// Library.Edit is the enforcement point that validates every edit
@@ -34,18 +33,26 @@ func Prepare(epubPath string, b *model.Book, e model.Edits) (*Commit, error) {
 		return nil, v
 	}
 
-	replace := make(map[string][]byte)
-
 	zrc, err := zip.OpenReader(epubPath)
 	if err != nil {
 		return nil, err
 	}
 	defer zrc.Close()
 
+	replace, err := createReplace(zrc, b, e)
+	if err != nil {
+		return nil, err
+	}
+
+	return rewriteEpub(epubPath, zrc, replace)
+}
+
+func createReplace(zrc *zip.ReadCloser, b *model.Book, e model.Edits) (map[string][]byte, error) {
 	enc, err := readEncryption(&zrc.Reader)
 	if err != nil {
 		return nil, err
 	}
+	replace := make(map[string][]byte, 2) // only 2 possible entries
 
 	if e.HasCoverEdit() {
 		want := coverFormat(b.CoverPath)
@@ -87,7 +94,7 @@ func Prepare(epubPath string, b *model.Book, e model.Edits) (*Commit, error) {
 		replace[opf] = newOPF
 	}
 
-	return prepareEpub(epubPath, replace)
+	return replace, nil
 }
 
 // coverFormat maps a cover entry's path to the image format name (as reported by

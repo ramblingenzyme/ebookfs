@@ -154,3 +154,16 @@ func (s *Store) Delete(loc model.Location) error {
 
 	return removeIfEmpty(filepath.Dir(path))
 }
+
+// Update applies the edits to the book's on-disk state: moves it from oldLoc to
+// newLoc if necessary, writes the updated meta.toml, and returns the observed
+// state for drift detection.
+func (s *Store) Update(oldLoc, newLoc model.Location, meta *model.Meta) (drift.PathInfo, error) {
+	if err := s.Move(oldLoc, newLoc); err != nil {
+		return drift.PathInfo{}, err
+	}
+	if err := s.writeMeta(newLoc, meta); err != nil {
+		return drift.PathInfo{}, err
+	}
+	return s.Stat(newLoc)
+}

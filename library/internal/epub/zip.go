@@ -121,49 +121,13 @@ func opfPath(zr *zip.Reader) (string, error) {
 	})
 }
 
-// prepareEpub produces a new epub at a temp file whose entries named in replace
-// are swapped for the given bytes and whose every other entry is copied
-// verbatim, then re-parses the result to validate it and returns a Commit that
-// can apply the change atomically. On any failure the original file is left
-// untouched.
-//
-// Faithfulness rules (matching the OCF container requirements calibre's
-// safe_replace also honours):
-//   - the "mimetype" entry is written first and copied byte-for-byte, preserving
-//     its STORED (uncompressed, no-extra-field) form so magic-byte sniffers keep
-//     recognising the file;
-//   - all untouched entries are copied raw (no recompression), preserving order,
-//     modtime, and method;
-//   - every key in replace must match an existing entry, so a mistargeted edit
-//     fails loudly instead of silently dropping.
-func prepareEpub(srcPath string, replace map[string][]byte) (*Commit, error) {
-	zrc, err := zip.OpenReader(srcPath)
-	if err != nil {
-		return nil, err
-	}
-	defer zrc.Close()
-
-	dir := filepath.Dir(srcPath)
-	tmp, err := os.CreateTemp(dir, ".ebookfs-*.epub.tmp")
-	if err != nil {
-		return nil, err
-	}
-	tmpPath := tmp.Name()
-	// Explicit cleanup on error paths only; on success the temp is passed to
-	// Commit and the caller is responsible for calling Commit or Discard.
-	discard := true
-	defer func() {
-		if discard {
-			tmp.Close()
-			os.Remove(tmpPath)
-		}
-	}()
-
-	zw := zip.NewWriter(tmp)
+func writeUpdatedEpub(zw *zip.Writer, zrc *zip.ReadCloser, replace map[string][]byte) error {
 	used := make(map[string]bool, len(replace))
-
 	writeEntry := func(f *zip.File) error {
-		if data, ok := replace[f.Name]; ok {
+		data, ok := replace[f.Name]
+
+		switch {
+		case ok:
 			used[f.Name] = true
 			w, err := zw.CreateHeader(&zip.FileHeader{
 				Name:     f.Name,
@@ -175,41 +139,78 @@ func prepareEpub(srcPath string, replace map[string][]byte) (*Commit, error) {
 			}
 			_, err = w.Write(data)
 			return err
-		}
-		if strings.HasSuffix(f.Name, "/") {
+		case strings.HasSuffix(f.Name, "/"):
 			_, err := zw.CreateHeader(&zip.FileHeader{
 				Name:     f.Name,
 				Method:   f.Method,
 				Modified: f.Modified,
 			})
 			return err
+		default:
+			return zw.Copy(f)
 		}
-		return zw.Copy(f) // verbatim: raw bytes, original method, no recompression
 	}
 
 	// mimetype must come first per the OCF spec; write it before anything else
 	// (and skip it in the main loop) regardless of its position in the source.
-	if mt := findEntry(&zrc.Reader, mimetypePath); mt != nil {
+	if mt := findEntry(&zrc.Reader, mimetypePath); mt == nil {
+		return fmt.Errorf("mimetype not found in epub")
+	} else {
 		if err := writeEntry(mt); err != nil {
-			return nil, err
+			return err
 		}
 	}
+
 	for _, f := range zrc.File {
 		if f.Name == mimetypePath {
 			continue
 		}
 		if err := writeEntry(f); err != nil {
-			return nil, err
+			return err
 		}
+	}
+
+	for name := range replace {
+		if !used[name] {
+			return fmt.Errorf("entry not found in epub: %s", name)
+		}
+	}
+
+	return nil
+}
+
+// rewriteEpub creates a temporary epub in the same directory as epubPath whose
+// entries named in replace are swapped for the given bytes and whose every
+// other entry is copied verbatim, then atomically replaces the original.
+// Returns the parsed Bib on success. On any failure the temp file is cleaned up.
+//
+// Faithfulness rules (matching the OCF container requirements calibre's
+// safe_replace also honours):
+//   - the "mimetype" entry is written first and copied byte-for-byte, preserving
+//     its STORED (uncompressed, no-extra-field) form so magic-byte sniffers keep
+//     recognising the file;
+//   - all untouched entries are copied raw (no recompression), preserving order,
+//     modtime, and method;
+//   - every key in replace must match an existing entry, so a mistargeted edit
+//     fails loudly instead of silently dropping.
+func rewriteEpub(epubPath string, zrc *zip.ReadCloser, replace map[string][]byte) (*model.Bib, error) {
+	dir := filepath.Dir(epubPath)
+	tmp, err := os.CreateTemp(dir, ".ebookfs-*.epub.tmp")
+	if err != nil {
+		return nil, err
+	}
+
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	defer tmp.Close()
+
+	zw := zip.NewWriter(tmp)
+	if err := writeUpdatedEpub(zw, zrc, replace); err != nil {
+		return nil, err
 	}
 
 	if err := zw.Close(); err != nil {
 		return nil, err
-	}
-	for name := range replace {
-		if !used[name] {
-			return nil, fmt.Errorf("entry not found in epub: %s", name)
-		}
 	}
 	if err := tmp.Sync(); err != nil {
 		return nil, err
@@ -225,38 +226,5 @@ func prepareEpub(srcPath string, replace map[string][]byte) (*Commit, error) {
 		return nil, fmt.Errorf("rewritten epub failed validation: %w", err)
 	}
 
-	discard = false // temp survives — Commit or Discard manages it
-	return &Commit{srcPath: srcPath, tmpPath: tmpPath, book: book}, nil
-}
-
-// Commit is a prepared epub rewrite that can be applied atomically or discarded.
-// A no-op Commit (created when no edits are requested) has Commit and Discard as
-// no-ops and Book returns nil.
-type Commit struct {
-	srcPath string
-	tmpPath string
-	book    *model.Bib
-	noop    bool
-}
-
-// Bib returns the reparsed book from the prepared epub, or nil for a no-op
-// commit.
-func (c *Commit) Bib() *model.Bib { return c.book }
-
-// Commit applies the rewrite by atomically replacing the original with the
-// prepared file. For a no-op commit this is a no-op.
-func (c *Commit) Commit() error {
-	if c.noop {
-		return nil
-	}
-	return os.Rename(c.tmpPath, c.srcPath)
-}
-
-// Discard removes the temporary file without touching the original. For a
-// no-op commit this is a no-op.
-func (c *Commit) Discard() {
-	if c.noop {
-		return
-	}
-	os.Remove(c.tmpPath)
+	return book, os.Rename(tmpPath, epubPath)
 }

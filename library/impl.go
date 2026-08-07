@@ -113,43 +113,26 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 	}
 
 	op := l.index.BeginOp()
-
-	c, err := epub.Prepare(l.store.AbsPath(b.EpubPath), b, e)
-	if err != nil {
-		slog.Error("edit: prepare rewrite failed", "book_id", b.Meta.ID, "title", b.Title, "error", err)
-		return nil, err
-	}
 	if err := op.MarkPending(); err != nil {
-		c.Discard()
 		return nil, err
-	}
-	if err := c.Commit(); err != nil {
-		c.Discard()
-		slog.Error("edit: commit rewrite failed", "book_id", b.Meta.ID, "title", b.Title, "error", err)
-		return nil, err
-	}
-
-	bib := b.Bib
-	if book := c.Bib(); book != nil {
-		bib = *book
 	}
 
 	meta := applyMeta(b.Meta, e)
-	location := l.store.Layout(bib.Authors, bib.Title, meta.ID)
-	if location.Dir() != b.Location.Dir() || location.Filename() != b.Location.Filename() {
-		if err := l.store.Move(b.Location, location); err != nil {
-			slog.Error("edit: move directory failed", "book_id", b.Meta.ID, "title", b.Title, "error", err)
-			return nil, err
-		}
-	}
-	if err := l.store.WriteMeta(location, &meta); err != nil {
-		slog.Error("edit: write meta failed", "book_id", b.Meta.ID, "title", b.Title, "error", err)
+	bib, err := epub.Rewrite(l.store.AbsPath(b.EpubPath), b, e)
+	if err != nil {
+		op.Cancel()
+		slog.Error("edit: rewrite failed", "book_id", b.Meta.ID, "title", b.Title, "error", err)
 		return nil, err
 	}
 
-	mt, err := l.store.Stat(location)
+	if bib == nil {
+		bib = &b.Bib
+	}
+
+	location := l.store.Layout(bib.Authors, bib.Title, meta.ID)
+	mt, err := l.store.Update(b.Location, location, &meta)
 	if err != nil {
-		slog.Error("edit: stat failed", "book_id", b.Meta.ID, "title", b.Title, "error", err)
+		slog.Error("edit: update failed", "book_id", b.Meta.ID, "title", b.Title, "error", err)
 		return nil, err
 	}
 

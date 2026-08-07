@@ -24,8 +24,8 @@ func (s *Store) ReadMeta(loc model.Location) (*model.Meta, error) {
 	return readMeta(s.metaPath(loc))
 }
 
-// WriteMeta atomically replaces the meta.toml sidecar for the book at loc.
-func (s *Store) WriteMeta(loc model.Location, meta *model.Meta) error {
+// writeMeta atomically replaces the meta.toml sidecar for the book at loc.
+func (s *Store) writeMeta(loc model.Location, meta *model.Meta) error {
 	return writeMeta(s.metaPath(loc), meta)
 }
 

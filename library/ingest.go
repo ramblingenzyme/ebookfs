@@ -100,15 +100,12 @@ func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 		}
 	}
 
-	if err := l.store.Ingest(epubPath, loc, &meta); err != nil {
-		cleanup()
-		return nil, err
-	}
-	mt, err := l.store.Stat(loc)
+	mt, err := l.store.Ingest(epubPath, loc, &meta)
 	if err != nil {
 		cleanup()
 		return nil, err
 	}
+
 	b := bookFromBib(*bib, meta, loc, mt)
 	if err := op.Put(b, mt); err != nil {
 		cleanup()

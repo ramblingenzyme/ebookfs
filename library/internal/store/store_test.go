@@ -245,7 +245,7 @@ func TestIngest(t *testing.T) {
 	loc := s.Layout([]model.Author{{Name: "Alice"}}, "Ingested", 10)
 	meta := &model.Meta{ID: 10}
 
-	if err := s.Ingest(tmpEpub, loc, meta); err != nil {
+	if _, err := s.Ingest(tmpEpub, loc, meta); err != nil {
 		t.Fatalf("Ingest: %v", err)
 	}
 
@@ -334,8 +334,8 @@ func TestReadMetaRoundTrip(t *testing.T) {
 		Tags:   []string{"sci-fi", "classic"},
 	}
 
-	if err := s.WriteMeta(loc, original); err != nil {
-		t.Fatalf("WriteMeta: %v", err)
+	if err := s.writeMeta(loc, original); err != nil {
+		t.Fatalf("writeMeta: %v", err)
 	}
 
 	got, err := s.ReadMeta(loc)
@@ -506,7 +506,7 @@ func TestIngestSurfacesWriteMetaFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := s.Ingest(staged, loc, &model.Meta{ID: 1}); err == nil {
+	if _, err := s.Ingest(staged, loc, &model.Meta{ID: 1}); err == nil {
 		t.Fatal("Ingest succeeded with an unwritable meta.toml, want the failure surfaced")
 	}
 	if _, err := os.Stat(bookDir); os.IsNotExist(err) {
@@ -521,7 +521,7 @@ func TestIngestMissingStagedEpub(t *testing.T) {
 	s, root := newStore(t)
 
 	loc := model.Location{EpubPath: filepath.Join("Alice/Title (1)", "Title - Alice.epub")}
-	err := s.Ingest(filepath.Join(t.TempDir(), "does-not-exist.epub"), loc, &model.Meta{ID: 1})
+	_, err := s.Ingest(filepath.Join(t.TempDir(), "does-not-exist.epub"), loc, &model.Meta{ID: 1})
 	if err == nil {
 		t.Fatal("Ingest succeeded with no staged epub, want the failure surfaced")
 	}

@@ -13,33 +13,16 @@ import (
 // write_test.go.
 
 // writeBib applies edits to the package document of the epub at epubPath,
-// rewrites the file in place, and returns the re-parsed Book. A test-only
-// convenience over Prepare/Commit; production code drives that flow through
-// library.Edit.
+// rewrites the file in place, and returns the re-parsed Book. Production code
+// drives that flow through library.Edit.
 func writeBib(epubPath string, e model.Edits) (*model.Bib, error) {
-	c, err := Prepare(epubPath, &model.Book{Location: model.Location{EpubPath: epubPath}}, e)
-	if err != nil {
-		return nil, err
-	}
-	if err := c.Commit(); err != nil {
-		c.Discard()
-		return nil, err
-	}
-	return c.Bib(), nil
+	return Rewrite(epubPath, &model.Book{Location: model.Location{EpubPath: epubPath}}, e)
 }
 
 // writeCover replaces the cover image entry (coverPath, as resolved by Parse)
 // with img, rewrites the file in place, and returns the re-parsed Book.
 func writeCover(epubPath, coverPath string, img []byte) (*model.Bib, error) {
-	c, err := Prepare(epubPath, &model.Book{Location: model.Location{EpubPath: epubPath}, Bib: model.Bib{CoverPath: coverPath}}, model.Edits{Cover: &img})
-	if err != nil {
-		return nil, err
-	}
-	if err := c.Commit(); err != nil {
-		c.Discard()
-		return nil, err
-	}
-	return c.Bib(), nil
+	return Rewrite(epubPath, &model.Book{Location: model.Location{EpubPath: epubPath}, Bib: model.Bib{CoverPath: coverPath}}, model.Edits{Cover: &img})
 }
 
 type entry struct {
