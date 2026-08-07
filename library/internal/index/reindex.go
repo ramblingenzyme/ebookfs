@@ -37,12 +37,8 @@ type BookPath struct {
 	Info drift.PathInfo
 }
 
-// Rebuild replaces the entire index with books, dropping and recreating tables
-// if the schema is stale. maxID advances the id sequence past all reindexed ids.
-// skipped maps the library path of each directory that could not be indexed to
-// the file state it had; they are recorded rather than forgotten so AllPathInfo
-// can report every path the rebuild accounted for.
-func (idx *Index) Rebuild(books []BookPath, skipped map[string]drift.PathInfo, maxID int64) error {
+// ensureSchema checks the schema version and recreates tables if needed.
+func (idx *Index) ensureSchema() error {
 	v, err := idx.getSchemaVersion()
 	if err != nil {
 		return err
@@ -55,13 +51,18 @@ func (idx *Index) Rebuild(books []BookPath, skipped map[string]drift.PathInfo, m
 			return fmt.Errorf("resetting index schema: %w", err)
 		}
 	}
+	return nil
+}
 
+// rebuildTx executes the rebuild transaction: clears tables, inserts books and skipped entries,
+// updates the ID sequence, and removes the pending op marker.
+func (idx *Index) rebuildTx(books []BookPath, skipped map[string]drift.PathInfo, maxID int64) error {
 	opID := newOpID()
 	if err := idx.wq.InsertPendingOp(idx.ctx, opID); err != nil {
 		return err
 	}
 
-	if err := idx.withTx(func(q *dbsqlc.Queries, tx *sql.Tx) error {
+	return idx.withTx(func(q *dbsqlc.Queries, tx *sql.Tx) error {
 		for _, t := range []string{
 			"book_authors", "book_tags", "identifiers",
 			"books", "authors", "series", "tags", "skipped_books",
@@ -96,7 +97,20 @@ func (idx *Index) Rebuild(books []BookPath, skipped map[string]drift.PathInfo, m
 		}
 
 		return q.DeleteAllPendingOps(idx.ctx)
-	}); err != nil {
+	})
+}
+
+// Rebuild replaces the entire index with books, dropping and recreating tables
+// if the schema is stale. maxID advances the id sequence past all reindexed ids.
+// skipped maps the library path of each directory that could not be indexed to
+// the file state it had; they are recorded rather than forgotten so AllPathInfo
+// can report every path the rebuild accounted for.
+func (idx *Index) Rebuild(books []BookPath, skipped map[string]drift.PathInfo, maxID int64) error {
+	if err := idx.ensureSchema(); err != nil {
+		return err
+	}
+
+	if err := idx.rebuildTx(books, skipped, maxID); err != nil {
 		return err
 	}
 

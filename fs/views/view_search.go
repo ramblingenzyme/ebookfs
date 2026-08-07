@@ -58,51 +58,63 @@ func parseSearchQuery(query string) (model.Query, error) {
 	return q, nil
 }
 
+// matchesAuthors checks if the book has any of the query's authors.
+func matchesAuthors(q model.Query, b *model.Book) bool {
+	return slices.ContainsFunc(b.Authors, func(a model.Author) bool {
+		return slices.Contains(q.Authors, a.Name)
+	})
+}
+
+// matchesTags checks if the book has any of the query's tags.
+func matchesTags(q model.Query, b *model.Book) bool {
+	return matchesAny(b.Meta.Tags, q.Tags)
+}
+
+// matchesSeries checks if the book belongs to any of the query's series.
+func matchesSeries(q model.Query, b *model.Book) bool {
+	return b.Series != nil && slices.Contains(q.Series, b.Series.Name)
+}
+
+// matchesStatus checks if the book has any of the query's statuses.
+func matchesStatus(q model.Query, b *model.Book) bool {
+	return slices.Contains(q.Status, b.Meta.Status)
+}
+
+// matchesIDs checks if the book has any of the query's IDs.
+func matchesIDs(q model.Query, b *model.Book) bool {
+	return slices.Contains(q.IDs, b.Meta.ID)
+}
+
+// matchesTitles checks if the book's title contains any of the query's title substrings.
+func matchesTitles(q model.Query, b *model.Book) bool {
+	lower := strings.ToLower(b.Title)
+	return slices.ContainsFunc(q.Titles, func(title string) bool {
+		return strings.Contains(lower, strings.ToLower(title))
+	})
+}
+
 // makeMatchesFn returns a predicate that reports whether a book matches q.
 // Within each field values are OR'd; across fields they're AND'd. The predicate
 // is the single membership authority for a search handle: ResyncView replays
 // every registered book through it at query time, and registry events evaluate
 // it for live updates, so both paths agree by construction.
 func makeMatchesFn(q model.Query) func(*model.Book) bool {
-	titles := make([]string, len(q.Titles))
-	for i, t := range q.Titles {
-		titles[i] = strings.ToLower(t)
+	type matcherEntry struct {
+		cond    bool
+		matcher func(model.Query, *model.Book) bool
 	}
+	entries := []matcherEntry{
+		{len(q.Authors) > 0, matchesAuthors},
+		{len(q.Tags) > 0, matchesTags},
+		{len(q.Series) > 0, matchesSeries},
+		{len(q.Status) > 0, matchesStatus},
+		{len(q.IDs) > 0, matchesIDs},
+		{len(q.Titles) > 0, matchesTitles},
+	}
+
 	return func(b *model.Book) bool {
-		if len(q.Authors) > 0 {
-			match := slices.ContainsFunc(b.Authors, func(a model.Author) bool {
-				return slices.Contains(q.Authors, a.Name)
-			})
-			if !match {
-				return false
-			}
-		}
-		if len(q.Tags) > 0 {
-			if !matchesAny(b.Meta.Tags, q.Tags) {
-				return false
-			}
-		}
-		if len(q.Series) > 0 {
-			if b.Series == nil || !slices.Contains(q.Series, b.Series.Name) {
-				return false
-			}
-		}
-		if len(q.Status) > 0 {
-			if !slices.Contains(q.Status, b.Meta.Status) {
-				return false
-			}
-		}
-		if len(q.IDs) > 0 {
-			if !slices.Contains(q.IDs, b.Meta.ID) {
-				return false
-			}
-		}
-		if len(titles) > 0 {
-			lower := strings.ToLower(b.Title)
-			match := slices.ContainsFunc(titles, func(title string) bool {
-				return strings.Contains(lower, title)
-			})
-			if !match {
+		for _, e := range entries {
+			if e.cond && !e.matcher(q, b) {
 				return false
 			}
 		}
