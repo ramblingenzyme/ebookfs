@@ -2,6 +2,7 @@ package library
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"slices"
 
@@ -61,4 +62,20 @@ func exportDirname(b *model.Book) string {
 		name = fat
 	}
 	return name
+}
+
+func (l *libraryImpl) Exporter(cfg config.ReaderConfig) (Exporter, error) {
+	e, err := newExporter(cfg, l)
+	if err != nil {
+		return nil, err
+	}
+	l.expMu.Lock()
+	l.exporters = append(l.exporters, e)
+	l.expMu.Unlock()
+	kind := "epub"
+	if cfg.Convert {
+		kind = "kepub"
+	}
+	slog.Info("export configured", "kind", kind, "statuses", cfg.Statuses)
+	return e, nil
 }

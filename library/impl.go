@@ -3,13 +3,11 @@ package library
 import (
 	"fmt"
 	"log/slog"
-	"os"
 	"slices"
 	"sync"
 	"time"
 
 	"github.com/ramblingenzyme/ebookfs/internal/syncutil"
-	"github.com/ramblingenzyme/ebookfs/library/config"
 	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index"
@@ -58,100 +56,6 @@ func (l *libraryImpl) Close() error {
 	}
 	l.expMu.Unlock()
 	return l.index.Close()
-}
-
-func (l *libraryImpl) Exporter(cfg config.ReaderConfig) (Exporter, error) {
-	e, err := newExporter(cfg, l)
-	if err != nil {
-		return nil, err
-	}
-	l.expMu.Lock()
-	l.exporters = append(l.exporters, e)
-	l.expMu.Unlock()
-	kind := "epub"
-	if cfg.Convert {
-		kind = "kepub"
-	}
-	slog.Info("export configured", "kind", kind, "statuses", cfg.Statuses)
-	return e, nil
-}
-
-func (l *libraryImpl) CreateIngest() (IngestHandle, error) {
-	f, err := os.CreateTemp(l.inboxTemp, "*.epub")
-	if err != nil {
-		return nil, err
-	}
-	return &ingestHandle{file: f, ingestFn: l.ingestPath}, nil
-}
-
-// ingestPath parses the staged epub, lays it down in the store, and records it
-// in the index.
-func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
-	// Parse before taking ingestMu: it touches only this upload's staged temp
-	// file, so bulk uploads overlap their parsing instead of serializing on it.
-	bib, err := epub.Parse(epubPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if bib.Title == "" {
-		return nil, fmt.Errorf("epub has no title")
-	}
-	if len(bib.Authors) == 0 {
-		bib.Authors = []model.Author{{Name: model.UnknownAuthor, SortName: model.UnknownAuthor}}
-	}
-
-	l.ingestMu.Lock()
-	defer l.ingestMu.Unlock()
-
-	if l.store.Exists(bib.Authors, bib.Title) {
-		return nil, fmt.Errorf("book already in library: %q", bib.Title)
-	}
-
-	id, err := l.index.NextID()
-	if err != nil {
-		return nil, err
-	}
-
-	now := time.Now()
-	meta := model.Meta{
-		ID:           id,
-		DateAdded:    now,
-		DateModified: now,
-	}
-	loc := l.store.Layout(bib.Authors, bib.Title, id)
-
-	op := l.index.BeginOp()
-	if err := op.MarkPending(); err != nil {
-		return nil, err
-	}
-
-	cleanup := func() {
-		if rmErr := l.store.Delete(loc); rmErr != nil {
-			slog.Error("ingest cleanup failed", "path", loc.Dir(), "error", rmErr)
-		} else {
-			// Clean up: nothing was written to disk, so there is no state to heal.
-			op.Cancel()
-		}
-	}
-
-	if err := l.store.Ingest(epubPath, loc, &meta); err != nil {
-		cleanup()
-		return nil, err
-	}
-	mt, err := l.store.Stat(loc)
-	if err != nil {
-		cleanup()
-		return nil, err
-	}
-	b := bookFromBib(*bib, meta, loc, mt)
-	if err := op.Put(b, mt); err != nil {
-		cleanup()
-		return nil, err
-	}
-
-	slog.Info("ingest: book added", "book_id", b.Meta.ID, "title", b.Title, "authors", model.JoinAuthors(bib.Authors, ", "))
-	return b, nil
 }
 
 func (l *libraryImpl) Query(f model.Filter) ([]*model.Book, error) {
