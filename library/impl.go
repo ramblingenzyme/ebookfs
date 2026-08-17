@@ -125,10 +125,6 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 		return nil, err
 	}
 
-	if bib == nil {
-		bib = &b.Bib
-	}
-
 	location := l.store.Layout(bib.Authors, bib.Title, meta.ID)
 	mt, err := l.store.Update(b.Location, location, &meta)
 	if err != nil {
@@ -136,7 +132,7 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 		return nil, err
 	}
 
-	updated := bookFromBib(*bib, meta, location, mt)
+	updated := bookFromBib(bib, meta, location, mt)
 	if err := op.Put(updated, mt); err != nil {
 		return nil, err
 	}

@@ -10,7 +10,7 @@ func TestSeriesEntryName(t *testing.T) {
 	tests := []struct {
 		name string
 		book *model.Book
-		pad  int
+		pad  int32
 		want string
 	}{
 		{
@@ -58,16 +58,6 @@ func TestSeriesEntryName(t *testing.T) {
 				t.Errorf("seriesEntryName = %q, want %q", got, tc.want)
 			}
 		})
-	}
-}
-
-func TestSeriesEntryNameFunc(t *testing.T) {
-	fn := seriesEntryNameFunc(0)
-	book := &model.Book{Bib: model.Bib{Title: "Test", Series: &model.SeriesRef{Index: 1}}}
-	got := fn(book)
-	want := "1 - Test"
-	if got != want {
-		t.Errorf("seriesEntryNameFunc = %q, want %q", got, want)
 	}
 }
 

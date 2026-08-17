@@ -128,19 +128,14 @@ var fields = map[string]field{
 		},
 	},
 	"series": {
-		get: func(b *model.Book) string {
-			if b.Series == nil {
-				return ""
-			}
-			return b.Series.Name
-		},
+		get: func(b *model.Book) string { return b.SeriesName() },
 		edits: func(s string) (model.Edits, error) {
 			return model.Edits{Series: &s}, nil
 		},
 	},
 	"series_index": {
 		get: func(b *model.Book) string {
-			if b.Series == nil {
+			if !b.HasSeries() {
 				return ""
 			}
 			return strconv.FormatFloat(b.Series.Index, 'f', 1, 64)

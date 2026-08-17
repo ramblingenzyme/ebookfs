@@ -2,18 +2,19 @@ package views
 
 import (
 	"fmt"
-	"github.com/ramblingenzyme/ebookfs/fs/book"
-	"github.com/ramblingenzyme/ebookfs/fs/registry"
 	"strconv"
 	"strings"
 	"sync/atomic"
+
+	"github.com/ramblingenzyme/ebookfs/fs/book"
+	"github.com/ramblingenzyme/ebookfs/fs/registry"
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-func seriesEntryName(b *model.Book, pad int) string {
+func seriesEntryName(b *model.Book, pad int32) string {
 	s := strconv.FormatFloat(b.Series.Index, 'f', 1, 64)
 	s = strings.TrimRight(s, "0")
 	s = strings.TrimRight(s, ".")
@@ -27,10 +28,6 @@ func seriesEntryName(b *model.Book, pad int) string {
 		}
 	}
 	return fmt.Sprintf("%s - %s", s, b.Title)
-}
-
-func seriesEntryNameFunc(pad int) func(*model.Book) string {
-	return func(b *model.Book) string { return seriesEntryName(b, pad) }
 }
 
 // seriesBookListDir lists one series' books as namedBookDir entries. Entry
@@ -59,7 +56,7 @@ func (s *seriesBookListDir) Add(dir *book.BookDir) {
 	n := &namedBookDir{
 		BookDir:  dir,
 		baseStat: *newStat(s.f, "", 0555|proto.DMDIR),
-		name:     func(b *model.Book) string { return seriesEntryName(b, int(s.pad.Load())) },
+		name:     func(b *model.Book) string { return seriesEntryName(b, s.pad.Load()) },
 	}
 	s.children[dir.Book().Meta.ID] = n
 	s.StaticDir.AddChild(n)
@@ -83,7 +80,7 @@ func (s *seriesBookListDir) Remove(dir *book.BookDir) {
 func (s *seriesBookListDir) repad() {
 	var maxIdx float64
 	for _, n := range s.children {
-		if b := n.Book(); b.Series != nil && b.Series.Index > maxIdx {
+		if b := n.Book(); b.HasSeries() && b.Series.Index > maxIdx {
 			maxIdx = b.Series.Index
 		}
 	}
@@ -111,16 +108,16 @@ func (d *bySeriesDir) seriesDir(name string) registry.BookView {
 
 func (d *bySeriesDir) Add(dir *book.BookDir) {
 	b := dir.Book()
-	if b.Series == nil {
+	if !b.HasSeries() {
 		return
 	}
-	d.seriesDir(b.Series.Name).Add(dir)
+	d.seriesDir(b.SeriesName()).Add(dir)
 }
 
 func (d *bySeriesDir) Remove(dir *book.BookDir) {
 	b := dir.Book()
-	if b.Series == nil {
+	if !b.HasSeries() {
 		return
 	}
-	d.removeLister(b.Series.Name, dir)
+	d.removeLister(b.SeriesName(), dir)
 }

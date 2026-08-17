@@ -93,9 +93,9 @@ func (c *Cache) Ensure(b *model.Book) error {
 	return c.ensureLocked(b)
 }
 
-// Open ensures b's kepub is fresh, then opens it for reading. The returned
-// *epub.Reader satisfies model.EpubReader. This is the read-path backstop when
-// the proactive warmer hasn't run (or its conversion is still in flight).
+// Open ensures b's kepub is fresh, then opens it for reading. This is the
+// read-path backstop when the proactive warmer hasn't run (or its conversion is
+// still in flight).
 func (c *Cache) Open(b *model.Book) (model.EpubReader, error) {
 	if err := c.Ensure(b); err != nil {
 		return nil, err

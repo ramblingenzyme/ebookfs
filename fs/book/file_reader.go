@@ -25,7 +25,15 @@ func NewReaderFile(stat *proto.Stat, exp library.Exporter, book func() *model.Bo
 			if exp == nil {
 				return nil, errors.New("exporter not available")
 			}
-			return exp.Open(book())
+			b := book()
+			if b == nil {
+				return nil, errors.New("book snapshot not available")
+			}
+			r, err := exp.Open(b)
+			if err != nil {
+				return nil, err
+			}
+			return r, nil
 		}),
 		exp:  exp,
 		book: book,
@@ -36,8 +44,10 @@ func NewReaderFile(stat *proto.Stat, exp library.Exporter, book func() *model.Bo
 // so a cold kepub lists as length 0 until its cache is warm.
 func (r *ReaderFile) Stat() proto.Stat {
 	s := r.BaseFile.Stat()
-	if size, ok := r.exp.Size(r.book()); ok {
-		s.Length = uint64(size)
+	if b := r.book(); b != nil {
+		if size, ok := r.exp.Size(b); ok {
+			s.Length = uint64(size)
+		}
 	}
 	return s
 }

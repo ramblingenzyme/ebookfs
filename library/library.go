@@ -37,6 +37,7 @@ type Library interface {
 	// Content returns an open handle to the book's epub content. The caller
 	// must close it. The handle reflects the book at the time of the call;
 	// after a concurrent Edit, call Content again to read updated content.
+	// The returned reader is non-nil iff err is nil.
 	Content(id int64) (model.EpubReader, error)
 	Edit(id int64, e model.Edits) (*model.Book, error)
 	Delete(id int64) error
@@ -55,6 +56,7 @@ type Library interface {
 type Exporter interface {
 	// Open returns a handle to the book's export rendition. The handle is a
 	// snapshot — after the book is edited, call Open again for updated content.
+	// The returned reader is non-nil iff err is nil.
 	Open(*model.Book) (model.EpubReader, error)
 	Size(*model.Book) (int64, bool) // cheap; 9P stat length, false when cold
 	Close() error                   // releases exporter resources; called by Library.Close

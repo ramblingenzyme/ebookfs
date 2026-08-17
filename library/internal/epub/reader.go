@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+
+	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 var ErrClosed = errors.New("epub reader is closed")
@@ -24,8 +26,9 @@ type Reader struct {
 
 // OpenReader opens the epub at epubPath and reads the zip central directory.
 // coverPath is the zip-relative path to the cover image (from model.Bib.CoverPath);
-// it may be empty. The returned Reader keeps the file open; the caller must call Close.
-func OpenReader(epubPath, coverPath string) (*Reader, error) {
+// it may be empty. The returned reader keeps the file open; the caller must call
+// Close. The reader is non-nil iff err is nil.
+func OpenReader(epubPath, coverPath string) (model.EpubReader, error) {
 	f, err := os.Open(epubPath)
 	if err != nil {
 		return nil, err

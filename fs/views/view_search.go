@@ -72,7 +72,7 @@ func matchesTags(q model.Query, b *model.Book) bool {
 
 // matchesSeries checks if the book belongs to any of the query's series.
 func matchesSeries(q model.Query, b *model.Book) bool {
-	return b.Series != nil && slices.Contains(q.Series, b.Series.Name)
+	return b.HasSeries() && slices.Contains(q.Series, b.SeriesName())
 }
 
 // matchesStatus checks if the book has any of the query's statuses.

@@ -15,13 +15,13 @@ import (
 // writeBib applies edits to the package document of the epub at epubPath,
 // rewrites the file in place, and returns the re-parsed Book. Production code
 // drives that flow through library.Edit.
-func writeBib(epubPath string, e model.Edits) (*model.Bib, error) {
+func writeBib(epubPath string, e model.Edits) (model.Bib, error) {
 	return Rewrite(epubPath, &model.Book{Location: model.Location{EpubPath: epubPath}}, e)
 }
 
 // writeCover replaces the cover image entry (coverPath, as resolved by Parse)
 // with img, rewrites the file in place, and returns the re-parsed Book.
-func writeCover(epubPath, coverPath string, img []byte) (*model.Bib, error) {
+func writeCover(epubPath, coverPath string, img []byte) (model.Bib, error) {
 	return Rewrite(epubPath, &model.Book{Location: model.Location{EpubPath: epubPath}, Bib: model.Bib{CoverPath: coverPath}}, model.Edits{Cover: &img})
 }
 

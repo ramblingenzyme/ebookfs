@@ -277,7 +277,7 @@ func renameSeries(args []string, lib library.Library, reg *registry.BookRegistry
 	var errs []string
 
 	for _, b := range books {
-		if b.Series == nil || b.Series.Name != old {
+		if !b.HasSeries() || b.SeriesName() != old {
 			continue
 		}
 		if err := reg.CommitEdit(b.Meta.ID, model.Edits{Series: &new}); err != nil {

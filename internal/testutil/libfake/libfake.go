@@ -62,8 +62,8 @@ func NewEpubReader(data []byte, opfFn, coverFn func() ([]byte, error)) *EpubRead
 }
 
 // Lib is a fake library.Library whose behavior is injected per method; a nil
-// hook yields a benign zero result (except Edit, which errors to catch
-// unstubbed edit paths).
+// hook yields a benign zero result (except Edit and Content, which error to
+// catch unstubbed edit/read paths).
 type Lib struct {
 	EditFn         func(int64, model.Edits) (*model.Book, error)
 	IngestFn       func(string) (*model.Book, error)
@@ -99,7 +99,7 @@ func (l Lib) Content(id int64) (model.EpubReader, error) {
 	if l.ContentFn != nil {
 		return l.ContentFn(id)
 	}
-	return nil, nil
+	return nil, errors.New("libfake.Lib: no ContentFn")
 }
 
 func (l Lib) Query(f model.Filter) ([]*model.Book, error) {
@@ -166,7 +166,7 @@ func (e Exporter) Open(b *model.Book) (model.EpubReader, error) {
 	if e.OpenFn != nil {
 		return e.OpenFn(b)
 	}
-	return nil, nil
+	return nil, errors.New("libfake.Exporter: no OpenFn")
 }
 
 func (e Exporter) Close() error { return nil }

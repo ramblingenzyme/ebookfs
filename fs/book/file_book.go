@@ -27,12 +27,13 @@ func newOPFFile(stat *proto.Stat, lib library.Library, book func() *model.Book) 
 			if lib == nil {
 				return nil, errors.New("library not available")
 			}
-			r, err := lib.Content(book().Meta.ID)
+			b := book()
+			if b == nil {
+				return nil, errors.New("book snapshot not available")
+			}
+			r, err := lib.Content(b.Meta.ID)
 			if err != nil {
 				return nil, err
-			}
-			if r == nil {
-				return nil, nil
 			}
 			defer r.Close()
 			return r.OPF()
@@ -65,12 +66,13 @@ func newCoverFile(stat *proto.Stat, lib library.Library, edit func(int64, model.
 			if lib == nil {
 				return nil, errors.New("library not available")
 			}
-			r, err := lib.Content(book().Meta.ID)
+			b := book()
+			if b == nil {
+				return nil, errors.New("book snapshot not available")
+			}
+			r, err := lib.Content(b.Meta.ID)
 			if err != nil {
 				return nil, err
-			}
-			if r == nil {
-				return nil, nil
 			}
 			defer r.Close()
 			return r.Cover()
@@ -118,12 +120,13 @@ func newEpubFile(stat *proto.Stat, lib library.Library, book func() *model.Book)
 			if lib == nil {
 				return nil, errors.New("library not available")
 			}
-			r, err := lib.Content(book().Meta.ID)
+			b := book()
+			if b == nil {
+				return nil, errors.New("book snapshot not available")
+			}
+			r, err := lib.Content(b.Meta.ID)
 			if err != nil {
 				return nil, err
-			}
-			if r == nil {
-				return nil, errors.New("library returned nil content")
 			}
 			return r, nil
 		}),

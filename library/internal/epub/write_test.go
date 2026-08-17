@@ -476,7 +476,7 @@ func TestWriteCoverRejectsFormatMismatch(t *testing.T) {
 // book model claiming series. Validate refuses a SeriesIndex edit on a book
 // with no series at all, so the model has to carry one — which is exactly the
 // shape library.Edit hands in, having read the book from the index.
-func reindexSeries(t *testing.T, path, series string, index float64) *model.Bib {
+func reindexSeries(t *testing.T, path, series string, index float64) model.Bib {
 	t.Helper()
 	b := &model.Book{
 		Location: model.Location{EpubPath: path},
