@@ -11,6 +11,54 @@ import (
 	"strings"
 )
 
+const bookExists = `-- name: BookExists :one
+
+
+SELECT EXISTS (
+    SELECT 1 FROM books b
+    WHERE b.title = ?1
+      AND (SELECT COUNT(*) FROM book_authors WHERE book_id = b.id)
+          = CAST(?2 AS INTEGER)
+      AND NOT EXISTS (
+          SELECT 1 FROM book_authors ba
+          JOIN authors a ON a.id = ba.author_id
+          WHERE ba.book_id = b.id AND a.name NOT IN (/*SLICE:names*/?))
+)
+`
+
+type BookExistsParams struct {
+	Title       string
+	AuthorCount int64
+	Names       []string
+}
+
+// Duplicate detection
+// BookExists is the ingest duplicate rule: this exact title, and this exact set
+// of author names. The book must have author_count authors and none outside the
+// slice, which together force the two sets to be equal. Order and repetition
+// never enter, so the same book credited "A & B" by one source and "B & A" by
+// another is one book. An empty slice expands to IN (NULL), never true, leaving
+// "has no authors". COUNT(*) on book_authors is the book's distinct author
+// count: authors.name is UNIQUE and book_authors is keyed (book_id, author_id).
+func (q *Queries) BookExists(ctx context.Context, arg BookExistsParams) (bool, error) {
+	query := bookExists
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.Title)
+	queryParams = append(queryParams, arg.AuthorCount)
+	if len(arg.Names) > 0 {
+		for _, v := range arg.Names {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:names*/?", strings.Repeat(",?", len(arg.Names))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:names*/?", "NULL", 1)
+	}
+	row := q.db.QueryRowContext(ctx, query, queryParams...)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const countPendingOps = `-- name: CountPendingOps :one
 SELECT COUNT(*) FROM pending_ops
 `
@@ -391,6 +439,7 @@ func (q *Queries) InsertAuthor(ctx context.Context, arg InsertAuthorParams) erro
 
 const insertBook = `-- name: InsertBook :exec
 
+
 INSERT INTO books (
     id, title, sort_title, pubdate, description, language,
     epub_path, cover_path, status, rating,
@@ -422,6 +471,10 @@ type InsertBookParams struct {
 	MetaSize     int64
 }
 
+// Editing notes: sqlc's SQLite parser rejects an em dash anywhere in a comment,
+// and reads a comment line whose first word after the dashes is "name" as a
+// query-name directive. A bare comparison against COUNT(...) types the argument
+// as a string, so wrap it in CAST(... AS INTEGER) to get an int64.
 // Mutation operations
 func (q *Queries) InsertBook(ctx context.Context, arg InsertBookParams) error {
 	_, err := q.db.ExecContext(ctx, insertBook,

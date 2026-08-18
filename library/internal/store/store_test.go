@@ -205,31 +205,6 @@ func TestLayoutUnknownAuthor(t *testing.T) {
 		t.Errorf("EpubPath = %q, want %q", loc.EpubPath, filepath.Join("Unknown/Untitled (99)", "Untitled.epub"))
 	}
 }
-
-func TestExists(t *testing.T) {
-	s, root := newStore(t)
-
-	writeBook(t, root, "Author A/Book Title (1)", "Book Title - Author A.epub", "fake epub", nil)
-
-	t.Run("book exists", func(t *testing.T) {
-		if !s.Exists([]model.Author{{Name: "Author A"}}, "Book Title") {
-			t.Error("Exists returned false, want true")
-		}
-	})
-
-	t.Run("book does not exist", func(t *testing.T) {
-		if s.Exists([]model.Author{{Name: "Author A"}}, "Different Title") {
-			t.Error("Exists returned true, want false")
-		}
-	})
-
-	t.Run("author dir does not exist", func(t *testing.T) {
-		if s.Exists([]model.Author{{Name: "Nobody"}}, "Anything") {
-			t.Error("Exists returned true for non-existent author dir")
-		}
-	})
-}
-
 func TestIngest(t *testing.T) {
 	s, root := newStore(t)
 
@@ -354,6 +329,22 @@ func TestReadMetaRoundTrip(t *testing.T) {
 	}
 	if len(got.Tags) != len(original.Tags) || got.Tags[0] != original.Tags[0] {
 		t.Errorf("Tags = %v, want %v", got.Tags, original.Tags)
+	}
+}
+
+func TestPathTaken(t *testing.T) {
+	s, root := newStore(t)
+
+	writeBook(t, root, "Author A/Book Title (1)", "Book Title - Author A.epub", "fake epub", nil)
+
+	if !s.PathTaken([]model.Author{{Name: "Author A"}}, "Book Title") {
+		t.Error("PathTaken returned false for a file that is on disk")
+	}
+	if s.PathTaken([]model.Author{{Name: "Author A"}}, "Different Title") {
+		t.Error("PathTaken returned true for a title that is not on disk")
+	}
+	if s.PathTaken([]model.Author{{Name: "Nobody"}}, "Anything") {
+		t.Error("PathTaken returned true for a non-existent author dir")
 	}
 }
 

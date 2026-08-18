@@ -19,6 +19,17 @@ import (
 // errors.Is; anything else from the same call is an index or store failure.
 var ErrBookNotFound = errors.New("no such book")
 
+// ErrDuplicate is wrapped into the error an ingest returns when the library
+// already holds a book with the same title and the same set of authors.
+var ErrDuplicate = errors.New("book already in library")
+
+// ErrDuplicateOnDisk is wrapped into the error an ingest returns when no
+// indexed book matches, but a file for these authors and this title is already
+// in the library tree — a book the indexer skipped. Ingesting anyway would
+// leave two copies on disk, one of them invisible. Reindex or remove the
+// existing file.
+var ErrDuplicateOnDisk = errors.New("book already on disk but not indexed")
+
 // Library defines the public API for filesystem and index operations on the
 // book collection. The concrete implementation is unexported; construct via New.
 //

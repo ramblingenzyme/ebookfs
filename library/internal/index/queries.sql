@@ -1,3 +1,8 @@
+-- Editing notes: sqlc's SQLite parser rejects an em dash anywhere in a comment,
+-- and reads a comment line whose first word after the dashes is "name" as a
+-- query-name directive. A bare comparison against COUNT(...) types the argument
+-- as a string, so wrap it in CAST(... AS INTEGER) to get an int64.
+
 -- Mutation operations
 
 -- name: InsertBook :exec
@@ -98,6 +103,28 @@ SELECT book_id, scheme, value
 FROM identifiers
 WHERE book_id IN (sqlc.slice('book_ids'))
 ORDER BY book_id;
+
+-- Duplicate detection
+
+-- BookExists is the ingest duplicate rule: this exact title, and this exact set
+-- of author names. The book must have author_count authors and none outside the
+-- slice, which together force the two sets to be equal. Order and repetition
+-- never enter, so the same book credited "A & B" by one source and "B & A" by
+-- another is one book. An empty slice expands to IN (NULL), never true, leaving
+-- "has no authors". COUNT(*) on book_authors is the book's distinct author
+-- count: authors.name is UNIQUE and book_authors is keyed (book_id, author_id).
+
+-- name: BookExists :one
+SELECT EXISTS (
+    SELECT 1 FROM books b
+    WHERE b.title = sqlc.arg(title)
+      AND (SELECT COUNT(*) FROM book_authors WHERE book_id = b.id)
+          = CAST(sqlc.arg(author_count) AS INTEGER)
+      AND NOT EXISTS (
+          SELECT 1 FROM book_authors ba
+          JOIN authors a ON a.id = ba.author_id
+          WHERE ba.book_id = b.id AND a.name NOT IN (sqlc.slice('names')))
+);
 
 -- Stats operations
 

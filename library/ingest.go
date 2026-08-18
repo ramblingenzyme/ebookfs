@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
@@ -62,8 +63,16 @@ func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 	l.ingestMu.Lock()
 	defer l.ingestMu.Unlock()
 
-	if l.store.Exists(bib.Authors, bib.Title) {
-		return nil, fmt.Errorf("book already in library: %q", bib.Title)
+	dupe, err := l.index.Exists(bib.Title, authorNames(bib.Authors))
+	if err != nil {
+		return nil, err
+	}
+	if dupe {
+		return nil, fmt.Errorf("%q: %w", bib.Title, ErrDuplicate)
+	}
+	// The index answers for books it holds; it cannot answer for one it skipped.
+	if l.store.PathTaken(bib.Authors, bib.Title) {
+		return nil, fmt.Errorf("%q: %w", bib.Title, ErrDuplicateOnDisk)
 	}
 
 	id, err := l.index.NextID()
@@ -111,4 +120,19 @@ func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 
 	slog.Info("ingest: book added", "book_id", b.Meta.ID, "title", b.Title, "authors", model.JoinAuthors(bib.Authors, ", "))
 	return b, nil
+}
+
+// authorNames returns the authors' distinct display names, the set Index.Exists
+// compares against. Names are non-empty by construction — epub.Parse drops
+// creators whose name sanitizes to nothing and rejects a book left with none,
+// and Edits rejects an empty author name — so there is nothing to filter here.
+// Filtering would be wrong anyway: the set compared has to be the set written,
+// or the same book ingests twice.
+func authorNames(authors []model.Author) []string {
+	names := make([]string, len(authors))
+	for i, a := range authors {
+		names[i] = a.Name
+	}
+	slices.Sort(names)
+	return slices.Compact(names)
 }

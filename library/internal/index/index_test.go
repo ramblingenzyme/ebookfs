@@ -1410,3 +1410,57 @@ func TestOpenFailsCleanlyWhenDBPathIsDirectory(t *testing.T) {
 		t.Fatal("expected error opening index at a directory path")
 	}
 }
+
+// Exists is set equality, not overlap: order is irrelevant, and neither a
+// subset nor a superset of a book's authors matches. It is the ingest
+// duplicate rule, so a false positive silently refuses a real book and a false
+// negative files the same book twice.
+func TestExists(t *testing.T) {
+	idx := openTestIndex(t)
+
+	solo := makeTestBook(1, "Foundation", []string{"Isaac Asimov"}, "", model.StatusUnread)
+	duo := makeTestBook(2, "Good Omens", []string{"Neil Gaiman", "Terry Pratchett"}, "", model.StatusUnread)
+	if err := idx.Rebuild(bookPaths(solo, duo), nil, 2); err != nil {
+		t.Fatalf("Rebuild: %v", err)
+	}
+
+	hits := []struct {
+		title string
+		names []string
+	}{
+		{"Foundation", []string{"Isaac Asimov"}},
+		{"Good Omens", []string{"Neil Gaiman", "Terry Pratchett"}},
+		{"Good Omens", []string{"Terry Pratchett", "Neil Gaiman"}}, // the order the rule exists for
+	}
+	for _, tc := range hits {
+		ok, err := idx.Exists(tc.title, tc.names)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !ok {
+			t.Errorf("Exists(%q, %q) = false, want true", tc.title, tc.names)
+		}
+	}
+
+	misses := []struct {
+		why   string
+		title string
+		names []string
+	}{
+		{"subset of the authors", "Good Omens", []string{"Neil Gaiman"}},
+		{"superset of the authors", "Foundation", []string{"Isaac Asimov", "Neil Gaiman"}},
+		{"no authors at all", "Foundation", nil},
+		{"wrong author", "Foundation", []string{"Frank Herbert"}},
+		{"title is exact, not a substring", "found", []string{"Isaac Asimov"}},
+		{"right authors, other title", "Dune", []string{"Isaac Asimov"}},
+	}
+	for _, tc := range misses {
+		ok, err := idx.Exists(tc.title, tc.names)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ok {
+			t.Errorf("Exists(%q, %q) = true, want false (%s)", tc.title, tc.names, tc.why)
+		}
+	}
+}

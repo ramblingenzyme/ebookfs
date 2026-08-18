@@ -32,13 +32,15 @@ func (s *Store) AbsPath(relPath string) string {
 // Root returns the absolute path to the library root directory.
 func (s *Store) Root() string { return s.root }
 
-// Exists reports whether a book with the given authors and title is already
-// in the library, regardless of its database ID. Each book lives in a
-// subdirectory named "Title (id)" under the author directory — we iterate
-// those subdirectories and check whether any already holds the target epub
-// file. Walking avoids glob patterns entirely, so metacharacters like [],
-// ?, and * in names are handled correctly.
-func (s *Store) Exists(authors []model.Author, title string) bool {
+// PathTaken reports whether the library already holds an epub file for these
+// authors and this title. Index.Exists is the duplicate rule; this is the
+// backstop for what the index cannot see, a book on disk that the indexer
+// skipped. Being path-derived it can miss (author order and FAT sanitization
+// both change the path), which is why it is a guard and not the rule.
+//
+// Each book lives in a subdirectory named "Title (id)" under the author
+// directory, so we walk those rather than glob — titles may contain [], ? and *.
+func (s *Store) PathTaken(authors []model.Author, title string) bool {
 	authorDir := filepath.Join(s.root, authorDirName(authors))
 	entries, err := os.ReadDir(authorDir)
 	if err != nil {
