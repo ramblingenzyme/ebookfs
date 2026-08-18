@@ -3,6 +3,7 @@ package ctl
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -62,6 +63,7 @@ func TestParseSelection(t *testing.T) {
 		{"10", false, []int64{10}, false},
 		{"", false, nil, true},
 		{"abc", false, nil, true},
+		{"1,abc", false, nil, true}, // no colon, so it stays an id-spec error
 	}
 
 	for _, tt := range tests {
@@ -82,6 +84,21 @@ func TestParseSelection(t *testing.T) {
 		if !slices.Equal(got.IDs, tt.wantIDs) {
 			t.Errorf("parseSelection(%q) IDs = %v, want %v", tt.spec, got.IDs, tt.wantIDs)
 		}
+	}
+}
+
+// parseSelection falls through to the shared query parser, so a ctl command can
+// select by metadata instead of by id.
+func TestParseSelectionQuerySyntax(t *testing.T) {
+	got, err := parseSelection("tag:sci-fi+status:unread")
+	if err != nil {
+		t.Fatalf("parseSelection: %v", err)
+	}
+	// ExactTitles: a ctl selection mutates books, so title: must not match
+	// substrings the way the search view does.
+	want := model.Query{Tags: []string{"sci-fi"}, Status: []string{"unread"}, ExactTitles: true}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("parseSelection = %+v, want %+v", got, want)
 	}
 }
 
@@ -250,6 +267,31 @@ func TestEditUnknownID(t *testing.T) {
 	result := execute("add-tag foo 999", lib, reg, cmdLog)
 	if !strings.Contains(result, "book 999: not found") {
 		t.Fatalf("expected a not-found error for id 999, got %q", result)
+	}
+}
+
+// A query that names an id alongside a filter must not report the id as
+// "not found" when the filter excludes it — the book exists, it just did not
+// match. Only a bare id-spec ("1,2,3") gets the typo-catching walk.
+func TestAddTagFilteredQueryDoesNotReportNotFound(t *testing.T) {
+	book := testutil.MakeBook(1, "Title", "Author")
+
+	lib := libfake.Lib{
+		SearchFn: func(q model.Query) ([]*model.Book, error) {
+			return nil, nil // book 1 exists but is filtered out by status:read
+		},
+		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
+			t.Fatalf("Edit should not be called, got %d", id)
+			return nil, nil
+		},
+	}
+
+	reg, cmdLog := newTestCtl(t, lib)
+	reg.Add(book)
+
+	result := execute("add-tag foo id:1+status:read", lib, reg, cmdLog)
+	if strings.Contains(result, "not found") {
+		t.Fatalf("filtered-out id must not be reported as not found, got %q", result)
 	}
 }
 

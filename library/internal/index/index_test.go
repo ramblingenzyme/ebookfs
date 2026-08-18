@@ -1034,6 +1034,26 @@ func TestSearch(t *testing.T) {
 		}
 	})
 
+	// ExactTitles turns the substring match into equality, so the same value
+	// that found Foundation above finds nothing.
+	t.Run("title exact", func(t *testing.T) {
+		books, err := idx.Search(model.Query{Titles: []string{"found"}, ExactTitles: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(books) != 0 {
+			t.Fatalf("got %d books, want 0", len(books))
+		}
+
+		books, err = idx.Search(model.Query{Titles: []string{"Foundation"}, ExactTitles: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(books) != 1 || books[0].Title != "Foundation" {
+			t.Fatalf("got %d books, want Foundation", len(books))
+		}
+	})
+
 	t.Run("author name", func(t *testing.T) {
 		books, err := idx.Search(model.Query{Authors: []string{"Isaac Asimov"}})
 		if err != nil {

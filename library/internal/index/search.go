@@ -7,7 +7,7 @@ import (
 )
 
 // Search returns the books matching q, using SQL-level filtering for all fields
-// including title (LIKE). Within each field values are OR'd; across fields they're
+// including title (LIKE, or "=" when q.ExactTitles). Within each field values are OR'd; across fields they're
 // AND'd. Empty fields are ignored, so Query{} returns every book.
 func (idx *Index) Search(q model.Query) ([]*model.Book, error) {
 	bq := &bookQuery{order: "b.sort_title", limit: q.Limit}
@@ -22,7 +22,9 @@ func (idx *Index) Search(q model.Query) ([]*model.Book, error) {
 	addIn(bq, "b.status IN (%s)", q.Status)
 	addIn(bq, "b.id IN (%s)", q.IDs)
 
-	if len(q.Titles) > 0 {
+	if q.ExactTitles {
+		addIn(bq, "b.title IN (%s)", q.Titles)
+	} else if len(q.Titles) > 0 {
 		clauses := make([]string, len(q.Titles))
 		args := make([]any, len(q.Titles))
 		for i, t := range q.Titles {

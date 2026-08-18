@@ -13,6 +13,7 @@ import (
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/fs/textfmt"
 	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
@@ -115,7 +116,7 @@ var fields = map[string]field{
 		edits: func(s string) (model.Edits, error) {
 			var authors []model.Author
 			for _, line := range strings.Split(s, "\n") {
-				a := model.ParseAuthor(line)
+				a := textfmt.ParseAuthor(line)
 				if a.Name == "" {
 					continue
 				}

@@ -13,51 +13,10 @@ import (
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/fs/book"
 	"github.com/ramblingenzyme/ebookfs/fs/registry"
+	"github.com/ramblingenzyme/ebookfs/fs/textfmt"
 	"github.com/ramblingenzyme/ebookfs/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
-
-// parseSearchQuery parses a Plan 9 clone-style search query string into a
-// model.Query. The syntax is:
-//
-//	term1+term2+...
-//
-// where each term is prefix:value. Supported prefixes: author, tag, series,
-// status, id, title. Values sharing a prefix are OR'd within the field;
-// different prefixes are AND'd across fields. author matches an author's
-// display name or sort name, as Index.Search does.
-func parseSearchQuery(query string) (model.Query, error) {
-	parts := strings.Split(query, "+")
-	var q model.Query
-	for _, part := range parts {
-		split := strings.SplitN(part, ":", 2)
-		if len(split) != 2 { // 1 string, i.e. no ":"
-			return q, fmt.Errorf("invalid query term: %q", part)
-		}
-		prefix, val := split[0], split[1]
-		switch prefix {
-		case "author":
-			q.Authors = append(q.Authors, val)
-		case "tag":
-			q.Tags = append(q.Tags, val)
-		case "series":
-			q.Series = append(q.Series, val)
-		case "status":
-			q.Status = append(q.Status, val)
-		case "id":
-			id, err := strconv.ParseInt(val, 10, 64)
-			if err != nil {
-				return q, fmt.Errorf("invalid id %q: %w", val, err)
-			}
-			q.IDs = append(q.IDs, id)
-		case "title":
-			q.Titles = append(q.Titles, val)
-		default:
-			return q, fmt.Errorf("unknown search prefix: %q", prefix)
-		}
-	}
-	return q, nil
-}
 
 // Each matcher answers for one query field. An empty field imposes no
 // constraint and matches everything — without that guard Query{} would match
@@ -93,11 +52,14 @@ func matchesIDs(q model.Query, b *model.Book) bool {
 	return len(q.IDs) == 0 || slices.Contains(q.IDs, b.Meta.ID)
 }
 
-// matchesTitles matches any of q.Titles as a case-insensitive substring of the
-// book's title.
+// matchesTitles matches any of q.Titles against the book's title: exactly when
+// q.ExactTitles, otherwise as a case-insensitive substring.
 func matchesTitles(q model.Query, b *model.Book) bool {
 	if len(q.Titles) == 0 {
 		return true
+	}
+	if q.ExactTitles {
+		return slices.Contains(q.Titles, b.Title)
 	}
 	lower := strings.ToLower(b.Title)
 	return slices.ContainsFunc(q.Titles, func(title string) bool {
@@ -112,7 +74,7 @@ func matchesTitles(q model.Query, b *model.Book) bool {
 // time, and registry events evaluate it for live updates, so both paths agree by
 // construction. Only the selecting fields are honoured — Query.Recent and
 // Query.Limit order and cap a SQL result and mean nothing to a directory
-// listing, and parseSearchQuery has no syntax that sets them.
+// listing, and textfmt.ParseQuery has no syntax that sets them.
 func makeMatchesFn(q model.Query) func(*model.Book) bool {
 	return func(b *model.Book) bool {
 		return matchesAuthors(q, b) && matchesTags(q, b) && matchesSeries(q, b) &&
@@ -181,7 +143,7 @@ func (f *searchCtlFile) Close(fid uint64) error {
 		f.handle.close()
 		return nil
 	}
-	q, err := parseSearchQuery(s)
+	q, err := textfmt.ParseQuery(s)
 	if err != nil {
 		return err
 	}

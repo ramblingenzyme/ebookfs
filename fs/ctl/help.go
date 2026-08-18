@@ -48,10 +48,32 @@ ID-spec formats:
   *         all books
   42        single book
   1,2,3     comma-separated list
+  <query>   same syntax as the search view (see below)
+
+Query syntax:
+
+  prefix:value joined by "+". Prefixes: author, tag,
+  series, status, id, title. Repeating a prefix ORs the
+  values; different prefixes AND together.
+
+    tag:sci-fi+tag:fantasy    either tag
+    tag:sci-fi+status:unread  the tag AND the status
+
+  A value containing spaces must be quoted, since the
+  command line splits on unquoted whitespace:
+  author:"Isaac Asimov". Quoting the whole spec works too.
+
+  Every prefix is an exact match here, title: included —
+  in the search view title: matches substrings, but a
+  selection for a mutating command does not.
+
+  A query selects every matching book, so it can be as
+  sweeping as "*" without looking like it.
 
 Examples:
 
   add-tag "science fiction" 1,2,3
+  add-tag classic author:"Isaac Asimov"+status:read
   set-status reading *
   rename-author "Asimov" "Isaac Asimov|Asimov, Isaac"
   rename-tag "scifi" "sci-fi"

@@ -2,7 +2,6 @@ package views
 
 import (
 	"fmt"
-	"reflect"
 	"strconv"
 	"sync"
 	"testing"
@@ -138,57 +137,6 @@ func TestSearchHandleConcurrentRequeryAndRegistryEvents(t *testing.T) {
 	}
 }
 
-// TestParseSearchQuery covers the query language itself: every supported
-// prefix, the OR-within-a-field / AND-across-fields shape the syntax promises,
-// and each way a term can be rejected.
-func TestParseSearchQuery(t *testing.T) {
-	tests := []struct {
-		name    string
-		query   string
-		want    model.Query
-		wantErr bool
-	}{
-		{"author", "author:Isaac Asimov", model.Query{Authors: []string{"Isaac Asimov"}}, false},
-		{"tag", "tag:sci-fi", model.Query{Tags: []string{"sci-fi"}}, false},
-		{"series", "series:Foundation", model.Query{Series: []string{"Foundation"}}, false},
-		{"status", "status:unread", model.Query{Status: []string{"unread"}}, false},
-		{"id", "id:42", model.Query{IDs: []int64{42}}, false},
-		{"title", "title:Dune", model.Query{Titles: []string{"Dune"}}, false},
-		// A repeated prefix accumulates into one field, which the matcher ORs...
-		{"repeated prefix", "tag:sci-fi+tag:fantasy", model.Query{Tags: []string{"sci-fi", "fantasy"}}, false},
-		// ...while distinct prefixes populate distinct fields, which it ANDs.
-		{"distinct prefixes", "tag:sci-fi+status:unread", model.Query{Tags: []string{"sci-fi"}, Status: []string{"unread"}}, false},
-		// The term splits on its first colon only, so a value may contain more.
-		{"colon in value", "title:Dune: Part Two", model.Query{Titles: []string{"Dune: Part Two"}}, false},
-		// An empty value is a term, not a parse error — it reaches the matcher
-		// and simply matches nothing.
-		{"empty value", "tag:", model.Query{Tags: []string{""}}, false},
-		{"no colon", "sci-fi", model.Query{}, true},
-		{"unknown prefix", "publisher:Tor", model.Query{}, true},
-		{"non-numeric id", "id:abc", model.Query{}, true},
-		// Reached only if a caller skips the guard in searchCtlFile.Close,
-		// which drops empty writes before parsing.
-		{"empty query", "", model.Query{}, true},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := parseSearchQuery(tc.query)
-			if tc.wantErr {
-				if err == nil {
-					t.Fatalf("parseSearchQuery(%q) = %+v, want an error", tc.query, got)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("parseSearchQuery(%q): %v", tc.query, err)
-			}
-			if !reflect.DeepEqual(got, tc.want) {
-				t.Errorf("parseSearchQuery(%q) = %+v, want %+v", tc.query, got, tc.want)
-			}
-		})
-	}
-}
-
 // TestMakeMatchesFn covers the membership predicate field by field. It is the
 // single authority a handle uses for both its resync and its live updates, so
 // every field needs a matching and a non-matching case, and the AND across
@@ -242,6 +190,10 @@ func TestMakeMatchesFn(t *testing.T) {
 		{"title substring matches", model.Query{Titles: []string{"and Empire"}}, base, true},
 		{"title match ignores case", model.Query{Titles: []string{"FOUNDATION"}}, base, true},
 		{"title does not match", model.Query{Titles: []string{"Hobbit"}}, base, false},
+		// ExactTitles is ctl's setting, but the predicate honours it so this
+		// path and Index.Search stay one semantics.
+		{"exact title matches", model.Query{Titles: []string{"Foundation and Empire"}, ExactTitles: true}, base, true},
+		{"exact title rejects a substring", model.Query{Titles: []string{"and Empire"}, ExactTitles: true}, base, false},
 
 		// Across fields every populated one must hold...
 		{

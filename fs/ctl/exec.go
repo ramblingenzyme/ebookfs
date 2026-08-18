@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/ramblingenzyme/ebookfs/fs/registry"
+	"github.com/ramblingenzyme/ebookfs/fs/textfmt"
 	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
@@ -217,7 +218,7 @@ func renameAuthor(args []string, lib library.Library, reg *registry.BookRegistry
 	old, rawNew := args[0], args[1]
 
 	// Parse new author (supports "Name | Sort" format).
-	newAuthor := model.ParseAuthor(rawNew)
+	newAuthor := textfmt.ParseAuthor(rawNew)
 	if newAuthor.Name == "" {
 		return "error: new author name must not be empty"
 	}
@@ -286,6 +287,13 @@ func renameSeries(args []string, lib library.Library, reg *registry.BookRegistry
 
 // --- helpers ---
 
+// idsOnly reports whether q selects by id and nothing else, i.e. it came from a
+// bare id-spec ("1,2,3") rather than a query that happens to name ids.
+func idsOnly(q model.Query) bool {
+	return len(q.IDs) > 0 && len(q.Authors) == 0 && len(q.Tags) == 0 &&
+		len(q.Series) == 0 && len(q.Status) == 0 && len(q.Titles) == 0
+}
+
 // dedupeAuthors returns authors with duplicate display names removed, keeping
 // the first occurrence of each name. rename-author uses it to fold a renamed
 // author into a matching one the book already carries instead of duplicating it.
@@ -304,9 +312,9 @@ func dedupeAuthors(authors []model.Author) []model.Author {
 
 // editSelection applies editFn to each book the selection addresses. It runs one
 // library.Search(query) rather than hydrating the whole library to filter it
-// down. When the query names explicit ids, an id naming no book is reported (so
+// down. When the query is a bare id list, an id naming no book is reported (so
 // a typo isn't counted as success) and a duplicated id is collapsed to a single
-// visit; when the query selects all books ("*"), every returned book is visited.
+// visit; otherwise every returned book is visited.
 func editSelection(query model.Query, lib library.Library, reg *registry.BookRegistry, editFn func(*model.Book) *model.Edits) string {
 	books, err := lib.Search(query)
 	if err != nil {
@@ -318,10 +326,12 @@ func editSelection(query model.Query, lib library.Library, reg *registry.BookReg
 		byID[b.Meta.ID] = b
 	}
 
-	// Walk the explicit id list when there is one, so a typo surfaces as "not
-	// found"; otherwise walk the ids the query actually returned.
+	// Walk the explicit id list when the query is nothing but ids, so a typo
+	// surfaces as "not found". Once the query also filters (id:42+status:read),
+	// an id absent from the results means "filtered out", not "no such book",
+	// so walk what the query returned instead.
 	visit := query.IDs
-	if len(visit) == 0 {
+	if !idsOnly(query) {
 		visit = make([]int64, 0, len(books))
 		for _, b := range books {
 			visit = append(visit, b.Meta.ID)
