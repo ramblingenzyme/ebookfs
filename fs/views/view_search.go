@@ -58,41 +58,42 @@ func parseSearchQuery(query string) (model.Query, error) {
 	return q, nil
 }
 
-// Each matcher below reports whether b satisfies the constraint one query field
-// imposes. A field the query left empty constrains nothing, so each starts by
-// conceding — without that, "has any of these" over an empty field would report
-// false and an empty Query would match no books rather than every book.
+// Each matcher answers for one query field. An empty field imposes no
+// constraint and matches everything — without that guard Query{} would match
+// nothing.
 
-// matchesAuthors checks if the book has any of the query's authors.
+// matchesAuthors matches any of q.Authors against either author column, as
+// Index.Search does in SQL.
 func matchesAuthors(q model.Query, b *model.Book) bool {
 	return len(q.Authors) == 0 || slices.ContainsFunc(b.Authors, func(a model.Author) bool {
-		return slices.Contains(q.Authors, a.Name)
+		return slices.Contains(q.Authors, a.Name) || slices.Contains(q.Authors, a.SortName)
 	})
 }
 
-// matchesTags checks if the book has any of the query's tags.
+// matchesTags matches any of q.Tags against the book's tags.
 func matchesTags(q model.Query, b *model.Book) bool {
 	return len(q.Tags) == 0 || slices.ContainsFunc(q.Tags, func(t string) bool {
 		return slices.Contains(b.Meta.Tags, t)
 	})
 }
 
-// matchesSeries checks if the book belongs to any of the query's series.
+// matchesSeries matches any of q.Series against the book's series.
 func matchesSeries(q model.Query, b *model.Book) bool {
 	return len(q.Series) == 0 || (b.HasSeries() && slices.Contains(q.Series, b.SeriesName()))
 }
 
-// matchesStatus checks if the book has any of the query's statuses.
+// matchesStatus matches any of q.Status against the book's reading status.
 func matchesStatus(q model.Query, b *model.Book) bool {
 	return len(q.Status) == 0 || slices.Contains(q.Status, b.Meta.Status)
 }
 
-// matchesIDs checks if the book has any of the query's IDs.
+// matchesIDs matches any of q.IDs against the book's id.
 func matchesIDs(q model.Query, b *model.Book) bool {
 	return len(q.IDs) == 0 || slices.Contains(q.IDs, b.Meta.ID)
 }
 
-// matchesTitles checks if the book's title contains any of the query's title substrings.
+// matchesTitles matches any of q.Titles as a case-insensitive substring of the
+// book's title.
 func matchesTitles(q model.Query, b *model.Book) bool {
 	if len(q.Titles) == 0 {
 		return true

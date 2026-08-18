@@ -149,7 +149,7 @@ func TestConcurrentDuplicateIngestRejected(t *testing.T) {
 	}
 
 	// Verify exactly one book exists in the library.
-	got, err := lib.Query(model.Filter{Author: "Alice"})
+	got, err := lib.Search(model.Query{Authors: []string{"Alice"}})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}

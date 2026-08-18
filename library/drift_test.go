@@ -172,7 +172,7 @@ func TestRenamedEpubHealedOnRestart(t *testing.T) {
 	if _, err := lib2.Content(book.Meta.ID); err != nil {
 		t.Errorf("Content after restart: %v (index still points at a stale filename)", err)
 	}
-	got, err := lib2.Query(model.Filter{ID: book.Meta.ID})
+	got, err := lib2.Search(model.Query{IDs: []int64{book.Meta.ID}})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
@@ -234,7 +234,7 @@ func TestUnstattableBookSettlesClean(t *testing.T) {
 	}
 	lib2 := openLib(t, cfg, false)
 
-	got, err := lib2.Query(model.Filter{})
+	got, err := lib2.Search(model.Query{})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
@@ -311,7 +311,7 @@ func TestUnreadableMetaReservesIDFromPath(t *testing.T) {
 	}
 	lib3 := openLib(t, cfg, false)
 
-	got, err := lib3.Query(model.Filter{})
+	got, err := lib3.Search(model.Query{})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
@@ -452,7 +452,7 @@ func TestCorruptEpubDoesNotReindexForever(t *testing.T) {
 	}
 	lib3 := openLib(t, cfg, false)
 
-	got, err := lib3.Query(model.Filter{})
+	got, err := lib3.Search(model.Query{})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
@@ -481,7 +481,7 @@ func TestOpenReindexesOnDrift(t *testing.T) {
 
 	lib2 := openLib(t, cfg, false) // plain restart, no -reindex
 
-	got, err := lib2.Query(model.Filter{ID: id})
+	got, err := lib2.Search(model.Query{IDs: []int64{id}})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
@@ -557,7 +557,7 @@ func TestReindexMigratesToCanonicalPath(t *testing.T) {
 
 			lib := openLib(t, cfg, true)
 
-			got, err := lib.Query(model.Filter{ID: book.Meta.ID})
+			got, err := lib.Search(model.Query{IDs: []int64{book.Meta.ID}})
 			if err != nil {
 				t.Fatalf("Query: %v", err)
 			}

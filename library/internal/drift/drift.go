@@ -13,6 +13,7 @@ import "time"
 // change made within the same clock tick as the recorded one — filesystems that
 // stamp mtimes from the kernel's coarse clock (tmpfs among them) hand out
 // identical nanosecond values for writes in the same tick.
+//
 // The zero PathInfo is the "unobserved" state, recorded for a book directory
 // whose files could not be stat'd. It is a definite value rather than an absent
 // one, so both sides of drift detection can record "we looked and could not see

@@ -47,20 +47,8 @@ func (l *libraryImpl) Close() error {
 	return l.index.Close()
 }
 
-func (l *libraryImpl) Query(f model.Filter) ([]*model.Book, error) {
-	books, err := l.index.Query(f)
-	if err != nil {
-		return nil, err
-	}
-	return books, nil
-}
-
 func (l *libraryImpl) Search(q model.Query) ([]*model.Book, error) {
-	books, err := l.index.Search(q)
-	if err != nil {
-		return nil, err
-	}
-	return books, nil
+	return l.index.Search(q)
 }
 
 // Stats returns aggregate library statistics.

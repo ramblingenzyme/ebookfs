@@ -24,7 +24,7 @@ const recentLimit = 5
 // slice on each Add/Remove, which is fine at personal-library scale but
 // wasteful for a very large one. If that ever matters, an alternative is to
 // drop the in-memory population and instead re-run the existing
-// model.Filter{Recent: true, Limit: recentLimit} query against the index on
+// model.Query{Recent: true, Limit: recentLimit} query against the index on
 // each mutation — trading an in-process resort for a small SQL query, the
 // same tradeoff the stats file already makes (see statsFile.Stat).
 type recentDir struct {

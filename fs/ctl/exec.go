@@ -177,7 +177,7 @@ func renameTag(args []string, lib library.Library, reg *registry.BookRegistry) s
 	}
 	old, new := args[0], args[1]
 
-	books, err := lib.Query(model.Filter{Tag: old})
+	books, err := lib.Search(model.Query{Tags: []string{old}})
 	if err != nil {
 		return fmt.Sprintf("error: query failed: %v", err)
 	}
@@ -225,7 +225,7 @@ func renameAuthor(args []string, lib library.Library, reg *registry.BookRegistry
 		return "error: new author name must not be empty"
 	}
 
-	books, err := lib.Query(model.Filter{Author: old})
+	books, err := lib.Search(model.Query{Authors: []string{old}})
 	if err != nil {
 		return fmt.Sprintf("error: query failed: %v", err)
 	}
@@ -268,7 +268,7 @@ func renameSeries(args []string, lib library.Library, reg *registry.BookRegistry
 	}
 	old, new := args[0], args[1]
 
-	books, err := lib.Query(model.Filter{Series: old})
+	books, err := lib.Search(model.Query{Series: []string{old}})
 	if err != nil {
 		return fmt.Sprintf("error: query failed: %v", err)
 	}

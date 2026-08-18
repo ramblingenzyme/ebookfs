@@ -10,25 +10,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-// Query returns the books matching f, each hydrated with authors, tags, and
-// identifiers. Every book-listing view (all books, by author, by tag, recent,
-// …) is expressed as a Filter rather than its own bespoke method.
-func (idx *Index) Query(f model.Filter) ([]*model.Book, error) {
-	q := &bookQuery{order: "b.sort_title"}
-	if f.Recent {
-		q.order = "b.date_added DESC"
-	}
-	q.limit = f.Limit
-
-	q.addCondition(f.ID != 0, "b.id = ?", f.ID)
-	q.addCondition(f.Status != "", "b.status = ?", f.Status)
-	q.addCondition(f.Author != "", "b.id IN (SELECT ba.book_id FROM book_authors ba JOIN authors a ON a.id = ba.author_id WHERE a.name = ? OR a.sort_name = ?)", f.Author, f.Author)
-	q.addCondition(f.Tag != "", "b.id IN (SELECT bt.book_id FROM book_tags bt JOIN tags t ON t.id = bt.tag_id WHERE t.name = ?)", f.Tag)
-	q.addCondition(f.Series != "", "b.series_id IN (SELECT id FROM series WHERE name = ?)", f.Series)
-
-	return idx.queryBooks(q)
-}
-
 func (idx *Index) queryBooks(q *bookQuery) ([]*model.Book, error) {
 	sql, args := q.sql()
 	rows, err := idx.readDB.QueryContext(idx.ctx, sql, args...)
@@ -77,7 +58,7 @@ func (idx *Index) AllPathInfo() (map[string]drift.PathInfo, error) {
 
 // Get returns the book with the given id, or sql.ErrNoRows if it is absent.
 func (idx *Index) Get(bookID int64) (*model.Book, error) {
-	books, err := idx.Query(model.Filter{ID: bookID})
+	books, err := idx.Search(model.Query{IDs: []int64{bookID}})
 	if err != nil {
 		return nil, err
 	}

@@ -64,7 +64,7 @@ func SetupServer(lib library.Library, exp library.Exporter, searchTTL time.Durat
 	reader := views.NewReaderDir(reg, exp)
 	stats := views.NewStatsFile(ebookfs, lib)
 
-	books, err := lib.Query(model.Filter{})
+	books, err := lib.Search(model.Query{})
 	if err != nil {
 		return nil, fmt.Errorf("loading books: %w", err)
 	}

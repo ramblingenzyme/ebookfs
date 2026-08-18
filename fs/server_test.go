@@ -13,7 +13,7 @@ import (
 
 func TestSetupServer(t *testing.T) {
 	lib := libfake.Lib{
-		QueryFn: func(_ model.Filter) ([]*model.Book, error) {
+		SearchFn: func(_ model.Query) ([]*model.Book, error) {
 			b1 := makeBook(1, "Book One", "Alice")
 			b1.Meta.Status = "unread"
 			b2 := makeBook(2, "Book Two", "Bob")
@@ -42,7 +42,7 @@ func TestSetupServer(t *testing.T) {
 
 func TestSetupServer_QueryError(t *testing.T) {
 	lib := libfake.Lib{
-		QueryFn: func(_ model.Filter) ([]*model.Book, error) {
+		SearchFn: func(_ model.Query) ([]*model.Book, error) {
 			return nil, errTest
 		},
 	}
@@ -54,7 +54,7 @@ func TestSetupServer_QueryError(t *testing.T) {
 
 func TestSetupServer_BooksPopulated(t *testing.T) {
 	lib := libfake.Lib{
-		QueryFn: func(_ model.Filter) ([]*model.Book, error) {
+		SearchFn: func(_ model.Query) ([]*model.Book, error) {
 			b := makeBook(1, "Present", "Alice")
 			b.Meta.Status = "unread"
 			return []*model.Book{b}, nil

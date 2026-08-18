@@ -69,7 +69,6 @@ type Lib struct {
 	IngestFn       func(string) (*model.Book, error)
 	CreateIngestFn func() (library.IngestHandle, error)
 	ContentFn      func(int64) (model.EpubReader, error)
-	QueryFn        func(model.Filter) ([]*model.Book, error)
 	SearchFn       func(model.Query) ([]*model.Book, error)
 	StatsFn        func() (*model.Stats, error)
 	ReindexFn      func() error
@@ -100,13 +99,6 @@ func (l Lib) Content(id int64) (model.EpubReader, error) {
 		return l.ContentFn(id)
 	}
 	return nil, errors.New("libfake.Lib: no ContentFn")
-}
-
-func (l Lib) Query(f model.Filter) ([]*model.Book, error) {
-	if l.QueryFn != nil {
-		return l.QueryFn(f)
-	}
-	return nil, nil
 }
 
 func (l Lib) Search(q model.Query) ([]*model.Book, error) {

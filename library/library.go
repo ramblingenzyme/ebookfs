@@ -16,7 +16,7 @@ import (
 // Library defines the public API for filesystem and index operations on the
 // book collection. The concrete implementation is unexported; construct via New.
 //
-// Concurrency contract: methods are safe for concurrent use. Query returns
+// Concurrency contract: methods are safe for concurrent use. Search returns
 // *model.Book values that are immutable snapshots — the library never mutates a
 // Book after returning it. Every other operation addresses a book by id and
 // resolves its current state fresh, so callers never pass stale snapshots back
@@ -30,7 +30,6 @@ type Library interface {
 	// returned Exporter is closed automatically by Close; callers should not
 	// close it themselves.
 	Exporter(config.ReaderConfig) (Exporter, error)
-	Query(model.Filter) ([]*model.Book, error)
 	Search(model.Query) ([]*model.Book, error)
 	Stats() (*model.Stats, error)
 	Reindex() error

@@ -18,7 +18,7 @@ func TestDeleteRemovesBook(t *testing.T) {
 	}
 
 	// Book should no longer be queryable.
-	results, err := lib.Query(model.Filter{ID: id})
+	results, err := lib.Search(model.Query{IDs: []int64{id}})
 	if err != nil {
 		t.Fatalf("Query after delete: %v", err)
 	}

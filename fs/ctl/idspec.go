@@ -17,10 +17,9 @@ import (
 //     42       — single book
 //     1,2,3    — comma-separated list
 //
-// "*" resolves to an empty Query{}, which Search treats as "every book" — the
-// same way an empty Filter{} does — rather than enumerating every id and
-// binding one SQL variable per book, which would overflow SQLite's variable
-// limit on a large library.
+// "*" resolves to an empty Query{}, which Search treats as "every book",
+// rather than enumerating every id and binding one SQL variable per book,
+// which would overflow SQLite's variable limit on a large library.
 //
 // TODO: support query syntax (tag:sci-fi, status:unread, etc.).
 func parseSelection(spec string) (model.Query, error) {

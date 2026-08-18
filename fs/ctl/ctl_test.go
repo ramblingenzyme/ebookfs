@@ -284,7 +284,7 @@ func TestRenameTag(t *testing.T) {
 	book.Meta.Tags = []string{"scifi"}
 
 	lib := libfake.Lib{
-		QueryFn: func(f model.Filter) ([]*model.Book, error) {
+		SearchFn: func(q model.Query) ([]*model.Book, error) {
 			return []*model.Book{book}, nil
 		},
 		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
@@ -311,7 +311,7 @@ func TestRenameTagBothTags(t *testing.T) {
 	book.Meta.Tags = []string{"old", "other", "new"}
 
 	lib := libfake.Lib{
-		QueryFn: func(f model.Filter) ([]*model.Book, error) {
+		SearchFn: func(q model.Query) ([]*model.Book, error) {
 			return []*model.Book{book}, nil
 		},
 		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
@@ -337,9 +337,9 @@ func TestRenameAuthor(t *testing.T) {
 	book := testutil.MakeBook(7, "Title", "Asimov")
 
 	lib := libfake.Lib{
-		QueryFn: func(f model.Filter) ([]*model.Book, error) {
-			if f.Author != "Asimov" {
-				t.Errorf("Filter.Author = %q, want %q", f.Author, "Asimov")
+		SearchFn: func(q model.Query) ([]*model.Book, error) {
+			if !slices.Equal(q.Authors, []string{"Asimov"}) {
+				t.Errorf("Query.Authors = %q, want [Asimov]", q.Authors)
 			}
 			return []*model.Book{book}, nil
 		},
@@ -371,9 +371,9 @@ func TestRenameAuthorMatchSortName(t *testing.T) {
 	book.Authors[0].SortName = "Asimov, Isaac"
 
 	lib := libfake.Lib{
-		QueryFn: func(f model.Filter) ([]*model.Book, error) {
-			if f.Author != "Asimov, Isaac" {
-				t.Errorf("Filter.Author = %q, want %q", f.Author, "Asimov, Isaac")
+		SearchFn: func(q model.Query) ([]*model.Book, error) {
+			if !slices.Equal(q.Authors, []string{"Asimov, Isaac"}) {
+				t.Errorf("Query.Authors = %q, want [Asimov, Isaac]", q.Authors)
 			}
 			return []*model.Book{book}, nil
 		},
@@ -405,7 +405,7 @@ func TestRenameSeries(t *testing.T) {
 	book.Series = &model.SeriesRef{Name: "Old", Index: 1.0}
 
 	lib := libfake.Lib{
-		QueryFn: func(f model.Filter) ([]*model.Book, error) {
+		SearchFn: func(q model.Query) ([]*model.Book, error) {
 			return []*model.Book{book}, nil
 		},
 		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
@@ -434,9 +434,9 @@ func TestRenameAuthorMerge(t *testing.T) {
 	book.Authors = append(book.Authors, model.Author{Name: "Paul French"})
 
 	lib := libfake.Lib{
-		QueryFn: func(f model.Filter) ([]*model.Book, error) {
-			if f.Author != "Paul French" {
-				t.Errorf("Filter.Author = %q, want %q", f.Author, "Paul French")
+		SearchFn: func(q model.Query) ([]*model.Book, error) {
+			if !slices.Equal(q.Authors, []string{"Paul French"}) {
+				t.Errorf("Query.Authors = %q, want [Paul French]", q.Authors)
 			}
 			return []*model.Book{book}, nil
 		},
@@ -767,7 +767,7 @@ func TestCommandFailureStrings(t *testing.T) {
 
 	t.Run("rename query fails", func(t *testing.T) {
 		lib := libfake.Lib{
-			QueryFn: func(model.Filter) ([]*model.Book, error) { return nil, errors.New("index closed") },
+			SearchFn: func(model.Query) ([]*model.Book, error) { return nil, errors.New("index closed") },
 		}
 		reg, cmdLog := newTestCtl(t, lib)
 

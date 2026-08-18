@@ -439,7 +439,7 @@ func TestQueryAllReturnsAllBooks(t *testing.T) {
 	storeInIndex(t, idx, newBook(2, "Beta"))
 	storeInIndex(t, idx, newBook(3, "Gamma"))
 
-	books, err := idx.Query(model.Filter{})
+	books, err := idx.Search(model.Query{})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
@@ -453,7 +453,7 @@ func TestQueryByID(t *testing.T) {
 	storeInIndex(t, idx, newBook(1, "One"))
 	storeInIndex(t, idx, newBook(2, "Two"))
 
-	got, err := idx.Query(model.Filter{ID: 2})
+	got, err := idx.Search(model.Query{IDs: []int64{2}})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
@@ -482,7 +482,7 @@ func TestQueryByAuthor(t *testing.T) {
 	storeInIndex(t, idx, bob)
 	storeInIndex(t, idx, aliceBook)
 
-	got, err := idx.Query(model.Filter{Author: "Bob"})
+	got, err := idx.Search(model.Query{Authors: []string{"Bob"}})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
@@ -491,6 +491,37 @@ func TestQueryByAuthor(t *testing.T) {
 	}
 	if got[0].Title != "Bob's Book" {
 		t.Errorf("Title = %q, want %q", got[0].Title, "Bob's Book")
+	}
+}
+
+// TestQueryByAuthorSortName pins the two-column author match. ctl's
+// rename-author documents that <old> matches display name OR sort name, and it
+// relies on this query to find the books to rewrite — if only a.name were
+// matched, renaming by sort name would silently rewrite nothing.
+func TestQueryByAuthorSortName(t *testing.T) {
+	idx := openTestIndex(t)
+
+	asimov := model.NewBook(
+		model.Bib{Title: "Foundation", Authors: []model.Author{{Name: "Isaac Asimov", SortName: "Asimov, Isaac"}}},
+		model.Meta{ID: 1},
+		model.Location{EpubPath: "Isaac Asimov/Foundation (1)/book.epub"},
+	)
+	other := model.NewBook(
+		model.Bib{Title: "Other", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		model.Meta{ID: 2},
+		model.Location{EpubPath: "Alice/Other (2)/book.epub"},
+	)
+	storeInIndex(t, idx, asimov)
+	storeInIndex(t, idx, other)
+
+	for _, name := range []string{"Asimov, Isaac", "Isaac Asimov"} {
+		got, err := idx.Search(model.Query{Authors: []string{name}})
+		if err != nil {
+			t.Fatalf("Search(%q): %v", name, err)
+		}
+		if len(got) != 1 || got[0].Title != "Foundation" {
+			t.Errorf("Search(%q) = %v, want just Foundation", name, got)
+		}
 	}
 }
 
@@ -511,7 +542,7 @@ func TestQueryByStatus(t *testing.T) {
 	storeInIndex(t, idx, readBook)
 	storeInIndex(t, idx, unreadBook)
 
-	got, err := idx.Query(model.Filter{Status: "read"})
+	got, err := idx.Search(model.Query{Status: []string{"read"}})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
@@ -540,7 +571,7 @@ func TestQueryByTag(t *testing.T) {
 	storeInIndex(t, idx, tagged)
 	storeInIndex(t, idx, untagged)
 
-	got, err := idx.Query(model.Filter{Tag: "sci-fi"})
+	got, err := idx.Search(model.Query{Tags: []string{"sci-fi"}})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
@@ -572,7 +603,7 @@ func TestQueryBySeries(t *testing.T) {
 	storeInIndex(t, idx, seriesBook)
 	storeInIndex(t, idx, standalone)
 
-	got, err := idx.Query(model.Filter{Series: "My Series"})
+	got, err := idx.Search(model.Query{Series: []string{"My Series"}})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
@@ -608,7 +639,7 @@ func TestQueryMultipleFilters(t *testing.T) {
 	storeInIndex(t, idx, aliceRead)
 
 	// Filter by Bob AND read.
-	got, err := idx.Query(model.Filter{Author: "Bob", Status: "read"})
+	got, err := idx.Search(model.Query{Authors: []string{"Bob"}, Status: []string{"read"}})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
@@ -626,7 +657,7 @@ func TestQueryLimit(t *testing.T) {
 	storeInIndex(t, idx, newBook(2, "Beetle"))
 	storeInIndex(t, idx, newBook(3, "Cougar"))
 
-	got, err := idx.Query(model.Filter{Limit: 2})
+	got, err := idx.Search(model.Query{Limit: 2})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
@@ -652,7 +683,7 @@ func TestQueryRecentOrder(t *testing.T) {
 	storeInIndex(t, idx, old)
 	storeInIndex(t, idx, new)
 
-	got, err := idx.Query(model.Filter{Recent: true})
+	got, err := idx.Search(model.Query{Recent: true})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
@@ -669,7 +700,7 @@ func TestQueryEmptyResult(t *testing.T) {
 	idx := openTestIndex(t)
 	storeInIndex(t, idx, newBook(1, "Only Book"))
 
-	got, err := idx.Query(model.Filter{Status: "abandoned"})
+	got, err := idx.Search(model.Query{Status: []string{"abandoned"}})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
@@ -682,7 +713,7 @@ func TestQueryIDNotFound(t *testing.T) {
 	idx := openTestIndex(t)
 	storeInIndex(t, idx, newBook(1, "Only"))
 
-	got, err := idx.Query(model.Filter{ID: 999})
+	got, err := idx.Search(model.Query{IDs: []int64{999}})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
@@ -705,7 +736,7 @@ func TestQueryLoadsIdentifiers(t *testing.T) {
 	)
 	storeInIndex(t, idx, b)
 
-	books, err := idx.Query(model.Filter{ID: 1})
+	books, err := idx.Search(model.Query{IDs: []int64{1}})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
@@ -759,7 +790,7 @@ func TestQueryBatchLoadsMultipleBooks(t *testing.T) {
 		storeInIndex(t, idx, b)
 	}
 
-	got, err := idx.Query(model.Filter{})
+	got, err := idx.Search(model.Query{})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
@@ -1072,7 +1103,7 @@ func TestPutAuthorsWithExistingName(t *testing.T) {
 	)
 	storeInIndex(t, idx, b2)
 
-	got, err := idx.Query(model.Filter{})
+	got, err := idx.Search(model.Query{})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
@@ -1258,7 +1289,7 @@ func TestRebuildClearsLeakedRowsAndInsertsBooks(t *testing.T) {
 	mustNeedReindex(t, idx, false)
 
 	// Only the fresh books should exist.
-	all, err := idx.Query(model.Filter{})
+	all, err := idx.Search(model.Query{})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
@@ -1294,7 +1325,7 @@ func TestRebuildWithMultipleBooks(t *testing.T) {
 		t.Fatalf("Rebuild: %v", err)
 	}
 
-	all, err := idx.Query(model.Filter{})
+	all, err := idx.Search(model.Query{})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
