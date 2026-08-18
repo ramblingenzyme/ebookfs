@@ -68,8 +68,8 @@ func TestEpubExporter_Warm(t *testing.T) {
 // only the configured statuses.
 func TestExporterIncludes(t *testing.T) {
 	exporters := map[string]func(statuses []string) Exporter{
-		"epub":  func(s []string) Exporter { return epubExporter{statuses: s} },
-		"kepub": func(s []string) Exporter { return &kepubCache{statuses: s} },
+		"epub":  func(s []string) Exporter { return epubExporter{readerPolicy: readerPolicy{statuses: s}} },
+		"kepub": func(s []string) Exporter { return &kepubCache{readerPolicy: readerPolicy{statuses: s}} },
 	}
 
 	tests := []struct {
@@ -108,8 +108,8 @@ func (dummyKepubSource) Content(int64) (model.EpubReader, error) {
 func TestKepubCacheDelegates(t *testing.T) {
 	dir := t.TempDir()
 	kc := &kepubCache{
-		statuses: []string{"reading"},
-		c:        kepub.NewCache(dir, dummyKepubSource{}),
+		readerPolicy: readerPolicy{statuses: []string{"reading"}},
+		Cache:        kepub.NewCache(dir, dummyKepubSource{}),
 	}
 
 	b := makeBook(1, "Test", "Alice")

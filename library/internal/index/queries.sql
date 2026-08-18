@@ -79,12 +79,6 @@ INSERT INTO identifiers (book_id, scheme, value) VALUES (?, ?, ?);
 
 -- Relationship loading
 
--- name: GetAuthorsByBookID :many
-SELECT a.* FROM authors a
-JOIN book_authors ba ON a.id = ba.author_id
-WHERE ba.book_id = ?
-ORDER BY ba.position;
-
 -- name: GetAuthorsByBookIDs :many
 SELECT ba.book_id, a.id, a.name, a.sort_name
 FROM book_authors ba
@@ -92,21 +86,12 @@ JOIN authors a ON a.id = ba.author_id
 WHERE ba.book_id IN (sqlc.slice('book_ids'))
 ORDER BY ba.book_id, ba.position;
 
--- name: GetTagsByBookID :many
-SELECT t.name FROM tags t
-JOIN book_tags bt ON t.id = bt.tag_id
-WHERE bt.book_id = ?
-ORDER BY t.name;
-
 -- name: GetTagsByBookIDs :many
 SELECT bt.book_id, t.name
 FROM book_tags bt
 JOIN tags t ON t.id = bt.tag_id
 WHERE bt.book_id IN (sqlc.slice('book_ids'))
 ORDER BY bt.book_id, t.name;
-
--- name: GetIdentifiersByBookID :many
-SELECT scheme, value FROM identifiers WHERE book_id = ?;
 
 -- name: GetIdentifiersByBookIDs :many
 SELECT book_id, scheme, value
@@ -170,8 +155,3 @@ VALUES (?, ?, ?, ?, ?);
 
 -- name: SetBookIDSequence :exec
 INSERT INTO book_id_seq(id) VALUES(?) ON CONFLICT(id) DO NOTHING;
-
--- ListAuthors
-
--- name: ListAuthors :many
-SELECT * FROM authors ORDER BY sort_name;

@@ -163,39 +163,8 @@ func (q *Queries) GetAuthorByName(ctx context.Context, name string) (Author, err
 	return i, err
 }
 
-const getAuthorsByBookID = `-- name: GetAuthorsByBookID :many
-
-SELECT a.id, a.name, a.sort_name FROM authors a
-JOIN book_authors ba ON a.id = ba.author_id
-WHERE ba.book_id = ?
-ORDER BY ba.position
-`
-
-// Relationship loading
-func (q *Queries) GetAuthorsByBookID(ctx context.Context, bookID int64) ([]Author, error) {
-	rows, err := q.db.QueryContext(ctx, getAuthorsByBookID, bookID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Author
-	for rows.Next() {
-		var i Author
-		if err := rows.Scan(&i.ID, &i.Name, &i.SortName); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getAuthorsByBookIDs = `-- name: GetAuthorsByBookIDs :many
+
 SELECT ba.book_id, a.id, a.name, a.sort_name
 FROM book_authors ba
 JOIN authors a ON a.id = ba.author_id
@@ -210,6 +179,7 @@ type GetAuthorsByBookIDsRow struct {
 	SortName string
 }
 
+// Relationship loading
 func (q *Queries) GetAuthorsByBookIDs(ctx context.Context, bookIds []int64) ([]GetAuthorsByBookIDsRow, error) {
 	query := getAuthorsByBookIDs
 	var queryParams []interface{}
@@ -235,38 +205,6 @@ func (q *Queries) GetAuthorsByBookIDs(ctx context.Context, bookIds []int64) ([]G
 			&i.Name,
 			&i.SortName,
 		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getIdentifiersByBookID = `-- name: GetIdentifiersByBookID :many
-SELECT scheme, value FROM identifiers WHERE book_id = ?
-`
-
-type GetIdentifiersByBookIDRow struct {
-	Scheme string
-	Value  string
-}
-
-func (q *Queries) GetIdentifiersByBookID(ctx context.Context, bookID int64) ([]GetIdentifiersByBookIDRow, error) {
-	rows, err := q.db.QueryContext(ctx, getIdentifiersByBookID, bookID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetIdentifiersByBookIDRow
-	for rows.Next() {
-		var i GetIdentifiersByBookIDRow
-		if err := rows.Scan(&i.Scheme, &i.Value); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -385,36 +323,6 @@ func (q *Queries) GetTagByName(ctx context.Context, name string) (Tag, error) {
 	var i Tag
 	err := row.Scan(&i.ID, &i.Name)
 	return i, err
-}
-
-const getTagsByBookID = `-- name: GetTagsByBookID :many
-SELECT t.name FROM tags t
-JOIN book_tags bt ON t.id = bt.tag_id
-WHERE bt.book_id = ?
-ORDER BY t.name
-`
-
-func (q *Queries) GetTagsByBookID(ctx context.Context, bookID int64) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, getTagsByBookID, bookID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []string
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
-		}
-		items = append(items, name)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const getTagsByBookIDs = `-- name: GetTagsByBookIDs :many
@@ -640,35 +548,6 @@ INSERT OR IGNORE INTO tags (name) VALUES (?)
 func (q *Queries) InsertTag(ctx context.Context, name string) error {
 	_, err := q.db.ExecContext(ctx, insertTag, name)
 	return err
-}
-
-const listAuthors = `-- name: ListAuthors :many
-
-SELECT id, name, sort_name FROM authors ORDER BY sort_name
-`
-
-// ListAuthors
-func (q *Queries) ListAuthors(ctx context.Context) ([]Author, error) {
-	rows, err := q.db.QueryContext(ctx, listAuthors)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Author
-	for rows.Next() {
-		var i Author
-		if err := rows.Scan(&i.ID, &i.Name, &i.SortName); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const nextBookID = `-- name: NextBookID :one

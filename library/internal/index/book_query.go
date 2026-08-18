@@ -1,6 +1,9 @@
 package index
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // bookQuery represents a parameterized book query. WHERE clauses are AND'd together.
 type bookQuery struct {
@@ -37,4 +40,23 @@ func (q *bookQuery) addCondition(cond bool, expr string, args ...any) {
 		q.where = append(q.where, expr)
 		q.args = append(q.args, args...)
 	}
+}
+
+// placeholders returns n SQL parameter placeholders ("?") joined by commas.
+func placeholders(n int) string {
+	return strings.TrimSuffix(strings.Repeat("?,", n), ",")
+}
+
+// addIn appends an IN-list condition to bq. expr is a format string with a
+// single %s where the placeholder list goes; vals supply the bound arguments.
+// Empty vals is a no-op, so callers need no length check of their own.
+func addIn[T any](bq *bookQuery, expr string, vals []T) {
+	if len(vals) == 0 {
+		return
+	}
+	args := make([]any, len(vals))
+	for i, v := range vals {
+		args[i] = v
+	}
+	bq.addCondition(true, fmt.Sprintf(expr, placeholders(len(vals))), args...)
 }

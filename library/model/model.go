@@ -3,6 +3,7 @@ package model
 
 import (
 	"io"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -100,7 +101,7 @@ func NewBook(bib Bib, meta Meta, loc Location) *Book {
 	if bib.Identifiers == nil {
 		bib.Identifiers = map[string]string{}
 	} else {
-		bib.Identifiers = cloneMap(bib.Identifiers)
+		bib.Identifiers = maps.Clone(bib.Identifiers)
 	}
 	if meta.DateAdded.IsZero() {
 		meta.DateAdded = time.Now()
@@ -160,18 +161,6 @@ type Bib struct {
 // metadata. It is injected by ingest and may appear defensively in store path
 // and export directory computations.
 const UnknownAuthor = "Unknown"
-
-// cloneMap returns a shallow copy of m. Helper for NewBook.
-func cloneMap[K comparable, V any](m map[K]V) map[K]V {
-	if m == nil {
-		return nil
-	}
-	out := make(map[K]V, len(m))
-	for k, v := range m {
-		out[k] = v
-	}
-	return out
-}
 
 // JoinAuthors renders authors as a display string joined by sep, skipping empty
 // names and falling back to UnknownAuthor when none remain. Callers differ only

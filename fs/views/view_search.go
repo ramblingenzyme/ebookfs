@@ -2,8 +2,8 @@ package views
 
 import (
 	"fmt"
+	"maps"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -58,35 +58,45 @@ func parseSearchQuery(query string) (model.Query, error) {
 	return q, nil
 }
 
+// Each matcher below reports whether b satisfies the constraint one query field
+// imposes. A field the query left empty constrains nothing, so each starts by
+// conceding — without that, "has any of these" over an empty field would report
+// false and an empty Query would match no books rather than every book.
+
 // matchesAuthors checks if the book has any of the query's authors.
 func matchesAuthors(q model.Query, b *model.Book) bool {
-	return slices.ContainsFunc(b.Authors, func(a model.Author) bool {
+	return len(q.Authors) == 0 || slices.ContainsFunc(b.Authors, func(a model.Author) bool {
 		return slices.Contains(q.Authors, a.Name)
 	})
 }
 
 // matchesTags checks if the book has any of the query's tags.
 func matchesTags(q model.Query, b *model.Book) bool {
-	return matchesAny(b.Meta.Tags, q.Tags)
+	return len(q.Tags) == 0 || slices.ContainsFunc(q.Tags, func(t string) bool {
+		return slices.Contains(b.Meta.Tags, t)
+	})
 }
 
 // matchesSeries checks if the book belongs to any of the query's series.
 func matchesSeries(q model.Query, b *model.Book) bool {
-	return b.HasSeries() && slices.Contains(q.Series, b.SeriesName())
+	return len(q.Series) == 0 || (b.HasSeries() && slices.Contains(q.Series, b.SeriesName()))
 }
 
 // matchesStatus checks if the book has any of the query's statuses.
 func matchesStatus(q model.Query, b *model.Book) bool {
-	return slices.Contains(q.Status, b.Meta.Status)
+	return len(q.Status) == 0 || slices.Contains(q.Status, b.Meta.Status)
 }
 
 // matchesIDs checks if the book has any of the query's IDs.
 func matchesIDs(q model.Query, b *model.Book) bool {
-	return slices.Contains(q.IDs, b.Meta.ID)
+	return len(q.IDs) == 0 || slices.Contains(q.IDs, b.Meta.ID)
 }
 
 // matchesTitles checks if the book's title contains any of the query's title substrings.
 func matchesTitles(q model.Query, b *model.Book) bool {
+	if len(q.Titles) == 0 {
+		return true
+	}
 	lower := strings.ToLower(b.Title)
 	return slices.ContainsFunc(q.Titles, func(title string) bool {
 		return strings.Contains(lower, strings.ToLower(title))
@@ -94,41 +104,16 @@ func matchesTitles(q model.Query, b *model.Book) bool {
 }
 
 // makeMatchesFn returns a predicate that reports whether a book matches q.
-// Within each field values are OR'd; across fields they're AND'd. The predicate
-// is the single membership authority for a search handle: ResyncView replays
-// every registered book through it at query time, and registry events evaluate
-// it for live updates, so both paths agree by construction.
+// Within each field values are OR'd (inside each matcher); across fields they're
+// AND'd (the chain below). The predicate is the single membership authority for
+// a search handle: ResyncView replays every registered book through it at query
+// time, and registry events evaluate it for live updates, so both paths agree by
+// construction.
 func makeMatchesFn(q model.Query) func(*model.Book) bool {
-	type matcherEntry struct {
-		cond    bool
-		matcher func(model.Query, *model.Book) bool
-	}
-	entries := []matcherEntry{
-		{len(q.Authors) > 0, matchesAuthors},
-		{len(q.Tags) > 0, matchesTags},
-		{len(q.Series) > 0, matchesSeries},
-		{len(q.Status) > 0, matchesStatus},
-		{len(q.IDs) > 0, matchesIDs},
-		{len(q.Titles) > 0, matchesTitles},
-	}
-
 	return func(b *model.Book) bool {
-		for _, e := range entries {
-			if e.cond && !e.matcher(q, b) {
-				return false
-			}
-		}
-		return true
+		return matchesAuthors(q, b) && matchesTags(q, b) && matchesSeries(q, b) &&
+			matchesStatus(q, b) && matchesIDs(q, b) && matchesTitles(q, b)
 	}
-}
-
-func matchesAny(haystack, needles []string) bool {
-	for _, n := range needles {
-		if slices.Contains(haystack, n) {
-			return true
-		}
-	}
-	return false
 }
 
 // searchResultsDir is a live book listing that evaluates membership against a
@@ -415,12 +400,9 @@ func (d *searchDir) cleanupLocked(headroom int) {
 	}
 
 	if d.maxHandles > 0 && len(d.handles)+headroom > d.maxHandles {
-		sorted := make([]*searchHandleDir, 0, len(d.handles))
-		for _, h := range d.handles {
-			sorted = append(sorted, h)
-		}
-		sort.Slice(sorted, func(i, j int) bool {
-			return sorted[i].lastQuery().Before(sorted[j].lastQuery())
+		sorted := slices.Collect(maps.Values(d.handles))
+		slices.SortFunc(sorted, func(a, b *searchHandleDir) int {
+			return a.lastQuery().Compare(b.lastQuery())
 		})
 		toRemove := len(sorted) + headroom - d.maxHandles
 		for _, h := range sorted[:toRemove] {

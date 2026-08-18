@@ -1,7 +1,7 @@
 package views
 
 import (
-	"sort"
+	"slices"
 
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/fs/book"
@@ -62,8 +62,8 @@ func (d *recentDir) Remove(dir *book.BookDir) {
 // reconciles the underlying bookListDir with whichever recentLimit books now
 // rank highest, adding newly-visible entries and removing ones that fell out.
 func (d *recentDir) refresh() {
-	sort.Slice(d.all, func(i, j int) bool {
-		return d.all[i].Book().Meta.DateAdded.After(d.all[j].Book().Meta.DateAdded)
+	slices.SortFunc(d.all, func(a, b *book.BookDir) int {
+		return b.Book().Meta.DateAdded.Compare(a.Book().Meta.DateAdded) // newest first
 	})
 
 	top := d.all

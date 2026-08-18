@@ -61,8 +61,8 @@ func (s *Store) Exists(authors []model.Author, title string) bool {
 // and both modification times — for drift detection. A stat failure is returned
 // rather than defaulted away: a zero mtime can never match a real file, so
 // recording one would silently force a full reindex on every startup thereafter.
-// Callers that need to record a directory they could not observe use
-// drift.Unobserved instead.
+// Callers that need to record a directory they could not observe store the
+// zero drift.PathInfo instead.
 func (s *Store) Stat(loc model.Location) (drift.PathInfo, error) {
 	epubFI, err := os.Stat(s.AbsPath(loc.EpubPath))
 	if err != nil {

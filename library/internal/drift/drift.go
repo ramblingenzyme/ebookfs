@@ -13,20 +13,16 @@ import "time"
 // change made within the same clock tick as the recorded one — filesystems that
 // stamp mtimes from the kernel's coarse clock (tmpfs among them) hand out
 // identical nanosecond values for writes in the same tick.
+// The zero PathInfo is the "unobserved" state, recorded for a book directory
+// whose files could not be stat'd. It is a definite value rather than an absent
+// one, so both sides of drift detection can record "we looked and could not see
+// it" and agree with each other across restarts — otherwise one unreadable book
+// means a full reindex on every startup, forever.
 type PathInfo struct {
 	Size      int64 // epub size, from the same stat as EpubMtime
 	EpubMtime time.Time
 	MetaSize  int64 // meta.toml size, from the same stat as MetaMtime
 	MetaMtime time.Time
-}
-
-// Unobserved returns the state recorded for a book directory whose files could
-// not be stat'd. It is a definite value rather than an absent one, so both
-// sides of drift detection can record "we looked and could not see it" and
-// agree with each other across restarts — otherwise one unreadable book means a
-// full reindex on every startup, forever.
-func Unobserved() PathInfo {
-	return PathInfo{}
 }
 
 // IsUnobserved reports whether p records a failed observation rather than a

@@ -75,7 +75,6 @@ func TestIsUnobserved(t *testing.T) {
 		pi   PathInfo
 		want bool
 	}{
-		{"marker", Unobserved(), true},
 		{"zero value", PathInfo{}, true},
 		{"real observation", observed(), false},
 		{"epub seen, meta not", PathInfo{EpubMtime: time.Unix(1, 0)}, false},
@@ -92,5 +91,3 @@ func TestIsUnobserved(t *testing.T) {
 		})
 	}
 }
-
-

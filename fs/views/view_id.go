@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"strconv"
 	"sync/atomic"
 
 	"github.com/knusbaum/go9p/proto"
@@ -49,13 +50,12 @@ func (d *byIDDir) Remove(dir *book.BookDir) {
 	d.StaticDir.DeleteChild(idEntryName(dir.Book(), int(d.pad.Load())))
 }
 
+// updatePad widens the zero-padding to the digit count of maxID, so by-id
+// entries sort lexically. A single-digit library needs no padding at all.
 func (d *byIDDir) updatePad(maxID int64) {
 	var pad int32
 	if maxID >= 10 {
-		pad = 2
-		for n := maxID / 10; n >= 10; n /= 10 {
-			pad++
-		}
+		pad = int32(len(strconv.FormatInt(maxID, 10)))
 	}
 	d.pad.Store(pad)
 }

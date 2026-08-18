@@ -81,9 +81,9 @@ func (l *libraryImpl) storeDrifted() (*storeScan, bool) {
 		if err != nil {
 			// Recorded as unobserved rather than forcing a rebuild: the rebuild
 			// records the same marker, so the two agree and one unreadable book
-			// stops meaning a full reindex on every startup (see drift.Unobserved).
+			// stops meaning a full reindex on every startup (see drift.PathInfo).
 			slog.Warn("reindex: could not stat, recording as unreadable", "path", e.Dir(), "error", err)
-			mt = drift.Unobserved()
+			mt = drift.PathInfo{}
 		}
 		onDisk.info[e.EpubPath] = mt
 	}
@@ -182,8 +182,8 @@ func (l *libraryImpl) scanEntry(s *scanState, known map[string]drift.PathInfo, e
 	if statErr != nil {
 		// Replace the failed observation with the unobserved marker so every
 		// skip path records something — otherwise a permanently unstattable
-		// directory triggers drift on every startup (see drift.Unobserved).
-		pi = drift.Unobserved()
+		// directory triggers drift on every startup (see drift.PathInfo).
+		pi = drift.PathInfo{}
 	}
 
 	meta, err := l.store.ReadMeta(e)
