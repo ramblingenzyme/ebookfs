@@ -1,6 +1,8 @@
 package library
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -64,8 +66,11 @@ func (l *libraryImpl) Stats() (*model.Stats, error) {
 // lock, so they always operate on the book's authoritative current state.
 func (l *libraryImpl) get(id int64) (*model.Book, error) {
 	b, err := l.index.Get(id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("book %d: %w", id, ErrBookNotFound)
+	}
 	if err != nil {
-		return nil, fmt.Errorf("no book with id %d: %w", id, err)
+		return nil, fmt.Errorf("book %d: %w", id, err)
 	}
 	return b, nil
 }

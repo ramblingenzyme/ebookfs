@@ -164,7 +164,7 @@ func (r *BookRegistry) edit(id int64, edits model.Edits) error {
 	dir, ok := r.books[id]
 	r.mu.RUnlock()
 	if !ok {
-		return fmt.Errorf("no book with id %d", id)
+		return fmt.Errorf("book %d: %w", id, library.ErrBookNotFound)
 	}
 
 	updated, err := r.lib.Edit(id, edits)

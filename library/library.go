@@ -1,6 +1,7 @@
 package library
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -12,6 +13,11 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/internal/store"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
+
+// ErrBookNotFound is wrapped into the error returned by any operation that
+// addresses a book id the index does not hold. Callers distinguish it with
+// errors.Is; anything else from the same call is an index or store failure.
+var ErrBookNotFound = errors.New("no such book")
 
 // Library defines the public API for filesystem and index operations on the
 // book collection. The concrete implementation is unexported; construct via New.

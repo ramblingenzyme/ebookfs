@@ -1,6 +1,7 @@
 package library
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -38,5 +39,14 @@ func TestCreateIngestReadOnlyDir(t *testing.T) {
 	_, err := lib.CreateIngest()
 	if err == nil {
 		t.Error("expected error when inbox temp is read-only")
+	}
+}
+
+func TestGetMissingBookIsErrBookNotFound(t *testing.T) {
+	lib := openTestLibrary(t)
+
+	_, err := lib.Content(999)
+	if !errors.Is(err, ErrBookNotFound) {
+		t.Fatalf("Content(999) err = %v, want ErrBookNotFound", err)
 	}
 }

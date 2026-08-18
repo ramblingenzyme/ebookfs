@@ -186,9 +186,6 @@ func renameTag(args []string, lib library.Library, reg *registry.BookRegistry) s
 	var errs []string
 
 	for _, b := range books {
-		if !slices.Contains(b.Meta.Tags, old) {
-			continue
-		}
 		var updated []string
 		if slices.Contains(b.Meta.Tags, new) {
 			// Book already has the new tag; just remove the old one.
@@ -277,9 +274,6 @@ func renameSeries(args []string, lib library.Library, reg *registry.BookRegistry
 	var errs []string
 
 	for _, b := range books {
-		if !b.HasSeries() || b.SeriesName() != old {
-			continue
-		}
 		if err := reg.CommitEdit(b.Meta.ID, model.Edits{Series: &new}); err != nil {
 			errs = append(errs, fmt.Sprintf("book %d: %v", b.Meta.ID, err))
 		} else {

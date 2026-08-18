@@ -1,8 +1,8 @@
 package library
 
 import (
+	"errors"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/library/model"
@@ -48,7 +48,7 @@ func TestDeleteNonexistentBookErrors(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when deleting a non-existent book")
 	}
-	if !strings.Contains(err.Error(), "no book") {
-		t.Errorf("error = %q, want message containing 'no book'", err)
+	if !errors.Is(err, ErrBookNotFound) {
+		t.Errorf("error = %v, want ErrBookNotFound", err)
 	}
 }
