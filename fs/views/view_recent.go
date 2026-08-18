@@ -20,16 +20,18 @@ const recentLimit = 5
 // bookListDir against it, to know which book backfills a slot vacated by
 // Remove.
 //
-// This keeps every book's *book.BookDir in memory and re-sorts the whole
-// slice on each Add/Remove, which is fine at personal-library scale but
-// wasteful for a very large one. If that ever matters, an alternative is to
-// drop the in-memory population and instead re-run the existing
-// model.Query{Recent: true, Limit: recentLimit} query against the index on
-// each mutation — trading an in-process resort for a small SQL query, the
-// same tradeoff the stats file already makes (see statsFile.Stat).
+// This keeps every book's *book.BookDir in memory, held in rank order: Add
+// inserts at the right position rather than appending and re-sorting, so filing
+// a whole library in at startup costs one insert per book instead of one sort
+// of the population per book. The visible set is then just the head of the list.
+//
+// all and visible need no lock of their own: every path into Add/Remove holds
+// BookRegistry.mu, and no 9P handler reads them. The embedded StaticDir's mutex
+// guards the children listing instead, and AddChild/DeleteChild take it
+// themselves — refresh must not hold it across them or it self-deadlocks.
 type recentDir struct {
 	*bookListDir
-	all     []*book.BookDir         // every known book
+	all     []*book.BookDir         // every known book, newest first
 	visible map[int64]*book.BookDir // ids currently filed into bookListDir
 }
 
@@ -43,29 +45,25 @@ func NewRecentDir(reg *registry.BookRegistry) *recentDir {
 }
 
 func (d *recentDir) Add(dir *book.BookDir) {
-	d.all = append(d.all, dir)
+	i, _ := slices.BinarySearchFunc(d.all, dir, func(a, b *book.BookDir) int {
+		return b.Book().Meta.DateAdded.Compare(a.Book().Meta.DateAdded) // newest first
+	})
+	d.all = slices.Insert(d.all, i, dir)
 	d.refresh()
 }
 
 func (d *recentDir) Remove(dir *book.BookDir) {
 	id := dir.Book().Meta.ID
-	for i, bd := range d.all {
-		if bd.Book().Meta.ID == id {
-			d.all = append(d.all[:i], d.all[i+1:]...)
-			break
-		}
-	}
+	d.all = slices.DeleteFunc(d.all, func(bd *book.BookDir) bool {
+		return bd.Book().Meta.ID == id
+	})
 	d.refresh()
 }
 
-// refresh re-sorts the full population by DateAdded (newest first) and
-// reconciles the underlying bookListDir with whichever recentLimit books now
-// rank highest, adding newly-visible entries and removing ones that fell out.
+// refresh brings the underlying bookListDir in line with the recentLimit
+// highest-ranked books, adding newly-visible entries and removing ones that
+// fell out. all is kept in rank order by Add, so the top slice is a prefix.
 func (d *recentDir) refresh() {
-	slices.SortFunc(d.all, func(a, b *book.BookDir) int {
-		return b.Book().Meta.DateAdded.Compare(a.Book().Meta.DateAdded) // newest first
-	})
-
 	top := d.all
 	if len(top) > recentLimit {
 		top = top[:recentLimit]

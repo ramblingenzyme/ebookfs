@@ -24,7 +24,8 @@ import (
 //
 // where each term is prefix:value. Supported prefixes: author, tag, series,
 // status, id, title. Values sharing a prefix are OR'd within the field;
-// different prefixes are AND'd across fields.
+// different prefixes are AND'd across fields. author matches an author's
+// display name or sort name, as Index.Search does.
 func parseSearchQuery(query string) (model.Query, error) {
 	parts := strings.Split(query, "+")
 	var q model.Query
@@ -109,7 +110,9 @@ func matchesTitles(q model.Query, b *model.Book) bool {
 // AND'd (the chain below). The predicate is the single membership authority for
 // a search handle: ResyncView replays every registered book through it at query
 // time, and registry events evaluate it for live updates, so both paths agree by
-// construction.
+// construction. Only the selecting fields are honoured — Query.Recent and
+// Query.Limit order and cap a SQL result and mean nothing to a directory
+// listing, and parseSearchQuery has no syntax that sets them.
 func makeMatchesFn(q model.Query) func(*model.Book) bool {
 	return func(b *model.Book) bool {
 		return matchesAuthors(q, b) && matchesTags(q, b) && matchesSeries(q, b) &&

@@ -120,13 +120,13 @@ func NewBook(bib Bib, meta Meta, loc Location) *Book {
 
 // HasSeries reports whether the book belongs to a series. It is nil-safe: a nil
 // receiver or an Series field both report false.
-func (b *Bib) HasSeries() bool {
+func (b *Book) HasSeries() bool {
 	return b != nil && b.Series != nil
 }
 
 // SeriesName returns the book's series name, or "" when the book has no series.
 // It is nil-safe.
-func (b *Bib) SeriesName() string {
+func (b *Book) SeriesName() string {
 	if !b.HasSeries() {
 		return ""
 	}

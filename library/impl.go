@@ -2,6 +2,7 @@ package library
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"slices"
 	"sync"
@@ -16,12 +17,14 @@ import (
 )
 
 type libraryImpl struct {
-	store           *store.Store
-	index           *index.Index
-	inboxTemp       string
-	defaultExporter Exporter
-	exporters       []Exporter
-	expMu           sync.Mutex
+	store     *store.Store
+	index     *index.Index
+	inboxTemp string
+
+	// Exporters that own resources (the kepub cache and its warmer), collected
+	// as they are handed out; releasing them is the library's job (see Exporter).
+	closers  []io.Closer
+	closerMu sync.Mutex
 	// Dedup of exporters by config is not implemented. If needed in the
 	// future, hash/comparable-key the ReaderConfig fields and store in a map.
 
@@ -37,13 +40,13 @@ type libraryImpl struct {
 }
 
 func (l *libraryImpl) Close() error {
-	l.expMu.Lock()
-	for _, e := range l.exporters {
-		if err := e.Close(); err != nil {
+	l.closerMu.Lock()
+	for _, c := range l.closers {
+		if err := c.Close(); err != nil {
 			slog.Error("close: exporter failed", "error", err)
 		}
 	}
-	l.expMu.Unlock()
+	l.closerMu.Unlock()
 	return l.index.Close()
 }
 
@@ -74,7 +77,7 @@ func (l *libraryImpl) Content(id int64) (model.EpubReader, error) {
 	if err != nil {
 		return nil, err
 	}
-	return l.defaultExporter.Open(b)
+	return epub.OpenReader(l.store.AbsPath(b.EpubPath), b.CoverPath)
 }
 
 // Edit applies edits to the book with the given id, persists everything, and

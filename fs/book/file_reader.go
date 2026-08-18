@@ -44,7 +44,7 @@ func NewReaderFile(stat *proto.Stat, exp library.Exporter, book func() *model.Bo
 // so a cold kepub lists as length 0 until its cache is warm.
 func (r *ReaderFile) Stat() proto.Stat {
 	s := r.BaseFile.Stat()
-	if b := r.book(); b != nil {
+	if b := r.book(); b != nil && r.exp != nil {
 		if size, ok := r.exp.Size(b); ok {
 			s.Length = uint64(size)
 		}

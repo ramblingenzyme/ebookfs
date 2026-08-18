@@ -2,6 +2,7 @@ package library
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"slices"
@@ -61,8 +62,6 @@ func (e epubExporter) Open(b *model.Book) (model.EpubReader, error) {
 	return epub.OpenReader(e.lib.store.AbsPath(b.EpubPath), b.CoverPath)
 }
 
-func (e epubExporter) Close() error { return nil }
-
 func (e epubExporter) Size(b *model.Book) (int64, bool) {
 	return b.EpubSize, b.EpubSize > 0
 }
@@ -75,9 +74,11 @@ func (l *libraryImpl) Exporter(cfg config.ReaderConfig) (Exporter, error) {
 	if err != nil {
 		return nil, err
 	}
-	l.expMu.Lock()
-	l.exporters = append(l.exporters, e)
-	l.expMu.Unlock()
+	if c, ok := e.(io.Closer); ok {
+		l.closerMu.Lock()
+		l.closers = append(l.closers, c)
+		l.closerMu.Unlock()
+	}
 	kind := "epub"
 	if cfg.Convert {
 		kind = "kepub"

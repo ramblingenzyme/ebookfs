@@ -87,3 +87,41 @@ func TestRecentDirRemoveNotVisibleNoOp(t *testing.T) {
 		t.Fatalf("expected visible set to stay the same size, before=%v after=%v", before, after)
 	}
 }
+
+// TestRecentDirOutOfOrderArrival covers the case the other recent tests miss:
+// books arriving in an order unrelated to their DateAdded. The population is
+// kept ordered by insertion rather than re-sorted, so a book landing in the
+// middle of the ranking is the path most likely to break.
+func TestRecentDirOutOfOrderArrival(t *testing.T) {
+	reg := newTestRegistry(t)
+	d := NewRecentDir(reg)
+
+	base := time.Now()
+	const total = recentLimit + 3
+	// Book i was added i minutes after base, so the newest ids rank highest —
+	// but they arrive in a scrambled order.
+	for _, id := range []int64{4, 1, 8, 6, 2, 7, 3, 5} {
+		b := makeBook(id, fmt.Sprintf("Title %d", id), "Author")
+		b.Meta.DateAdded = base.Add(time.Duration(id) * time.Minute)
+		reg.Add(b)
+	}
+
+	if len(d.visible) != recentLimit {
+		t.Fatalf("expected %d visible, got %d: %v", recentLimit, len(d.visible), d.visible)
+	}
+	for id := int64(1); id <= total; id++ {
+		_, shown := d.visible[id]
+		want := id > total-recentLimit
+		if shown != want {
+			t.Errorf("book %d visible = %v, want %v (visible: %v)", id, shown, want, d.visible)
+		}
+	}
+
+	// all must stay ordered newest-first for the binary insert to hold.
+	for i := 1; i < len(d.all); i++ {
+		prev, cur := d.all[i-1].Book(), d.all[i].Book()
+		if prev.Meta.DateAdded.Before(cur.Meta.DateAdded) {
+			t.Fatalf("all out of order at %d: %s before %s", i, prev.Title, cur.Title)
+		}
+	}
+}

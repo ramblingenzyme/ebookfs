@@ -65,3 +65,14 @@ func TestReaderFileStatFallbackToZero(t *testing.T) {
 		t.Errorf("Stat.Length for cold book = %d, want 0", s.Length)
 	}
 }
+
+// TestReaderFileStatNilExporter mirrors TestCoverFileStatLengthNilLib: Stat
+// must report zero rather than panic when the exporter is absent, the same case
+// the read path handles with "exporter not available".
+func TestReaderFileStatNilExporter(t *testing.T) {
+	rf := testReaderFile(t, nil)
+
+	if s := rf.Stat(); s.Length != 0 {
+		t.Errorf("Stat().Length with nil exporter = %d, want 0", s.Length)
+	}
+}

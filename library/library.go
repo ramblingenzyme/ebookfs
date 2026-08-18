@@ -26,9 +26,9 @@ import (
 type Library interface {
 	Close() error
 	CreateIngest() (IngestHandle, error)
-	// Exporter creates a view of the library for export (reader/ view). The
-	// returned Exporter is closed automatically by Close; callers should not
-	// close it themselves.
+	// Exporter creates a view of the library for export (reader/ view). Any
+	// resources it holds are released by Library.Close — the caller has no
+	// teardown to perform, which is why Exporter has no Close method.
 	Exporter(config.ReaderConfig) (Exporter, error)
 	Search(model.Query) ([]*model.Book, error)
 	Stats() (*model.Stats, error)
@@ -58,7 +58,6 @@ type Exporter interface {
 	// The returned reader is non-nil iff err is nil.
 	Open(*model.Book) (model.EpubReader, error)
 	Size(*model.Book) (int64, bool) // cheap; 9P stat length, false when cold
-	Close() error                   // releases exporter resources; called by Library.Close
 	Warm(*model.Book)               // non-blocking proactive warm hint
 	Filename(*model.Book) string    // FAT-safe export name
 	Dirname(*model.Book) string     // FAT-safe export directory name
@@ -108,7 +107,6 @@ func Open(cfg config.LibraryConfig, forceReindex bool) (Library, error) {
 	} else {
 		slog.Info("reindex: index is clean, skipping")
 	}
-	lib.defaultExporter = epubExporter{lib: lib}
 	return lib, nil
 }
 
