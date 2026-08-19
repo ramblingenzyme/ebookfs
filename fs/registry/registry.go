@@ -94,7 +94,7 @@ func (r *BookRegistry) dirLocked(bk *model.Book) *book.BookDir {
 	if d, ok := r.books[bk.Meta.ID]; ok {
 		return d
 	}
-	d := book.NewBookDir(r.f, r.lib, r.edit, bk)
+	d := book.NewBookDir(r.f, r.lib, r.Edit, bk)
 	r.books[bk.Meta.ID] = d
 	return d
 }
@@ -138,24 +138,14 @@ func (r *BookRegistry) Remove(id int64) {
 	delete(r.books, id)
 }
 
-// CommitEdit persists edits to a book and commits the change so views rehome
-// the book if its grouping or name changed. It is the exported entry point for
-// callers outside the field-file path (e.g. the root ctl file). The same
-// locking and commit protocol as the unexported edit applies.
-func (r *BookRegistry) CommitEdit(id int64, edits model.Edits) error {
-	return r.edit(id, edits)
-}
-
-// edit persists edits to a book and commits the change so views rehome the
-// book if its grouping or name changed. It is unexported: the only production
-// caller is a book's field file, which receives it as the edit callback passed
-// to book.NewBookDir.
+// Edit persists edits to a book and commits the change so views rehome the
+// book if its grouping or name changed.
 //
 // lib.Edit can rewrite the whole epub (seconds of disk I/O), so it must not
 // run under r.mu — that would queue every unrelated mutation behind it. The
 // per-book editMu keeps concurrent edits of the same book (and their commits)
 // in order; r.mu is only held for the lookup and the commit bracket.
-func (r *BookRegistry) edit(id int64, edits model.Edits) error {
+func (r *BookRegistry) Edit(id int64, edits model.Edits) error {
 	mu := r.editMu.For(id)
 	mu.Lock()
 	defer mu.Unlock()

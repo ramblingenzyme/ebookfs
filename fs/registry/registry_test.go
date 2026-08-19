@@ -24,7 +24,7 @@ func TestEditUnknownID(t *testing.T) {
 	reg := NewBookRegistry(testutil.NewTestFS(t), libfake.Lib{})
 
 	status := "read"
-	if err := reg.edit(999, model.Edits{Status: &status}); err == nil {
+	if err := reg.Edit(999, model.Edits{Status: &status}); err == nil {
 		t.Fatal("expected error editing unknown book")
 	}
 }
@@ -66,7 +66,7 @@ func TestEditConcurrentSnapshotSwap(t *testing.T) {
 		titles := [2]string{"Title B", "Title A"}
 		for i := range 200 {
 			title := titles[i%2]
-			if err := reg.edit(1, model.Edits{Title: &title}); err != nil {
+			if err := reg.Edit(1, model.Edits{Title: &title}); err != nil {
 				t.Errorf("edit: %v", err)
 				return
 			}
@@ -220,7 +220,7 @@ func TestResyncViewReplaysEveryBook(t *testing.T) {
 	}
 }
 
-func TestCommitEdit(t *testing.T) {
+func TestEdit(t *testing.T) {
 	t.Run("persists and rehomes the book", func(t *testing.T) {
 		current := testutil.MakeBook(1, "Old Title", "Alice")
 		lib := libfake.Lib{
@@ -233,8 +233,8 @@ func TestCommitEdit(t *testing.T) {
 		reg, v := newTestRegistry(t, lib)
 		reg.Add(current)
 
-		if err := reg.CommitEdit(1, model.Edits{Title: new("New Title")}); err != nil {
-			t.Fatalf("CommitEdit: %v", err)
+		if err := reg.Edit(1, model.Edits{Title: new("New Title")}); err != nil {
+			t.Fatalf("Edit: %v", err)
 		}
 
 		// The commit brackets the snapshot swap with remove/add so views refile
@@ -250,8 +250,8 @@ func TestCommitEdit(t *testing.T) {
 	t.Run("unknown id", func(t *testing.T) {
 		reg, _ := newTestRegistry(t, libfake.Lib{})
 
-		if err := reg.CommitEdit(999, model.Edits{Status: new("read")}); err == nil {
-			t.Error("CommitEdit on an unknown id returned nil, want an error")
+		if err := reg.Edit(999, model.Edits{Status: new("read")}); err == nil {
+			t.Error("Edit on an unknown id returned nil, want an error")
 		}
 	})
 
@@ -262,8 +262,8 @@ func TestCommitEdit(t *testing.T) {
 		reg, v := newTestRegistry(t, lib)
 		reg.Add(testutil.MakeBook(1, "Unchanged", "Alice"))
 
-		if err := reg.CommitEdit(1, model.Edits{Title: new("Never Written")}); err == nil {
-			t.Fatal("CommitEdit returned nil despite the library failing")
+		if err := reg.Edit(1, model.Edits{Title: new("Never Written")}); err == nil {
+			t.Fatal("Edit returned nil despite the library failing")
 		}
 
 		if len(v.removed) != 0 {

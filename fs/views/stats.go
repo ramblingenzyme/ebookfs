@@ -59,12 +59,12 @@ func formatStats(s *model.Stats) string {
 	fmt.Fprintf(&b, "series: %d\n", s.Series)
 	fmt.Fprintf(&b, "tags: %d\n", s.Tags)
 	fmt.Fprintf(&b, "total-size: %d\n", s.TotalSize)
-	fmt.Fprintf(&b, "last-added: %s\n", formatStatsTime(s.LastAdded))
-	fmt.Fprintf(&b, "last-modified: %s\n", formatStatsTime(s.LastModified))
+	fmt.Fprintf(&b, "last-added: %s\n", formatTime(s.LastAdded))
+	fmt.Fprintf(&b, "last-modified: %s\n", formatTime(s.LastModified))
 	return b.String()
 }
 
-func formatStatsTime(t time.Time) string {
+func formatTime(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}

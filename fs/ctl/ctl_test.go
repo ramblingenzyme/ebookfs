@@ -33,16 +33,16 @@ func TestParseCommand(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got, err := parseCommand(tt.input)
+		name, args, err := parseCommand(tt.input)
 		if (err != nil) != tt.wantErr {
 			t.Errorf("parseCommand(%q) error = %v, wantErr = %v", tt.input, err, tt.wantErr)
 			continue
 		}
-		if got.name != tt.name {
-			t.Errorf("parseCommand(%q).name = %q, want %q", tt.input, got.name, tt.name)
+		if name != tt.name {
+			t.Errorf("parseCommand(%q).name = %q, want %q", tt.input, name, tt.name)
 		}
-		if !slices.Equal(got.args, tt.args) {
-			t.Errorf("parseCommand(%q).args = %q, want %q", tt.input, got.args, tt.args)
+		if !slices.Equal(args, tt.args) {
+			t.Errorf("parseCommand(%q).args = %q, want %q", tt.input, args, tt.args)
 		}
 	}
 }
@@ -571,11 +571,11 @@ func TestDispatch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.cmd, func(t *testing.T) {
-			p, err := parseCommand(tt.cmd)
+			name, args, err := parseCommand(tt.cmd)
 			if err != nil {
 				t.Fatalf("unexpected parse error for %q: %v", tt.cmd, err)
 			}
-			got := dispatch(p, libfake.Lib{}, registry.NewBookRegistry(testutil.NewTestFS(t), libfake.Lib{}))
+			got := dispatch(name, args, libfake.Lib{}, registry.NewBookRegistry(testutil.NewTestFS(t), libfake.Lib{}))
 			if got != tt.want {
 				t.Errorf("dispatch(%q) = %q, want %q", tt.cmd, got, tt.want)
 			}

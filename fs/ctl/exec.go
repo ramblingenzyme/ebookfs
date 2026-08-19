@@ -14,40 +14,40 @@ import (
 
 // execute parses a command line, dispatches it, and returns the result string.
 func execute(cmd string, lib library.Library, reg *registry.BookRegistry, cmdLog *CommandLog) string {
-	p, err := parseCommand(cmd)
+	name, args, err := parseCommand(cmd)
 	if err != nil {
 		r := fmt.Sprintf("error: %v", err)
 		cmdLog.Append(cmd, r)
 		return r
 	}
 
-	r := dispatch(p, lib, reg)
+	r := dispatch(name, args, lib, reg)
 	cmdLog.Append(cmd, r)
 	return r
 }
 
-func dispatch(p parsedCmd, lib library.Library, reg *registry.BookRegistry) string {
-	switch p.name {
+func dispatch(name string, args []string, lib library.Library, reg *registry.BookRegistry) string {
+	switch name {
 	case "add-tag":
-		return addTag(p.args, lib, reg)
+		return addTag(args, lib, reg)
 	case "remove-tag":
-		return removeTag(p.args, lib, reg)
+		return removeTag(args, lib, reg)
 	case "set-status":
-		return setStatus(p.args, lib, reg)
+		return setStatus(args, lib, reg)
 	case "set-rating":
-		return setRating(p.args, lib, reg)
+		return setRating(args, lib, reg)
 	case "delete":
-		return deleteBook(p.args, lib, reg)
+		return deleteBook(args, lib, reg)
 	case "reindex":
-		return reindexCmd(p.args, lib)
+		return reindexCmd(args, lib)
 	case "rename-tag":
-		return renameTag(p.args, lib, reg)
+		return renameTag(args, lib, reg)
 	case "rename-author":
-		return renameAuthor(p.args, lib, reg)
+		return renameAuthor(args, lib, reg)
 	case "rename-series":
-		return renameSeries(p.args, lib, reg)
+		return renameSeries(args, lib, reg)
 	default:
-		return fmt.Sprintf("error: unknown command %q", p.name)
+		return fmt.Sprintf("error: unknown command %q", name)
 	}
 }
 
@@ -201,7 +201,7 @@ func renameTag(args []string, lib library.Library, reg *registry.BookRegistry) s
 				}
 			}
 		}
-		if err := reg.CommitEdit(b.Meta.ID, model.Edits{Tags: &updated}); err != nil {
+		if err := reg.Edit(b.Meta.ID, model.Edits{Tags: &updated}); err != nil {
 			errs = append(errs, fmt.Sprintf("book %d: %v", b.Meta.ID, err))
 		} else {
 			affected++
@@ -250,7 +250,7 @@ func renameAuthor(args []string, lib library.Library, reg *registry.BookRegistry
 		// strictly implies, but harmless: only books the rename matched are
 		// rewritten at all.
 		updated = dedupeAuthors(updated)
-		if err := reg.CommitEdit(b.Meta.ID, model.Edits{Authors: &updated}); err != nil {
+		if err := reg.Edit(b.Meta.ID, model.Edits{Authors: &updated}); err != nil {
 			errs = append(errs, fmt.Sprintf("book %d: %v", b.Meta.ID, err))
 		} else {
 			affected++
@@ -275,7 +275,7 @@ func renameSeries(args []string, lib library.Library, reg *registry.BookRegistry
 	var errs []string
 
 	for _, b := range books {
-		if err := reg.CommitEdit(b.Meta.ID, model.Edits{Series: &new}); err != nil {
+		if err := reg.Edit(b.Meta.ID, model.Edits{Series: &new}); err != nil {
 			errs = append(errs, fmt.Sprintf("book %d: %v", b.Meta.ID, err))
 		} else {
 			affected++
@@ -358,7 +358,7 @@ func editSelection(query model.Query, lib library.Library, reg *registry.BookReg
 			skipped++ // already in the requested state
 			continue
 		}
-		if err := reg.CommitEdit(id, *edits); err != nil {
+		if err := reg.Edit(id, *edits); err != nil {
 			errs = append(errs, fmt.Sprintf("book %d: %v", id, err))
 		} else {
 			affected++
