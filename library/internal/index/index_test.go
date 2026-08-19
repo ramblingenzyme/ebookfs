@@ -683,16 +683,70 @@ func TestQueryRecentOrder(t *testing.T) {
 	storeInIndex(t, idx, old)
 	storeInIndex(t, idx, new)
 
-	got, err := idx.Search(model.Query{Recent: true})
+	got, err := idx.Search(model.Query{Order: model.OrderDateAdded})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
 	if len(got) != 2 {
 		t.Fatalf("len = %d, want 2", len(got))
 	}
-	// Recent means date_added DESC — the most recently inserted should be first.
+	// OrderDateAdded means date_added DESC. Both books land in the same second
+	// here (date_added is RFC3339), so this also pins the id DESC tiebreak.
 	if got[0].Meta.ID != 2 {
 		t.Errorf("first book id = %d, want 2 (most recently added)", got[0].Meta.ID)
+	}
+}
+
+// The remaining orders, plus the sort-title tiebreaker that keeps a Limit from
+// slicing an arbitrary subset of tied rows.
+func TestSearchOrders(t *testing.T) {
+	idx := openTestIndex(t)
+
+	mid := newBook(1, "Bravo")
+	mid.Meta.Rating = 3
+	mid.Pubdate = "2001-01-01"
+	top := newBook(2, "Alpha")
+	top.Meta.Rating = 5
+	top.Pubdate = "2020-01-01"
+	// Rating 0 and no pubdate, so these two tie under every order but the
+	// title one, exercising the tiebreaker.
+	tied := newBook(3, "Charlie")
+	untied := newBook(4, "Delta")
+
+	// sort_title is NULL unless the epub carried a file-as refine, so leave it
+	// unset on some books: the title ordering has to fall back to the title,
+	// not lump them into one NULL tie ordered by id.
+	mid.SortTitle = "Bravo"
+	top.SortTitle = "Alpha"
+	for _, b := range []*model.Book{mid, top, tied, untied} {
+		storeInIndex(t, idx, b)
+	}
+
+	for _, tc := range []struct {
+		name  string
+		order model.Order
+		want  []int64
+	}{
+		// 2 "Alpha" and 1 "Bravo" have sort titles; 3 "Charlie" and 4 "Delta"
+		// do not and sort by their titles rather than ahead of everything.
+		{"sort title", model.OrderSortTitle, []int64{2, 1, 3, 4}},
+		{"rating", model.OrderRating, []int64{2, 1, 3, 4}}, // 5, 3, then the 0s by title
+		{"pubdate", model.OrderPubdate, []int64{2, 1, 3, 4}},
+		{"unknown order falls back to title", model.Order(99), []int64{2, 1, 3, 4}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := idx.Search(model.Query{Order: tc.order})
+			if err != nil {
+				t.Fatal(err)
+			}
+			ids := make([]int64, len(got))
+			for i, b := range got {
+				ids[i] = b.Meta.ID
+			}
+			if !slices.Equal(ids, tc.want) {
+				t.Errorf("ids = %v, want %v", ids, tc.want)
+			}
+		})
 	}
 }
 

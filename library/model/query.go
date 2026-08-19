@@ -21,6 +21,25 @@ type Query struct {
 	// match it is case-sensitive.
 	ExactTitles bool
 
-	Recent bool // order by date added (newest first) instead of sort title
-	Limit  int  // cap the result count; 0 means no limit
+	Order Order // result ordering; zero value is by sort title
+	Limit int   // cap the result count; 0 means no limit
 }
+
+// Order selects how Search orders its results. It is presentation, not
+// selection: ordering can never change which books match, only the sequence
+// they come back in. Limit is the opposite — it changes membership, which is
+// why no user-facing query syntax sets it (see ParseQuery).
+//
+// Each order carries the direction that reads as "best first" for its field:
+// dates and ratings descend, titles ascend. A caller wanting the reverse of one
+// of these should get its own constant rather than a separate direction flag,
+// which would double the combinations to support the two anyone asks for.
+type Order int
+
+const (
+	OrderSortTitle    Order = iota // by sort title, A-Z; the default
+	OrderDateAdded                 // newest addition first
+	OrderDateModified              // most recently edited first
+	OrderRating                    // highest rated first
+	OrderPubdate                   // most recently published first
+)

@@ -72,4 +72,3 @@ type opfMeta struct {
 	ID       string `xml:"id,attr"`       // EPUB 3 used to chain refines
 	Value    string `xml:",chardata"`     // value for refines
 }
-

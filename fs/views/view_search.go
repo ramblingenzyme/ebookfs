@@ -72,9 +72,12 @@ func matchesTitles(q model.Query, b *model.Book) bool {
 // AND'd (the chain below). The predicate is the single membership authority for
 // a search handle: ResyncView replays every registered book through it at query
 // time, and registry events evaluate it for live updates, so both paths agree by
-// construction. Only the selecting fields are honoured — Query.Recent and
-// Query.Limit order and cap a SQL result and mean nothing to a directory
-// listing, and textfmt.ParseQuery has no syntax that sets them.
+// construction. Only the selecting fields are honoured. Query.Order cannot
+// matter here — a directory is keyed by name, and ordering never changes
+// membership. Query.Limit would matter, since capping a result set does change
+// which books are in it, but textfmt.ParseQuery has no syntax that sets it and
+// must not grow one: it is shared with ctl, where a limited selection would
+// mutate an arbitrary subset of the books the operator named.
 func makeMatchesFn(q model.Query) func(*model.Book) bool {
 	return func(b *model.Book) bool {
 		return matchesAuthors(q, b) && matchesTags(q, b) && matchesSeries(q, b) &&
