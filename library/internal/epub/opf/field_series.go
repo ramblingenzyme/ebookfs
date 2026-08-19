@@ -11,31 +11,20 @@ type seriesField struct{ o *Doc }
 
 func (o *Doc) series() seriesField { return seriesField{o} }
 
-// collection returns the EPUB 3 belongs-to-collection recording the series, or
-// nil when the series lives in the calibre metas instead, or nowhere.
-func (f seriesField) collection() *etree.Element {
-	for _, m := range f.o.elements("meta") {
-		if f.o.isSeriesCollection(m) && text(m) != "" {
-			return m
-		}
-	}
-	return nil
-}
-
 // get returns the series as the document records it: no index means an empty
 // Index, not a default.
 func (f seriesField) get() *model.SeriesRef {
-	if coll := f.collection(); coll != nil {
+	if coll := f.collection(); coll.exists() {
 		return &model.SeriesRef{
-			Name:  text(coll),
-			Index: f.o.refine(attr(coll, "id"), propGroupPosition),
+			Name:  coll.get(),
+			Index: coll.refine("group-position").get(),
 		}
 	}
-	name := f.o.namedMeta("calibre:series")
+	name := f.o.namedMeta("calibre:series").get()
 	if name == "" {
 		return nil
 	}
-	return &model.SeriesRef{Name: name, Index: f.o.namedMeta("calibre:series_index")}
+	return &model.SeriesRef{Name: name, Index: f.o.namedMeta("calibre:series_index").get()}
 }
 
 // set writes the series membership, or clears it when the name is empty. EPUB 3
@@ -43,8 +32,6 @@ func (f seriesField) get() *model.SeriesRef {
 // standard mechanism, so the proprietary calibre metas are used instead. Either
 // half is nil when the edit did not name it, and is carried over from get.
 func (f seriesField) set(name, index *string) {
-	o := f.o
-
 	series, position := "", ""
 	if cur := f.get(); cur != nil {
 		series, position = cur.Name, cur.Index
@@ -56,72 +43,126 @@ func (f seriesField) set(name, index *string) {
 		position = *index
 	}
 
+	coll := f.collection()
+	calibreName := f.o.namedMeta("calibre:series")
+	calibreIdx := f.o.namedMeta("calibre:series_index")
+
 	// Clearing, or an index edit with no series to move.
 	if series == "" {
-		o.clearCollections(nil)
-		o.removeNamedMeta("calibre:series")
-		o.removeNamedMeta("calibre:series_index")
+		coll.clear()
+		calibreName.clear()
+		calibreIdx.clear()
 		return
 	}
 
 	// Rewritten in place wherever the file has one, whatever version it claims,
 	// since a stale collection would outrank the calibre metas on the way back
-	// in. A v3 package with none gets one.
-	coll := f.collection()
-	if coll == nil && o.epub3() {
-		coll = o.metaHome().CreateElement("meta")
-		coll.CreateAttr("property", "belongs-to-collection")
-	}
-
-	// Only the extra collections go; this one's refinements may hold metadata we
-	// did not write.
-	o.clearCollections(coll)
-
-	if coll != nil {
-		coll.SetText(series)
-		id := o.ensureID(coll, "ebookfs-series")
-		o.setRefine(id, propCollectionType, "series", "")
-		if position == "" {
-			o.removeRefine(id, propGroupPosition)
-		} else {
-			o.setRefine(id, propGroupPosition, position, "")
-		}
+	// in. A v3 package with none gets one; a v2 package with none stays without
+	// one, but still loses any duplicate or empty-named collection.
+	if coll.exists() || f.o.epub3() {
+		coll.set(series)
+		put(coll.refine("group-position"), position)
+	} else {
+		coll.clear()
 	}
 
 	// A v2 package always gets the calibre metas; a v3 package only if it already
 	// carried them, kept in step rather than left contradicting the collection.
-	if o.epub3() && len(o.namedMetas("calibre:series")) == 0 {
+	if f.o.epub3() && !calibreName.exists() {
 		return
 	}
-	o.setNamedMeta("calibre:series", series)
-	if position == "" {
-		o.removeNamedMeta("calibre:series_index")
-		return
-	}
-	o.setNamedMeta("calibre:series_index", calibreIndex(position))
+	calibreName.set(series)
+	put(calibreIdx, calibreIndex(position))
 }
 
-// isSeriesCollection reports whether a meta records membership of a series
-// rather than of a set or a publisher bundle. The collection-type must carry no
-// scheme: D.3.4 defines series and set only "when no scheme is specified".
-func (o *Doc) isSeriesCollection(m *etree.Element) bool {
-	return attr(m, "property") == "belongs-to-collection" &&
-		o.refine(attr(m, "id"), propCollectionType) == "series"
+// seriesCollection is the belongs-to-collection meta recording the series. It is
+// an elementSlot with two extra duties: a write marks the collection as a
+// series, and both a write and a clear drop the other series collections, so the
+// document is left recording exactly one.
+type seriesCollection struct {
+	*elementSlot
+	f seriesField
 }
 
-// clearCollections removes every series collection and its refinements, except
-// keep. Sets and publisher bundles are recorded the same way and are not ours to
-// remove. Unlike seriesField.collection an empty name is still ours to clear.
-func (o *Doc) clearCollections(keep *etree.Element) {
-	var ids []string
+// collection finds the collection recording the series, or nil when the series
+// lives in the calibre metas instead, or nowhere.
+func (f seriesField) collection() seriesCollection {
+	o := f.o
+	var found *etree.Element
 	for _, m := range o.elements("meta") {
-		if m == keep || !o.isSeriesCollection(m) {
+		if f.isSeriesCollection(m) && text(m) != "" {
+			found = m
+			break
+		}
+	}
+	return seriesCollection{
+		f: f,
+		elementSlot: &elementSlot{
+			o:        o,
+			el:       found,
+			idPrefix: "ebookfs-series",
+			create: func() *etree.Element {
+				m := o.metaParent().CreateElement("meta")
+				m.CreateAttr("property", "belongs-to-collection")
+				return m
+			},
+		},
+	}
+}
+
+func (s seriesCollection) set(value string) {
+	s.elementSlot.set(value)
+	s.markSeries()
+	// Only the extra collections go; this one's refinements may hold metadata we
+	// did not write.
+	s.f.dropCollections(s.el)
+}
+
+func (s seriesCollection) clear() {
+	s.f.dropCollections(nil)
+	s.elementSlot.el = nil
+}
+
+// unschemedType returns the collection-type refinement that is ours to read and
+// to write. Only an unschemed one is: D.3.4 defines series and set only "when no
+// scheme is specified", so a value from someone else's code list is neither.
+func (f seriesField) unschemedType(id string) *etree.Element {
+	for _, r := range f.o.refineElements(id, "collection-type") {
+		if attr(r, "scheme") == "" {
+			return r
+		}
+	}
+	return nil
+}
+
+// markSeries records the collection as a series rather than a set or a
+// publisher bundle.
+func (s seriesCollection) markSeries() {
+	if m := s.f.unschemedType(s.id()); m != nil {
+		m.SetText("series")
+		return
+	}
+	s.refine("collection-type").add("series", "")
+}
+
+func (f seriesField) isSeriesCollection(m *etree.Element) bool {
+	return attr(m, "property") == "belongs-to-collection" &&
+		text(f.unschemedType(attr(m, "id"))) == "series"
+}
+
+// dropCollections removes every series collection except keep, with its
+// refinements. Sets and publisher bundles are recorded the same way and are not
+// ours to remove. Unlike collection an empty name is still ours to clear.
+func (f seriesField) dropCollections(keep *etree.Element) {
+	var ids []string
+	for _, m := range f.o.elements("meta") {
+		if m == keep || !f.isSeriesCollection(m) {
 			continue
 		}
 		ids = append(ids, attr(m, "id"))
 		detach(m)
 	}
-	o.removeMetas(func(m *etree.Element) bool { return refinesAny(m, ids) })
+	f.o.removeRefinements(ids)
 }
 
 // calibreIndex narrows a series position to the float calibre:series_index is by

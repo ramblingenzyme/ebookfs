@@ -7,6 +7,18 @@
 // writing (set) both go through it so the two cannot disagree. Book-level
 // validation and presentation defaults stay out of the fields and live in Bib,
 // so set(get()) never invents metadata the file did not carry.
+//
+// Three rules keep the fields readable:
+//
+//   - A field with a write side is a type with get/set (title, authors, series,
+//     modified). A read-only field is a single Doc method (description,
+//     language, pubdate, identifiers, cover).
+//   - Fields go through the named operations in dc.go, refine.go and epub2.go —
+//     one file per encoding, holding both its read and its write half. Only
+//     etree.go touches etree directly.
+//   - The EPUB 2 / EPUB 3 branch stays visible in each field. The two specs
+//     genuinely differ, and for the sort title v2 has no mechanism at all;
+//     hiding that behind a common writer would hide what matters.
 package opf
 
 import (
@@ -49,95 +61,6 @@ func (o *Doc) epub3() bool {
 	return strings.HasPrefix(o.pkg.SelectAttrValue("version", ""), "3")
 }
 
-// collapse is the whitespace normalization §5.5.2 requires of a reader. Every
-// value this layer hands out passes through it.
-func collapse(s string) string { return strings.Join(strings.Fields(s), " ") }
-
-func text(e *etree.Element) string { return collapse(e.Text()) }
-
-// attr collapses too: XML 1.0 §3.3.3 turns a newline in an attribute value into
-// a space without trimming it.
-func attr(e *etree.Element, name string) string {
-	return collapse(e.SelectAttrValue(name, ""))
-}
-
-// children flattens the deprecated OPF 2.0 §2.2 wrappers, so no field has to
-// know about them. The write side is dcHome/metaHome in epub2.go.
-func (o *Doc) children() []*etree.Element {
-	var out []*etree.Element
-	for _, c := range o.md.ChildElements() {
-		switch c.Tag {
-		case "dc-metadata", "x-metadata":
-			out = append(out, c.ChildElements()...)
-		default:
-			out = append(out, c)
-		}
-	}
-	return out
-}
-
-// elements matches on etree's Tag, which is the local name with the prefix held
-// separately, so it matches whatever prefix the document binds Dublin Core to.
-func (o *Doc) elements(tag string) []*etree.Element {
-	var out []*etree.Element
-	for _, c := range o.children() {
-		if c.Tag == tag {
-			out = append(out, c)
-		}
-	}
-	return out
-}
-
-// first skips empty values: §5.5.2 requires non-empty ones, so an empty element
-// is a malformed file and the usable value after it is preferred to no book.
-func (o *Doc) first(tag string) (*etree.Element, string) {
-	for _, e := range o.elements(tag) {
-		if v := text(e); v != "" {
-			return e, v
-		}
-	}
-	return nil, ""
-}
-
-// target is the element a read and a write of a Dublin Core field both mean:
-// the first with a non-empty value (§5.5.3.1.2 for the title), or the first
-// present when they are all empty, since a write has to land somewhere.
-func (o *Doc) target(tag string) *etree.Element {
-	if el, _ := o.first(tag); el != nil {
-		return el
-	}
-	if els := o.elements(tag); len(els) > 0 {
-		return els[0]
-	}
-	return nil
-}
-
-func (o *Doc) manifest() []manifestItem {
-	m := o.pkg.SelectElement("manifest")
-	if m == nil {
-		return nil
-	}
-	var out []manifestItem
-	for _, it := range m.SelectElements("item") {
-		out = append(out, manifestItem{
-			ID: attr(it, "id"),
-			// Only trimmed, not collapsed: href is a percent-encoded URL, and
-			// collapsing could rewrite a literal filename.
-			Href:       strings.TrimSpace(it.SelectAttrValue("href", "")),
-			MediaType:  attr(it, "media-type"),
-			Properties: attr(it, "properties"),
-		})
-	}
-	return out
-}
-
-type manifestItem struct {
-	ID         string
-	Href       string
-	MediaType  string
-	Properties string
-}
-
 // Apply writes the edits into the document; nothing is serialized until Bytes.
 // etree is used rather than encoding/xml because it round-trips namespace
 // declarations, dc: prefixes, comments and formatting untouched.
@@ -145,10 +68,10 @@ func (o *Doc) Apply(e model.Edits) {
 	o.title().set(e.Title, e.SortTitle)
 
 	if e.Description != nil {
-		o.setDCText("description", *e.Description)
+		o.dcElement("description", "").set(*e.Description)
 	}
 	if e.Language != nil {
-		o.setDCText("language", *e.Language)
+		o.dcElement("language", "").set(*e.Language)
 	}
 	if e.Authors != nil {
 		o.authors().set(*e.Authors)

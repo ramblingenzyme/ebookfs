@@ -38,7 +38,7 @@ func (o *Doc) cover(base string) string {
 		}
 	}
 
-	coverID := o.namedMeta("cover")
+	coverID := o.namedMeta("cover").get()
 	if coverID != "" {
 		for _, item := range manifest {
 			if item.ID == coverID && isRasterCoverType(item.MediaType) {
@@ -59,4 +59,30 @@ func (o *Doc) cover(base string) string {
 		}
 	}
 	return found
+}
+
+func (o *Doc) manifest() []manifestItem {
+	m := o.pkg.SelectElement("manifest")
+	if m == nil {
+		return nil
+	}
+	var out []manifestItem
+	for _, it := range m.SelectElements("item") {
+		out = append(out, manifestItem{
+			ID: attr(it, "id"),
+			// Only trimmed, not collapsed: href is a percent-encoded URL, and
+			// collapsing could rewrite a literal filename.
+			Href:       strings.TrimSpace(it.SelectAttrValue("href", "")),
+			MediaType:  attr(it, "media-type"),
+			Properties: attr(it, "properties"),
+		})
+	}
+	return out
+}
+
+type manifestItem struct {
+	ID         string
+	Href       string
+	MediaType  string
+	Properties string
 }
