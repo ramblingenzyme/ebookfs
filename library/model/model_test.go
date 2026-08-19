@@ -211,12 +211,19 @@ func TestValidateSeriesIndex(t *testing.T) {
 		wantErr    bool
 	}{
 		{"nil series index", nil, Edits{}, false},
-		{"with series in edits", nil, Edits{Series: new("New Series"), SeriesIndex: new(1.0)}, false},
-		{"book has series, nil in edits", &SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new(2.5)}, false},
-		{"no series anywhere", nil, Edits{SeriesIndex: new(1.0)}, true},
-		{"book has series, empty series edit", &SeriesRef{Name: "Existing"}, Edits{Series: new(string), SeriesIndex: new(1.0)}, false},
-		{"NaN index", &SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new(math.NaN())}, true},
-		{"infinite index", &SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new(math.Inf(1))}, true},
+		{"with series in edits", nil, Edits{Series: new("New Series"), SeriesIndex: new("1")}, false},
+		{"book has series, nil in edits", &SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new("2.5")}, false},
+		{"no series anywhere", nil, Edits{SeriesIndex: new("1")}, true},
+		{"book has series, empty series edit", &SeriesRef{Name: "Existing"}, Edits{Series: new(string), SeriesIndex: new("1")}, false},
+
+		// D.3.7's grammar: "A single xsd:unsignedInt or series of
+		// decimal-separated numbers (e.g., 1 or 2.2.1)."
+		{"multi-level index", &SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new("2.2.1")}, false},
+		{"empty index", &SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new("")}, true},
+		{"non-numeric index", &SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new("two")}, true},
+		{"negative index", &SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new("-1")}, true},
+		{"trailing separator", &SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new("1.")}, true},
+		{"float syntax we cannot store", &SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new("1e3")}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			book := &Book{Bib: Bib{Series: tc.bookSeries}}
@@ -269,7 +276,7 @@ func TestValidateNoErrors(t *testing.T) {
 		Authors:     &[]Author{{Name: "Author"}},
 		Language:    new("en"),
 		Series:      new("New Series"),
-		SeriesIndex: new(2.0),
+		SeriesIndex: new("2"),
 	}
 	err := e.Validate(book)
 	if err != nil {
@@ -397,7 +404,7 @@ func TestEditsNormalized(t *testing.T) {
 		edits Edits
 		// nil means the field must come back nil.
 		wantRating *float64
-		wantIndex  *float64
+		wantIndex  *string
 	}{
 		{"nil fields stay nil", Edits{}, nil, nil},
 
@@ -408,19 +415,20 @@ func TestEditsNormalized(t *testing.T) {
 		{"rating already exact", Edits{Rating: new(4.5)}, new(4.5), nil},
 		{"rating zero", Edits{Rating: new(0.0)}, new(0.0), nil},
 
-		// Series indices are stored to 1 decimal place.
-		{"index rounds down", Edits{SeriesIndex: new(1.54)}, nil, new(1.5)},
-		{"index rounds up", Edits{SeriesIndex: new(1.56)}, nil, new(1.6)},
-		{"index already exact", Edits{SeriesIndex: new(2.0)}, nil, new(2.0)},
-
-		{"both fields", Edits{Rating: new(3.999), SeriesIndex: new(0.04)}, new(4.0), new(0.0)},
+		// The series index is a string carried from the epub and has no
+		// precision to round to: D.3.7's "2.2.1" is not a number.
+		{"index untouched", Edits{SeriesIndex: new("2.2.1")}, nil, new("2.2.1")},
+		{"both fields", Edits{Rating: new(3.999), SeriesIndex: new("1.56")}, new(4.0), new("1.56")},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			got := tc.edits.Normalized()
 
 			assertRounded(t, "Rating", got.Rating, tc.wantRating)
-			assertRounded(t, "SeriesIndex", got.SeriesIndex, tc.wantIndex)
+			if (got.SeriesIndex == nil) != (tc.wantIndex == nil) ||
+				(tc.wantIndex != nil && *got.SeriesIndex != *tc.wantIndex) {
+				t.Errorf("SeriesIndex = %v, want %v", got.SeriesIndex, tc.wantIndex)
+			}
 		})
 	}
 }
@@ -452,13 +460,10 @@ func TestEditsNormalizedKeepsNonFinite(t *testing.T) {
 		{"-Inf", math.Inf(-1)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := Edits{Rating: new(tc.v), SeriesIndex: new(tc.v)}.Normalized()
+			got := Edits{Rating: new(tc.v)}.Normalized()
 
 			if r := *got.Rating; !math.IsNaN(r) && !math.IsInf(r, 0) {
 				t.Errorf("Rating = %v, want it left non-finite for Validate to reject", r)
-			}
-			if i := *got.SeriesIndex; !math.IsNaN(i) && !math.IsInf(i, 0) {
-				t.Errorf("SeriesIndex = %v, want it left non-finite for Validate to reject", i)
 			}
 			// The pairing that matters: Validate still refuses it afterwards.
 			book := &Book{Bib: Bib{Series: &SeriesRef{Name: "S"}}}
@@ -473,15 +478,12 @@ func TestEditsNormalizedKeepsNonFinite(t *testing.T) {
 // carries pointers, so rewriting through them would reach back into the
 // caller's copy.
 func TestEditsNormalizedDoesNotMutateItsReceiver(t *testing.T) {
-	rating, index := 4.567, 1.56
-	e := Edits{Rating: &rating, SeriesIndex: &index}
+	rating := 4.567
+	e := Edits{Rating: &rating}
 
 	e.Normalized()
 
 	if rating != 4.567 {
 		t.Errorf("caller's Rating = %v, want it untouched at 4.567", rating)
-	}
-	if index != 1.56 {
-		t.Errorf("caller's SeriesIndex = %v, want it untouched at 1.56", index)
 	}
 }

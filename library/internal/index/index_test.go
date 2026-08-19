@@ -589,7 +589,7 @@ func TestQueryBySeries(t *testing.T) {
 	seriesBook := model.NewBook(
 		model.Bib{
 			Title: "Series Book", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}},
-			Series: &model.SeriesRef{Name: "My Series", Index: 1},
+			Series: &model.SeriesRef{Name: "My Series", Index: "1"},
 		},
 		model.Meta{ID: 1},
 		model.Location{EpubPath: "A/Series Book (1)/book.epub"},
@@ -953,7 +953,7 @@ func TestStatsAggregates(t *testing.T) {
 		model.Bib{
 			Title:   "First",
 			Authors: []model.Author{{Name: "Alice", SortName: "Alice"}},
-			Series:  &model.SeriesRef{Name: "EPIC", Index: 1},
+			Series:  &model.SeriesRef{Name: "EPIC", Index: "1"},
 		},
 		model.Meta{ID: 1, Tags: []string{"sci-fi", "space"}},
 		model.Location{EpubPath: "A/First (1)/book.epub"},
@@ -962,7 +962,7 @@ func TestStatsAggregates(t *testing.T) {
 		model.Bib{
 			Title:   "Second",
 			Authors: []model.Author{{Name: "Alice", SortName: "Alice"}, {Name: "Bob", SortName: "Bob"}},
-			Series:  &model.SeriesRef{Name: "EPIC", Index: 2},
+			Series:  &model.SeriesRef{Name: "EPIC", Index: "2"},
 		},
 		model.Meta{ID: 2, Tags: []string{"sci-fi"}},
 		model.Location{EpubPath: "A/Second (2)/book.epub"},
@@ -1193,7 +1193,7 @@ func TestPutBookWithSeriesAndTags(t *testing.T) {
 		model.Bib{
 			Title:   "Series Book",
 			Authors: []model.Author{{Name: "Alice", SortName: "Alice"}},
-			Series:  &model.SeriesRef{Name: "EPIC", Index: 1},
+			Series:  &model.SeriesRef{Name: "EPIC", Index: "1"},
 		},
 		model.Meta{ID: 1, Tags: []string{"sci-fi", "space"}},
 		model.Location{EpubPath: "A/Series Book (1)/book.epub"},
@@ -1306,7 +1306,7 @@ func TestRolledBackTxSurfacesErrors(t *testing.T) {
 		}},
 		{"upsertSeries", func(idx *Index, q *dbsqlc.Queries) error {
 			b := newBook(1, "Test")
-			b.Series = &model.SeriesRef{Name: "S", Index: 1}
+			b.Series = &model.SeriesRef{Name: "S", Index: "1"}
 			return idx.upsertSeries(q, b)
 		}},
 		{"putBook", func(idx *Index, q *dbsqlc.Queries) error {
@@ -1388,7 +1388,7 @@ func TestRebuildWithMultipleBooks(t *testing.T) {
 			model.Bib{
 				Title:   "Second",
 				Authors: []model.Author{{Name: "Bob", SortName: "Bob"}},
-				Series:  &model.SeriesRef{Name: "Series A", Index: 2},
+				Series:  &model.SeriesRef{Name: "Series A", Index: "2"},
 			},
 			model.Meta{ID: 2},
 			model.Location{EpubPath: "B/Second (2)/book.epub"},

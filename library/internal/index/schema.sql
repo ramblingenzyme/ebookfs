@@ -12,7 +12,11 @@ CREATE TABLE books (
     date_added    TEXT    NOT NULL,
     date_modified TEXT    NOT NULL,
     series_id     INTEGER REFERENCES series(id),
-    series_index  REAL,
+    -- The book's position in its series, stored as written: EPUB 3.3 D.3.7
+    -- allows decimal-separated levels ("2.2.1"), which no numeric type holds.
+    -- Nothing orders by this column; the by-series view sorts on the padded
+    -- entry name it builds itself.
+    series_index  TEXT,
     -- opf_size and cover_size come from the zip central directory, so they are
     -- the parser's and only ever known for a book that parsed.
     opf_size      INTEGER NOT NULL DEFAULT 0,

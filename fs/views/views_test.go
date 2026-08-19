@@ -3,6 +3,7 @@ package views
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"testing"
 
 	"github.com/knusbaum/go9p/fs"
@@ -159,7 +160,7 @@ var groupingViews = []groupingView{
 		newDir: func(reg *registry.BookRegistry) fs.Dir { return NewBySeriesDir(reg) },
 		withKeys: func(id int64, title string, keys ...string) *model.Book {
 			b := makeBook(id, title, "Author")
-			b.Series = &model.SeriesRef{Name: keys[0], Index: float64(id)}
+			b.Series = &model.SeriesRef{Name: keys[0], Index: strconv.FormatInt(id, 10)}
 			return b
 		},
 		keyless: func(id int64, title string) *model.Book { return makeBook(id, title, "Author") },

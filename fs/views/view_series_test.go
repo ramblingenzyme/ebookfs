@@ -15,40 +15,52 @@ func TestSeriesEntryName(t *testing.T) {
 	}{
 		{
 			name: "simple integer index",
-			book: &model.Book{Bib: model.Bib{Title: "Test", Series: &model.SeriesRef{Index: 1}}},
+			book: &model.Book{Bib: model.Bib{Title: "Test", Series: &model.SeriesRef{Index: "1"}}},
 			want: "1 - Test",
 		},
 		{
 			name: "decimal index",
-			book: &model.Book{Bib: model.Bib{Title: "Longer", Series: &model.SeriesRef{Index: 2.5}}},
+			book: &model.Book{Bib: model.Bib{Title: "Longer", Series: &model.SeriesRef{Index: "2.5"}}},
 			want: "2.5 - Longer",
 		},
 		{
 			name: "zero-padded when maxIdx >= 10",
-			book: &model.Book{Bib: model.Bib{Title: "Padded", Series: &model.SeriesRef{Index: 10}}},
+			book: &model.Book{Bib: model.Bib{Title: "Padded", Series: &model.SeriesRef{Index: "10"}}},
 			pad:  2,
 			want: "10 - Padded",
 		},
 		{
 			name: "zero-padded with decimal",
-			book: &model.Book{Bib: model.Bib{Title: "DPadded", Series: &model.SeriesRef{Index: 10.5}}},
+			book: &model.Book{Bib: model.Bib{Title: "DPadded", Series: &model.SeriesRef{Index: "10.5"}}},
 			pad:  2,
 			want: "10.5 - DPadded",
 		},
 		{
 			name: "index 0",
-			book: &model.Book{Bib: model.Bib{Title: "Zero", Series: &model.SeriesRef{Index: 0}}},
+			book: &model.Book{Bib: model.Bib{Title: "Zero", Series: &model.SeriesRef{Index: "0"}}},
 			want: "0 - Zero",
 		},
 		{
-			name: "large fractional index",
-			book: &model.Book{Bib: model.Bib{Title: "Frac", Series: &model.SeriesRef{Index: 3.14159}}},
-			want: "3.1 - Frac",
+			name: "single digit is zero-padded",
+			book: &model.Book{Bib: model.Bib{Title: "Nine", Series: &model.SeriesRef{Index: "9"}}},
+			pad:  2,
+			want: "09 - Nine",
 		},
 		{
-			name: ".0 trimmed to integer",
-			book: &model.Book{Bib: model.Bib{Title: "Trim", Series: &model.SeriesRef{Index: 42.0}}},
-			want: "42 - Trim",
+			// The index is the string the epub carries and is used as written;
+			// it used to be rounded to one decimal place by the float
+			// formatting this went through.
+			name: "long fractional index passes through",
+			book: &model.Book{Bib: model.Bib{Title: "Frac", Series: &model.SeriesRef{Index: "3.14159"}}},
+			want: "3.14159 - Frac",
+		},
+		{
+			// EPUB 3.3 D.3.7 multi-level position: only the first level is
+			// padded, the rest is carried through untouched.
+			name: "multi-level position",
+			book: &model.Book{Bib: model.Bib{Title: "Multi", Series: &model.SeriesRef{Index: "2.2.1"}}},
+			pad:  2,
+			want: "02.2.1 - Multi",
 		},
 	}
 	for _, tc := range tests {
@@ -66,9 +78,9 @@ func TestSeriesEntryName_PadTriggeredByMaxIndex(t *testing.T) {
 	d := NewBySeriesDir(reg)
 
 	b1 := makeBook(1, "First", "Author")
-	b1.Series = &model.SeriesRef{Name: "S", Index: 1.0}
+	b1.Series = &model.SeriesRef{Name: "S", Index: "1"}
 	b2 := makeBook(2, "Tenth", "Author")
-	b2.Series = &model.SeriesRef{Name: "S", Index: 10.0}
+	b2.Series = &model.SeriesRef{Name: "S", Index: "10"}
 
 	reg.Add(b1)
 	reg.Add(b2)

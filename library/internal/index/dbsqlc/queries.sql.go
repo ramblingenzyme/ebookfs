@@ -462,7 +462,7 @@ type InsertBookParams struct {
 	DateAdded    string
 	DateModified string
 	SeriesID     sql.NullInt64
-	SeriesIndex  sql.NullFloat64
+	SeriesIndex  sql.NullString
 	OpfSize      int64
 	CoverSize    int64
 	EpubSize     int64
@@ -631,7 +631,7 @@ UPDATE books SET series_id = ?, series_index = ? WHERE id = ?
 
 type UpdateBookSeriesParams struct {
 	SeriesID    sql.NullInt64
-	SeriesIndex sql.NullFloat64
+	SeriesIndex sql.NullString
 	ID          int64
 }
 
@@ -672,7 +672,7 @@ type UpsertBookParams struct {
 	DateAdded    string
 	DateModified string
 	SeriesID     sql.NullInt64
-	SeriesIndex  sql.NullFloat64
+	SeriesIndex  sql.NullString
 	OpfSize      int64
 	CoverSize    int64
 	EpubSize     int64

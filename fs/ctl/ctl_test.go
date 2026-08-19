@@ -444,7 +444,7 @@ func TestRenameAuthorMatchSortName(t *testing.T) {
 
 func TestRenameSeries(t *testing.T) {
 	book := testutil.MakeBook(9, "Title", "Author")
-	book.Series = &model.SeriesRef{Name: "Old", Index: 1.0}
+	book.Series = &model.SeriesRef{Name: "Old", Index: "1"}
 
 	lib := libfake.Lib{
 		SearchFn: func(q model.Query) ([]*model.Book, error) {

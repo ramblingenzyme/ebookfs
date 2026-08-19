@@ -17,7 +17,7 @@ type bookRow struct {
 	sortTitle                                                          sql.NullString
 	seriesID                                                           sql.NullInt64
 	seriesName                                                         sql.NullString
-	seriesIndex                                                        sql.NullFloat64
+	seriesIndex                                                        sql.NullString
 }
 
 // toBook converts a bookRow to a model.Book.
@@ -49,7 +49,7 @@ func (r *bookRow) toBook() *model.Book {
 		b.Series = &model.SeriesRef{
 			ID:    r.seriesID.Int64,
 			Name:  r.seriesName.String,
-			Index: r.seriesIndex.Float64,
+			Index: r.seriesIndex.String,
 		}
 	}
 	return b

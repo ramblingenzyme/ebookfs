@@ -139,14 +139,13 @@ var fields = map[string]field{
 			if !b.HasSeries() {
 				return ""
 			}
-			return strconv.FormatFloat(b.Series.Index, 'f', 1, 64)
+			return b.Series.Index
 		},
+		// Passed through as written: the position is a string all the way from
+		// the epub (EPUB 3.3 D.3.7 allows "2.2.1"), and its grammar is checked
+		// by model.Edits.Validate along with every other field's.
 		edits: func(s string) (model.Edits, error) {
-			idx, err := strconv.ParseFloat(s, 64)
-			if err != nil {
-				return model.Edits{}, fmt.Errorf("invalid series index %q", s)
-			}
-			return model.Edits{SeriesIndex: &idx}, nil
+			return model.Edits{SeriesIndex: &s}, nil
 		},
 	},
 }

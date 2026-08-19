@@ -186,9 +186,15 @@ type Author struct {
 }
 
 type SeriesRef struct {
-	ID    int64
-	Name  string
-	Index float64
+	ID   int64
+	Name string
+	// Index is the book's position in the series, held as the string the epub
+	// carries. EPUB 3.3 Appendix D.3.7 allows "a single xsd:unsignedInt or
+	// series of decimal-separated numbers (e.g., 1 or 2.2.1)", and Example 89
+	// notes that 98.4 means volume 98, issue 4 — not the number 98.4. A float
+	// cannot represent either, and parsing one silently turned every book in a
+	// multi-level series into volume 1.
+	Index string
 }
 
 // Location identifies where a book lives on disk. EpubPath is relative to

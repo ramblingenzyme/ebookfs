@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/beevik/etree"
@@ -235,7 +234,7 @@ func isAuthorCreator(md, c *etree.Element) bool {
 // Name and index are nil when the edit did not name them. Since the series is
 // rewritten wholesale, whichever half the edit left out is carried over from the
 // file: a rename keeps the book's position, and a move keeps the series name.
-func setSeries(pkg, md *etree.Element, name *string, index *float64) {
+func setSeries(pkg, md *etree.Element, name, index *string) {
 	// Read before clearSeries, which is about to take both halves with it.
 	curName, curIndex := currentSeries(md)
 	if name == nil {
@@ -265,7 +264,7 @@ func setSeries(pkg, md *etree.Element, name *string, index *float64) {
 	if !epub3 {
 		newNamedMeta(md, "calibre:series", *name)
 		if index != nil {
-			newNamedMeta(md, "calibre:series_index", formatIndex(*index))
+			newNamedMeta(md, "calibre:series_index", calibreIndex(*index))
 		}
 		return
 	}
@@ -283,7 +282,7 @@ func setSeries(pkg, md *etree.Element, name *string, index *float64) {
 	clearManagedRefines(md, id, "collection-type", "group-position")
 	addRefine(md, id, "collection-type", "series", "")
 	if index != nil {
-		addRefine(md, id, "group-position", formatIndex(*index), "")
+		addRefine(md, id, "group-position", *index, "")
 	}
 }
 
@@ -330,21 +329,21 @@ func clearSeries(md, keep *etree.Element) {
 // back to the EPUB 2 calibre:series metas. A nil index means the file records
 // no position; unlike translateSeries this does not default it to 1, because
 // the caller is deciding whether to write one at all.
-func currentSeries(md *etree.Element) (string, *float64) {
+func currentSeries(md *etree.Element) (string, *string) {
 	if coll := seriesCollection(md); coll != nil {
 		pos := refineValue(md, coll.SelectAttrValue("id", ""), "group-position")
-		return strings.TrimSpace(coll.Text()), parseIndex(pos)
+		return strings.TrimSpace(coll.Text()), presentIndex(pos)
 	}
 	var (
 		name string
-		idx  *float64
+		idx  *string
 	)
 	for _, m := range md.SelectElements("meta") {
 		switch m.SelectAttrValue("name", "") {
 		case "calibre:series":
 			name = strings.TrimSpace(m.SelectAttrValue("content", ""))
 		case "calibre:series_index":
-			idx = parseIndex(m.SelectAttrValue("content", ""))
+			idx = presentIndex(m.SelectAttrValue("content", ""))
 		}
 	}
 	return name, idx
@@ -358,18 +357,27 @@ func isSeriesCollection(md, m *etree.Element) bool {
 		refineValue(md, m.SelectAttrValue("id", ""), "collection-type") == "series"
 }
 
-// formatIndex writes a series position in its shortest exact form: 3 -> "3",
-// 2.5 -> "2.5". It round-trips through parseIndex.
-func formatIndex(f float64) string {
-	return strconv.FormatFloat(f, 'g', -1, 64)
-}
-
-func parseIndex(s string) *float64 {
-	f, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
-	if err != nil {
+// presentIndex reports a recorded series position, or nil when the file records
+// none. Unlike translateSeries this does not default to "1": the caller is
+// deciding whether to write a position at all, and inventing one the file never
+// carried would churn every edit.
+func presentIndex(s string) *string {
+	if s = strings.TrimSpace(s); s == "" {
 		return nil
 	}
-	return &f
+	return &s
+}
+
+// calibreIndex narrows a series position to what the EPUB 2 encoding can carry.
+// calibre:series_index is a float by calibre's own convention, so a multi-level
+// D.3.7 position ("2.2.1") is written as its first two levels — the closest
+// thing a calibre reader can act on. The EPUB 3 group-position keeps it exact.
+func calibreIndex(s string) string {
+	parts := strings.SplitN(s, ".", 3)
+	if len(parts) < 3 {
+		return s
+	}
+	return parts[0] + "." + parts[1]
 }
 
 // --- OPF and etree plumbing --------------------------------------------------

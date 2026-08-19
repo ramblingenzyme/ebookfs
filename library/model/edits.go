@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 
 	"golang.org/x/text/language"
@@ -29,7 +30,7 @@ type Edits struct {
 	Language    *string
 	Authors     *[]Author
 	Series      *string
-	SeriesIndex *float64
+	SeriesIndex *string
 
 	// Cover replaces the cover image in the epub. It is applied before any bib
 	// edits so that a combined Cover + OPF edit produces a single final epub
@@ -45,18 +46,16 @@ type Edits struct {
 }
 
 // Normalized returns a copy of e with the persisted-precision rules applied:
-// ratings are stored to 2 decimal places and series indices to 1. Rounding is
-// a storage policy enforced by Library.Edit for every caller, not a parsing
-// concern re-implemented by each frontend. NaN/Inf survive rounding and are
-// rejected by Validate.
+// ratings are stored to 2 decimal places. Rounding is a storage policy enforced
+// by Library.Edit for every caller, not a parsing concern re-implemented by each
+// frontend. NaN/Inf survive rounding and are rejected by Validate.
+//
+// The series index is not rounded: it is the string the epub carries, and
+// D.3.7's multi-level positions have no precision to round to.
 func (e Edits) Normalized() Edits {
 	if e.Rating != nil {
 		r := math.Round(*e.Rating*100) / 100
 		e.Rating = &r
-	}
-	if e.SeriesIndex != nil {
-		i := math.Round(*e.SeriesIndex*10) / 10
-		e.SeriesIndex = &i
 	}
 	return e
 }
@@ -216,12 +215,21 @@ func (e Edits) validateCover(b *Book) string {
 	return ""
 }
 
+// seriesIndexPattern is EPUB 3.3 Appendix D.3.7's allowed value: "A single
+// xsd:unsignedInt or series of decimal-separated numbers (e.g., 1 or 2.2.1)."
+var seriesIndexPattern = regexp.MustCompile(`^[0-9]+(\.[0-9]+)*$`)
+
+// ValidSeriesIndex reports whether s is a well-formed series position. It is
+// exported so the epub reader can apply the same grammar it validates edits
+// against, rather than keeping a second opinion about what a position is.
+func ValidSeriesIndex(s string) bool { return seriesIndexPattern.MatchString(s) }
+
 func (e Edits) validateSeriesIndex(b *Book) string {
 	if e.SeriesIndex == nil {
 		return ""
 	}
-	if math.IsNaN(*e.SeriesIndex) || math.IsInf(*e.SeriesIndex, 0) {
-		return fmt.Sprintf("invalid series index %g: must be a finite number", *e.SeriesIndex)
+	if !ValidSeriesIndex(*e.SeriesIndex) {
+		return fmt.Sprintf("invalid series index %q: must be a number, or decimal-separated numbers such as 2.2.1", *e.SeriesIndex)
 	}
 	if e.Series == nil && b.Series == nil {
 		return "book has no series to set an index on"

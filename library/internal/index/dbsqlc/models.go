@@ -28,7 +28,7 @@ type Book struct {
 	DateAdded    string
 	DateModified string
 	SeriesID     sql.NullInt64
-	SeriesIndex  sql.NullFloat64
+	SeriesIndex  sql.NullString
 	OpfSize      int64
 	CoverSize    int64
 	EpubSize     int64

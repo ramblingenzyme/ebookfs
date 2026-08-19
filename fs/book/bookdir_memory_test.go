@@ -30,7 +30,7 @@ func representativeBook(id int64, withCover bool) *model.Book {
 			Name:     "Ursula K. Le Guin",
 			SortName: "Le Guin, Ursula K",
 		}},
-		Series:      &model.SeriesRef{Name: "Hainish Cycle", Index: 1.0},
+		Series:      &model.SeriesRef{Name: "Hainish Cycle", Index: "1"},
 		Language:    "en",
 		Pubdate:     "1969-03-01",
 		Description: desc,

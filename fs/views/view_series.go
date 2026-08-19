@@ -14,20 +14,31 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
+// seriesEntryName builds a book's entry name within its series. The index is
+// the string the epub carries, so it is used as written and only the first
+// level is zero-padded — that is the level entries sort on, and padding it is
+// what keeps "9" ahead of "10" in a plain lexical listing.
 func seriesEntryName(b *model.Book, pad int32) string {
-	s := strconv.FormatFloat(b.Series.Index, 'f', 1, 64)
-	s = strings.TrimRight(s, "0")
-	s = strings.TrimRight(s, ".")
+	s := b.Series.Index
 
 	if pad > 0 {
-		parts := strings.SplitN(s, ".", 2)
-		intPart, _ := strconv.Atoi(parts[0])
-		s = fmt.Sprintf("%02d", intPart)
-		if len(parts) > 1 {
-			s += "." + parts[1]
+		head, rest, _ := strings.Cut(s, ".")
+		s = fmt.Sprintf("%02d", seriesLevel(head))
+		if rest != "" {
+			s += "." + rest
 		}
 	}
 	return fmt.Sprintf("%s - %s", s, b.Title)
+}
+
+// seriesLevel reads the first level of a series position, which is the only
+// part the padding and the pad-width decision look at. A position that is not a
+// number at all sorts as 0; model.Edits.Validate rejects those on the way in,
+// so this only covers what an epub already contained.
+func seriesLevel(s string) int {
+	head, _, _ := strings.Cut(s, ".")
+	n, _ := strconv.Atoi(head)
+	return n
 }
 
 // seriesBookListDir lists one series' books as namedBookDir entries. Entry
@@ -78,10 +89,10 @@ func (s *seriesBookListDir) Remove(dir *book.BookDir) {
 // repad recomputes the zero-pad width from the current members: two digits
 // once any series index reaches 10.
 func (s *seriesBookListDir) repad() {
-	var maxIdx float64
+	var maxIdx int
 	for _, n := range s.children {
-		if b := n.Book(); b.HasSeries() && b.Series.Index > maxIdx {
-			maxIdx = b.Series.Index
+		if b := n.Book(); b.HasSeries() && seriesLevel(b.Series.Index) > maxIdx {
+			maxIdx = seriesLevel(b.Series.Index)
 		}
 	}
 	var pad int32

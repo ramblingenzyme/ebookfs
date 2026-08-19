@@ -60,8 +60,8 @@ func (idx *Index) insertBook(q *dbsqlc.Queries, b *model.Book, mt drift.PathInfo
 		Rating:       b.Meta.Rating,
 		DateAdded:    b.Meta.DateAdded.UTC().Format(time.RFC3339),
 		DateModified: b.Meta.DateModified.UTC().Format(time.RFC3339),
-		SeriesID:     sql.NullInt64{},   // series_id set by finishBook
-		SeriesIndex:  sql.NullFloat64{}, // series_index set by finishBook
+		SeriesID:     sql.NullInt64{},  // series_id set by finishBook
+		SeriesIndex:  sql.NullString{}, // series_index set by finishBook
 		OpfSize:      b.OpfSize,
 		CoverSize:    b.CoverSize,
 		EpubSize:     mt.Size,
@@ -95,8 +95,8 @@ func (idx *Index) putBook(q *dbsqlc.Queries, b *model.Book, mt drift.PathInfo) e
 		Rating:       b.Meta.Rating,
 		DateAdded:    b.Meta.DateAdded.UTC().Format(time.RFC3339),
 		DateModified: b.Meta.DateModified.UTC().Format(time.RFC3339),
-		SeriesID:     sql.NullInt64{},   // series_id set by finishBook
-		SeriesIndex:  sql.NullFloat64{}, // series_index set by finishBook
+		SeriesID:     sql.NullInt64{},  // series_id set by finishBook
+		SeriesIndex:  sql.NullString{}, // series_index set by finishBook
 		OpfSize:      b.OpfSize,
 		CoverSize:    b.CoverSize,
 		EpubSize:     mt.Size,
@@ -198,7 +198,7 @@ func (idx *Index) upsertTags(q *dbsqlc.Queries, bookID int64, tags []string) err
 // orphaned series rows. It must run after the books row exists.
 func (idx *Index) upsertSeries(q *dbsqlc.Queries, b *model.Book) error {
 	var seriesID sql.NullInt64
-	var seriesIndex sql.NullFloat64
+	var seriesIndex sql.NullString
 
 	if b.Series != nil {
 		if err := q.InsertSeries(idx.ctx, b.Series.Name); err != nil {
@@ -209,7 +209,7 @@ func (idx *Index) upsertSeries(q *dbsqlc.Queries, b *model.Book) error {
 			return err
 		}
 		seriesID = sql.NullInt64{Int64: series.ID, Valid: true}
-		seriesIndex = sql.NullFloat64{Float64: b.Series.Index, Valid: true}
+		seriesIndex = sql.NullString{String: b.Series.Index, Valid: true}
 	}
 
 	if err := q.UpdateBookSeries(idx.ctx, dbsqlc.UpdateBookSeriesParams{

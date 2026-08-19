@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/url"
 	"path"
-	"strconv"
 	"strings"
 
 	"github.com/ramblingenzyme/ebookfs/library/internal/naming"
@@ -182,12 +181,18 @@ func translateAuthor(meta *opfMetadata, b *model.Bib) error {
 // calibre:series can still be found. Failing an EPUB 3 series, the proprietary
 // EPUB 2 calibre:series / calibre:series_index metas are used.
 //
-// The index defaults to 1 (calibre's convention) whenever a series is present
-// but carries no parseable position — a 0 would surface as "0. Title" in the
+// The index is the string the file records, kept as written: EPUB 3.3 Appendix
+// D.3.7 allows "a single xsd:unsignedInt or series of decimal-separated numbers
+// (e.g., 1 or 2.2.1)", and Example 89 notes that 98.4 means volume 98, issue 4
+// — not the number 98.4. Parsing it as a float collapsed every multi-level
+// position to 1.
+//
+// It defaults to "1" (calibre's convention) whenever a series is present but
+// carries no usable position — a 0 would surface as "0 - Title" in the
 // by-series view and sort ahead of the real, numbered entries.
 func translateSeries(meta *opfMetadata, b *model.Bib) {
 	var name string
-	var index float64 = 1
+	var index string
 
 	for _, m := range meta.Metas {
 		if m.Property != "belongs-to-collection" || m.ID == "" {
@@ -198,12 +203,8 @@ func translateSeries(meta *opfMetadata, b *model.Bib) {
 			continue
 		}
 		name = collName
-		if pos := findRefine(meta.Metas, m.ID, "group-position"); pos != "" {
-			if idx, err := strconv.ParseFloat(pos, 64); err == nil {
-				index = idx
-			}
-		}
-		b.Series = &model.SeriesRef{Name: name, Index: index}
+		index = findRefine(meta.Metas, m.ID, "group-position")
+		b.Series = &model.SeriesRef{Name: name, Index: seriesIndex(index)}
 		return
 	}
 
@@ -212,15 +213,23 @@ func translateSeries(meta *opfMetadata, b *model.Bib) {
 		case "calibre:series":
 			name = strings.TrimSpace(m.Content)
 		case "calibre:series_index":
-			if idx, err := strconv.ParseFloat(m.Content, 64); err == nil {
-				index = idx
-			}
+			index = m.Content
 		}
 	}
 
 	if name != "" {
-		b.Series = &model.SeriesRef{Name: name, Index: index}
+		b.Series = &model.SeriesRef{Name: name, Index: seriesIndex(index)}
 	}
+}
+
+// seriesIndex defaults a recorded position to "1" when the file records none,
+// or records one outside D.3.7's grammar.
+func seriesIndex(pos string) string {
+	pos = strings.TrimSpace(pos)
+	if !model.ValidSeriesIndex(pos) {
+		return "1"
+	}
+	return pos
 }
 
 // coverUrl resolves a manifest href into the literal zip entry path of the cover.

@@ -302,7 +302,7 @@ func TestTranslateSeriesSetCollectionIgnored(t *testing.T) {
 	if book.Series == nil || book.Series.Name != "Real Series" {
 		t.Errorf("series = %v, want Real Series (set collection should be ignored)", book.Series)
 	}
-	if book.Series == nil || book.Series.Index != 3 {
+	if book.Series == nil || book.Series.Index != "3" {
 		t.Errorf("series index = %v, want 3", book.Series.Index)
 	}
 }
@@ -407,7 +407,7 @@ func TestTranslateSeriesDefaultsIndexToOne(t *testing.T) {
 			if book.Series == nil || book.Series.Name != "Lonely Series" {
 				t.Fatalf("series = %v, want Lonely Series", book.Series)
 			}
-			if book.Series == nil || book.Series.Index != 1 {
+			if book.Series == nil || book.Series.Index != "1" {
 				t.Errorf("series index = %v, want 1 (calibre default)", book.Series.Index)
 			}
 		})

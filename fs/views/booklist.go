@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+
 	"github.com/ramblingenzyme/ebookfs/fs/book"
 	"github.com/ramblingenzyme/ebookfs/fs/registry"
 
@@ -32,6 +33,16 @@ func newBookListDir(stat *proto.Stat) *bookListDir {
 
 // disambiguatedName is the entry name for a book whose plain title collides with
 // another book's. Mirrors the store's canonicalDir convention.
+//
+// Known gap: Add tests the plain title for collisions but not the name it mints,
+// so a book literally titled "Foo (2)" and the minted name for book 2 titled
+// "Foo" are the same key. It only bites in one order — literal title added
+// first, then the collision that mints over it: the minted entry replaces the
+// literal one, so a registered book vanishes from the listing, and because
+// entries then maps both ids to that name, removing either deletes the other's
+// entry too. Added the other way round it is fine, since by then the plain
+// title "Foo (2)" is taken and gets disambiguated in turn. Fixing it means
+// minting until the name is free rather than assuming one pass suffices.
 func disambiguatedName(b *model.Book) string {
 	return fmt.Sprintf("%s (%d)", b.Title, b.Meta.ID)
 }

@@ -159,14 +159,14 @@ func TestWriteBibSeriesRoundTrip(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEpub(t, baseEntries(tc.opf))
 			// A fractional index (e.g. a 1.5 novella) must round-trip, not truncate.
-			book, err := writeBib(path, model.Edits{Series: new("The Saga"), SeriesIndex: new(1.5)})
+			book, err := writeBib(path, model.Edits{Series: new("The Saga"), SeriesIndex: new("1.5")})
 			if err != nil {
 				t.Fatal(err)
 			}
 			if book.Series == nil || book.Series.Name != "The Saga" {
 				t.Errorf("series = %v, want The Saga", book.Series)
 			}
-			if book.Series == nil || book.Series.Index != 1.5 {
+			if book.Series == nil || book.Series.Index != "1.5" {
 				t.Errorf("series index = %v, want 1.5", book.Series.Index)
 			}
 
@@ -476,11 +476,11 @@ func TestWriteCoverRejectsFormatMismatch(t *testing.T) {
 // book model claiming series. Validate refuses a SeriesIndex edit on a book
 // with no series at all, so the model has to carry one — which is exactly the
 // shape library.Edit hands in, having read the book from the index.
-func reindexSeries(t *testing.T, path, series string, index float64) model.Bib {
+func reindexSeries(t *testing.T, path, series, index string) model.Bib {
 	t.Helper()
 	b := &model.Book{
 		Location: model.Location{EpubPath: path},
-		Bib:      model.Bib{Series: &model.SeriesRef{Name: series, Index: 1}},
+		Bib:      model.Bib{Series: &model.SeriesRef{Name: series, Index: "1"}},
 	}
 	bib, err := Rewrite(path, b, model.Edits{SeriesIndex: new(index)})
 	if err != nil {
@@ -501,16 +501,16 @@ func TestWriteBibSeriesIndexOnlyKeepsName(t *testing.T) {
 	}{{"epub3", opf3}, {"epub2", opf2}} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEpub(t, baseEntries(tc.opf))
-			if _, err := writeBib(path, model.Edits{Series: new("The Saga"), SeriesIndex: new(1.0)}); err != nil {
+			if _, err := writeBib(path, model.Edits{Series: new("The Saga"), SeriesIndex: new("1")}); err != nil {
 				t.Fatal(err)
 			}
 
-			book := reindexSeries(t, path, "The Saga", 4)
+			book := reindexSeries(t, path, "The Saga", "4")
 
 			if book.Series == nil || book.Series.Name != "The Saga" {
 				t.Errorf("series = %v after an index-only edit, want it carried over from the OPF", book.Series)
 			}
-			if book.Series == nil || book.Series.Index != 4 {
+			if book.Series == nil || book.Series.Index != "4" {
 				t.Errorf("series index = %v, want 4", book.Series.Index)
 			}
 		})
@@ -524,7 +524,7 @@ func TestWriteBibSeriesIndexOnlyKeepsName(t *testing.T) {
 func TestWriteBibSeriesIndexOnlyWithoutSeriesInOPF(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3)) // no series metadata
 
-	book := reindexSeries(t, path, "Phantom Saga", 4)
+	book := reindexSeries(t, path, "Phantom Saga", "4")
 
 	if book.Series != nil {
 		t.Errorf("series = %+v, want nil — the OPF has none to carry over, and the edit must not invent one", book.Series)
@@ -539,7 +539,7 @@ func TestWriteBibSeriesIndexOnlyWithoutSeriesInOPF(t *testing.T) {
 func TestSetSeriesPreservesExistingIndex(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
 	// First, set up a series with index 3
-	if _, err := writeBib(path, model.Edits{Series: new("The Trilogy"), SeriesIndex: new(3.0)}); err != nil {
+	if _, err := writeBib(path, model.Edits{Series: new("The Trilogy"), SeriesIndex: new("3")}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -550,7 +550,7 @@ func TestSetSeriesPreservesExistingIndex(t *testing.T) {
 	}
 
 	// The index should be preserved as 3, not reset to 1
-	if book.Series == nil || book.Series.Index != 3.0 {
+	if book.Series == nil || book.Series.Index != "3" {
 		t.Errorf("series index = %v, want 3.0 (preserved from before rename)", book.Series.Index)
 	}
 }
@@ -577,7 +577,7 @@ func TestSetSeriesReusesCollection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if book.Series == nil || book.Series.Name != "The Quartet" || book.Series.Index != 2 {
+	if book.Series == nil || book.Series.Name != "The Quartet" || book.Series.Index != "2" {
 		t.Fatalf("series = %+v, want The Quartet at 2", book.Series)
 	}
 
@@ -626,7 +626,7 @@ func TestSetSeriesPreservesSets(t *testing.T) {
 	path := writeEpub(t, baseEntries(opfWithSet))
 
 	// Edit the series
-	book, err := writeBib(path, model.Edits{Series: new("The Quartet"), SeriesIndex: new(1.0)})
+	book, err := writeBib(path, model.Edits{Series: new("The Quartet"), SeriesIndex: new("1")})
 	if err != nil {
 		t.Fatal(err)
 	}
