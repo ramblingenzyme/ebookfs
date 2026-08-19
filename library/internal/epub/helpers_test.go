@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/library/model"
@@ -104,6 +105,17 @@ const opf2 = `<?xml version="1.0" encoding="utf-8"?>
   </manifest>
   <spine toc="ncx"><itemref idref="ch1"/></spine>
 </package>`
+
+// opf3With returns opf3 with extra metadata spliced in before </metadata>, so a
+// fixture that needs one more <meta> does not restate the whole package.
+func opf3With(extra string) string {
+	const close = "  </metadata>"
+	before, after, ok := strings.Cut(opf3, close)
+	if !ok {
+		panic("opf3 has no </metadata>")
+	}
+	return before + extra + "\n" + close + after
+}
 
 var (
 	chapterBytes = []byte("<html><body><p>chapter one</p></body></html>")

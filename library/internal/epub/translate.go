@@ -126,15 +126,19 @@ func translateTitle(meta *opfMetadata, b *model.Bib) error {
 	return nil
 }
 
+// isAuthorRole is the single definition of which MARC relator counts as an
+// author: "aut", or unspecified, which the EPUB spec defaults to author. Both
+// the reader (translateAuthor) and the writer (isAuthorCreator) go through it,
+// so a creator setAuthors replaces is exactly one translate reports.
+func isAuthorRole(role string) bool {
+	return role == "" || role == "aut"
+}
+
 func translateAuthor(meta *opfMetadata, b *model.Bib) error {
 	for _, c := range meta.Creators {
 		role := c.Role
 		if role == "" {
 			role = findRefine(meta.Metas, c.ID, "role")
-		}
-
-		if role == "" {
-			role = "aut"
 		}
 
 		// Non-author contributors (editors, illustrators, translators) are
@@ -144,7 +148,7 @@ func translateAuthor(meta *opfMetadata, b *model.Bib) error {
 		// untouched in the OPF, so exposing them would create a broken
 		// round-trip where removing an editor from the 9P authors field
 		// appears to work but the editor survives in the epub.
-		if role != "aut" {
+		if !isAuthorRole(role) {
 			continue
 		}
 

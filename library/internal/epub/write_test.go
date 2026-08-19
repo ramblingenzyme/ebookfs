@@ -534,11 +534,9 @@ func TestWriteBibSeriesIndexOnlyWithoutSeriesInOPF(t *testing.T) {
 	// non-empty, so the position never escapes.
 }
 
-// --- Known limitations (TODOs) --------------------------------------------
+// --- Metadata we must not clobber -----------------------------------------
 
 func TestSetSeriesPreservesExistingIndex(t *testing.T) {
-	t.Skip("TODO: setSeries doesn't preserve existing index when only Series is set")
-
 	path := writeEpub(t, baseEntries(opf3))
 	// First, set up a series with index 3
 	if _, err := writeBib(path, model.Edits{Series: new("The Trilogy"), SeriesIndex: new(3.0)}); err != nil {
@@ -557,82 +555,73 @@ func TestSetSeriesPreservesExistingIndex(t *testing.T) {
 	}
 }
 
-func TestSetAuthorsPreservesNonAuthorMetadata(t *testing.T) {
-	t.Skip("TODO: setAuthors removes all creator metadata, not just ebookfs-managed fields")
+// opfWithAlternateScript carries a refinement ebookfs does not manage
+// (alternate-script, a publisher/Calibre convention) alongside the role and
+// file-as it does.
+var opfWithAlternateScript = opf3With(`    <meta refines="#creator1" property="alternate-script" xml:lang="ja">ドゥ・ジェーン</meta>`)
 
-	// Create an OPF with an author that has alternate-script metadata
-	opfWithAlternateScript := `<?xml version="1.0" encoding="utf-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
-  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:identifier id="bookid">urn:uuid:1234</dc:identifier>
-    <dc:title>Original Title</dc:title>
-    <dc:creator id="creator1">Jane Doe</dc:creator>
-    <meta refines="#creator1" property="role" scheme="marc:relators">aut</meta>
-    <meta refines="#creator1" property="file-as">Doe, Jane</meta>
-    <meta refines="#creator1" property="alternate-script" xml:lang="ja">ドゥ・ジェーン</meta>
-    <dc:language>en</dc:language>
-  </metadata>
-  <manifest>
-    <item id="cover-img" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
-    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
-  </manifest>
-  <spine><itemref idref="ch1"/></spine>
-</package>`
+// opfSeriesWithIdentifier refines the collection with a dcterms:identifier —
+// EPUB 3 lets a series carry an ISSN — which is not ours to rewrite.
+var opfSeriesWithIdentifier = opf3With(`    <meta property="belongs-to-collection" id="series1">The Trilogy</meta>
+    <meta refines="#series1" property="collection-type">series</meta>
+    <meta refines="#series1" property="group-position">2</meta>
+    <meta refines="#series1" property="dcterms:identifier">urn:issn:1234-5678</meta>`)
 
-	path := writeEpub(t, baseEntries(opfWithAlternateScript))
+// TestSetSeriesReusesCollection pins that a series edit rewrites the collection
+// element it found rather than replacing it, so a refinement ebookfs does not
+// manage survives — and that clearing the series still takes the whole thing.
+func TestSetSeriesReusesCollection(t *testing.T) {
+	path := writeEpub(t, baseEntries(opfSeriesWithIdentifier))
 
-	// Edit the author
-	authors := []model.Author{{Name: "Jane Doe", SortName: "Doe, Jane"}}
-	book, err := writeBib(path, model.Edits{Authors: &authors})
+	book, err := writeBib(path, model.Edits{Series: new("The Quartet")})
 	if err != nil {
 		t.Fatal(err)
 	}
+	if book.Series == nil || book.Series.Name != "The Quartet" || book.Series.Index != 2 {
+		t.Fatalf("series = %+v, want The Quartet at 2", book.Series)
+	}
 
-	// The alternate-script metadata should be preserved
 	opfBytes, ok, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
 	if !ok {
 		t.Fatal("OPF entry not found")
 	}
-
-	if !bytes.Contains(opfBytes, []byte(`property="alternate-script"`)) {
-		t.Error("alternate-script metadata was removed, should be preserved")
+	if !bytes.Contains(opfBytes, []byte("urn:issn:1234-5678")) {
+		t.Error("the collection identifier was dropped by a rename")
+	}
+	// The element is reused, so it keeps its own id rather than being minted a
+	// fresh one, and the refines above still point at it.
+	if !bytes.Contains(opfBytes, []byte(`id="series1"`)) {
+		t.Error("collection id changed; refinements no longer target it")
+	}
+	for _, p := range []string{"collection-type", "group-position"} {
+		want := []byte(`refines="#series1" property="` + p + `"`)
+		if n := bytes.Count(opfBytes, want); n != 1 {
+			t.Errorf("%s refines = %d, want 1 (rewritten, not duplicated)", p, n)
+		}
 	}
 
-	// Also verify the author was updated correctly
-	if len(book.Authors) != 1 || book.Authors[0].Name != "Jane Doe" {
-		t.Errorf("author not updated correctly: %+v", book.Authors)
+	// Clearing the series takes the element with it, identifier and all.
+	if _, err := writeBib(path, model.Edits{Series: new(string)}); err != nil {
+		t.Fatal(err)
+	}
+	opfBytes, ok, _ = readEntryFromFile(t, path, "OEBPS/content.opf")
+	if !ok {
+		t.Fatal("OPF entry not found")
+	}
+	if bytes.Contains(opfBytes, []byte("series1")) {
+		t.Error("clearing the series left the collection behind")
 	}
 }
 
 func TestSetSeriesPreservesSets(t *testing.T) {
-	t.Skip("TODO: setSeries removes all belongs-to-collection elements, not just series")
-
-	// Create an OPF with both a series and a set
-	opfWithSet := `<?xml version="1.0" encoding="utf-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
-  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:identifier id="bookid">urn:uuid:1234</dc:identifier>
-    <dc:title>Original Title</dc:title>
-    <dc:creator id="creator1">Jane Doe</dc:creator>
-    <meta refines="#creator1" property="role" scheme="marc:relators">aut</meta>
-    <dc:language>en</dc:language>
-
-    <!-- Series -->
+	opfWithSet := opf3With(`    <!-- Series -->
     <meta property="belongs-to-collection" id="series1">The Trilogy</meta>
     <meta refines="#series1" property="collection-type">series</meta>
     <meta refines="#series1" property="group-position">2</meta>
 
     <!-- Set (bundle) -->
     <meta property="belongs-to-collection" id="set1">Complete Works</meta>
-    <meta refines="#set1" property="collection-type">set</meta>
-
-  </metadata>
-  <manifest>
-    <item id="cover-img" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
-    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
-  </manifest>
-  <spine><itemref idref="ch1"/></spine>
-</package>`
+    <meta refines="#set1" property="collection-type">set</meta>`)
 
 	path := writeEpub(t, baseEntries(opfWithSet))
 
@@ -660,4 +649,77 @@ func TestSetSeriesPreservesSets(t *testing.T) {
 	if !bytes.Contains(opfBytes, []byte(`collection-type">set`)) {
 		t.Error("set collection-type was removed, should be preserved")
 	}
+}
+
+// TestSetAuthorsReuseBookkeeping covers what reusing a creator element has to
+// get right: a refinement ebookfs does not manage survives an edit, an author
+// dropped from the list takes its refinements with it (nothing may keep
+// pointing at a creator that is gone), the written order is the order given
+// rather than the order the OPF happened to hold, and the managed refinements
+// are rewritten rather than duplicated. Each step edits the file the previous
+// one left behind.
+func TestSetAuthorsReuseBookkeeping(t *testing.T) {
+	path := writeEpub(t, baseEntries(opfWithAlternateScript))
+
+	opf := func(t *testing.T) []byte {
+		t.Helper()
+		b, ok, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
+		if !ok {
+			t.Fatal("OPF entry not found")
+		}
+		return b
+	}
+
+	t.Run("rewrite", func(t *testing.T) {
+		// The author list is unchanged, so the creator is reused as-is.
+		authors := []model.Author{{Name: "Jane Doe", SortName: "Doe, Jane"}}
+		book, err := writeBib(path, model.Edits{Authors: &authors})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(book.Authors) != 1 || book.Authors[0].Name != "Jane Doe" || book.Authors[0].SortName != "Doe, Jane" {
+			t.Errorf("authors = %+v, want Jane Doe / Doe, Jane", book.Authors)
+		}
+		if n := bytes.Count(opf(t), []byte(`property="alternate-script"`)); n != 1 {
+			t.Errorf("alternate-script count = %d, want 1", n)
+		}
+	})
+
+	t.Run("reorder and clear sort name", func(t *testing.T) {
+		authors := []model.Author{{Name: "Bob Jones", SortName: "Jones, Bob"}, {Name: "Jane Doe"}}
+		book, err := writeBib(path, model.Edits{Authors: &authors})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(book.Authors) != 2 || book.Authors[0].Name != "Bob Jones" || book.Authors[1].Name != "Jane Doe" {
+			t.Fatalf("authors = %+v, want Bob Jones then Jane Doe", book.Authors)
+		}
+		// Jane kept her element, so her sort name has to be cleared rather than
+		// left over from the previous write.
+		if book.Authors[1].SortName != "" {
+			t.Errorf("Jane sort name = %q, want empty", book.Authors[1].SortName)
+		}
+
+		b := opf(t)
+		if n := bytes.Count(b, []byte(`property="alternate-script"`)); n != 1 {
+			t.Errorf("alternate-script count = %d, want 1", n)
+		}
+		if n := bytes.Count(b, []byte(`refines="#creator1" property="role"`)); n != 1 {
+			t.Errorf("role refines on creator1 = %d, want 1 (rewritten, not duplicated)", n)
+		}
+		if bytes.Contains(b, []byte(`refines="#creator1" property="file-as"`)) {
+			t.Error("creator1 kept a file-as refine after its sort name was cleared")
+		}
+	})
+
+	t.Run("drop", func(t *testing.T) {
+		// Jane's element goes, and so must everything refining it.
+		authors := []model.Author{{Name: "Bob Jones", SortName: "Jones, Bob"}}
+		if _, err := writeBib(path, model.Edits{Authors: &authors}); err != nil {
+			t.Fatal(err)
+		}
+		if bytes.Contains(opf(t), []byte("creator1")) {
+			t.Error("refinements still point at creator1 after the author was dropped")
+		}
+	})
 }
