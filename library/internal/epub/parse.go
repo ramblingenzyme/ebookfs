@@ -9,6 +9,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -94,19 +95,19 @@ func getMetadataPath(f *zip.File, exists func(string) bool) (string, error) {
 	return "", ErrNoRootfile
 }
 
-func parsePackage(f *zip.File) (*opfPackage, error) {
+func parsePackage(f *zip.File) (*opf.Doc, error) {
 	r, err := f.Open()
 	if err != nil {
-		return &opfPackage{}, err
+		return nil, err
 	}
 	defer r.Close()
 
-	var pkg opfPackage
+	b, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
 
-	d := xml.NewDecoder(r)
-	err = d.Decode(&pkg)
-
-	return &pkg, err
+	return opf.Parse(b)
 }
 
 func Parse(bpath string) (*model.Bib, error) {
@@ -149,13 +150,12 @@ func Parse(bpath string) (*model.Bib, error) {
 		return nil, ErrRootfileMissing
 	}
 
-	pkg, err := parsePackage(mfile)
+	doc, err := parsePackage(mfile)
 	if err != nil {
 		return nil, err
 	}
-	pkg.BasePath = path.Dir(mpath)
 
-	book, err := translate(pkg)
+	book, err := doc.Bib(path.Dir(mpath))
 	if err != nil {
 		return nil, err
 	}

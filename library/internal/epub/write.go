@@ -10,6 +10,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -84,22 +85,27 @@ func createReplace(zrc *zip.ReadCloser, b *model.Book, e model.Edits) (map[strin
 	}
 
 	if e.HasBibEdits() {
-		opf, err := opfPath(&zrc.Reader)
+		opfEntry, err := opfPath(&zrc.Reader)
 		if err != nil {
 			return nil, err
 		}
-		if enc.isEncrypted(opf) {
-			return nil, fmt.Errorf("refusing to edit: package document %q is encrypted", opf)
+		if enc.isEncrypted(opfEntry) {
+			return nil, fmt.Errorf("refusing to edit: package document %q is encrypted", opfEntry)
 		}
-		opfBytes, err := readEntry(&zrc.Reader, opf)
+		opfBytes, err := readEntry(&zrc.Reader, opfEntry)
 		if err != nil {
 			return nil, err
 		}
-		newOPF, err := editOPF(opfBytes, e)
+		doc, err := opf.Parse(opfBytes)
 		if err != nil {
 			return nil, err
 		}
-		replace[opf] = newOPF
+		doc.Apply(e)
+		newOPF, err := doc.Bytes()
+		if err != nil {
+			return nil, err
+		}
+		replace[opfEntry] = newOPF
 	}
 
 	return replace, nil
