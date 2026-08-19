@@ -12,12 +12,8 @@ type authorsField struct{ o *Doc }
 
 func (o *Doc) authors() authorsField { return authorsField{o} }
 
-// creators returns the creator elements this package owns — those
-// isAuthorCreator claims. Non-author contributors (editors, illustrators,
-// translators) are parsed correctly but deliberately excluded: the frontend has
-// no concept of contributor roles, so exposing them would create a broken
-// round-trip where removing an editor from the 9P authors field appears to work
-// but the editor survives in the epub.
+// creators returns the creator elements this package owns. Other contributors
+// (editors, illustrators, translators) are excluded on purpose.
 func (f authorsField) creators() []*etree.Element {
 	var out []*etree.Element
 	for _, c := range f.o.elements("creator") {
@@ -29,8 +25,7 @@ func (f authorsField) creators() []*etree.Element {
 }
 
 // get returns the authors in document order, which §5.5.3.2.3 makes the display
-// order: "The document order of dc:creator elements in the metadata section
-// determines the display priority."
+// order.
 func (f authorsField) get() []model.Author {
 	var out []model.Author
 	for _, c := range f.creators() {
@@ -50,30 +45,19 @@ func (f authorsField) get() []model.Author {
 	return out
 }
 
-// set replaces the author creators and leaves every other creator alone.
+// set replaces the author creators and leaves every other creator alone. A
+// creator whose name survives is reused, so refinements this package does not
+// manage stay attached to it; only the role and the sort name are ours to write.
+// AddChild moves an element already in the tree rather than duplicating it.
 //
-// Re-adding each creator in the order given is what puts document order in
-// agreement with the order the edit asked for, which get reads back: etree's
-// AddChild detaches an element from its current parent first, so adding one
-// that is already in the tree moves it to the end rather than duplicating it.
-// A creator whose name survives is reused rather than rebuilt, so refinements
-// this package does not manage — alternate-script, alternate display names,
-// third-party metadata — keep pointing at a live creator; only the role and the
-// sort name are ours to write. Creators that did not survive are removed at the
-// end, with their refinements.
-//
-// Nothing is detached before the loop, and that is load-bearing: ensureID mints
-// against the ids present in the tree, so a creator sitting outside it is
-// invisible and its id can be minted on top of. An earlier version detached
-// every creator up front and did exactly that — editing ["Alice"] to
-// ["Bob", "Alice"] gave both creators the id "ebookfs-creator", and Bob's sort
-// name was written to Alice's refinement and then overwritten by it.
+// Do not detach creators before the loop. ensureID mints ids by scanning the
+// tree, so a detached creator is invisible to it and a later creator can be
+// given the same id.
 func (f authorsField) set(authors []model.Author) {
 	o := f.o
 
-	// Keyed by the same name get reports, so a creator this matches is the one
-	// the caller was shown. A creator with no usable name — or a second sharing
-	// one — is left unmatchable, and is rebuilt from scratch.
+	// Keyed by the name get reports, so a match is the creator the caller was
+	// shown. Anything unmatchable is rebuilt from scratch.
 	byName := map[string]*etree.Element{}
 	unclaimed := map[*etree.Element]bool{}
 	for _, c := range f.creators() {
@@ -88,11 +72,7 @@ func (f authorsField) set(authors []model.Author) {
 	home := o.dcHome()
 	for _, a := range authors {
 		c, reused := byName[a.Name]
-		if reused {
-			// Handed out once: a name repeated in the new list gets a fresh
-			// creator the second time rather than the same element twice.
-			delete(byName, a.Name)
-		} else {
+		if !reused {
 			c = etree.NewElement(qualify(o.dcPrefix(), "creator"))
 		}
 		home.AddChild(c)
@@ -111,11 +91,8 @@ func (f authorsField) set(authors []model.Author) {
 		}
 
 		id := o.ensureID(c, "ebookfs-creator")
-		// D.3.10 gives role cardinality "zero or more", and Example 92 gives one
-		// dc:creator both aut and ill — so the aut relator is added only when
-		// absent, and any other role the creator carries is left alone.
-		// Rewriting the roles wholesale deleted an illustrator credit on the
-		// first edit of any kind.
+		// Roles are "zero or more" (D.3.10), so aut is added only when absent
+		// and any other role is left alone.
 		if !slices.Contains(creatorRoles(o, c), "aut") {
 			o.addRefine(id, propRole, "aut", "marc:relators")
 		}
@@ -126,8 +103,7 @@ func (f authorsField) set(authors []model.Author) {
 		}
 	}
 
-	// Refinements follow their creator: one that survived keeps everything we
-	// did not rewrite, one that did not loses them all.
+	// Refinements follow their creator.
 	var dropped []string
 	for c := range unclaimed {
 		dropped = append(dropped, attr(c, "id"))
@@ -137,10 +113,8 @@ func (f authorsField) set(authors []model.Author) {
 }
 
 // creatorRoles returns the roles attached to a creator, in document order. The
-// EPUB 2 opf:role attribute is a single value and wins outright when present;
-// otherwise the EPUB 3 role refinements are used, all of them — D.3.10 gives
-// role cardinality "zero or more", and Example 92 gives one dc:creator both
-// aut and ill, with the most important role first.
+// single-valued EPUB 2 opf:role wins outright when present; otherwise all of the
+// EPUB 3 role refinements are used (D.3.10, "zero or more").
 func creatorRoles(o *Doc, c *etree.Element) []string {
 	if r := attr(c, "role"); r != "" {
 		return []string{r}
@@ -156,14 +130,7 @@ func creatorRoles(o *Doc, c *etree.Element) []string {
 
 // isAuthorCreator is the single definition of which creator counts as an
 // author: one carrying the "aut" MARC relator, or one carrying no role at all.
-// Both the reader (translateAuthor) and the writer (setAuthors) go through it,
-// so a creator setAuthors replaces is exactly one translate reports.
-//
-// Treating an unspecified role as author is our interpretation, not a rule
-// either spec states: EPUB 3.3 §5.5.3.2.3 makes the role property optional and
-// describes dc:creator as the party "responsible for the creation of the
-// content"; OPF 2.0 §2.2.2 calls it "A primary creator or author of the
-// publication". Neither declares a default.
+// The second half is our interpretation, not a rule either spec states.
 func isAuthorCreator(o *Doc, c *etree.Element) bool {
 	roles := creatorRoles(o, c)
 	return len(roles) == 0 || slices.Contains(roles, "aut")

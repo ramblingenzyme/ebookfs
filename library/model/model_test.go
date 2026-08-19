@@ -133,6 +133,9 @@ func TestValidateAuthors(t *testing.T) {
 		{"empty name", &[]Author{{Name: ""}}, true, "author 1 has an empty name"},
 		{"second empty name", &[]Author{{Name: "Alice"}, {Name: ""}}, true, "author 2 has an empty name"},
 		{"whitespace name", &[]Author{{Name: "   "}}, true, "author 1 has an empty name"},
+		{"duplicate name", &[]Author{{Name: "Alice"}, {Name: "Alice"}}, true, `author 2 duplicates "Alice"`},
+		{"duplicate after trimming", &[]Author{{Name: "Alice"}, {Name: " Alice "}}, true, `author 2 duplicates "Alice"`},
+		{"duplicate sort names are fine", &[]Author{{Name: "Alice", SortName: "X"}, {Name: "Bob", SortName: "X"}}, false, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e := Edits{Authors: tc.authors}

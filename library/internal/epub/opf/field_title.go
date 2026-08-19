@@ -4,9 +4,8 @@ type titleField struct{ o *Doc }
 
 func (o *Doc) title() titleField { return titleField{o} }
 
-// get returns the title and its sort value. The sort title is the EPUB 3
-// file-as refine on the title element; EPUB 2 has no standard mechanism, so it
-// is simply absent there.
+// get returns the title and its sort value, which is the EPUB 3 file-as refine
+// on the title element. EPUB 2 has no standard mechanism for it.
 func (f titleField) get() (title, sort string) {
 	el := f.o.target("title")
 	if el == nil {
@@ -15,9 +14,6 @@ func (f titleField) get() (title, sort string) {
 	return text(el), f.o.refine(attr(el, "id"), propFileAs)
 }
 
-// set writes the title and its sort value, either of which is nil when the edit
-// did not name it. Changing the title without supplying a sort title clears the
-// old one, which was derived from the title that just went.
 func (f titleField) set(title, sort *string) {
 	if title != nil {
 		f.o.setDCText("title", *title)
@@ -31,9 +27,8 @@ func (f titleField) set(title, sort *string) {
 		value = collapse(*sort)
 	}
 
-	// Since the sort title is not exposed for editing in the frontend we do not
-	// invent a proprietary EPUB 2 fallback the way the series field does for
-	// calibre:series — a v2 package simply gets nothing.
+	// A v2 package gets nothing: no standard mechanism and, unlike series, no
+	// proprietary fallback either.
 	el := f.o.target("title")
 	if !f.o.epub3() || el == nil {
 		return

@@ -14,26 +14,20 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-// Rewrite applies the requested changes from e to the epub at epubPath
-// atomically. Every refusal check runs before any file is written — the
-// original is never touched on error.
+// Rewrite applies the changes in e to the epub at epubPath atomically. Every
+// refusal check runs before any file is written, so the original is untouched
+// on error. It returns the book's authoritative Bib: re-parsed when a rewrite
+// happened, or b.Bib unchanged when e carried no bib or cover edits.
 //
-// It returns the book's authoritative Bib: the re-parsed result when a rewrite
-// happened, or b.Bib unchanged when e carried no bib or cover edits (the
-// no-op case). The result is a value, never a nil-pointer sentinel.
-//
-// b is used only for validation and for locating the cover entry within the
-// zip; its EpubPath field is not read — the caller provides the resolved
-// absolute path separately so the epub package does not need to know the store
-// root.
+// b is used only for validation and for locating the cover entry; its EpubPath
+// is not read, so this package never resolves a path against the store root.
 func Rewrite(epubPath string, b *model.Book, e model.Edits) (model.Bib, error) {
 	if !e.HasCoverEdit() && !e.HasBibEdits() {
 		return b.Bib, nil
 	}
 
-	// Library.Edit is the enforcement point that validates every edit
-	// (including the meta-only ones that noop out above); this re-check is a
-	// defensive backstop so an unvalidated Edits can never rewrite an epub.
+	// Backstop: Library.Edit is the enforcement point, and an unvalidated Edits
+	// must never reach a file.
 	if v := e.Validate(b); v != nil {
 		return model.Bib{}, v
 	}
@@ -61,7 +55,7 @@ func createReplace(zrc *zip.ReadCloser, b *model.Book, e model.Edits) (map[strin
 	if err != nil {
 		return nil, err
 	}
-	replace := make(map[string][]byte, 2) // only 2 possible entries
+	replace := make(map[string][]byte, 2)
 
 	if e.HasCoverEdit() {
 		want := coverFormat(b.CoverPath)
@@ -111,10 +105,9 @@ func createReplace(zrc *zip.ReadCloser, b *model.Book, e model.Edits) (map[strin
 	return replace, nil
 }
 
-// coverFormat maps a cover entry's path to the image format name (as reported by
-// image.DecodeConfig) that may replace it in place, or "" if the extension is
-// not an in-place-replaceable raster cover (matching calibre's png/jpg/jpeg
-// restriction).
+// coverFormat maps a cover entry's path to the image.DecodeConfig format name
+// that may replace it in place, or "" for anything outside calibre's png/jpg/jpeg
+// restriction.
 func coverFormat(coverPath string) string {
 	switch strings.ToLower(path.Ext(coverPath)) {
 	case ".jpg", ".jpeg":

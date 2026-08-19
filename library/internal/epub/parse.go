@@ -26,11 +26,8 @@ var (
 )
 
 // checkMimetype enforces the OCF requirement that the archive's "mimetype" entry
-// declares the epub media type. ebookfs's parser is deliberately strict — it
-// already rejects epubs with no title or author — so a missing or wrong mimetype
-// (the signature of a non-epub zip such as a mis-added .cbz) is rejected here
-// with a clear error, rather than warned about and carried forward the way
-// calibre does.
+// declares the epub media type. Unlike calibre we reject rather than warn: a
+// wrong mimetype usually means a non-epub zip, such as a mis-added .cbz.
 func checkMimetype(filemap map[string]*zip.File) error {
 	f := filemap[mimetypePath]
 	if f == nil {
@@ -52,14 +49,11 @@ func checkMimetype(filemap map[string]*zip.File) error {
 }
 
 // getMetadataPath returns the package document's path from container.xml. exists
-// reports whether a given path is present in the container; it may be nil to
-// skip the check.
+// reports whether a path is present in the container, and may be nil to skip the
+// check.
 //
-// Some Kobo epubs declare multiple <rootfile> entries where only one actually
-// exists in the zip. Mirroring calibre, the first package rootfile that exists
-// is chosen and missing ones are skipped. If a package rootfile is declared but
-// none of them exist, ErrRootfileMissing is returned (distinct from ErrNoRootfile,
-// which means no package rootfile was declared at all).
+// Some Kobo epubs declare several <rootfile> entries where only one exists in
+// the zip, so missing ones are skipped and the first that exists is chosen.
 func getMetadataPath(f *zip.File, exists func(string) bool) (string, error) {
 	r, err := f.Open()
 	if err != nil {
@@ -111,9 +105,8 @@ func parsePackage(f *zip.File) (*opf.Doc, error) {
 }
 
 func Parse(bpath string) (*model.Bib, error) {
-	// zip.OpenReader opens the file and validates the zip structure: a missing or
-	// unreadable path surfaces its os error verbatim, while a non-zip file is
-	// reported as zip.ErrFormat, which we translate into ErrNotEpub.
+	// A missing or unreadable path surfaces its os error verbatim; a non-zip file
+	// comes back as zip.ErrFormat, which becomes ErrNotEpub.
 	r, err := zip.OpenReader(bpath)
 	if err != nil {
 		if errors.Is(err, zip.ErrFormat) {
@@ -160,11 +153,8 @@ func Parse(bpath string) (*model.Bib, error) {
 		return nil, err
 	}
 
-	// Capture OPF and cover sizes from the zip central directory, without
-	// decompressing the entries. Both are carried on model.Bib. The epub file's
-	// own size is not read here: the library stats it anyway for drift detection,
-	// and a second stat could only disagree with that one or fail where it
-	// succeeded.
+	// From the zip central directory, so nothing is decompressed. The epub's own
+	// size is left to the library, which stats it for drift detection anyway.
 	book.OpfSize = int64(mfile.UncompressedSize64)
 	if book.CoverPath != "" {
 		if cf := filemap[book.CoverPath]; cf != nil {

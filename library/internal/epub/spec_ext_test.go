@@ -26,6 +26,7 @@
 package epub_test
 
 import (
+	"bytes"
 	"slices"
 	"strings"
 	"testing"
@@ -905,9 +906,7 @@ func TestSpecWhitespaceInEPUB2RoleAttribute(t *testing.T) {
 //    elements must go in dc-metadata and all other metadata elements, if any,
 //    must go into x-metadata."
 
-func TestSpecLegacyMetadataWrappers(t *testing.T) {
-
-	const opf = `<?xml version="1.0" encoding="utf-8"?>
+const opfWrappers = `<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" xmlns:opf="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="pub-id">
   <metadata>
     <dc-metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -928,7 +927,8 @@ func TestSpecLegacyMetadataWrappers(t *testing.T) {
   <spine toc="ncx"><itemref idref="ch1"/></spine>
 </package>`
 
-	bib, err := epub.Parse(buildEpub(t, opf))
+func TestSpecLegacyMetadataWrappers(t *testing.T) {
+	bib, err := epub.Parse(buildEpub(t, opfWrappers))
 	if err != nil {
 		t.Fatalf("reading systems MUST allow dc-metadata/x-metadata: %v", err)
 	}
@@ -1367,6 +1367,318 @@ func TestSpecUnrecognisedDateEventsLeaveNoPubdate(t *testing.T) {
 	}
 	if bib.Pubdate != "" {
 		t.Errorf("pubdate = %q; the closed-world reading changed — decide it deliberately", bib.Pubdate)
+	}
+}
+
+// --- writing into the legacy wrappers ----------------------------------------
+//
+// OPF 2.0 §2.2 (Publication Metadata):
+//   "If the dc-metadata element is used, all dc elements must go in dc-metadata
+//    and all other metadata elements, if any, must go into x-metadata."
+//
+// TestSpecLegacyMetadataWrappers pins the read side. This pins the write side:
+// the MUST binds anything ebookfs adds to such a file just as much as what it
+// found there, so a new dc:description belongs in dc-metadata and a new
+// calibre:series_index in x-metadata, not loose under <metadata>.
+
+func TestSpecEditsLandInTheLegacyWrappers(t *testing.T) {
+	path := buildEpub(t, opfWrappers)
+	desc, series, index := "A new description.", "Wonderland", "3"
+	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Description: &desc, Series: &series, SeriesIndex: &index}); err != nil {
+		t.Fatal(err)
+	}
+
+	md := metadata(t, path)
+	if el := md.FindElement("dc-metadata/description"); el == nil || el.Text() != desc {
+		t.Errorf("dc:description = %v, want %q inside dc-metadata per §2.2", el, desc)
+	}
+	// The series meta the file already had is updated where it sits; the index
+	// is new, so it has to be created inside the wrapper rather than beside it.
+	if el := md.FindElement("x-metadata/meta[@name='calibre:series']"); el == nil || el.SelectAttrValue("content", "") != series {
+		t.Errorf("calibre:series = %v, want %q still inside x-metadata", el, series)
+	}
+	if el := md.FindElement("x-metadata/meta[@name='calibre:series_index']"); el == nil || el.SelectAttrValue("content", "") != index {
+		t.Errorf("calibre:series_index = %v, want %q inside x-metadata", el, index)
+	}
+	for _, p := range []string{"description", "meta[@name='calibre:series']", "meta[@name='calibre:series_index']"} {
+		if md.FindElement(p) != nil {
+			t.Errorf("%s was written loose under <metadata>, outside the wrappers", p)
+		}
+	}
+
+	// And the reader finds them where the writer put them.
+	bib, err := epub.Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bib.Description != desc {
+		t.Errorf("description = %q, want %q read back through dc-metadata", bib.Description, desc)
+	}
+	if bib.Series == nil || bib.Series.Name != series || bib.Series.Index != index {
+		t.Errorf("series = %+v, want %q at %s read back through x-metadata", bib.Series, series, index)
+	}
+}
+
+// TestSeriesWithNoPositionDropsTheCalibreIndex covers a series whose collection
+// carries no group-position, in a file that still has a calibre:series_index
+// from some earlier tool. The position the edit carries over is empty, so the
+// stale index goes rather than staying behind to contradict the collection.
+func TestSeriesWithNoPositionDropsTheCalibreIndex(t *testing.T) {
+	path := buildEpub(t, epub2(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>The Title</dc:title>
+    <dc:creator opf:role="aut">Ann Rand</dc:creator>
+    <dc:language>en</dc:language>
+    <meta property="belongs-to-collection" id="c01">The Old Series</meta>
+    <meta refines="#c01" property="collection-type">series</meta>
+    <meta name="calibre:series" content="The Old Series"/>
+    <meta name="calibre:series_index" content="7"/>`))
+
+	want := "The New Series"
+	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Series: &want}); err != nil {
+		t.Fatal(err)
+	}
+
+	md := metadata(t, path)
+	if el := md.FindElement("meta[@name='calibre:series']"); el == nil || el.SelectAttrValue("content", "") != want {
+		t.Errorf("calibre:series = %v, want %q", el, want)
+	}
+	if el := md.FindElement("meta[@name='calibre:series_index']"); el != nil {
+		t.Errorf("calibre:series_index = %q, want it gone with the position", el.SelectAttrValue("content", ""))
+	}
+}
+
+// --- opf: attributes need a declared prefix ----------------------------------
+//
+// XML Namespaces §6.2 (Namespace Defaulting):
+//   "The default namespace ... does not apply directly to attributes."
+//
+// So an EPUB 2 file may bind the OPF namespace as the default and still need
+// xmlns:opf declared before opf:role and opf:file-as can be written. Writing
+// them unprefixed would put them in no namespace, which is not what OPF 2.0
+// §2.2.6 describes.
+
+func TestSpecEPUB2AttributesGetADeclaredPrefix(t *testing.T) {
+	// epub2() declares xmlns:opf; this file binds OPF as the default only.
+	opf := strings.Replace(epub2(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>The Title</dc:title>
+    <dc:creator>Ann Rand</dc:creator>
+    <dc:language>en</dc:language>`), ` xmlns:opf="http://www.idpf.org/2007/opf"`, "", 1)
+
+	path := buildEpub(t, opf)
+	authors := []model.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
+	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Authors: &authors}); err != nil {
+		t.Fatal(err)
+	}
+
+	raw := string(readEntry(t, path, opfPath))
+	if !strings.Contains(raw, `xmlns:opf="http://www.idpf.org/2007/opf"`) {
+		t.Error("no xmlns:opf declaration was added for the prefixed attributes")
+	}
+	c := metadata(t, path).FindElement("creator")
+	if c == nil {
+		t.Fatal("creator was removed")
+	}
+	if got := c.SelectAttrValue("opf:role", ""); got != "aut" {
+		t.Errorf("opf:role = %q, want aut", got)
+	}
+	if got := c.SelectAttrValue("opf:file-as", ""); got != "Rand, Ann" {
+		t.Errorf("opf:file-as = %q, want the sort name", got)
+	}
+
+	// The reader resolves the attributes under the prefix the writer declared.
+	bib, err := epub.Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bib.Authors) != 1 || bib.Authors[0].SortName != "Rand, Ann" {
+		t.Errorf("authors = %+v, want one author sorting as Rand, Ann", bib.Authors)
+	}
+}
+
+// --- an EPUB 2 creator can lose its sort name --------------------------------
+
+// TestEPUB2CreatorLosesAStaleSortName covers editing an author whose name is
+// unchanged but whose sort name is gone. The creator element is reused, so the
+// opf:file-as it was written with has to be removed rather than left behind
+// describing a sort order the caller just cleared. The EPUB 3 half of this is
+// TestSetAuthorsReuseBookkeeping in the internal tests.
+func TestEPUB2CreatorLosesAStaleSortName(t *testing.T) {
+	opf := epub2(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>The Title</dc:title>
+    <dc:creator opf:role="aut" opf:file-as="Doe, Jane">Jane Doe</dc:creator>
+    <dc:language>en</dc:language>`)
+
+	path := buildEpub(t, opf)
+	authors := []model.Author{{Name: "Jane Doe"}}
+	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Authors: &authors}); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := metadata(t, path).FindElement("creator").SelectAttrValue("opf:file-as", ""); got != "" {
+		t.Errorf("opf:file-as = %q, want removed with the sort name", got)
+	}
+	bib, err := epub.Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bib.Authors) != 1 || bib.Authors[0].SortName != "" {
+		t.Errorf("authors = %+v, want one author with no sort name", bib.Authors)
+	}
+}
+
+// --- an edit has to land somewhere -------------------------------------------
+
+// TestEmptyElementIsWrittenInPlace covers a file whose only dc:description is
+// empty. §5.5.2 requires non-empty values, so the file is malformed and no rule
+// says where a write should go. The element that is already there is used,
+// rather than a second one added beside it, so the file ends up with one
+// description however many rewrites it sees.
+func TestEmptyElementIsWrittenInPlace(t *testing.T) {
+	opf := epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>The Title</dc:title>
+    <dc:creator id="c1">Ann Rand</dc:creator>
+    <dc:language>en</dc:language>
+    <dc:description>   </dc:description>
+    <dc:description></dc:description>`)
+
+	path := buildEpub(t, opf)
+	desc := "A new description."
+	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Description: &desc}); err != nil {
+		t.Fatal(err)
+	}
+
+	els := metadata(t, path).SelectElements("description")
+	if len(els) != 2 {
+		t.Fatalf("description count = %d, want the two the file had", len(els))
+	}
+	if els[0].Text() != desc {
+		t.Errorf("first description = %q, want the edit", els[0].Text())
+	}
+	// first skips the empty element the write landed in front of.
+	bib, err := epub.Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bib.Description != desc {
+		t.Errorf("description = %q, want the edit read back", bib.Description)
+	}
+}
+
+// --- a repeated author name ---------------------------------------------------
+
+// TestRewriteRefusesDuplicateAuthors covers an author list naming the same
+// person twice. Edits.Validate rejects it, and Rewrite re-checks so an
+// unvalidated Edits cannot reach the file: two creators of one name have no
+// meaning in either spec, and reusing one element for both would silently
+// collapse the list instead.
+func TestRewriteRefusesDuplicateAuthors(t *testing.T) {
+	path := buildEpub(t, richOPF3)
+	before := readEntry(t, path, opfPath)
+
+	authors := []model.Author{{Name: "Jane Doe"}, {Name: "Jane Doe"}}
+	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Authors: &authors}); err == nil {
+		t.Fatal("a duplicated author was accepted")
+	}
+	if !bytes.Equal(before, readEntry(t, path, opfPath)) {
+		t.Error("the epub was rewritten by a refused edit")
+	}
+}
+
+// --- refinements need a target -----------------------------------------------
+
+// TestUnrefinedMetaIsNotACreatorsSortName covers a file carrying a file-as meta
+// with no refines attribute, next to a creator with no id. Both are missing the
+// thing that would link them, so the meta refines the package as a whole
+// (§5.3.6) and must not be read as that creator's sort name.
+func TestUnrefinedMetaIsNotACreatorsSortName(t *testing.T) {
+	opf := epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>The Title</dc:title>
+    <dc:creator>Ann Rand</dc:creator>
+    <meta property="file-as">Someone, Else</meta>
+    <dc:language>en</dc:language>`)
+
+	bib, err := epub.Parse(buildEpub(t, opf))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bib.Authors) != 1 || bib.Authors[0].SortName != "" {
+		t.Errorf("authors = %+v, want no sort name", bib.Authors)
+	}
+}
+
+// --- cover fallback ordering --------------------------------------------------
+
+// TestCoverHeuristicTakesTheLastMatch pins the fallback for files that name no
+// cover at all: no cover-image property, no <meta name="cover">, just manifest
+// ids that happen to contain "cover". Neither spec describes this, and calibre
+// takes the first such item where this takes the last, so the divergence is
+// pinned rather than left to be discovered by a book showing the wrong cover.
+func TestCoverHeuristicTakesTheLastMatch(t *testing.T) {
+	const opf = `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>The Title</dc:title>
+    <dc:creator id="c1">Ann Rand</dc:creator>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="cover-thumb" href="thumb.jpg" media-type="image/jpeg"/>
+    <item id="cover.jpg" href="cover.jpg" media-type="image/jpeg"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine><itemref idref="ch1"/></spine>
+</package>`
+
+	bib, err := epub.Parse(buildEpub(t, opf))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bib.CoverPath != "OEBPS/cover.jpg" {
+		t.Errorf("cover = %q, want the last matching item (calibre would take thumb.jpg)", bib.CoverPath)
+	}
+}
+
+// --- duplicate refinements ----------------------------------------------------
+
+// TestDuplicateRefinementsKeepTheirDuplicates pins a known gap. D.3.6 gives
+// file-as "Cardinality: zero or one", so a creator carrying two of them is a
+// malformed file; the writer updates the first and leaves the second
+// contradicting it, and the reader takes the first. Removing every refinement
+// to append a replacement is the churn this package avoids everywhere else, so
+// the duplicate is left alone until a file is seen where it matters. Delete
+// this test when that changes.
+func TestDuplicateRefinementsKeepTheirDuplicates(t *testing.T) {
+	opf := epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>The Title</dc:title>
+    <dc:creator id="c1">Ann Rand</dc:creator>
+    <meta refines="#c1" property="file-as">First, Ann</meta>
+    <meta refines="#c1" property="file-as">Second, Ann</meta>
+    <dc:language>en</dc:language>`)
+
+	path := buildEpub(t, opf)
+	authors := []model.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
+	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Authors: &authors}); err != nil {
+		t.Fatal(err)
+	}
+
+	var got []string
+	for _, m := range metadata(t, path).SelectElements("meta") {
+		if m.SelectAttrValue("property", "") == "file-as" {
+			got = append(got, m.Text())
+		}
+	}
+	if !slices.Equal(got, []string{"Rand, Ann", "Second, Ann"}) {
+		t.Errorf("file-as refines = %v, want the first updated and the second left", got)
+	}
+	// The reader takes the same one the writer updated, so the duplicate is
+	// inert rather than contradicting what the edit asked for.
+	bib, err := epub.Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bib.Authors[0].SortName != "Rand, Ann" {
+		t.Errorf("sort name = %q, want the refinement the write updated", bib.Authors[0].SortName)
 	}
 }
 
