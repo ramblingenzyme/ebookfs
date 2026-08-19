@@ -2,11 +2,11 @@
 // a book's metadata. The zip container around it belongs to the parent epub
 // package.
 //
-// A field is one piece of metadata ebookfs owns, one per file, named
-// field_*.go. Each holds that field's whole encoding, and reading (get) and
-// writing (set) both go through it so the two cannot disagree. Book-level
-// validation and presentation defaults stay out of the fields and live in Bib,
-// so set(get()) never invents metadata the file did not carry.
+// A field is one piece of metadata ebookfs owns. Each holds that field's whole
+// encoding, and reading (get) and writing (set) both go through it so the two
+// cannot disagree. Book-level validation and presentation defaults
+// stay out of the fields and live in Bib, so set(get()) never invents metadata
+// the file did not carry.
 //
 // Three rules keep the fields readable:
 //
