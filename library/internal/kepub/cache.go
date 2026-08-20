@@ -168,7 +168,7 @@ type warmer struct {
 func newWarmer(ensure func(*model.Book) error) *warmer {
 	w := &warmer{ensure: ensure, ch: make(chan *model.Book, warmerQueueSize)}
 	w.wg.Add(warmerGoroutines)
-	for i := 0; i < warmerGoroutines; i++ {
+	for range warmerGoroutines {
 		go w.run()
 	}
 	return w

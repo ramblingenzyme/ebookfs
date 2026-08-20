@@ -102,7 +102,7 @@ func TestSearchHandleConcurrentRequeryAndRegistryEvents(t *testing.T) {
 	wg.Add(3)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 2*perTag; i++ {
+		for i := range 2 * perTag {
 			if i%2 == 0 {
 				handle.executeSearch(model.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
 			} else {
@@ -112,7 +112,7 @@ func TestSearchHandleConcurrentRequeryAndRegistryEvents(t *testing.T) {
 	}()
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 2*perTag; i++ {
+		for i := range 2 * perTag {
 			b := makeBook(int64(i+1), fmt.Sprintf("Book %d", i+1), "Author")
 			if i%2 == 0 {
 				b.Meta.Tags = []string{"sci-fi"}
@@ -124,7 +124,7 @@ func TestSearchHandleConcurrentRequeryAndRegistryEvents(t *testing.T) {
 	}()
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 2*perTag; i++ {
+		for range 2 * perTag {
 			_ = handle.currentQueryText()
 			_ = handle.lastQuery()
 		}

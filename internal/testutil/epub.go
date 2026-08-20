@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/library/config"
@@ -28,9 +29,9 @@ func BuildTestEpub(t testing.TB, title string, authors ...string) []byte {
 	}
 	mt.Write([]byte("application/epub+zip"))
 
-	var creatorEls string
+	var creatorEls strings.Builder
 	for i, a := range authors {
-		creatorEls += fmt.Sprintf("    <dc:creator id=\"c%d\">%s</dc:creator>\n", i+1, a)
+		creatorEls.WriteString(fmt.Sprintf("    <dc:creator id=\"c%d\">%s</dc:creator>\n", i+1, a))
 	}
 
 	files := map[string]string{
@@ -45,7 +46,7 @@ func BuildTestEpub(t testing.TB, title string, authors ...string) []byte {
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
     <dc:identifier id="id">ebookfs-test-1</dc:identifier>
     <dc:title>` + title + `</dc:title>
-` + creatorEls + `    <dc:language>en</dc:language>
+` + creatorEls.String() + `    <dc:language>en</dc:language>
   </metadata>
   <manifest>
     <item id="cover" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>

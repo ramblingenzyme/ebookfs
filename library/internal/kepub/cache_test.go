@@ -108,15 +108,13 @@ func TestWarmConcurrentWithStopNoPanic(t *testing.T) {
 	w := newWarmer(func(*model.Book) error { return nil })
 
 	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 8 {
+		wg.Go(func() {
 			b := makeBook(1, "Test", "Author")
-			for j := 0; j < 1000; j++ {
+			for range 1000 {
 				w.warm(b)
 			}
-		}()
+		})
 	}
 
 	w.stop()

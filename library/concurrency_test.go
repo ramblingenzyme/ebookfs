@@ -108,10 +108,8 @@ func TestConcurrentDuplicateIngestRejected(t *testing.T) {
 		errs  []error
 	)
 
-	for i := 0; i < 3; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 3 {
+		wg.Go(func() {
 			h, err := lib.CreateIngest()
 			if err != nil {
 				mu.Lock()
@@ -134,7 +132,7 @@ func TestConcurrentDuplicateIngestRejected(t *testing.T) {
 			}
 			count++
 			mu.Unlock()
-		}()
+		})
 	}
 	wg.Wait()
 

@@ -57,7 +57,7 @@ func settleGC() uint64 {
 	var prev, cur runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&prev)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		runtime.GC()
 		runtime.ReadMemStats(&cur)
 		if cur.HeapAlloc == prev.HeapAlloc {

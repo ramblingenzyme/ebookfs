@@ -59,9 +59,7 @@ func TestEditConcurrentSnapshotSwap(t *testing.T) {
 	done := make(chan struct{})
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		defer close(done)
 		titles := [2]string{"Title B", "Title A"}
 		for i := range 200 {
@@ -71,12 +69,10 @@ func TestEditConcurrentSnapshotSwap(t *testing.T) {
 				return
 			}
 		}
-	}()
+	})
 
 	for range 4 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for {
 				select {
 				case <-done:
@@ -89,7 +85,7 @@ func TestEditConcurrentSnapshotSwap(t *testing.T) {
 				}
 				titleFF.Stat() // field get closure reads the snapshot
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }
