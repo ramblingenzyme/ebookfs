@@ -14,24 +14,33 @@ func (o *Doc) title() titleField { return titleField{o} }
 
 func (f titleField) element() *elementSlot { return f.o.dcElement("title", "ebookfs-title") }
 
-// get returns the title and its sort value, which is the EPUB 3 file-as refine
-// on the title element. EPUB 2 has no standard mechanism for it.
+// The sort title has the same shape as the series: a standard EPUB 3 mechanism,
+// and for EPUB 2, which has none, the proprietary meta calibre writes. Checked
+// against calibre itself — `ebook-meta --title-sort` writes a file-as refinement
+// into a v3 package and calibre:title_sort into a v2 one.
+
+func (f titleField) calibreSort() *namedMetaSlot { return f.o.namedMeta("calibre:title_sort") }
+
+// get returns the title and its sort value, preferring the standard refinement
+// and falling back to the calibre meta, so a v2 file written by calibre reads
+// back the sort title it carries.
 func (f titleField) get() (title, sort string) {
 	el := f.element()
-	return el.get(), el.refine("file-as").get()
+	sort = el.refine("file-as").get()
+	if sort == "" {
+		sort = f.calibreSort().get()
+	}
+	return el.get(), sort
 }
 
 func (f titleField) set(title, sort *string) {
+	if title == nil && sort == nil {
+		return
+	}
+
 	el := f.element()
 	if title != nil {
 		el.set(*title)
-	}
-
-	// A v2 package gets no sort title: no standard mechanism and, unlike series,
-	// no proprietary fallback either. Neither does a file with no title element
-	// to refine — a sort title alone is not reason enough to invent one.
-	if !f.o.epub3() || !el.exists() || (title == nil && sort == nil) {
-		return
 	}
 
 	// A title written without one drops the sort title it used to carry.
@@ -39,7 +48,21 @@ func (f titleField) set(title, sort *string) {
 	if sort != nil {
 		value = collapse(*sort)
 	}
-	put(el.refine("file-as"), value)
+
+	// Rewritten in place wherever the file has a refinement, whatever version it
+	// claims, since a stale one would outrank the calibre meta on the way back
+	// in. A v3 package with none gets one; a v2 package with none stays without.
+	refine := el.refine("file-as")
+	if refine.exists() || f.o.epub3() {
+		put(refine, value)
+	}
+
+	// A v2 package always gets the calibre meta; a v3 package only if it already
+	// carried one, kept in step rather than left contradicting the refinement.
+	if f.o.epub3() && !f.calibreSort().exists() {
+		return
+	}
+	put(f.calibreSort(), value)
 }
 
 type modifiedField struct{ o *Doc }

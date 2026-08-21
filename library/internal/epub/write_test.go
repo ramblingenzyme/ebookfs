@@ -7,6 +7,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"os"
+	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -251,27 +252,37 @@ func TestWriteBibTitleChangeClearsStaleSortTitle(t *testing.T) {
 	}
 }
 
-func TestWriteBibSortTitleIgnoredForEpub2(t *testing.T) {
-	// Sort titles are an EPUB 3 feature; setting one on an EPUB 2 file is a no-op
-	// and must not introduce a file-as refine or a calibre:title_sort meta.
+func TestWriteBibSortTitleForEpub2UsesCalibreMeta(t *testing.T) {
+	// EPUB 2 has no standard sort-title mechanism, so the proprietary meta calibre
+	// writes is used instead — the same fallback this package already uses for the
+	// series. A refinement is an EPUB 3 construct and must not appear.
 	path := writeEpub(t, baseEntries(opf2))
-	book, err := writeBib(path, model.Edits{SortTitle: new("Ignored, This")})
+	book, err := writeBib(path, model.Edits{SortTitle: new("Sorted, This")})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if book.SortTitle != "" {
-		t.Errorf("sort title = %q, want empty (ignored for EPUB 2)", book.SortTitle)
+	if book.SortTitle != "Sorted, This" {
+		t.Errorf("sort title = %q, want %q", book.SortTitle, "Sorted, This")
 	}
 
 	opf, ok, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
 	if !ok {
 		t.Fatal("OPF entry not found")
 	}
+	if !bytes.Contains(opf, []byte(`<meta name="calibre:title_sort" content="Sorted, This"/>`)) {
+		t.Errorf("expected calibre:title_sort, got:\n%s", opf)
+	}
 	if bytes.Contains(opf, []byte(`property="file-as"`)) {
 		t.Error("EPUB 2 OPF must not gain a file-as refine")
 	}
+
+	// Clearing it takes the meta with it rather than leaving a stale value.
+	if _, err := writeBib(path, model.Edits{Title: new("Retitled")}); err != nil {
+		t.Fatal(err)
+	}
+	opf, _, _ = readEntryFromFile(t, path, "OEBPS/content.opf")
 	if bytes.Contains(opf, []byte("calibre:title_sort")) {
-		t.Error("EPUB 2 OPF must not gain calibre:title_sort")
+		t.Errorf("a title change left a stale calibre:title_sort:\n%s", opf)
 	}
 }
 
@@ -806,5 +817,90 @@ func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 	}
 	if os.SameFile(before, statOf()) {
 		t.Error("a real title change did not rewrite the epub")
+	}
+}
+
+// TestParseReadsCalibreTitleSortFromEpub2 is the read half. calibre records a v2
+// sort title in calibre:title_sort and nowhere else, so without this fallback
+// every calibre-managed v2 book reads back as having no sort title at all.
+func TestParseReadsCalibreTitleSortFromEpub2(t *testing.T) {
+	opf := strings.Replace(opf2, "  </metadata>",
+		`    <meta name="calibre:title_sort" content="Hobbit, The"/>`+"\n  </metadata>", 1)
+	bib, err := Parse(writeEpub(t, baseEntries(opf)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bib.SortTitle != "Hobbit, The" {
+		t.Errorf("sort title = %q, want %q from calibre:title_sort", bib.SortTitle, "Hobbit, The")
+	}
+}
+
+// TestWriteBibSortTitleKeepsCalibreMetaInStepForEpub3 pins the v3 half of the
+// same rule the series follows: the calibre meta is updated when the file
+// already carries one, so it cannot be left contradicting the refinement, but is
+// never injected into a file without one (TestWriteBibSetsSortTitle).
+func TestWriteBibSortTitleKeepsCalibreMetaInStepForEpub3(t *testing.T) {
+	path := writeEpub(t, baseEntries(opf3With(`    <meta name="calibre:title_sort" content="Stale, The"/>`)))
+	book, err := writeBib(path, model.Edits{SortTitle: new("Fresh, The")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if book.SortTitle != "Fresh, The" {
+		t.Errorf("sort title = %q, want %q", book.SortTitle, "Fresh, The")
+	}
+
+	opf, ok, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
+	if !ok {
+		t.Fatal("OPF entry not found")
+	}
+	if bytes.Contains(opf, []byte("Stale, The")) {
+		t.Errorf("calibre:title_sort left contradicting the refinement:\n%s", opf)
+	}
+	if !bytes.Contains(opf, []byte(`<meta name="calibre:title_sort" content="Fresh, The"/>`)) {
+		t.Errorf("calibre:title_sort not kept in step:\n%s", opf)
+	}
+	if !bytes.Contains(opf, []byte(`property="file-as">Fresh, The<`)) {
+		t.Errorf("file-as refinement not updated:\n%s", opf)
+	}
+}
+
+// TestFailedValidationLeavesTheOriginal covers rewriteEpub's last line of
+// defence: it re-parses the rewritten epub before renaming it over the
+// original, so a write that would produce an unreadable book is abandoned with
+// the original untouched. Nothing else exercises that path.
+//
+// The trigger is a sort-title-only edit against a package with no <dc:title>.
+// Writing a refinement needs an element to bind to, so one is minted empty, and
+// an empty title is not a book. A titleless package is malformed — both specs
+// require one, and Parse rejects it — so this is reachable only if the file
+// changed on disk after it was indexed.
+func TestFailedValidationLeavesTheOriginal(t *testing.T) {
+	opf := opf3
+	for _, drop := range []string{
+		`    <dc:title id="t1">Original Title</dc:title>` + "\n",
+		`    <meta refines="#t1" property="file-as">Title, Original</meta>` + "\n",
+	} {
+		if !strings.Contains(opf, drop) {
+			t.Fatalf("opf3 changed; cannot drop %q to build a titleless package", drop)
+		}
+		opf = strings.Replace(opf, drop, "", 1)
+	}
+	path := writeEpub(t, baseEntries(opf))
+
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := writeBib(path, model.Edits{SortTitle: new("Hobbit, The")}); err == nil {
+		t.Fatal("expected the rewrite to be rejected, got nil")
+	}
+
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Error("a rejected rewrite modified the original epub")
 	}
 }

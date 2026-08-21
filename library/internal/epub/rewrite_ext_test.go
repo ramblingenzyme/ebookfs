@@ -290,27 +290,6 @@ func TestRewriteRoundTrips(t *testing.T) {
 	}
 }
 
-// TestRewriteDiscardsEPUB2SortTitle pins a known gap: EPUB 2 has no standard
-// title-sort mechanism, and ebookfs writes no proprietary fallback the way it
-// writes calibre:series for the series, so the edit is accepted and silently
-// dropped. Nothing under fs/ sets SortTitle, so only a programmatic Library
-// caller can reach it.
-//
-// Unresolved on purpose — it needs a decision, not a fix: write
-// calibre:title_sort the way calibre does, or refuse loudly so the caller gets
-// an error instead of a lie. Delete this test whichever way that goes.
-func TestRewriteDiscardsEPUB2SortTitle(t *testing.T) {
-	path := buildEpub(t, richOPF2)
-	want := "Title, New"
-	bib, err := epub.Rewrite(path, book(t, path), model.Edits{SortTitle: &want})
-	if err != nil {
-		t.Fatalf("the edit is accepted, not refused: %v", err)
-	}
-	if bib.SortTitle != "" {
-		t.Errorf("sort title = %q; EPUB 2 sort titles now round-trip, delete this test", bib.SortTitle)
-	}
-}
-
 // TestRewriteIsIdempotent applies the same edit twice. The second write must
 // produce byte-identical OPF: anything else means the writer appends where it
 // should replace, and repeated edits would grow the file or reorder it forever.

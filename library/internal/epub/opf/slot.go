@@ -98,6 +98,10 @@ func (r *refineSlot) set(value string) {
 	r.add(value, "")
 }
 
+func (r *refineSlot) exists() bool {
+	return len(r.o.refineElements(r.ownerID(), r.property)) > 0
+}
+
 func (r *refineSlot) clear() {
 	for _, m := range r.o.refineElements(r.ownerID(), r.property) {
 		detach(m)
