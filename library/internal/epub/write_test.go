@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/jpeg"
 	"image/png"
+	"os"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -758,4 +759,52 @@ func TestModifiedStampIsWrittenOnlyForARealChange(t *testing.T) {
 			t.Errorf("a no-op edit restamped dcterms:modified:\n%s", opfOf())
 		}
 	})
+}
+
+// TestNoOpBibEditDoesNotRewriteTheFile pins the skip: an edit asking for what
+// the OPF already says leaves the epub alone. os.SameFile compares device and
+// inode, so it catches the rewrite even when the rebuilt zip is byte-identical
+// — rewriteEpub builds a temp file and renames it over the original.
+//
+// The returned Bib still comes from the file, which is the half the skip must
+// not cost us.
+func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
+	path := writeEpub(t, baseEntries(opf3))
+	statOf := func() os.FileInfo {
+		t.Helper()
+		fi, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return fi
+	}
+
+	before := statOf()
+	current, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Both halves: a Title with no SortTitle clears a stale sort title, which is
+	// a real change (TestWriteBibTitleChangeClearsStaleSortTitle), and opf3
+	// carries one.
+	bib, err := writeBib(path, model.Edits{Title: &current.Title, SortTitle: &current.SortTitle})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !os.SameFile(before, statOf()) {
+		t.Error("an edit asking for the title the OPF already carries rewrote the epub")
+	}
+	if bib.Title != current.Title {
+		t.Errorf("bib.Title = %q, want %q read back from the file", bib.Title, current.Title)
+	}
+
+	// Control: a real change must still land, or the check above proves nothing.
+	changed := current.Title + " (Revised)"
+	if _, err := writeBib(path, model.Edits{Title: &changed}); err != nil {
+		t.Fatal(err)
+	}
+	if os.SameFile(before, statOf()) {
+		t.Error("a real title change did not rewrite the epub")
+	}
 }

@@ -65,10 +65,13 @@ func (o *Doc) epub3() bool {
 	return strings.HasPrefix(o.pkg.SelectAttrValue("version", ""), "3")
 }
 
-// Apply writes the edits into the document; nothing is serialized until Bytes.
+// Apply writes the edits into the document and reports whether that changed
+// anything; nothing is serialized until Bytes. A false means the file already
+// said what the edit asked for, so the caller has nothing to write back.
+//
 // etree is used rather than encoding/xml because it round-trips namespace
 // declarations, dc: prefixes, comments and formatting untouched.
-func (o *Doc) Apply(e model.Edits) {
+func (o *Doc) Apply(e model.Edits) bool {
 	before, _ := o.Bytes()
 
 	o.title().set(e.Title, e.SortTitle)
@@ -90,9 +93,11 @@ func (o *Doc) Apply(e model.Edits) {
 	// that asks for what the file already says is not one. Comparing the whole
 	// serialization is the only honest test of that: a field's set is free to
 	// decide the document already carries the value, and only the bytes know.
-	if after, _ := o.Bytes(); !bytes.Equal(before, after) {
-		o.modified().set(time.Now())
+	if after, _ := o.Bytes(); bytes.Equal(before, after) {
+		return false
 	}
+	o.modified().set(time.Now())
+	return true
 }
 
 // Bib reads the book's metadata out of the document, adding what is not a

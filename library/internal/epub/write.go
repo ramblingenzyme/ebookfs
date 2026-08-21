@@ -16,8 +16,14 @@ import (
 
 // Rewrite applies the changes in e to the epub at epubPath atomically. Every
 // refusal check runs before any file is written, so the original is untouched
-// on error. It returns the book's authoritative Bib: re-parsed when a rewrite
-// happened, or b.Bib unchanged when e carried no bib or cover edits.
+// on error. It returns the book's authoritative Bib, read from the epub, except
+// on the one path that never opens it: an e with no bib or cover edits returns
+// b.Bib untouched.
+//
+// A bib edit asking for what the package document already says skips the zip
+// rebuild but is still re-parsed, so the answer comes from the file either way.
+// Refusals apply before that is known: an edit is checked against the epub
+// before it is found to be a no-op.
 //
 // b is used only for validation and for locating the cover entry; its EpubPath
 // is not read, so this package never resolves a path against the store root.
@@ -41,6 +47,17 @@ func Rewrite(epubPath string, b *model.Book, e model.Edits) (model.Bib, error) {
 	replace, err := createReplace(zrc, b, e)
 	if err != nil {
 		return model.Bib{}, err
+	}
+	// Nothing to write, but the file is still re-read rather than trusting the
+	// Bib the caller handed in: library.Edit builds that from the index, which
+	// can disagree with the epub, and an edit is an occasion to reconcile it.
+	// Only the zip rebuild is skipped.
+	if len(replace) == 0 {
+		bib, err := Parse(epubPath)
+		if err != nil {
+			return model.Bib{}, err
+		}
+		return *bib, nil
 	}
 
 	bib, err := rewriteEpub(epubPath, zrc, replace)
@@ -94,12 +111,15 @@ func createReplace(zrc *zip.ReadCloser, b *model.Book, e model.Edits) (map[strin
 		if err != nil {
 			return nil, err
 		}
-		doc.Apply(e)
-		newOPF, err := doc.Bytes()
-		if err != nil {
-			return nil, err
+		// An edit asking for what the file already says leaves no entry to
+		// replace, which is what lets Rewrite skip the rewrite entirely.
+		if doc.Apply(e) {
+			newOPF, err := doc.Bytes()
+			if err != nil {
+				return nil, err
+			}
+			replace[opfEntry] = newOPF
 		}
-		replace[opfEntry] = newOPF
 	}
 
 	return replace, nil
