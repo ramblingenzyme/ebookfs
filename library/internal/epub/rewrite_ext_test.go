@@ -23,6 +23,7 @@ import (
 	"bytes"
 	"slices"
 	"testing"
+	"testing/synctest"
 
 	"github.com/beevik/etree"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
@@ -313,24 +314,32 @@ func TestRewriteDiscardsEPUB2SortTitle(t *testing.T) {
 // TestRewriteIsIdempotent applies the same edit twice. The second write must
 // produce byte-identical OPF: anything else means the writer appends where it
 // should replace, and repeated edits would grow the file or reorder it forever.
+//
+// synctest freezes the clock so dcterms:modified cannot differ between the two
+// writes for the trivial reason that a wall-clock second elapsed between them,
+// which is a property of the machine and not of the writer. That the stamp is
+// left alone by an edit changing nothing is its own rule, pinned by
+// TestModifiedStampIsWrittenOnlyForARealChange.
 func TestRewriteIsIdempotent(t *testing.T) {
 	for _, c := range corpora() {
 		for _, tc := range preservingEdits() {
 			t.Run(c.name+"/"+tc.name, func(t *testing.T) {
-				path := buildEpub(t, c.opf)
-				if _, err := epub.Rewrite(path, book(t, path), tc.e); err != nil {
-					t.Fatal(err)
-				}
-				once := readEntry(t, path, opfPath)
+				synctest.Test(t, func(t *testing.T) {
+					path := buildEpub(t, c.opf)
+					if _, err := epub.Rewrite(path, book(t, path), tc.e); err != nil {
+						t.Fatal(err)
+					}
+					once := readEntry(t, path, opfPath)
 
-				if _, err := epub.Rewrite(path, book(t, path), tc.e); err != nil {
-					t.Fatal(err)
-				}
-				twice := readEntry(t, path, opfPath)
+					if _, err := epub.Rewrite(path, book(t, path), tc.e); err != nil {
+						t.Fatal(err)
+					}
+					twice := readEntry(t, path, opfPath)
 
-				if !bytes.Equal(once, twice) {
-					t.Errorf("second identical edit changed the file\n--- after one ---\n%s\n--- after two ---\n%s", once, twice)
-				}
+					if !bytes.Equal(once, twice) {
+						t.Errorf("second identical edit changed the file\n--- after one ---\n%s\n--- after two ---\n%s", once, twice)
+					}
+				})
 			})
 		}
 	}

@@ -7,6 +7,8 @@ import (
 	"image/jpeg"
 	"image/png"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
@@ -720,6 +722,40 @@ func TestSetAuthorsReuseBookkeeping(t *testing.T) {
 		}
 		if bytes.Contains(opf(t), []byte("creator1")) {
 			t.Error("refinements still point at creator1 after the author was dropped")
+		}
+	})
+}
+
+// TestModifiedStampIsWrittenOnlyForARealChange pins both halves of the
+// dcterms:modified rule. synctest gives the bubble a fake clock that only moves
+// when the test sleeps, so the stamp is an exact value rather than a format
+// check: a real edit records the time, and an edit asking for what the file
+// already says records nothing, even an hour later.
+func TestModifiedStampIsWrittenOnlyForARealChange(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		path := writeEpub(t, baseEntries(opf3With("")))
+		opfOf := func() []byte {
+			t.Helper()
+			b, _, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
+			return b
+		}
+
+		title := "A New Title"
+		if _, err := writeBib(path, model.Edits{Title: &title}); err != nil {
+			t.Fatal(err)
+		}
+		want := []byte(`<meta property="dcterms:modified">2000-01-01T00:00:00Z</meta>`)
+		if !bytes.Contains(opfOf(), want) {
+			t.Errorf("stamp is not the time of the edit:\n%s", opfOf())
+		}
+
+		// Same title an hour later: nothing changes, so nothing is restamped.
+		time.Sleep(time.Hour)
+		if _, err := writeBib(path, model.Edits{Title: &title}); err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Contains(opfOf(), want) {
+			t.Errorf("a no-op edit restamped dcterms:modified:\n%s", opfOf())
 		}
 	})
 }

@@ -22,6 +22,7 @@
 package opf
 
 import (
+	"bytes"
 	"errors"
 	"strings"
 	"time"
@@ -65,6 +66,8 @@ func (o *Doc) epub3() bool {
 // etree is used rather than encoding/xml because it round-trips namespace
 // declarations, dc: prefixes, comments and formatting untouched.
 func (o *Doc) Apply(e model.Edits) {
+	before, _ := o.Bytes()
+
 	o.title().set(e.Title, e.SortTitle)
 
 	if e.Description != nil {
@@ -80,7 +83,13 @@ func (o *Doc) Apply(e model.Edits) {
 		o.series().set(e.Series, e.SeriesIndex)
 	}
 
-	o.modified().set(time.Now())
+	// §5.5.5 asks for the timestamp when the creator makes changes, so an edit
+	// that asks for what the file already says is not one. Comparing the whole
+	// serialization is the only honest test of that: a field's set is free to
+	// decide the document already carries the value, and only the bytes know.
+	if after, _ := o.Bytes(); !bytes.Equal(before, after) {
+		o.modified().set(time.Now())
+	}
 }
 
 // Bib reads the book's metadata out of the document, adding what is not a
