@@ -13,9 +13,12 @@
 //   - A field with a write side is a type with get/set (title, authors, series,
 //     modified). A read-only field is a single Doc method (description,
 //     language, pubdate, identifiers, cover).
-//   - Fields go through the named operations in dc.go, refine.go and epub2.go —
-//     one file per encoding, holding both its read and its write half. Only
-//     etree.go touches etree directly.
+//   - A field says what a value should be and never where it is kept. Slots
+//     (slot.go) know where: an element's text, a refinement, an opf: attribute,
+//     a named meta. Under both sit the finders — metadata.go for the children of
+//     <metadata> and the parents and prefixes new ones need, refine.go for the
+//     EPUB 3 refinement binding — and under everything, the normalization in
+//     etree.go that every value this package hands out passes through.
 //   - The EPUB 2 / EPUB 3 branch stays visible in each field. The two specs
 //     genuinely differ, and for the sort title v2 has no mechanism at all;
 //     hiding that behind a common writer would hide what matters.

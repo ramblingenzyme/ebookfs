@@ -23,8 +23,9 @@ func text(e *etree.Element) string {
 	return collapse(e.Text())
 }
 
-// attr collapses too: XML 1.0 §3.3.3 turns a newline in an attribute value into
-// a space without trimming it.
+// attr collapses too. Nothing upstream does it for us: XML 1.0 §3.3.3 would
+// normalize a newline in an attribute value to a space, but encoding/xml, which
+// etree wraps, does not implement it, so a tab or newline arrives verbatim.
 func attr(e *etree.Element, name string) string {
 	return collapse(e.SelectAttrValue(name, ""))
 }
