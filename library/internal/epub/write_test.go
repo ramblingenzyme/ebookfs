@@ -7,6 +7,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"testing/synctest"
@@ -124,6 +125,74 @@ func TestWriteBibPreservesContainerLayout(t *testing.T) {
 	cover, ok, _ := readEntryFromFile(t, path, "OEBPS/cover.jpg")
 	if !ok || !bytes.Equal(cover, coverBytes) {
 		t.Errorf("cover bytes changed by a metadata-only edit")
+	}
+}
+
+// TestWriteBibHoistsMimetypeToTheFront pins the OCF §4.3.3 layout of what we
+// write. The two input orders are not two features — they show the guarantee is
+// unconditional rather than inherited from the source, which is the only thing
+// that makes it a guarantee. Every other fixture puts mimetype first, so without
+// the second row the hoist could be deleted with nothing failing.
+//
+// The assertion is that byte layout rather than the entry index, because it is
+// what actually breaks: magic-byte sniffers and file(1) read "mimetype" at
+// offset 30 and its content at 38. One check covers the position, the STORED
+// method, and the MUST NOT on extra fields — a compressed entry or an added
+// extra field moves the content off 38. Parse's own validation cannot catch any
+// of it: checkMimetype reads the entry by name and never looks at where it sits.
+func TestWriteBibHoistsMimetypeToTheFront(t *testing.T) {
+	rest := []entry{
+		{name: "META-INF/container.xml", data: []byte(containerXML)},
+		{name: "OEBPS/content.opf", data: []byte(opf3)},
+		{name: "OEBPS/cover.jpg", data: coverBytes},
+		{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
+	}
+	mimetype := entry{name: mimetypePath, data: []byte(mimetypeValue), store: true}
+
+	for _, tc := range []struct {
+		name    string
+		entries []entry
+		// conformingInput says the fixture already satisfies §4.3.3, so the
+		// layout is asserted before the write as well. Without that precondition
+		// this row proves nothing: a fixture that did not conform would come out
+		// conforming anyway, and the assertion would pass without showing that
+		// the input order was preserved rather than overridden.
+		conformingInput bool
+	}{
+		{name: "mimetype last", entries: append(slices.Clone(rest), mimetype)},
+		{name: "mimetype already first", entries: append([]entry{mimetype}, rest...), conformingInput: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeEpub(t, tc.entries)
+			if tc.conformingInput {
+				assertOCFHeader(t, path, "before the write")
+			}
+
+			if _, err := writeBib(path, model.Edits{Title: new("Another Title")}); err != nil {
+				t.Fatal(err)
+			}
+			assertOCFHeader(t, path, "after the write")
+		})
+	}
+}
+
+// assertOCFHeader checks the byte layout OCF §4.3.3 guarantees: the local file
+// header first, "mimetype" as its name at offset 30, and the media type
+// immediately after at 38.
+func assertOCFHeader(t *testing.T, path, when string) {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	end := 38 + len(mimetypeValue)
+	if len(raw) < end {
+		t.Fatalf("%s: archive is %d bytes, too short to carry an OCF header", when, len(raw))
+	}
+	if !bytes.HasPrefix(raw, []byte("PK\x03\x04")) ||
+		string(raw[30:38]) != mimetypePath ||
+		string(raw[38:end]) != mimetypeValue {
+		t.Errorf("%s: OCF header = %q, want mimetype at offset 30 and %q at 38", when, raw[:end], mimetypeValue)
 	}
 }
 

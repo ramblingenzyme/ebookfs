@@ -151,8 +151,9 @@ func writeUpdatedEpub(zw *zip.Writer, zrc *zip.ReadCloser, replace map[string][]
 		}
 	}
 
-	// mimetype must come first per the OCF spec; write it before anything else
-	// (and skip it in the main loop) regardless of its position in the source.
+	// mimetype must come first per the OCF spec. Written before anything else and
+	// skipped in the main loop, so the guarantee holds for whatever order the
+	// source happened to use rather than inheriting it.
 	if mt := findEntry(&zrc.Reader, mimetypePath); mt == nil {
 		return fmt.Errorf("mimetype not found in epub")
 	} else {
