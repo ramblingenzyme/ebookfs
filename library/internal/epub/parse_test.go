@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/library/model"
@@ -274,6 +275,50 @@ func TestParseCollapsesRootfileMediaType(t *testing.T) {
 
 	if _, err := Parse(path); err != nil {
 		t.Fatalf("Parse failed for a padded rootfile media-type: %v", err)
+	}
+}
+
+// TestParseAndWriteAgreeOnADuplicateEntry pins that a read and the edit that
+// follows it resolve a duplicated entry name the same way. A zip may carry two
+// entries under one name — badly repacked epubs do — and the two sides had
+// opposite rules: Parse built its filemap by assignment, so the last copy won,
+// while findEntry on the write side returns the first.
+//
+// Disagreeing means an edit is computed from one copy's metadata and reported
+// from the other's, which is invisible until the two copies differ. Either rule
+// would do; what matters is that it is one rule.
+func TestParseAndWriteAgreeOnADuplicateEntry(t *testing.T) {
+	first := strings.Replace(opf3, "Original Title", "First Copy", 1)
+	second := strings.Replace(opf3, "Original Title", "Second Copy", 1)
+
+	path := writeEpub(t, []entry{
+		{name: "mimetype", data: []byte(mimetypeValue), store: true},
+		{name: "META-INF/container.xml", data: []byte(containerXML)},
+		{name: "OEBPS/content.opf", data: []byte(first)},
+		{name: "OEBPS/content.opf", data: []byte(second)}, // same name, different content
+		{name: "OEBPS/cover.jpg", data: coverBytes},
+		{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
+	})
+
+	bib, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bib.Title != "First Copy" {
+		t.Errorf("title = %q, want First Copy — Parse must resolve it the way findEntry does", bib.Title)
+	}
+
+	// The edit is computed from whichever copy the writer reads; the re-parse
+	// has to see the result, which it only can if both picked the same one.
+	if _, err := writeBib(path, model.Edits{Title: new("Edited Title")}); err != nil {
+		t.Fatal(err)
+	}
+	bib, err = Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bib.Title != "Edited Title" {
+		t.Errorf("title = %q, want the edit to be visible to the next read", bib.Title)
 	}
 }
 

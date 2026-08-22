@@ -146,7 +146,13 @@ func Parse(bpath string) (*model.Bib, error) {
 
 	filemap := make(map[string]*zip.File)
 	for _, f := range r.File {
-		filemap[f.Name] = f
+		// First wins, matching findEntry on the write side. A zip may carry two
+		// entries under one name, and a duplicate is malformed either way; what
+		// matters is that a read and the edit that follows it agree on which
+		// copy is the package document.
+		if _, dup := filemap[f.Name]; !dup {
+			filemap[f.Name] = f
+		}
 	}
 
 	if err := checkMimetype(filemap); err != nil {
