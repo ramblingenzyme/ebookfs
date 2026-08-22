@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"path"
 	"strings"
 
@@ -69,24 +70,51 @@ func getMetadataPath(f *zip.File, exists func(string) bool) (string, error) {
 		return "", err
 	}
 
-	var declared string
+	var first string
 	for _, rf := range c.Rootfiles {
-		if rf.MediaType != metadataType {
+		// Both attributes are compared after collapsing: encoding/xml does not
+		// implement the XML 1.0 §3.3.3 normalization, so a container that wraps
+		// or pads either one would otherwise skip every rootfile and report a
+		// package document that is right there.
+		if opf.Collapse(rf.MediaType) != metadataType {
 			continue
 		}
-		if declared == "" {
-			declared = rf.FullPath
-		}
-		if exists == nil || exists(rf.FullPath) {
-			return rf.FullPath, nil
+
+		// Decoded first, then the literal. A producer that wrote an unencoded
+		// name into both container.xml and the zip has an entry whose name
+		// really does contain "%20", so the raw value is the one that matches.
+		for _, candidate := range []string{rootfilePath(rf.FullPath), rf.FullPath} {
+			if first == "" {
+				first = candidate
+			}
+			if exists == nil || exists(candidate) {
+				return candidate, nil
+			}
 		}
 	}
 
-	if declared != "" {
+	if first != "" {
 		return "", ErrRootfileMissing
 	}
 
 	return "", ErrNoRootfile
+}
+
+// rootfilePath decodes a container's full-path. §4.2.6.3.1.3 makes it a
+// path-relative-scheme-less-URL string, so a space is written %20 while the zip
+// entry it names holds the decoded form.
+//
+// PathUnescape rather than url.Parse: the value is a path, not a URL to take
+// apart, and Parse would read "C:/content.opf" as having a scheme and truncate
+// anything from a '#' or '?' onwards — naming an entry no archive holds and
+// reporting it as a missing rootfile. An invalid escape ("100%.opf") is not a
+// path we can decode, so the literal stands.
+func rootfilePath(fullPath string) string {
+	decoded, err := url.PathUnescape(fullPath)
+	if err != nil {
+		return fullPath
+	}
+	return decoded
 }
 
 func parsePackage(f *zip.File) (*opf.Doc, error) {

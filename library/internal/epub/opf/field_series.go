@@ -37,7 +37,7 @@ func (f seriesField) set(name, index *string) {
 		series, position = cur.Name, cur.Index
 	}
 	if name != nil {
-		series = collapse(*name)
+		series = Collapse(*name)
 	}
 	if index != nil {
 		position = *index

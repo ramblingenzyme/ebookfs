@@ -208,6 +208,120 @@ func TestParseResolvesEncodedCoverHref(t *testing.T) {
 	}
 }
 
+// TestParseResolvesEncodedRootfilePath is the container-side half of the test
+// above. §4.2.6.3.1.3 makes full-path "a path-relative-scheme-less-URL string",
+// so a package document at "OEBPS/My Book.opf" is declared as "My%20Book.opf"
+// and the zip entry it names holds the decoded form.
+//
+// Undecoded, the entry lookup misses and Parse reports ErrRootfileMissing — the
+// book is not merely mis-read but unopenable, blamed on a rootfile that is
+// present. The write path resolves the OPF through the same function, so an
+// edit has to find it too.
+func TestParseResolvesEncodedRootfilePath(t *testing.T) {
+	const container = `<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/My%20Book.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`
+
+	path := writeEpub(t, []entry{
+		{name: "mimetype", data: []byte("application/epub+zip"), store: true},
+		{name: "META-INF/container.xml", data: []byte(container)},
+		{name: "OEBPS/My Book.opf", data: []byte(opf3)}, // literal space in the entry name
+		{name: "OEBPS/cover.jpg", data: coverBytes},
+		{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
+	})
+
+	if _, err := Parse(path); err != nil {
+		t.Fatalf("Parse failed for a percent-encoded full-path: %v", err)
+	}
+	if _, err := writeBib(path, model.Edits{Title: new("Another Title")}); err != nil {
+		t.Fatalf("edit failed for a percent-encoded full-path: %v", err)
+	}
+	bib, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bib.Title != "Another Title" {
+		t.Errorf("title = %q, want the edit to have landed in the resolved package document", bib.Title)
+	}
+}
+
+// TestParseCollapsesRootfileMediaType covers the other container attribute read
+// through encoding/xml, which does not apply XML 1.0 §3.3.3 attribute-value
+// normalization. §4.2.6.3.1.3 requires the value to be the package media type;
+// a container that wraps it would otherwise have every rootfile skipped and
+// report ErrNoRootfile for a package document that is right there.
+func TestParseCollapsesRootfileMediaType(t *testing.T) {
+	const container = `<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf"
+              media-type="
+                application/oebps-package+xml
+              "/>
+  </rootfiles>
+</container>`
+
+	path := writeEpub(t, []entry{
+		{name: "mimetype", data: []byte("application/epub+zip"), store: true},
+		{name: "META-INF/container.xml", data: []byte(container)},
+		{name: "OEBPS/content.opf", data: []byte(opf3)},
+		{name: "OEBPS/cover.jpg", data: coverBytes},
+		{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
+	})
+
+	if _, err := Parse(path); err != nil {
+		t.Fatalf("Parse failed for a padded rootfile media-type: %v", err)
+	}
+}
+
+// TestParseRootfilePathEdgeCases covers what decoding full-path must not break.
+// §4.2.6.3.1.3 makes it a path-relative-scheme-less-URL, so %20 decodes — but
+// url.Parse would also read "C:/..." as a scheme and truncate at '#' or '?',
+// silently naming an entry the archive does not hold. PathUnescape decodes the
+// escapes and touches nothing else.
+//
+// The literal case is the other direction: a producer that wrote an unencoded
+// name into both container.xml and the zip has an entry whose name really does
+// contain '%20', so the raw value has to be tried when the decoded one misses.
+func TestParseRootfilePathEdgeCases(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		declared string // full-path as written in container.xml
+		entry    string // the zip entry that actually exists
+	}{
+		{"percent-encoded space", "OEBPS/My%20Book.opf", "OEBPS/My Book.opf"},
+		{"literal percent-encoding in the entry name", "OEBPS/My%20Book.opf", "OEBPS/My%20Book.opf"},
+		{"fragment character", "OEBPS/a#b.opf", "OEBPS/a#b.opf"},
+		{"query character", "OEBPS/a?b.opf", "OEBPS/a?b.opf"},
+		{"drive-letter shape", "C:/content.opf", "C:/content.opf"},
+		{"stray percent", "OEBPS/100%.opf", "OEBPS/100%.opf"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			container := `<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="` + tc.declared + `" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`
+
+			path := writeEpub(t, []entry{
+				{name: "mimetype", data: []byte(mimetypeValue), store: true},
+				{name: "META-INF/container.xml", data: []byte(container)},
+				{name: tc.entry, data: []byte(opf3)},
+				{name: "OEBPS/cover.jpg", data: coverBytes},
+				{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
+			})
+
+			if _, err := Parse(path); err != nil {
+				t.Fatalf("full-path %q naming entry %q: %v", tc.declared, tc.entry, err)
+			}
+		})
+	}
+}
+
 // --- container & mimetype validation ---------------------------------------
 
 func TestParseRejectsNonZip(t *testing.T) {

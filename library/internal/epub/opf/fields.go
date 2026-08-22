@@ -46,7 +46,7 @@ func (f titleField) set(title, sort *string) {
 	// A title written without one drops the sort title it used to carry.
 	value := ""
 	if sort != nil {
-		value = collapse(*sort)
+		value = Collapse(*sort)
 	}
 
 	// Rewritten in place wherever the file has a refinement, whatever version it
