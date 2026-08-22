@@ -44,12 +44,16 @@ func newBookListDir(stat *proto.Stat) *bookListDir {
 // title "Foo (2)" is taken and gets disambiguated in turn. Fixing it means
 // minting until the name is free rather than assuming one pass suffices.
 func disambiguatedName(b *model.Book) string {
-	return fmt.Sprintf("%s (%d)", b.Title, b.Meta.ID)
+	return fmt.Sprintf("%s (%d)", model.PathSafe(b.Title), b.Meta.ID)
 }
 
 func (d *bookListDir) Add(dir *book.BookDir) {
 	b := dir.Book()
-	if child, ok := d.Children()[b.Title]; ok && child != dir {
+	// Keyed by the name the child actually carries: BookDir.Stat reports a
+	// PathSafe title, so looking up the raw one would miss the collision and
+	// entries would name a child that cannot be deleted.
+	name := model.PathSafe(b.Title)
+	if child, ok := d.Children()[name]; ok && child != dir {
 		// Plain title is taken by a different book — disambiguate with the id.
 		d.AddChild(&namedBookDir{
 			BookDir:  dir,
@@ -60,7 +64,7 @@ func (d *bookListDir) Add(dir *book.BookDir) {
 		return
 	}
 	d.AddChild(dir)
-	d.entries[b.Meta.ID] = b.Title
+	d.entries[b.Meta.ID] = name
 }
 
 func (d *bookListDir) Remove(dir *book.BookDir) {

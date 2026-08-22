@@ -13,9 +13,9 @@ import (
 
 func idEntryName(b *model.Book, pad int) string {
 	if pad > 0 {
-		return fmt.Sprintf("%0*d. %s", pad, b.Meta.ID, b.Title)
+		return fmt.Sprintf("%0*d. %s", pad, b.Meta.ID, model.PathSafe(b.Title))
 	}
-	return fmt.Sprintf("%d. %s", b.Meta.ID, b.Title)
+	return fmt.Sprintf("%d. %s", b.Meta.ID, model.PathSafe(b.Title))
 }
 
 type byIDDir struct {

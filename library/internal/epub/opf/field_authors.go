@@ -4,7 +4,6 @@ import (
 	"slices"
 
 	"github.com/beevik/etree"
-	"github.com/ramblingenzyme/ebookfs/library/internal/naming"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -45,16 +44,16 @@ func (f authorsField) creators() []*elementSlot {
 func (f authorsField) get() []model.Author {
 	var out []model.Author
 	for _, c := range f.creators() {
-		name, err := naming.Sanitize(c.get())
-		if err != nil {
+		// Reported as written; §5.5.2 requires a non-empty value, so a creator
+		// with none is not an author. Making a name safe to use as a path
+		// component belongs to whoever builds the path, not here.
+		name := c.get()
+		if name == "" {
 			continue
 		}
 		sortAs := c.opfAttr("file-as").get() // EPUB 2
 		if sortAs == "" {
 			sortAs = c.refine("file-as").get()
-		}
-		if sortAs != "" {
-			sortAs, _ = naming.Sanitize(sortAs)
 		}
 		out = append(out, model.Author{Name: name, SortName: sortAs})
 	}
@@ -81,6 +80,10 @@ func (f authorsField) set(authors []model.Author) {
 			c.refine("role").add("aut", "marc:relators")
 		}
 		put(c.refine("file-as"), a.SortName)
+
+		if legacy := c.opfAttr("file-as"); legacy.get() != "" {
+			put(legacy, a.SortName)
+		}
 	}
 }
 
@@ -100,7 +103,7 @@ func (f authorsField) reconcileCreators(authors []model.Author) []*elementSlot {
 	unclaimed := map[*elementSlot]bool{}
 	for _, c := range f.creators() {
 		unclaimed[c] = true
-		if name, err := naming.Sanitize(c.get()); err == nil {
+		if name := c.get(); name != "" {
 			if _, seen := byName[name]; !seen {
 				byName[name] = c
 			}

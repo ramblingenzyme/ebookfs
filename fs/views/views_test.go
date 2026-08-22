@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/knusbaum/go9p/fs"
@@ -99,6 +100,79 @@ func TestBooksDirRemoveOnlyOne(t *testing.T) {
 	}
 	if _, ok := d.Children()["Keep"]; !ok {
 		t.Error("'Keep' should remain")
+	}
+}
+
+// TestBooksDirSlashInTitleIsOneEntry pins that a '/' in a title cannot become a
+// path separator in a 9P entry name, and — the part that would fail silently —
+// that the listing and the entries map agree on the name, so the book can still
+// be removed. epub reports titles as the file wrote them (EPUB 3.3 §5.5.2), so
+// this is the layer that has to make one safe.
+func TestBooksDirSlashInTitleIsOneEntry(t *testing.T) {
+	reg := newTestRegistry(t)
+	d := NewAllBooksDir(reg)
+
+	reg.Add(makeBook(1, "Either/Or", "Author"))
+
+	children := dirChildNames(d)
+	if len(children) != 1 {
+		t.Fatalf("expected 1 book, got %v", children)
+	}
+	if strings.Contains(children[0], "/") {
+		t.Errorf("entry name = %q, want no path separator", children[0])
+	}
+
+	reg.Remove(1)
+	if got := dirChildNames(d); len(got) != 0 {
+		t.Errorf("after remove: %v, want the book gone — the entries map named a child that could not be deleted", got)
+	}
+}
+
+// TestGroupNamesAreOneComponent pins that a group directory name cannot contain
+// a path separator. Author and series names are metadata read verbatim from the
+// epub, so a '/' in one reaches these views intact; an entry carrying it is one
+// a 9P client can never walk to, which hides every book filed under it. by-tag
+// already guarded this with tagEntryName; by-author and by-series did not.
+func TestGroupNamesAreOneComponent(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		dir  func(*registry.BookRegistry) fs.Dir
+		book func() *model.Book
+	}{
+		{
+			name: "by-author",
+			dir:  func(reg *registry.BookRegistry) fs.Dir { return NewByAuthorDir(reg) },
+			book: func() *model.Book { return makeBook(1, "Title", "Doe/Jane") },
+		},
+		{
+			name: "by-series",
+			dir:  func(reg *registry.BookRegistry) fs.Dir { return NewBySeriesDir(reg) },
+			book: func() *model.Book {
+				b := makeBook(1, "Title", "Author")
+				b.Series = &model.SeriesRef{Name: "Either/Or", Index: "1"}
+				return b
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reg := newTestRegistry(t)
+			d := tc.dir(reg)
+			reg.Add(tc.book())
+
+			names := dirChildNames(d)
+			if len(names) != 1 {
+				t.Fatalf("groups = %v, want one", names)
+			}
+			if strings.Contains(names[0], "/") {
+				t.Errorf("group name = %q, want no path separator", names[0])
+			}
+
+			// Remove has to mint the same name or the group is orphaned.
+			reg.Remove(1)
+			if got := dirChildNames(d); len(got) != 0 {
+				t.Errorf("after remove: %v, want the group pruned", got)
+			}
+		})
 	}
 }
 

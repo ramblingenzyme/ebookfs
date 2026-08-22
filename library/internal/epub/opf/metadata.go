@@ -47,11 +47,19 @@ func (o *Doc) dcParent() *etree.Element {
 	return o.md
 }
 
+// metaParent creates the x-metadata wrapper when the file uses dc-metadata
+// without one. §2.2 binds what we add as much as what we found: "all other
+// metadata elements, if any, must go into x-metadata". A producer with no non-DC
+// metadata to write has no reason to emit the wrapper, so this is the common
+// shape of such a file rather than an odd one.
 func (o *Doc) metaParent() *etree.Element {
 	if w := o.md.SelectElement("x-metadata"); w != nil {
 		return w
 	}
-	return o.md
+	if o.md.SelectElement("dc-metadata") == nil {
+		return o.md
+	}
+	return o.md.CreateElement("x-metadata")
 }
 
 // primary is the element a read and a write of a field both mean: the first

@@ -617,6 +617,88 @@ func TestSpecWhitespaceInEPUB2RoleAttribute(t *testing.T) {
 	}
 }
 
+// TestSpecWhitespaceInTheVersionAttribute is the same normalization failure at
+// the point that decides every other one. The package version attribute is the
+// only attribute read without going through attr(), so a wrapped version="3.0"
+// reports EPUB 2 — and then §5.5.5's required dcterms:modified is never updated,
+// and the calibre metas an EPUB 3 package is not supposed to carry are injected
+// into one that had none.
+func TestSpecWhitespaceInTheVersionAttribute(t *testing.T) {
+	opf := strings.Replace(epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>The Title</dc:title>
+    <dc:creator id="c1">Ann Rand</dc:creator>
+    <dc:language>en</dc:language>
+    <meta property="dcterms:modified">2020-01-02T00:00:00Z</meta>`),
+		`version="3.0"`, "version=\"\n      3.0\n    \"", 1)
+
+	path := buildEpub(t, opf)
+	sort := "Title, The"
+	if _, err := epub.Rewrite(path, book(t, path), model.Edits{SortTitle: &sort}); err != nil {
+		t.Fatal(err)
+	}
+
+	md := metadata(t, path)
+	got := md.FindElement("//meta[@property='dcterms:modified']")
+	if got == nil {
+		t.Fatal("dcterms:modified was removed")
+	}
+	if got.Text() == "2020-01-02T00:00:00Z" {
+		t.Errorf("dcterms:modified = %q, want the time of this rewrite — the padded version read as EPUB 2", got.Text())
+	}
+	for _, m := range md.SelectElements("meta") {
+		if name := m.SelectAttrValue("name", ""); strings.HasPrefix(name, "calibre:") {
+			t.Errorf("%s was injected into an EPUB 3 package", name)
+		}
+	}
+}
+
+// --- a metadata value is text, not a path component ---------------------------
+//
+// EPUB 3.3 §5.5.2 licenses exactly one transformation of a metadata value:
+// strip the leading and trailing whitespace, collapse the internal runs. OPF 2.0
+// §2.2 says only that the element's content is the field's value. Substituting
+// characters is not among the things a reader may do, and a writer that persists
+// a substitution has destroyed the value it was handed.
+//
+// This package used to map '/' to '-' on the way out, because a title becomes a
+// path component downstream. That is the path layer's problem, and it is solved
+// there now: store.canonicalDir and the 9P entry names run model.PathSafe over
+// the name they are building, and store.epubFilename always had its own
+// naming.ForFAT pass. Doing it here as well corrupted the value for every other
+// reader, and an author edit wrote the corruption back to the file.
+
+func TestSpecSlashInAValueIsNotRewritten(t *testing.T) {
+	path := buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>Either/Or</dc:title>
+    <dc:creator id="c1">AC/DC</dc:creator>
+    <dc:language>en</dc:language>`))
+
+	bib, err := epub.Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bib.Title != "Either/Or" {
+		t.Errorf("title = %q, want it read as written", bib.Title)
+	}
+	if got := authorNames(bib); !slices.Equal(got, []string{"AC/DC"}) {
+		t.Errorf("authors = %v, want [AC/DC] as written", got)
+	}
+
+	// An edit to an unrelated field carries the author list back the way
+	// library.Edit does, which is how a read-side substitution reaches the file.
+	desc := "A new description."
+	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Description: &desc, Authors: &bib.Authors}); err != nil {
+		t.Fatal(err)
+	}
+	raw := string(readEntry(t, path, opfPath))
+	if !strings.Contains(raw, "AC/DC") {
+		t.Errorf("the creator no longer says AC/DC:\n%s", raw)
+	}
+	if !strings.Contains(raw, "Either/Or") {
+		t.Errorf("the title no longer says Either/Or:\n%s", raw)
+	}
+}
+
 // --- dc-metadata / x-metadata ------------------------------------------------
 //
 // OPF 2.0 §2.2 (Publication Metadata):
@@ -1035,6 +1117,52 @@ func TestSpecEditsLandInTheLegacyWrappers(t *testing.T) {
 	}
 	if bib.Series == nil || bib.Series.Name != series || bib.Series.Index != index {
 		t.Errorf("series = %+v, want %q at %s read back through x-metadata", bib.Series, series, index)
+	}
+}
+
+// TestSpecEditsCreateTheMissingXMetadataWrapper is the case the fixture above
+// cannot reach, and the common one: a file that uses dc-metadata but has no
+// x-metadata, because its producer had no non-DC metadata to put there. §2.2's
+// MUST still binds — "all other metadata elements, if any, must go into
+// x-metadata" — so a writer with a calibre meta to add has to create the wrapper
+// rather than drop the meta beside it.
+//
+// The dc half already works; only the metas land loose. Nothing fails today
+// because elements() reads both the wrappers and the direct children, so the
+// package is the one reader that cannot see its own violation.
+func TestSpecEditsCreateTheMissingXMetadataWrapper(t *testing.T) {
+	const opf = `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" xmlns:opf="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="pub-id">
+  <metadata>
+    <dc-metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+      <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+      <dc:title>Alice in Wonderland</dc:title>
+      <dc:creator opf:role="aut">Lewis Carroll</dc:creator>
+      <dc:language>en</dc:language>
+    </dc-metadata>
+  </metadata>
+  <manifest>
+    <item id="cover-img" href="cover.jpg" media-type="image/jpeg"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine toc="ncx"><itemref idref="ch1"/></spine>
+</package>`
+
+	path := buildEpub(t, opf)
+	series := "Wonderland"
+	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Series: &series}); err != nil {
+		t.Fatal(err)
+	}
+
+	md := metadata(t, path)
+	if md.FindElement("x-metadata") == nil {
+		t.Error("no x-metadata wrapper was created for the new meta")
+	}
+	if el := md.FindElement("x-metadata/meta[@name='calibre:series']"); el == nil || el.SelectAttrValue("content", "") != series {
+		t.Errorf("calibre:series = %v, want %q inside x-metadata per §2.2", el, series)
+	}
+	if md.FindElement("meta[@name='calibre:series']") != nil {
+		t.Error("calibre:series was written loose under <metadata>, outside the wrappers")
 	}
 }
 

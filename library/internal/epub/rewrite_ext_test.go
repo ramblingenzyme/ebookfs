@@ -22,6 +22,7 @@ package epub_test
 import (
 	"bytes"
 	"slices"
+	"strings"
 	"testing"
 	"testing/synctest"
 
@@ -570,6 +571,52 @@ func TestEPUB2CreatorLosesAStaleSortName(t *testing.T) {
 	}
 	if len(bib.Authors) != 1 || bib.Authors[0].SortName != "" {
 		t.Errorf("authors = %+v, want one author with no sort name", bib.Authors)
+	}
+}
+
+// TestEPUB3CreatorWithALegacySortNameTakesTheEdit covers an EPUB 3 package whose
+// creators still carry the EPUB 2 opf:file-as — a v2 file upgraded in place, or
+// a producer that emits both. Nothing forbids carrying both, and no spec says
+// which one a reader should prefer; what it cannot do is disagree with itself.
+//
+// The read prefers the attribute (field_authors.go), the v3 write only touches
+// the refinement, so the edit lands somewhere the read will never look. The file
+// ends up asserting two different sort names for one creator and reporting the
+// stale one, and every later edit rewrites a refinement nothing reads.
+//
+// titleField.set already guards exactly this hazard for the title, which is why
+// this is an oversight rather than a decision. The EPUB 2 half is
+// TestEPUB2CreatorLosesAStaleSortName above.
+func TestEPUB3CreatorWithALegacySortNameTakesTheEdit(t *testing.T) {
+	opf := strings.Replace(epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>The Title</dc:title>
+    <dc:creator id="c1" opf:file-as="Stale, Name">Ann Rand</dc:creator>
+    <meta refines="#c1" property="role" scheme="marc:relators">aut</meta>
+    <dc:language>en</dc:language>`),
+		`xmlns:dc="http://purl.org/dc/elements/1.1/"`,
+		`xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf"`, 1)
+
+	path := buildEpub(t, opf)
+	authors := []model.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
+	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Authors: &authors}); err != nil {
+		t.Fatal(err)
+	}
+
+	bib, err := epub.Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bib.Authors) != 1 || bib.Authors[0].SortName != "Rand, Ann" {
+		t.Errorf("authors = %+v, want the sort name the edit asked for", bib.Authors)
+	}
+	// Whichever mechanism the writer picks, the file must not end up claiming
+	// both. A stale attribute left beside a fresh refinement is the failure.
+	c := metadata(t, path).FindElement("creator")
+	if c == nil {
+		t.Fatal("creator was removed")
+	}
+	if got := c.SelectAttrValue("opf:file-as", ""); got != "" && got != "Rand, Ann" {
+		t.Errorf("opf:file-as = %q, want it updated or removed, not left stale", got)
 	}
 }
 

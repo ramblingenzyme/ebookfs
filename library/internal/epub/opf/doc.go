@@ -31,7 +31,6 @@ import (
 	"time"
 
 	"github.com/beevik/etree"
-	"github.com/ramblingenzyme/ebookfs/library/internal/naming"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -61,8 +60,14 @@ func (o *Doc) Bytes() ([]byte, error) { return o.doc.WriteToBytes() }
 
 // epub3 decides how metadata is written: refinements for v3, opf: attributes
 // and calibre metas for v2. The version attribute is "3.0"/"3.1"/"2.0".
+//
+// It goes through attr for the same reason everything else does: a wrapped or
+// padded version would otherwise read as EPUB 2, and getting this one wrong
+// costs the §5.5.5 dcterms:modified update and injects calibre metas into a
+// package that never had any. A file with no version attribute at all is
+// malformed either way, and EPUB 2 is the safer guess for one.
 func (o *Doc) epub3() bool {
-	return strings.HasPrefix(o.pkg.SelectAttrValue("version", ""), "3")
+	return strings.HasPrefix(attr(o.pkg, "version"), "3")
 }
 
 // Apply writes the edits into the document and reports whether that changed
@@ -106,15 +111,15 @@ func (o *Doc) Apply(e model.Edits) bool {
 func (o *Doc) Bib(base string) (*model.Bib, error) {
 	b := &model.Bib{}
 
+	// Reported as written. §5.5.2 licenses stripping and collapsing whitespace,
+	// which get already did, and nothing else: a value is text, not a path
+	// component. Making it safe to use as one is the business of whoever builds
+	// the path — model.PathSafe, called by the store and the 9P names.
 	title, sortTitle := o.title().get()
 	if title == "" {
 		return nil, errors.New("no title")
 	}
-	var err error
-	if b.Title, err = naming.Sanitize(title); err != nil {
-		return nil, errors.New("empty title")
-	}
-	// REVIEW: we don't sanitize sortTitle?
+	b.Title = title
 	b.SortTitle = sortTitle
 	// TODO: decide whether to derive a sort title heuristically when none is set
 	// (calibre strips leading articles, e.g. "The Hobbit" -> "Hobbit, The"); it is

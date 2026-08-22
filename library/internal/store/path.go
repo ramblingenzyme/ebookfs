@@ -42,12 +42,15 @@ func epubFilename(authors []model.Author, title string) string {
 	return fmt.Sprintf("%s - %s.epub", fatTitle, fatAuthor)
 }
 
+// Both components are made path-safe: a '/' in a title or an author name would
+// otherwise split one directory into two. epubFilename does its own, stricter
+// pass for the file itself.
 func authorDirName(authors []model.Author) string {
-	return model.JoinAuthors(authors, " & ")
+	return model.PathSafe(model.JoinAuthors(authors, " & "))
 }
 
 func canonicalDir(authors []model.Author, title string, id int64) string {
-	return filepath.Join(authorDirName(authors), fmt.Sprintf("%s (%d)", title, id))
+	return filepath.Join(authorDirName(authors), fmt.Sprintf("%s (%d)", model.PathSafe(title), id))
 }
 
 // IDFromPath recovers the book id that canonicalDir encoded in a library path's

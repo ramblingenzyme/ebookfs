@@ -31,12 +31,6 @@ func sanitize(s, forbidden string) (string, error) {
 	return out, nil
 }
 
-// Sanitize makes s safe for use as a filesystem path component: '/' is the
-// only forbidden rune.
-func Sanitize(s string) (string, error) {
-	return sanitize(s, "/")
-}
-
 // ForFAT makes s safe for use as a filename on a FAT filesystem.
 // FAT forbids \ : * ? " < > | in addition to the characters Sanitize already
 // handles, and filenames may not end with a space or period (covered by the
