@@ -758,3 +758,172 @@ func TestIdentifiersKeepTheirCurrentKeying(t *testing.T) {
 		t.Errorf(`Identifiers["isbn"] = %q; keying changed — needs a migration`, got)
 	}
 }
+
+// --- xml:lang and dir --------------------------------------------------------
+
+// TestMetadataDirectionalitySurvives pins that the language and direction a
+// publisher put on a metadata element survive an edit to a different field.
+// They are attributes of the element, so this holds only while elements are
+// reused rather than rebuilt.
+//
+// Nothing in §5.3.1 or §5.3.7 requires a writer to preserve them; this is the
+// same preservation rule the rest of this file pins, applied to attributes.
+func TestMetadataDirectionalitySurvives(t *testing.T) {
+	const opf = `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id" xml:lang="en" dir="ltr">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title xml:lang="ar" dir="rtl">العنوان</dc:title>
+    <dc:creator id="c1">Ann Rand</dc:creator>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="cover-img" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine><itemref idref="ch1"/></spine>
+</package>`
+
+	path := buildEpub(t, opf)
+	desc := "A new description."
+	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Description: &desc}); err != nil {
+		t.Fatal(err)
+	}
+	title := metadata(t, path).SelectElement("title")
+	if title == nil {
+		t.Fatal("title removed")
+	}
+	if got := title.SelectAttrValue("dir", ""); got != "rtl" {
+		t.Errorf("dir = %q, want rtl", got)
+	}
+	if got := title.SelectAttrValue("lang", ""); got != "ar" {
+		t.Errorf("xml:lang = %q, want ar", got)
+	}
+}
+
+// --- metadata we do not model ------------------------------------------------
+
+// TestUnmodelledMetadataSurvives pins that Dublin Core elements ebookfs has
+// no field for are still carried through an edit untouched. Not modelling
+// something is not a licence to drop it.
+func TestUnmodelledMetadataSurvives(t *testing.T) {
+	var opf = epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>Original Title</dc:title>
+    <dc:creator id="c1">Ann Rand</dc:creator>
+    <dc:language>en</dc:language>
+    <dc:subject>Science Fiction</dc:subject>
+    <dc:subject>Space Opera</dc:subject>
+    <dc:publisher>Acme Press</dc:publisher>
+    <dc:rights>All rights reserved.</dc:rights>
+    <dc:source>urn:isbn:9780000000000</dc:source>`)
+
+	path := buildEpub(t, opf)
+	want := "A New Title"
+	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Title: &want}); err != nil {
+		t.Fatal(err)
+	}
+	md := metadata(t, path)
+	for _, tag := range []string{"publisher", "rights", "source"} {
+		if el := md.SelectElement(tag); el == nil {
+			t.Errorf("dc:%s was dropped", tag)
+		}
+	}
+	if n := len(md.SelectElements("subject")); n != 2 {
+		t.Errorf("dc:subject count = %d, want 2", n)
+	}
+}
+
+// --- a collection-type we do not own ------------------------------------------
+
+// TestSchemedCollectionTypeSurvivesASeriesEdit pins that a series edit leaves a
+// schemed collection-type alone. The reader resolves collection-type to the
+// first *unschemed* refinement, because series/set are only defined "when no
+// scheme is specified" (D.3.4); the writer resolves it the same way, so a
+// collection-type drawn from someone else's code list is left as it was.
+// Overwriting it with "series" would be the same class of loss as the dropped
+// creator refinements this file exists for.
+//
+// This is ours, not conformance: D.3.4 gives collection-type cardinality "zero
+// or one", so the two refinements the fixture needs cannot occur in a conforming
+// file and the spec never has to arbitrate between them. We handle it anyway.
+// Two refinements are what it takes to show, which is why the corpus above never
+// caught it.
+func TestSchemedCollectionTypeSurvivesASeriesEdit(t *testing.T) {
+	path := buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>The Title</dc:title>
+    <dc:creator id="c1">Ann Rand</dc:creator>
+    <dc:language>en</dc:language>
+    <meta property="belongs-to-collection" id="c01">The Trilogy</meta>
+    <meta refines="#c01" property="collection-type" scheme="onix:codelist148">12</meta>
+    <meta refines="#c01" property="collection-type">series</meta>
+    <meta refines="#c01" property="group-position">2</meta>`))
+
+	want := "The Quartet"
+	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Series: &want}); err != nil {
+		t.Fatal(err)
+	}
+
+	var schemed, unschemed []string
+	for _, m := range metadata(t, path).SelectElements("meta") {
+		if m.SelectAttrValue("property", "") != "collection-type" {
+			continue
+		}
+		if m.SelectAttrValue("scheme", "") != "" {
+			schemed = append(schemed, m.Text())
+		} else {
+			unschemed = append(unschemed, m.Text())
+		}
+	}
+	if !slices.Equal(schemed, []string{"12"}) {
+		t.Errorf("schemed collection-type = %v, want [12] untouched — it is drawn from onix:codelist148, not ours", schemed)
+	}
+	if !slices.Equal(unschemed, []string{"series"}) {
+		t.Errorf("unschemed collection-type = %v, want [series]", unschemed)
+	}
+
+	bib, err := epub.Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bib.Series == nil || bib.Series.Name != want || bib.Series.Index != "2" {
+		t.Errorf("series = %+v, want %q at 2", bib.Series, want)
+	}
+}
+
+// --- renaming a series the reader cannot see ----------------------------------
+
+// TestSeriesRenameDoesNotDuplicate covers the write-side consequence of a
+// collection the reader fails to resolve: when the reader cannot see the
+// existing collection, the writer cannot either, so a rename adds a second one
+// instead of rewriting the first — and the new one carries no group-position,
+// resetting the book's position to 1.
+//
+// The fixture is opfSpecStyleWhitespace from spec_ext_test.go, where the reason
+// a reader might miss the collection is spelled out. What is pinned here is only
+// our rule: one collection, position preserved across a rename.
+func TestSeriesRenameDoesNotDuplicate(t *testing.T) {
+
+	path := buildEpub(t, opfSpecStyleWhitespace)
+	want := "Renamed"
+	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Series: &want}); err != nil {
+		t.Fatal(err)
+	}
+	md := metadata(t, path)
+	var collections int
+	for _, m := range md.SelectElements("meta") {
+		if m.SelectAttrValue("property", "") == "belongs-to-collection" {
+			collections++
+		}
+	}
+	if collections != 1 {
+		t.Errorf("belongs-to-collection count = %d, want 1 — the rename duplicated it", collections)
+	}
+
+	bib, err := epub.Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bib.Series == nil || bib.Series.Index != "2" {
+		t.Errorf("series = %+v, want the position preserved across a rename", bib.Series)
+	}
+}
