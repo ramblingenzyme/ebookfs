@@ -26,6 +26,20 @@ const (
 	mimetypeValue = "application/epub+zip"
 )
 
+// notEpub classifies a failure to open the archive. A malformed zip is not an
+// epub; anything else — a missing file, a permission problem, a disk error — is
+// the caller's to see verbatim, since it says nothing about the file's contents.
+//
+// Shared because each entry point opens the file itself and each had grown its
+// own rule, so the same broken file was three different errors depending on
+// which way in the caller took.
+func notEpub(path string, err error) error {
+	if errors.Is(err, zip.ErrFormat) {
+		return fmt.Errorf("%w: %s: %w", ErrNotEpub, path, err)
+	}
+	return err
+}
+
 // archive is the seam between reading an epub and writing one. It owns how an
 // entry is located and what the container is checked for, so a read and the
 // write that follows it cannot answer those differently — the same reason a

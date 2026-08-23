@@ -2,8 +2,6 @@ package epub
 
 import (
 	"archive/zip"
-	"errors"
-	"fmt"
 	"path"
 
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf"
@@ -11,14 +9,9 @@ import (
 )
 
 func Parse(bpath string) (*model.Bib, error) {
-	// A missing or unreadable path surfaces its os error verbatim; a non-zip file
-	// comes back as zip.ErrFormat, which becomes ErrNotEpub.
 	r, err := zip.OpenReader(bpath)
 	if err != nil {
-		if errors.Is(err, zip.ErrFormat) {
-			return nil, fmt.Errorf("%w: %s: %w", ErrNotEpub, bpath, err)
-		}
-		return nil, err
+		return nil, notEpub(bpath, err)
 	}
 	defer r.Close()
 

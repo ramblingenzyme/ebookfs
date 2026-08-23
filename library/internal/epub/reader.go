@@ -42,7 +42,7 @@ func OpenReader(epubPath, coverPath string) (model.EpubReader, error) {
 	zr, err := zip.NewReader(f, fi.Size())
 	if err != nil {
 		f.Close()
-		return nil, fmt.Errorf("%w: %w", ErrNotEpub, err)
+		return nil, notEpub(epubPath, err)
 	}
 	a, err := openArchive(zr)
 	if err != nil {

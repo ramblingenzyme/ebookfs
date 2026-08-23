@@ -373,6 +373,69 @@ func TestParseRootfilePathEdgeCases(t *testing.T) {
 
 // --- container & mimetype validation ---------------------------------------
 
+// TestEntryPointsAgreeOnABadEpub pins that the three ways into this package
+// classify a failure to open the archive the same way. Each opens the file
+// itself, so each had its own rule: Parse mapped zip.ErrFormat to ErrNotEpub,
+// OpenReader mapped every zip error to it, and Rewrite mapped nothing.
+//
+// A caller distinguishing "this is not a book" from "the disk is broken" does it
+// with errors.Is on ErrNotEpub, and got the right answer from two paths and the
+// wrong one from the third.
+//
+// The missing-file row matters as much as the malformed ones: a path that does
+// not exist says nothing about the contents, so labelling it ErrNotEpub would be
+// the obvious wrong fix.
+func TestEntryPointsAgreeOnABadEpub(t *testing.T) {
+	good := writeEpub(t, baseEntries(opf3))
+	raw, err := os.ReadFile(good)
+	if err != nil {
+		t.Fatal(err)
+	}
+	write := func(name string, data []byte) string {
+		p := filepath.Join(t.TempDir(), name)
+		if err := os.WriteFile(p, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+
+	for _, tc := range []struct {
+		name    string
+		path    string
+		notEpub bool // ErrNotEpub, rather than the os error verbatim
+	}{
+		{name: "not a zip", path: write("junk.epub", []byte("this is plainly not a zip archive")), notEpub: true},
+		{name: "empty file", path: write("empty.epub", nil), notEpub: true},
+		{name: "truncated epub", path: write("trunc.epub", raw[:len(raw)/2]), notEpub: true},
+		{name: "missing file", path: filepath.Join(t.TempDir(), "nope.epub")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, parseErr := epub.Parse(tc.path)
+			_, readerErr := epub.OpenReader(tc.path, "")
+			_, rewriteErr := epub.Rewrite(tc.path,
+				&model.Book{Location: model.Location{EpubPath: tc.path}},
+				model.Edits{Title: new("X")})
+
+			for _, e := range []struct {
+				from string
+				err  error
+			}{{"Parse", parseErr}, {"OpenReader", readerErr}, {"Rewrite", rewriteErr}} {
+				if e.err == nil {
+					t.Errorf("%s returned no error", e.from)
+					continue
+				}
+				if got := errors.Is(e.err, epub.ErrNotEpub); got != tc.notEpub {
+					t.Errorf("%s: errors.Is(err, ErrNotEpub) = %v, want %v (err = %v)",
+						e.from, got, tc.notEpub, e.err)
+				}
+				if !tc.notEpub && !errors.Is(e.err, os.ErrNotExist) {
+					t.Errorf("%s: err = %v, want the os error to survive", e.from, e.err)
+				}
+			}
+		})
+	}
+}
+
 func TestParseRejectsNonZip(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "junk.epub")
 	if err := os.WriteFile(p, []byte("this is plainly not a zip archive"), 0o644); err != nil {

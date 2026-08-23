@@ -42,7 +42,7 @@ func Rewrite(epubPath string, b *model.Book, e model.Edits) (model.Bib, error) {
 
 	zrc, err := zip.OpenReader(epubPath)
 	if err != nil {
-		return model.Bib{}, err
+		return model.Bib{}, notEpub(epubPath, err)
 	}
 	defer zrc.Close()
 
