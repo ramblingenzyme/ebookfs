@@ -42,6 +42,9 @@ func detach(e *etree.Element) {
 	}
 }
 
+// qualify joins an XML namespace prefix to a local name: the dcPrefix or
+// ensureOPFPrefix kind, never a vocabulary prefix. vocab.go's spell is the
+// vocabulary-side twin.
 func qualify(prefix, tag string) string {
 	if prefix == "" {
 		return tag
@@ -49,13 +52,16 @@ func qualify(prefix, tag string) string {
 	return prefix + ":" + tag
 }
 
-// ensureID returns the element's id, minting "prefix", "prefix-2", … if it has
+// ensureID returns the element's id, minting "stem", "stem-2", … if it has
 // none. Uniqueness is checked against every id in the document, not just those
 // of the same kind: XML 1.0 §3.3.1 makes ID values unique document-wide.
 //
+// stem is a name to build an id from, not a prefix in either sense the rest of
+// this package uses the word: not an xmlns: prefix, not a vocabulary prefix.
+//
 // ponytail: rescans per call, O(n²) over a document holding tens of elements.
 // Thread a set through the callers only if a profile ever says to.
-func (o *Doc) ensureID(el *etree.Element, prefix string) string {
+func (o *Doc) ensureID(el *etree.Element, stem string) string {
 	if id := attr(el, "id"); id != "" {
 		return id
 	}
@@ -63,9 +69,9 @@ func (o *Doc) ensureID(el *etree.Element, prefix string) string {
 	for _, e := range o.pkg.FindElements("//*[@id]") {
 		taken[attr(e, "id")] = true
 	}
-	id := prefix
+	id := stem
 	for n := 2; taken[id]; n++ {
-		id = prefix + "-" + strconv.Itoa(n)
+		id = stem + "-" + strconv.Itoa(n)
 	}
 	el.CreateAttr("id", id)
 	return id

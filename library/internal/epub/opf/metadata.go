@@ -93,8 +93,9 @@ func (o *Doc) namedMetaElements(name string) []*etree.Element {
 	return out
 }
 
-// dcPrefix takes the Dublin Core prefix from the always-present <dc:title>, so
-// a new dc element matches the existing declaration. Defaults to "dc".
+// dcPrefix takes the Dublin Core xmlns: prefix from the always-present
+// <dc:title>, so a new dc element matches the existing declaration. Defaults to
+// "dc". An XML namespace prefix, not the vocabulary kind vocab.go resolves.
 func (o *Doc) dcPrefix() string {
 	if els := o.elements("title"); len(els) > 0 {
 		return els[0].Space
@@ -102,9 +103,11 @@ func (o *Doc) dcPrefix() string {
 	return "dc"
 }
 
-// ensureOPFPrefix returns the prefix bound to the OPF namespace, declaring
-// xmlns:opf if the document only has it as the default namespace. Attributes
-// cannot use a default namespace, so opf:role and opf:file-as need a prefix.
+// ensureOPFPrefix returns the xmlns: prefix bound to the OPF namespace,
+// declaring xmlns:opf if the document only has it as the default namespace.
+// Attributes cannot use a default namespace, so opf:role and opf:file-as need a
+// prefix. vocab.go's spell is this same get-or-declare step for the other
+// naming system.
 func (o *Doc) ensureOPFPrefix() string {
 	for i := range o.pkg.Attr {
 		a := o.pkg.Attr[i]

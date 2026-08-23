@@ -141,15 +141,27 @@ func (a *opfAttrSlot) get() string {
 	return attr(a.owner.el, a.name)
 }
 
+// set writes the attribute get would read. etree matches an attribute by local
+// name whatever prefix it carries, so a document with a bare file-as rather than
+// opf:file-as is read from that one; creating the qualified spelling regardless
+// would leave the element asserting two sort names, with the next read taking
+// the stale one. A creator with no such attribute gets the qualified spelling.
 func (a *opfAttrSlot) set(value string) {
-	a.owner.ensure().CreateAttr(qualify(a.o.ensureOPFPrefix(), a.name), value)
+	el := a.owner.ensure()
+	if existing := el.SelectAttr(a.name); existing != nil {
+		existing.Value = value
+		return
+	}
+	el.CreateAttr(qualify(a.o.ensureOPFPrefix(), a.name), value)
 }
 
 func (a *opfAttrSlot) clear() {
 	if a.owner.el == nil {
 		return
 	}
-	a.owner.el.RemoveAttr(qualify(a.o.ensureOPFPrefix(), a.name))
+	if existing := a.owner.el.SelectAttr(a.name); existing != nil {
+		a.owner.el.RemoveAttr(existing.FullKey())
+	}
 }
 
 // namedMetaSlot is the EPUB 2 <meta name="..." content="..."> pair that
@@ -202,7 +214,7 @@ func (o *Doc) dcElement(tag, idPrefix string) *elementSlot {
 func (o *Doc) propertyMeta(property string) *elementSlot {
 	var found *etree.Element
 	for _, m := range o.elements("meta") {
-		if attr(m, "property") == property && attr(m, "refines") == "" {
+		if o.sameProperty(attr(m, "property"), property) && attr(m, "refines") == "" {
 			found = m
 			break
 		}
@@ -212,7 +224,10 @@ func (o *Doc) propertyMeta(property string) *elementSlot {
 		el: found,
 		create: func() *etree.Element {
 			m := o.metaParent().CreateElement("meta")
-			m.CreateAttr("property", property)
+			// spell, not property: in a document that rebound the vocabulary
+			// our name resolves in, the literal would mean something else to
+			// every other reader.
+			m.CreateAttr("property", o.spell(property))
 			return m
 		},
 	}

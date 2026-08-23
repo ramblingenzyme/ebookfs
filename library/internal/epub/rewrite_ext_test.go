@@ -620,6 +620,50 @@ func TestEPUB3CreatorWithALegacySortNameTakesTheEdit(t *testing.T) {
 	}
 }
 
+// TestUnprefixedFileAsIsUpdatedNotDuplicated covers a creator carrying a bare
+// file-as rather than opf:file-as. Reading matches on the local name, so such an
+// attribute is found and reported as the sort name; writing always qualifies
+// with the opf prefix, so the update would land on a second attribute and leave
+// the one the read prefers untouched.
+//
+// The element then asserts two sort names and the next read takes the stale one,
+// which is the same silent no-op TestEPUB3CreatorWithALegacySortNameTakesTheEdit
+// exists to prevent, one namespace lower.
+func TestUnprefixedFileAsIsUpdatedNotDuplicated(t *testing.T) {
+	opf := epub2(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>The Title</dc:title>
+    <dc:creator opf:role="aut" file-as="Stale, Name">Ann Rand</dc:creator>
+    <dc:language>en</dc:language>`)
+
+	path := buildEpub(t, opf)
+	authors := []model.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
+	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Authors: &authors}); err != nil {
+		t.Fatal(err)
+	}
+
+	bib, err := epub.Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bib.Authors) != 1 || bib.Authors[0].SortName != "Rand, Ann" {
+		t.Errorf("authors = %+v, want the sort name the edit asked for", bib.Authors)
+	}
+
+	c := metadata(t, path).FindElement("creator")
+	if c == nil {
+		t.Fatal("creator was removed")
+	}
+	var fileAs []string
+	for _, a := range c.Attr {
+		if a.Key == "file-as" {
+			fileAs = append(fileAs, a.FullKey()+"="+a.Value)
+		}
+	}
+	if len(fileAs) != 1 {
+		t.Errorf("file-as attributes = %v, want exactly one", fileAs)
+	}
+}
+
 // --- an edit has to land somewhere -------------------------------------------
 
 // TestEmptyElementIsWrittenInPlace covers a file whose only dc:description is

@@ -652,6 +652,169 @@ func TestSpecWhitespaceInTheVersionAttribute(t *testing.T) {
 	}
 }
 
+// --- the prefix attribute -----------------------------------------------------
+//
+// EPUB 3.3 D.1.4 (The prefix attribute):
+//   "EPUB creators MUST declare the prefix mappings they use in the prefix
+//    attribute of the package element."
+// D.1.5 reserves a set of prefixes (dcterms, marc, media, onix, rendition,
+// schema, a11y, xsd) that need no declaration, and says creators SHOULD NOT
+// override them — so a document MAY bind dcterms to a prefix of its own.
+//
+// A property is therefore a name in a namespace, not the literal string in the
+// attribute. Comparing the literal means a conforming last-modified date written
+// under a declared prefix is invisible to us, and §5.5.5 is a MUST for exactly
+// one: not seeing the existing one means adding a second, which turns a valid
+// package invalid. That is the rarest failure in this file and the only one that
+// breaks a file that arrived correct.
+
+func TestSpecDeclaredPrefixResolvesToTheSameProperty(t *testing.T) {
+	opf := strings.Replace(epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>The Title</dc:title>
+    <dc:creator id="c1">Ann Rand</dc:creator>
+    <dc:language>en</dc:language>
+    <meta property="dct:modified">2020-01-02T00:00:00Z</meta>`),
+		`version="3.0"`, `version="3.0" prefix="dct: http://purl.org/dc/terms/"`, 1)
+
+	path := buildEpub(t, opf)
+	want := "A New Title"
+	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Title: &want}); err != nil {
+		t.Fatal(err)
+	}
+
+	// §5.5.5: exactly one, whichever prefix spells it, and freshly written.
+	var modified []*etree.Element
+	for _, m := range metadata(t, path).SelectElements("meta") {
+		if p := m.SelectAttrValue("property", ""); p == "dct:modified" || p == "dcterms:modified" {
+			modified = append(modified, m)
+		}
+	}
+	if len(modified) != 1 {
+		t.Fatalf("last-modified properties = %d, want exactly one per §5.5.5", len(modified))
+	}
+	if modified[0].Text() == "2020-01-02T00:00:00Z" {
+		t.Errorf("last-modified = %q, want the time of this rewrite", modified[0].Text())
+	}
+}
+
+// TestSpecRedefinedReservedPrefixIsNotOurProperty is the other half of D.1.4.
+// A document MAY bind a reserved prefix to a vocabulary of its own — D.1.5's
+// "SHOULD NOT override" advises against it but admits circumstances where it is
+// legitimate, so the declaration says what the prefix means in this document and
+// a reader honours it.
+//
+// Honouring it is also the defence. This file's dcterms:modified is somebody
+// else's "modified" property, so it is not the §5.5.5 last-modified date: it
+// must not be read as one, and above all must not be overwritten with a
+// timestamp. The package genuinely has no last-modified date, so the edit adds
+// one — spelled with a prefix that resolves to the real DCMI vocabulary, since
+// "dcterms:" in this document does not.
+func TestSpecRedefinedReservedPrefixIsNotOurProperty(t *testing.T) {
+	opf := strings.Replace(epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>The Title</dc:title>
+    <dc:creator id="c1">Ann Rand</dc:creator>
+    <dc:language>en</dc:language>
+    <meta property="dcterms:modified">not-a-date</meta>`),
+		`version="3.0"`, `version="3.0" prefix="dcterms: http://example.com/vocab#"`, 1)
+
+	path := buildEpub(t, opf)
+	want := "A New Title"
+	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Title: &want}); err != nil {
+		t.Fatal(err)
+	}
+
+	md := metadata(t, path)
+	pkg := md.Parent()
+
+	// Their property is untouched: we do not own http://example.com/vocab#modified.
+	var theirs *etree.Element
+	for _, m := range md.SelectElements("meta") {
+		if m.SelectAttrValue("property", "") == "dcterms:modified" {
+			theirs = m
+		}
+	}
+	if theirs == nil {
+		t.Fatal("the document's own dcterms:modified was removed")
+	}
+	if theirs.Text() != "not-a-date" {
+		t.Errorf("their dcterms:modified = %q, want it untouched — it is not the DCMI property", theirs.Text())
+	}
+
+	// And a real last-modified date was added, under a prefix that resolves to
+	// the DCMI vocabulary in this document.
+	bindings := map[string]string{}
+	fields := strings.Fields(pkg.SelectAttrValue("prefix", ""))
+	for i := 0; i+1 < len(fields); i += 2 {
+		bindings[strings.TrimSuffix(fields[i], ":")] = fields[i+1]
+	}
+	var found bool
+	for _, m := range md.SelectElements("meta") {
+		p := m.SelectAttrValue("property", "")
+		prefix, local, ok := strings.Cut(p, ":")
+		if !ok || local != "modified" {
+			continue
+		}
+		if bindings[prefix] == "http://purl.org/dc/terms/" {
+			found = true
+			if _, err := time.Parse("2006-01-02T15:04:05Z", m.Text()); err != nil {
+				t.Errorf("%s = %q, want the extended UTC format", p, m.Text())
+			}
+		}
+	}
+	if !found {
+		t.Errorf("no last-modified property resolves to the DCMI vocabulary; prefix=%q",
+			pkg.SelectAttrValue("prefix", ""))
+	}
+}
+
+// TestSpecNewRefineSpellsItsSchemeAndProperty pins the write half of D.1.4 for
+// refinements. A role refine carries scheme="marc:relators", which is a prefixed
+// name like any other, so a document that rebinds marc turns it into a code list
+// we did not mean — the same failure the property side guards against.
+//
+// marc is reserved (D.1.5) and needs no declaration, so the fix cannot be to
+// declare it blindly: it has to be spelled with whatever prefix resolves to the
+// MARC vocabulary in this document.
+func TestSpecNewRefineSpellsItsSchemeAndProperty(t *testing.T) {
+	opf := strings.Replace(epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>The Title</dc:title>
+    <dc:creator id="c1">Ann Rand</dc:creator>
+    <dc:language>en</dc:language>`),
+		`version="3.0"`, `version="3.0" prefix="marc: http://example.com/not-marc#"`, 1)
+
+	path := buildEpub(t, opf)
+	authors := []model.Author{{Name: "Ann Rand"}, {Name: "Bo Li"}}
+	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Authors: &authors}); err != nil {
+		t.Fatal(err)
+	}
+
+	md := metadata(t, path)
+	bindings := map[string]string{}
+	fields := strings.Fields(md.Parent().SelectAttrValue("prefix", ""))
+	for i := 0; i+1 < len(fields); i += 2 {
+		bindings[strings.TrimSuffix(fields[i], ":")] = fields[i+1]
+	}
+	bindings["marc"] = bindings["marc"] // present or not, the doc's binding wins
+
+	for _, m := range md.SelectElements("meta") {
+		if m.SelectAttrValue("property", "") != "role" {
+			continue
+		}
+		scheme := m.SelectAttrValue("scheme", "")
+		if scheme == "" {
+			continue
+		}
+		prefix, _, _ := strings.Cut(scheme, ":")
+		url, declared := bindings[prefix]
+		if !declared {
+			url = "http://id.loc.gov/vocabulary/" // reserved, needs no declaration
+		}
+		if url != "http://id.loc.gov/vocabulary/" {
+			t.Errorf("role scheme = %q, which resolves to %q, not the MARC relator vocabulary", scheme, url)
+		}
+	}
+}
+
 // --- a metadata value is text, not a path component ---------------------------
 //
 // EPUB 3.3 §5.5.2 licenses exactly one transformation of a metadata value:

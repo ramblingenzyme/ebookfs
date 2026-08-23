@@ -13,12 +13,24 @@
 //   - A field with a write side is a type with get/set (title, authors, series,
 //     modified). A read-only field is a single Doc method (description,
 //     language, pubdate, identifiers, cover).
+//
 //   - A field says what a value should be and never where it is kept. Slots
 //     (slot.go) know where: an element's text, a refinement, an opf: attribute,
 //     a named meta. Under both sit the finders — metadata.go for the children of
-//     <metadata> and the parents and prefixes new ones need, refine.go for the
-//     EPUB 3 refinement binding — and under everything, the normalization in
-//     etree.go that every value this package hands out passes through.
+//     <metadata>, the parents new ones belong in, and the xmlns: prefix to give
+//     them; refine.go for the EPUB 3 refinement binding; vocab.go for the
+//     vocabulary a property name resolves in — and under everything, the
+//     normalization in etree.go that every value this package hands out passes
+//     through.
+//
+//     The package has two naming systems and they are not the same thing.
+//     metadata.go handles XML namespaces, declared with xmlns: and resolved by
+//     the parser; vocab.go handles property vocabularies, declared with the
+//     package element's prefix attribute and living inside attribute values.
+//     Each answers the same question for its own system — give me a prefix bound
+//     to this, declaring one if the document has none — which is ensureOPFPrefix
+//     on one side and spell/declarePrefix on the other.
+//
 //   - The EPUB 2 / EPUB 3 branch stays visible in each field. The two specs
 //     genuinely differ, and for the sort title v2 has no mechanism at all;
 //     hiding that behind a common writer would hide what matters.

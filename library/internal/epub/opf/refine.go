@@ -35,7 +35,7 @@ func refinesID(m *etree.Element, id string) bool {
 func (o *Doc) refineElements(id, property string) []*etree.Element {
 	var out []*etree.Element
 	for _, m := range o.elements("meta") {
-		if attr(m, "property") == property && refinesID(m, id) {
+		if o.sameProperty(attr(m, "property"), property) && refinesID(m, id) {
 			out = append(out, m)
 		}
 	}
@@ -44,12 +44,16 @@ func (o *Doc) refineElements(id, property string) []*etree.Element {
 
 // addRefine appends unconditionally, for properties where an existing value may
 // be one we do not own, such as a creator's second role.
+// Both property and scheme go through spell: each is a prefixed name, and a
+// document that rebound the vocabulary either resolves in would otherwise turn
+// our value into one from somebody else's. scheme matters most today — role refinements
+// carry marc:relators — since every property we write is default-vocabulary.
 func (o *Doc) addRefine(id, property, value, scheme string) {
 	m := o.metaParent().CreateElement("meta")
 	m.CreateAttr("refines", "#"+id)
-	m.CreateAttr("property", property)
+	m.CreateAttr("property", o.spell(property))
 	if scheme != "" {
-		m.CreateAttr("scheme", scheme)
+		m.CreateAttr("scheme", o.spell(scheme))
 	}
 	m.SetText(value)
 }

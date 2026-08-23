@@ -20,6 +20,10 @@ func (f seriesField) get() *model.SeriesRef {
 			Index: coll.refine("group-position").get(),
 		}
 	}
+	// calibre:series and its siblings are <meta name=…> values matched
+	// literally (metadata.go), not property names: the colon is part of a
+	// proprietary flat string, not a vocabulary prefix, so nothing here goes
+	// through spell.
 	name := f.o.namedMeta("calibre:series").get()
 	if name == "" {
 		return nil
@@ -103,7 +107,7 @@ func (f seriesField) collection() seriesCollection {
 			idPrefix: "ebookfs-series",
 			create: func() *etree.Element {
 				m := o.metaParent().CreateElement("meta")
-				m.CreateAttr("property", "belongs-to-collection")
+				m.CreateAttr("property", o.spell("belongs-to-collection"))
 				return m
 			},
 		},
@@ -146,7 +150,7 @@ func (s seriesCollection) markSeries() {
 }
 
 func (f seriesField) isSeriesCollection(m *etree.Element) bool {
-	return attr(m, "property") == "belongs-to-collection" &&
+	return f.o.sameProperty(attr(m, "property"), "belongs-to-collection") &&
 		text(f.unschemedType(attr(m, "id"))) == "series"
 }
 
