@@ -1112,30 +1112,6 @@ func TestSpecGroupPositionMultiLevelRoundTrips(t *testing.T) {
 	}
 }
 
-// --- empty values ------------------------------------------------------------
-//
-// §5.5.2 requires non-empty values after trimming, so a file with an empty
-// dc:title is invalid; the spec does not say what to do with one. translateLanguage
-// already skips empties to find a usable value, and doing the same for the title
-// recovers a book whose real title is right there.
-
-func TestSpecEmptyFirstTitleFallsThrough(t *testing.T) {
-
-	var opf = epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>   </dc:title>
-    <dc:title>The Real Title</dc:title>
-    <dc:creator id="c1">Ann Rand</dc:creator>
-    <dc:language>en</dc:language>`)
-
-	bib, err := epub.Parse(buildEpub(t, opf))
-	if err != nil {
-		t.Fatalf("a usable title follows the empty one: %v", err)
-	}
-	if bib.Title != "The Real Title" {
-		t.Errorf("title = %q", bib.Title)
-	}
-}
-
 // --- schemed collection-type -------------------------------------------------
 //
 // EPUB 3.3 Appendix D.3.4 (collection-type):

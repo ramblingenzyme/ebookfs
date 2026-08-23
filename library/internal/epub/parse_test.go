@@ -407,6 +407,59 @@ func TestParseToleratesMimetypeWhitespace(t *testing.T) {
 	}
 }
 
+// TestParseDistinguishesMissingFromUndeclared covers what getMetadataPath's
+// `first` variable exists for, and nothing else does: telling a container that
+// names a package document we cannot find from one that names none at all.
+//
+// The two errors send a reader to different places — a broken archive versus a
+// container that never pointed at an OPF — and the distinction survives only
+// because `first` is kept separate from the path being probed. Collapsing them
+// into one variable also breaks TestMultipleRootfilesKobo, but that test passes
+// for a package that *is* found, so it cannot catch the errors themselves.
+func TestParseDistinguishesMissingFromUndeclared(t *testing.T) {
+	for _, tc := range []struct {
+		name, container string
+		want            error
+	}{
+		{
+			name: "declared but absent from the archive",
+			container: `<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/nowhere.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`,
+			want: ErrRootfileMissing,
+		},
+		{
+			name: "no rootfile of the package media type",
+			container: `<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/x-something-else"/>
+  </rootfiles>
+</container>`,
+			want: ErrNoRootfile,
+		},
+		{
+			name: "no rootfiles at all",
+			container: `<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles></rootfiles>
+</container>`,
+			want: ErrNoRootfile,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeEpub(t, withContainer(baseEntries(opf3), tc.container))
+			_, err := Parse(path)
+			if !errors.Is(err, tc.want) {
+				t.Errorf("err = %v, want %v", err, tc.want)
+			}
+		})
+	}
+}
+
 // Kobo epubs sometimes declare several <rootfile> entries where only one
 // exists; the absent ones must be skipped on both the read and write paths.
 func TestMultipleRootfilesKobo(t *testing.T) {

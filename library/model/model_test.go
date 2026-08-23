@@ -36,6 +36,46 @@ func assertHasFieldError(t *testing.T, err error, field, msgSubstr string) {
 	t.Errorf("expected an error on field %q containing %q, got %v", field, msgSubstr, *ve)
 }
 
+// TestPathSafe pins the contract every caller that builds a name depends on.
+// Bib values are stored as the epub wrote them (EPUB 3.3 §5.5.2), so anything
+// a file can carry arrives here: store.canonicalDir and the 9P entry names are
+// the only thing between a title like ".." and a path that leaves the library.
+//
+// Exercised through store and fs today, each testing its own concern, so the
+// rules themselves — and the two trims that surprise — are stated here.
+func TestPathSafe(t *testing.T) {
+	for _, tc := range []struct {
+		name, in, want string
+	}{
+		{"ordinary text is untouched", "The Hobbit", "The Hobbit"},
+		{"slash would split a component", "Either/Or", "Either-Or"},
+		{"every slash, not just the first", "a/b/c", "a-b-c"},
+
+		// The traversal guards. filepath.Join would walk out of the library root
+		// on the first and collapse into it on the second.
+		{"parent directory", "..", "_"},
+		{"current directory", ".", "_"},
+		{"nothing but dots", "...", "_"},
+		{"nothing but spaces", "   ", "_"},
+		{"empty", "", "_"},
+		{"slashes alone become dashes, which are a usable name", "//", "--"},
+
+		// Trims that change a real title. Both match what naming.Sanitize did
+		// before this moved out of the epub parser.
+		{"trailing dot is trimmed", "Ph.D.", "Ph.D"},
+		{"leading dot is trimmed", ".hidden", "hidden"},
+		{"inner dots are kept", "R.U.R.", "R.U.R"},
+		{"surrounding spaces are trimmed", "  Title  ", "Title"},
+		{"inner spaces are kept", "A Tale", "A Tale"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := PathSafe(tc.in); got != tc.want {
+				t.Errorf("PathSafe(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestValidateStatus(t *testing.T) {
 	book := &Book{}
 	for _, tc := range []struct {

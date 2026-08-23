@@ -1,7 +1,6 @@
 // Package epub_test drives the package from the outside, through Rewrite and
-// Parse only. The internal tests reach for editOPF and the element helpers,
-// which pins them to how the OPF is written today; these pin what an edit is
-// allowed to do to a file, which is the part that must not change.
+// Parse only, and pins what an edit is allowed to do to a file — the part that
+// must not change.
 //
 // The rules under test:
 //
@@ -21,10 +20,12 @@ package epub_test
 
 import (
 	"bytes"
+	"os"
 	"slices"
 	"strings"
 	"testing"
 	"testing/synctest"
+	"time"
 
 	"github.com/beevik/etree"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
@@ -359,6 +360,68 @@ func TestRewriteIsIdempotent(t *testing.T) {
 					}
 				})
 			})
+		}
+	}
+}
+
+// TestRewriteIsIdempotentOnARebindingDocument is the corpus test's blind spot:
+// every fixture above leaves the reserved prefixes alone, so no fixture ever
+// takes an edit twice on a document where our own property is spelled
+// differently from the way we would write it fresh.
+//
+// What keeps that stable is sameProperty on the *read* side. The first edit
+// declares dcterms2 and writes dcterms2:modified; every later edit has to
+// recognise that element as ours, or propertyMeta would miss it and mint
+// another — dcterms3, dcterms4 — growing the package element and leaving a
+// trail of unread modified metas, one per save. The failure is cumulative,
+// which is what makes it worth its own test.
+//
+// The foreign property is checked on every pass for the same reason: recognising
+// ours must not start meaning we recognise theirs. spell's reuse branch is a
+// different rule and is covered directly in opf/vocab_test.go, since it does not
+// run here at all — the element is found rather than created after the first
+// edit. Distinct titles, not a repeat, so each pass is a real edit.
+func TestRewriteIsIdempotentOnARebindingDocument(t *testing.T) {
+	opf := strings.Replace(epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>The Title</dc:title>
+    <dc:creator id="c1">Ann Rand</dc:creator>
+    <dc:language>en</dc:language>
+    <meta property="dcterms:modified">not-a-date</meta>`),
+		`version="3.0"`, `version="3.0" prefix="dcterms: http://example.com/vocab#"`, 1)
+
+	path := buildEpub(t, opf)
+	var first string
+	for i, title := range []string{"One", "Two", "Three"} {
+		if _, err := epub.Rewrite(path, book(t, path), model.Edits{Title: &title}); err != nil {
+			t.Fatalf("edit %d: %v", i+1, err)
+		}
+
+		md := metadata(t, path)
+		declared := md.Parent().SelectAttrValue("prefix", "")
+		if i == 0 {
+			first = declared
+		} else if declared != first {
+			t.Fatalf("edit %d grew the prefix attribute:\n first: %s\n  now: %s", i+1, first, declared)
+		}
+
+		var modified int
+		for _, m := range md.SelectElements("meta") {
+			if strings.HasSuffix(m.SelectAttrValue("property", ""), ":modified") {
+				modified++
+			}
+		}
+		// Theirs, untouched, plus exactly one of ours.
+		if modified != 2 {
+			t.Fatalf("edit %d left %d modified properties, want 2", i+1, modified)
+		}
+		var theirs *etree.Element
+		for _, m := range md.SelectElements("meta") {
+			if m.SelectAttrValue("property", "") == "dcterms:modified" {
+				theirs = m
+			}
+		}
+		if theirs == nil || theirs.Text() != "not-a-date" {
+			t.Fatalf("edit %d touched the document's own dcterms:modified: %v", i+1, theirs)
 		}
 	}
 }
@@ -699,6 +762,136 @@ func TestUnprefixedFileAsIsUpdatedNotDuplicated(t *testing.T) {
 	}
 	if len(fileAs) != 1 {
 		t.Errorf("file-as attributes = %v, want exactly one", fileAs)
+	}
+}
+
+// TestRewriteSkipsTheWriteWhenNothingChanges pins the optimization in Rewrite:
+// when the edits leave the OPF byte-identical there is nothing to replace, so
+// the zip is not rebuilt. Every other test here checks returned values, and the
+// returned Bib is the same either way — the file is re-parsed regardless — so a
+// regression that rebuilt the archive on every edit would pass all of them.
+//
+// Mind what counts as a no-op. A title edit carrying no sort title clears the
+// file-as refine the file had, so "the same title" is only unchanged when the
+// sort title comes with it; the third case below is the one that catches this.
+//
+// mtime rather than bytes: a faithful rebuild can produce identical bytes, so
+// only the timestamp shows whether the file was written at all. Set to a fixed
+// past time first so the check needs no sleep.
+func TestRewriteSkipsTheWriteWhenNothingChanges(t *testing.T) {
+	past := time.Date(2020, 1, 2, 3, 4, 5, 0, time.UTC)
+
+	for _, tc := range []struct {
+		name    string
+		e       model.Edits
+		rewrite bool
+	}{
+		{"description already equal", model.Edits{Description: new("Original description.")}, false},
+		{"language already equal", model.Edits{Language: new("en")}, false},
+		{"title with its existing sort title", model.Edits{Title: new("Original Title"), SortTitle: new("Title, Original")}, false},
+		{"a title edit that drops the sort title is a change", model.Edits{Title: new("Original Title")}, true},
+		{"a different description is a change", model.Edits{Description: new("Something else")}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := buildEpub(t, richOPF3)
+			if err := os.Chtimes(path, past, past); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := epub.Rewrite(path, book(t, path), tc.e); err != nil {
+				t.Fatal(err)
+			}
+			fi, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if rewritten := !fi.ModTime().Equal(past); rewritten != tc.rewrite {
+				t.Errorf("rewritten = %v, want %v", rewritten, tc.rewrite)
+			}
+		})
+	}
+}
+
+// --- recovering from an empty value ------------------------------------------
+//
+// §5.5.2 requires non-empty values after trimming, so an empty dc:title, creator
+// or date makes the file invalid — and there the spec stops. What a reader does
+// with one is not stated anywhere, so recovering rather than rejecting is our
+// rule, which is why these live here and not with the conformance assertions.
+//
+// The rule: skip the empty value and use the next usable one. It costs nothing
+// when a real value follows, and where nothing usable remains the book still
+// fails loudly rather than silently arriving without an author.
+
+// TestEmptyDateIsSkipped completes the family. An empty
+// dc:date is invalid, and skipping it matters more than skipping an empty title
+// or creator does: pubdate returns a date only when exactly one untagged
+// dc:date carries a value, so counting an empty one would make it two and leave
+// the book with no publication date at all rather than the one it has.
+func TestEmptyDateIsSkipped(t *testing.T) {
+	bib, err := epub.Parse(buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>The Title</dc:title>
+    <dc:creator id="c1">Ann Rand</dc:creator>
+    <dc:language>en</dc:language>
+    <dc:date>   </dc:date>
+    <dc:date>2020-01-02</dc:date>`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bib.Pubdate != "2020-01-02" {
+		t.Errorf("pubdate = %q, want the one date that carries a value", bib.Pubdate)
+	}
+}
+
+// TestEmptyCreatorIsSkippedNotFatal is the creator half of the same rule,
+// and the pair of branches it covers is the whole argument for skipping rather
+// than rejecting: a stray empty creator costs nothing, and a file with no
+// readable author at all still fails loudly.
+//
+// Rejecting the first case would lose an entire book over an element carrying
+// no information, which is the opposite of what the empty title above does.
+func TestEmptyCreatorIsSkippedNotFatal(t *testing.T) {
+	t.Run("skipped alongside a usable one", func(t *testing.T) {
+		bib, err := epub.Parse(buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>The Title</dc:title>
+    <dc:creator id="c1">Ann Rand</dc:creator>
+    <dc:creator id="c2">   </dc:creator>
+    <dc:language>en</dc:language>`)))
+		if err != nil {
+			t.Fatalf("a usable author sits beside the empty creator: %v", err)
+		}
+		if got := authorNames(bib); !slices.Equal(got, []string{"Ann Rand"}) {
+			t.Errorf("authors = %v, want [Ann Rand]", got)
+		}
+	})
+
+	t.Run("no readable author is an error", func(t *testing.T) {
+		_, err := epub.Parse(buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>The Title</dc:title>
+    <dc:creator id="c1">   </dc:creator>
+    <dc:language>en</dc:language>`)))
+		if err == nil {
+			t.Fatal("a book whose only creator is empty parsed anyway")
+		}
+		if !strings.Contains(err.Error(), "no authors") {
+			t.Errorf("err = %v, want it to say there are no authors", err)
+		}
+	})
+}
+
+func TestEmptyFirstTitleFallsThrough(t *testing.T) {
+
+	var opf = epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>   </dc:title>
+    <dc:title>The Real Title</dc:title>
+    <dc:creator id="c1">Ann Rand</dc:creator>
+    <dc:language>en</dc:language>`)
+
+	bib, err := epub.Parse(buildEpub(t, opf))
+	if err != nil {
+		t.Fatalf("a usable title follows the empty one: %v", err)
+	}
+	if bib.Title != "The Real Title" {
+		t.Errorf("title = %q", bib.Title)
 	}
 }
 
