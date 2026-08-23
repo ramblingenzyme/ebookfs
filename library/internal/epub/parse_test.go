@@ -1,10 +1,13 @@
 package epub
 
 import (
+	"archive/zip"
 	"bytes"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -404,6 +407,65 @@ func TestParseToleratesMimetypeWhitespace(t *testing.T) {
 	p := writeEpub(t, withMimetype(baseEntries(opf3), "application/epub+zip\n"))
 	if _, err := Parse(p); err != nil {
 		t.Fatalf("Parse rejected a whitespace-padded mimetype: %v", err)
+	}
+}
+
+// TestRewriteReplacesOnlyTheResolvedDuplicate is the write half of the
+// duplicate-entry rule. Lookup was unified on first-wins, but writeUpdatedEpub
+// matches its replacement map by name against every entry it copies, so both
+// copies of a duplicated package document were being overwritten.
+//
+// That is not merely untidy: the copy nobody resolved is somebody else's data,
+// and the archive is contractually copied verbatim. Only the entry the lookup
+// chose is ours to rewrite.
+func TestRewriteReplacesOnlyTheResolvedDuplicate(t *testing.T) {
+	first := strings.Replace(opf3, "Original Title", "First Copy", 1)
+	second := strings.Replace(opf3, "Original Title", "Second Copy", 1)
+
+	path := writeEpub(t, []entry{
+		{name: "mimetype", data: []byte(mimetypeValue), store: true},
+		{name: "META-INF/container.xml", data: []byte(containerXML)},
+		{name: "OEBPS/content.opf", data: []byte(first)},
+		{name: "OEBPS/content.opf", data: []byte(second)},
+		{name: "OEBPS/cover.jpg", data: coverBytes},
+		{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
+	})
+
+	if _, err := writeBib(path, model.Edits{Title: new("Edited Title")}); err != nil {
+		t.Fatal(err)
+	}
+
+	zrc, err := zip.OpenReader(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer zrc.Close()
+
+	var copies []string
+	for _, f := range zrc.File {
+		if f.Name != "OEBPS/content.opf" {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch {
+		case bytes.Contains(b, []byte("Edited Title")):
+			copies = append(copies, "edited")
+		case bytes.Contains(b, []byte("Second Copy")):
+			copies = append(copies, "second, untouched")
+		default:
+			copies = append(copies, "other")
+		}
+	}
+	if want := []string{"edited", "second, untouched"}; !slices.Equal(copies, want) {
+		t.Errorf("content.opf copies = %v, want %v", copies, want)
 	}
 }
 

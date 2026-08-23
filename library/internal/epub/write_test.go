@@ -128,6 +128,38 @@ func TestWriteBibPreservesContainerLayout(t *testing.T) {
 	}
 }
 
+// TestWriteBibDeduplicatesMimetype pins the one place the rewrite deliberately
+// does not copy verbatim. A source with two "mimetype" entries is malformed —
+// OCF requires exactly one, first and stored — so emitting both would preserve
+// the defect in the very respect the hoist exists to fix.
+func TestWriteBibDeduplicatesMimetype(t *testing.T) {
+	mt := entry{name: mimetypePath, data: []byte(mimetypeValue), store: true}
+	entries := append([]entry{mt}, baseEntries(opf3)[1:]...)
+	entries = append(entries, mt)
+
+	path := writeEpub(t, entries)
+	if _, err := writeBib(path, model.Edits{Title: new("Another Title")}); err != nil {
+		t.Fatal(err)
+	}
+
+	zrc, err := zip.OpenReader(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer zrc.Close()
+
+	var n int
+	for _, f := range zrc.File {
+		if f.Name == mimetypePath {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("mimetype entries = %d, want exactly one", n)
+	}
+	assertOCFHeader(t, path, "after the write")
+}
+
 // TestWriteBibHoistsMimetypeToTheFront pins the OCF §4.3.3 layout of what we
 // write. The two input orders are not two features — they show the guarantee is
 // unconditional rather than inherited from the source, which is the only thing
@@ -393,6 +425,44 @@ func TestWriteBibRefusesEncryptedOPF(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3, entry{name: "META-INF/encryption.xml", data: []byte(enc)}))
 	if _, err := writeBib(path, model.Edits{Title: new("Hack")}); err == nil {
 		t.Fatal("expected refusal on encrypted OPF, got nil")
+	}
+}
+
+// TestWriteBibRefusesEncryptedOPFDeclaredAsAURL covers the other half of
+// CipherReference/@URI. It is a URL attribute, so a package document at
+// "OEBPS/my book.opf" is declared as "OEBPS/my%20book.opf" while the zip entry
+// holds the decoded name — the same rule rootfilePath already applies to the
+// container's full-path.
+//
+// Undecoded, the algorithm map is keyed by a name no entry has, isEncrypted
+// finds nothing, and the edit proceeds to rewrite a genuinely encrypted package
+// document. The refusal is the whole protection, so missing it is worse than
+// misreading a value.
+func TestWriteBibRefusesEncryptedOPFDeclaredAsAURL(t *testing.T) {
+	const container = `<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/my%20book.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`
+	enc := `<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" xmlns:enc="http://www.w3.org/2001/04/xmlenc#">
+  <enc:EncryptedData>
+    <enc:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes256-cbc"/>
+    <enc:CipherData><enc:CipherReference URI="OEBPS/my%20book.opf"/></enc:CipherData>
+  </enc:EncryptedData>
+</encryption>`
+
+	path := writeEpub(t, []entry{
+		{name: "mimetype", data: []byte(mimetypeValue), store: true},
+		{name: "META-INF/container.xml", data: []byte(container)},
+		{name: "META-INF/encryption.xml", data: []byte(enc)},
+		{name: "OEBPS/my book.opf", data: []byte(opf3)}, // literal space
+		{name: "OEBPS/cover.jpg", data: coverBytes},
+		{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
+	})
+
+	if _, err := writeBib(path, model.Edits{Title: new("Hack")}); err == nil {
+		t.Fatal("edited an encrypted package document declared with a percent-encoded URI")
 	}
 }
 

@@ -7,7 +7,9 @@ import (
 	"image"
 	_ "image/jpeg" // register JPEG decoder for image.DecodeConfig
 	_ "image/png"  // register PNG decoder for image.DecodeConfig
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf"
@@ -44,7 +46,15 @@ func Rewrite(epubPath string, b *model.Book, e model.Edits) (model.Bib, error) {
 	}
 	defer zrc.Close()
 
-	replace, err := createReplace(zrc, b, e)
+	a, err := openArchive(&zrc.Reader)
+	if err != nil {
+		return model.Bib{}, err
+	}
+	if err := a.validate(); err != nil {
+		return model.Bib{}, err
+	}
+
+	replace, err := createReplace(a, b, e)
 	if err != nil {
 		return model.Bib{}, err
 	}
@@ -60,15 +70,15 @@ func Rewrite(epubPath string, b *model.Book, e model.Edits) (model.Bib, error) {
 		return *bib, nil
 	}
 
-	bib, err := rewriteEpub(epubPath, zrc, replace)
+	bib, err := rewriteEpub(epubPath, a, replace)
 	if err != nil {
 		return model.Bib{}, err
 	}
 	return *bib, nil
 }
 
-func createReplace(zrc *zip.ReadCloser, b *model.Book, e model.Edits) (map[string][]byte, error) {
-	enc, err := readEncryption(&zrc.Reader)
+func createReplace(a *archive, b *model.Book, e model.Edits) (map[string][]byte, error) {
+	enc, err := a.readEncryption()
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +96,7 @@ func createReplace(zrc *zip.ReadCloser, b *model.Book, e model.Edits) (map[strin
 		if got != want {
 			return nil, fmt.Errorf("cover image is %s but the epub's cover entry %q is %s; a matching format is required (no transcoding)", got, b.CoverPath, want)
 		}
-		if findEntry(&zrc.Reader, b.CoverPath) == nil {
+		if !a.has(b.CoverPath) {
 			return nil, fmt.Errorf("cover not found in epub: %s", b.CoverPath)
 		}
 		if enc.isEncrypted(b.CoverPath) {
@@ -96,14 +106,11 @@ func createReplace(zrc *zip.ReadCloser, b *model.Book, e model.Edits) (map[strin
 	}
 
 	if e.HasBibEdits() {
-		opfEntry, err := opfPath(&zrc.Reader)
-		if err != nil {
-			return nil, err
-		}
+		opfEntry := a.opf
 		if enc.isEncrypted(opfEntry) {
 			return nil, fmt.Errorf("refusing to edit: package document %q is encrypted", opfEntry)
 		}
-		opfBytes, err := readEntry(&zrc.Reader, opfEntry)
+		opfBytes, err := a.read(opfEntry)
 		if err != nil {
 			return nil, err
 		}
@@ -137,4 +144,54 @@ func coverFormat(coverPath string) string {
 	default:
 		return ""
 	}
+}
+
+// rewriteEpub creates a temporary epub in the same directory as epubPath whose
+// entries named in replace are swapped for the given bytes and whose every
+// other entry is copied verbatim, then atomically replaces the original.
+// Returns the parsed Bib on success. On any failure the temp file is cleaned up.
+//
+// Faithfulness rules (matching the OCF container requirements calibre's
+// safe_replace also honours):
+//   - the "mimetype" entry is written first and copied byte-for-byte, preserving
+//     its STORED (uncompressed, no-extra-field) form so magic-byte sniffers keep
+//     recognising the file;
+//   - all untouched entries are copied raw (no recompression), preserving order,
+//     modtime, and method;
+//   - every key in replace must match an existing entry, so a mistargeted edit
+//     fails loudly instead of silently dropping.
+func rewriteEpub(epubPath string, a *archive, replace map[string][]byte) (*model.Bib, error) {
+	dir := filepath.Dir(epubPath)
+	tmp, err := os.CreateTemp(dir, ".ebookfs-*.epub.tmp")
+	if err != nil {
+		return nil, err
+	}
+
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	defer tmp.Close()
+
+	zw := zip.NewWriter(tmp)
+	if err := a.writeTo(zw, replace); err != nil {
+		return nil, err
+	}
+
+	if err := zw.Close(); err != nil {
+		return nil, err
+	}
+	if err := tmp.Sync(); err != nil {
+		return nil, err
+	}
+	if err := tmp.Close(); err != nil {
+		return nil, err
+	}
+
+	// Verify by re-parsing before we touch the original. A blanked title, dropped
+	// authors, or any structural breakage fails here and the original survives.
+	book, err := Parse(tmpPath)
+	if err != nil {
+		return nil, fmt.Errorf("rewritten epub failed validation: %w", err)
+	}
+
+	return book, os.Rename(tmpPath, epubPath)
 }
