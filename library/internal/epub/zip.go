@@ -20,11 +20,10 @@ var (
 )
 
 const (
-	containerPath  = "META-INF/container.xml"
-	metadataType   = "application/oebps-package+xml"
-	mimetypePath   = "mimetype"
-	mimetypeValue  = "application/epub+zip"
-	encryptionPath = "META-INF/encryption.xml"
+	containerPath = "META-INF/container.xml"
+	metadataType  = "application/oebps-package+xml"
+	mimetypePath  = "mimetype"
+	mimetypeValue = "application/epub+zip"
 )
 
 // archive is the seam between reading an epub and writing one. It owns how an
@@ -236,17 +235,6 @@ func rootfilePath(fullPath string) string {
 	return decoded
 }
 
-type encryptionXML struct {
-	Data []struct {
-		Method struct {
-			Algorithm string `xml:"Algorithm,attr"`
-		} `xml:"EncryptionMethod"`
-		Ref struct {
-			URI string `xml:"URI,attr"`
-		} `xml:"CipherData>CipherReference"`
-	} `xml:"EncryptedData"`
-}
-
 // readEncryption parses META-INF/encryption.xml if present. A missing file means
 // nothing is encrypted (nil info); a malformed file is reported as an error
 // rather than silently treated as "no encryption", since proceeding could
@@ -262,46 +250,5 @@ func (a *archive) readEncryption() (*encryptionInfo, error) {
 	}
 	defer rc.Close()
 
-	var doc encryptionXML
-	if err := xml.NewDecoder(rc).Decode(&doc); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", encryptionPath, err)
-	}
-
-	info := &encryptionInfo{algorithms: make(map[string]string, len(doc.Data))}
-	for _, d := range doc.Data {
-		if d.Ref.URI != "" && d.Method.Algorithm != "" {
-			// Keyed by the zip entry name isEncrypted will be asked about.
-			// CipherReference/@URI is a URL like the container's full-path, so a
-			// space arrives as %20 and the raw value would key the map by a name
-			// no entry has — silently reporting an encrypted entry as readable.
-			info.algorithms[rootfilePath(d.Ref.URI)] = d.Method.Algorithm
-		}
-	}
-	return info, nil
-}
-
-// obfuscationAlgorithms are the two font-obfuscation schemes the EPUB ecosystem
-// uses. They appear in encryption.xml exactly like real DRM but are not actually
-// encryption — calibre deliberately treats them as readable, and so do we, so a
-// book with obfuscated fonts stays editable.
-var obfuscationAlgorithms = map[string]bool{
-	"http://ns.adobe.com/pdf/enc#RC":     true,
-	"http://www.idpf.org/2008/embedding": true,
-}
-
-// encryptionInfo records which zip entries are listed in META-INF/encryption.xml
-// and under which algorithm, so a real-DRM entry can be distinguished from a
-// merely font-obfuscated one (see obfuscationAlgorithms).
-type encryptionInfo struct {
-	algorithms map[string]string // zip entry name -> EncryptionMethod algorithm
-}
-
-// isEncrypted reports whether name is protected by real encryption (as opposed
-// to font obfuscation). An entry absent from encryption.xml is not encrypted.
-func (e *encryptionInfo) isEncrypted(name string) bool {
-	if e == nil {
-		return false
-	}
-	algo, ok := e.algorithms[name]
-	return ok && !obfuscationAlgorithms[algo]
+	return newEncryptionInfo(rc)
 }
