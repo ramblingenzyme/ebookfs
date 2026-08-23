@@ -54,8 +54,3 @@ func (c *Container) PackagePaths() []string {
 	}
 	return out
 }
-
-// readEncryption parses META-INF/encryption.xml if present. A missing file means
-// nothing is encrypted (nil info); a malformed file is reported as an error
-// rather than silently treated as "no encryption", since proceeding could
-// corrupt a protected entry.
