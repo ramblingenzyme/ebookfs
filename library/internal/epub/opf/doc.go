@@ -2,11 +2,10 @@
 // a book's metadata. The zip container around it belongs to the parent epub
 // package.
 //
-// A field is one piece of metadata ebookfs owns. Each holds that field's whole
-// encoding, and reading (get) and writing (set) both go through it so the two
-// cannot disagree. Book-level validation and presentation defaults
-// stay out of the fields and live in Bib, so set(get()) never invents metadata
-// the file did not carry.
+// A field is one piece of metadata ebookfs owns. Reading (get) and writing (set)
+// both go through it so the two cannot disagree. Book-level validation and
+// presentation defaults live in Bib instead, so set(get()) never invents
+// metadata the file did not carry.
 //
 // Three rules keep the fields readable:
 //
@@ -14,26 +13,21 @@
 //     modified). A read-only field is a single Doc method (description,
 //     language, pubdate, identifiers, cover).
 //
-//   - A field says what a value should be and never where it is kept. Slots
-//     (slot.go) know where: an element's text, a refinement, an opf: attribute,
-//     a named meta. Under both sit the finders — metadata.go for the children of
-//     <metadata>, the parents new ones belong in, and the xmlns: prefix to give
-//     them; refine.go for the EPUB 3 refinement binding; vocab.go for the
-//     vocabulary a property name resolves in — and under everything, the
-//     normalization in etree.go that every value this package hands out passes
-//     through.
+//   - A field says what a value should be, never where it is kept. Slots
+//     (slot.go) know where: element text, a refinement, an opf: attribute, a
+//     named meta. Under them sit the finders — metadata.go for the children of
+//     <metadata> and the xmlns: prefixes new ones need, refine.go for the EPUB 3
+//     refinement binding, vocab.go for the vocabulary a property name resolves
+//     in.
 //
-//     The package has two naming systems and they are not the same thing.
-//     metadata.go handles XML namespaces, declared with xmlns: and resolved by
-//     the parser; vocab.go handles property vocabularies, declared with the
-//     package element's prefix attribute and living inside attribute values.
-//     Each answers the same question for its own system — give me a prefix bound
-//     to this, declaring one if the document has none — which is ensureOPFPrefix
-//     on one side and spell/declarePrefix on the other.
+//     Those last two are different naming systems: xmlns: prefixes are resolved
+//     by the XML parser, vocabulary prefixes live inside attribute values and
+//     are bound by the package element's prefix attribute. Each has a
+//     get-or-declare step — ensureNSPrefix and spell/declarePrefix.
 //
-//   - The EPUB 2 / EPUB 3 branch stays visible in each field. The two specs
-//     genuinely differ, and for the sort title v2 has no mechanism at all;
-//     hiding that behind a common writer would hide what matters.
+//   - The EPUB 2 / EPUB 3 branch stays visible in each field. The specs
+//     genuinely differ, and v2 has no sort-title mechanism at all; hiding that
+//     behind a common writer would hide what matters.
 package opf
 
 import (
@@ -70,14 +64,10 @@ func Parse(b []byte) (*Doc, error) {
 
 func (o *Doc) Bytes() ([]byte, error) { return o.doc.WriteToBytes() }
 
-// epub3 decides how metadata is written: refinements for v3, opf: attributes
-// and calibre metas for v2. The version attribute is "3.0"/"3.1"/"2.0".
-//
-// It goes through attr for the same reason everything else does: a wrapped or
-// padded version would otherwise read as EPUB 2, and getting this one wrong
-// costs the §5.5.5 dcterms:modified update and injects calibre metas into a
-// package that never had any. A file with no version attribute at all is
-// malformed either way, and EPUB 2 is the safer guess for one.
+// epub3 decides how metadata is written: refinements for v3, opf: attributes and
+// calibre metas for v2. Through attr, since a padded version would otherwise read
+// as EPUB 2 — which costs the §5.5.5 dcterms:modified update and injects calibre
+// metas. No version attribute at all is malformed; EPUB 2 is the safer guess.
 func (o *Doc) epub3() bool {
 	return strings.HasPrefix(attr(o.pkg, "version"), "3")
 }

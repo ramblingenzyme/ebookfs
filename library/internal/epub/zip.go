@@ -26,9 +26,8 @@ const (
 // epub; anything else — a missing file, a permission problem, a disk error — is
 // the caller's to see verbatim, since it says nothing about the file's contents.
 //
-// Shared because each entry point opens the file itself and each had grown its
-// own rule, so the same broken file was three different errors depending on
-// which way in the caller took.
+// Shared by every entry point, so one broken file is one error however the
+// caller got here.
 func notEpub(path string, err error) error {
 	if errors.Is(err, zip.ErrFormat) {
 		return fmt.Errorf("%w: %s: %w", ErrNotEpub, path, err)
@@ -36,22 +35,15 @@ func notEpub(path string, err error) error {
 	return err
 }
 
-// archive is the seam between reading an epub and writing one. It owns how an
-// entry is located and what the container is checked for, so a read and the
-// write that follows it cannot answer those differently — the same reason a
-// field in the opf package never touches etree directly.
+// archive owns how an entry is located, so a read and the write that follows it
+// cannot resolve a duplicated name, the package document's path, or "present"
+// differently.
 //
-// Every lookup that diverged and had to be fixed lived here: duplicate entries
-// resolving last-wins on one side and first-wins on the other, the package
-// document's path, the rootfile media-type. They diverged because each caller
-// brought its own lookup; the container resolver even took one as a parameter.
+// files indexes zr.File rather than replacing it: writeTo walks the slice in
+// order and copies every entry, duplicates included.
 //
-// files indexes zr.File rather than replacing it. writeTo walks the
-// slice in order and copies every entry, duplicates included, so a map alone
-// would silently drop entries the rewrite is required to preserve.
-//
-// The archive does not close anything: Parse drops it at once, Rewrite holds it
-// for the copy, and Reader keeps it for the life of the handle.
+// Closing is the caller's — Parse drops the archive, Rewrite holds it for the
+// copy, Reader for the life of the handle.
 type archive struct {
 	zr    *zip.Reader
 	files map[string]*zip.File // index over zr.File; first wins
@@ -110,9 +102,9 @@ func (a *archive) read(name string) ([]byte, error) {
 	return io.ReadAll(rc)
 }
 
-// validate enforces the OCF requirement that the archive declares the epub
-// media type. Unlike calibre we reject rather than warn: a wrong mimetype
-// usually means a non-epub zip, such as a mis-added .cbz.
+// validate enforces the OCF mimetype declaration. Unlike calibre we reject
+// rather than warn: a wrong mimetype usually means a non-epub zip, such as a
+// mis-added .cbz.
 func (a *archive) validate() error {
 	if !a.has(mimetypePath) {
 		return fmt.Errorf("%w: missing mimetype declaration", ErrNotEpub)
@@ -127,14 +119,11 @@ func (a *archive) validate() error {
 	return nil
 }
 
-// metadataPath returns the package document's path from container.xml, and
-// guarantees the archive holds an entry under that name — every caller relies on
-// that rather than re-checking.
+// metadataPath returns the package document's path, and guarantees the archive
+// holds an entry under it — callers rely on that rather than re-checking.
 //
-// Some Kobo epubs declare several <rootfile> entries where only one exists in
-// the zip, so missing ones are skipped and the first that exists is chosen. That
-// skipping is why the lookup is the archive's own: a caller supplying its own
-// notion of "present" is how the read and write paths came to disagree.
+// Some Kobo epubs declare several <rootfile> entries where only one exists, so
+// missing ones are skipped and the first present one wins.
 func (a *archive) metadataPath() (string, error) {
 	f := a.file(ocf.ContainerPath)
 	if f == nil {

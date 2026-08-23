@@ -10,12 +10,11 @@
 //   - an edit is idempotent, so applying it twice does not accumulate
 //     duplicates or churn the file further.
 //
-// Past the table-driven tests that carry those three rules, the rest of this
-// file pins choices rather than rules: a calibre convention we follow, a
-// divergence we took deliberately, a known-wrong behaviour held still until it
-// can be changed on purpose. Those are ours to revisit, and each says in its
-// own comment what would make it right to change or delete. The conformance
-// assertions — the ones the specs make for us — live in spec_ext_test.go.
+// Past the table-driven tests carrying those rules, the rest of the file pins
+// choices rather than rules: a calibre convention, a deliberate divergence, a
+// known-wrong behaviour held still. Those are ours to revisit, and each says in
+// its own comment what would justify changing it. Conformance assertions live in
+// spec_ext_test.go.
 package epub_test
 
 import (
@@ -363,22 +362,17 @@ func TestRewriteIsIdempotent(t *testing.T) {
 }
 
 // TestRewriteIsIdempotentOnARebindingDocument is the corpus test's blind spot:
-// every fixture above leaves the reserved prefixes alone, so no fixture ever
-// takes an edit twice on a document where our own property is spelled
-// differently from the way we would write it fresh.
+// no fixture above rebinds a prefix, so none takes a second edit on a document
+// where our property is spelled differently from how we would write it fresh.
 //
-// What keeps that stable is sameProperty on the *read* side. The first edit
-// declares dcterms2 and writes dcterms2:modified; every later edit has to
-// recognise that element as ours, or propertyMeta would miss it and mint
-// another — dcterms3, dcterms4 — growing the package element and leaving a
-// trail of unread modified metas, one per save. The failure is cumulative,
-// which is what makes it worth its own test.
+// sameProperty on the read side is what keeps it stable. The first edit declares
+// dcterms2; every later one must recognise that element as ours or mint
+// dcterms3, dcterms4 — growing the package element once per save. The foreign
+// property is checked each pass for the converse: recognising ours must not
+// start meaning we recognise theirs.
 //
-// The foreign property is checked on every pass for the same reason: recognising
-// ours must not start meaning we recognise theirs. spell's reuse branch is a
-// different rule and is covered directly in opf/vocab_test.go, since it does not
-// run here at all — the element is found rather than created after the first
-// edit. Distinct titles, not a repeat, so each pass is a real edit.
+// spell's reuse branch never runs here (the element is found, not created) and
+// is covered in opf/vocab_test.go.
 func TestRewriteIsIdempotentOnARebindingDocument(t *testing.T) {
 	opf := strings.Replace(epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>The Title</dc:title>
@@ -426,15 +420,13 @@ func TestRewriteIsIdempotentOnARebindingDocument(t *testing.T) {
 
 // --- packages carrying both series encodings ---------------------------------
 //
-// Nothing forbids a version="2.0" package from containing a
-// belongs-to-collection meta — OPF 2.0 §2.2.10 lets <meta> carry anything — and
-// the reader prefers the EPUB 3 collection over the proprietary calibre metas
-// whatever the package version says. A file can therefore hold the series twice
-// over, in two encodings that disagree.
+// A version="2.0" package may carry a belongs-to-collection meta (OPF 2.0
+// §2.2.10 lets <meta> carry anything), and the reader prefers the EPUB 3
+// collection whatever the version says — so a file can hold the series twice, in
+// two encodings that disagree.
 //
-// The rule is to write every encoding the file already uses, plus the one its
-// version implies: an edit no reader can miss, and nothing the file's author put
-// there is deleted. Neither test below lets the two encodings drift apart.
+// The rule: write every encoding the file already uses, plus the one its version
+// implies. Neither test below lets the two drift apart.
 
 func TestEPUB2SeriesEditUpdatesBothEncodings(t *testing.T) {
 	path := buildEpub(t, epub2(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
@@ -674,18 +666,14 @@ func TestEPUB2CreatorLosesAStaleSortName(t *testing.T) {
 }
 
 // TestEPUB3CreatorWithALegacySortNameTakesTheEdit covers an EPUB 3 package whose
-// creators still carry the EPUB 2 opf:file-as — a v2 file upgraded in place, or
-// a producer that emits both. Nothing forbids carrying both, and no spec says
-// which one a reader should prefer; what it cannot do is disagree with itself.
+// creators still carry the EPUB 2 opf:file-as — common in v2 files upgraded in
+// place. Carrying both is allowed and no spec says which wins; disagreeing with
+// itself is not.
 //
-// The read prefers the attribute (field_authors.go), the v3 write only touches
-// the refinement, so the edit lands somewhere the read will never look. The file
-// ends up asserting two different sort names for one creator and reporting the
-// stale one, and every later edit rewrites a refinement nothing reads.
-//
-// titleField.set already guards exactly this hazard for the title, which is why
-// this is an oversight rather than a decision. The EPUB 2 half is
-// TestEPUB2CreatorLosesAStaleSortName above.
+// The read prefers the attribute, the v3 write only touches the refinement, so
+// the edit lands where the read never looks and the stale value is reported
+// forever. titleField.set guards the same hazard for the title. The EPUB 2 half
+// is TestEPUB2CreatorLosesAStaleSortName above.
 func TestEPUB3CreatorWithALegacySortNameTakesTheEdit(t *testing.T) {
 	opf := strings.Replace(epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>The Title</dc:title>
@@ -765,14 +753,12 @@ func TestUnprefixedFileAsIsUpdatedNotDuplicated(t *testing.T) {
 
 // --- recovering from an empty value ------------------------------------------
 //
-// §5.5.2 requires non-empty values after trimming, so an empty dc:title, creator
-// or date makes the file invalid — and there the spec stops. What a reader does
-// with one is not stated anywhere, so recovering rather than rejecting is our
-// rule, which is why these live here and not with the conformance assertions.
+// §5.5.2 makes an empty dc:title, creator or date invalid, and there the spec
+// stops — what a reader does with one is unstated, so recovering rather than
+// rejecting is ours, which is why these are not with the conformance assertions.
 //
-// The rule: skip the empty value and use the next usable one. It costs nothing
-// when a real value follows, and where nothing usable remains the book still
-// fails loudly rather than silently arriving without an author.
+// Skip the empty value, use the next usable one. Where nothing usable remains
+// the book still fails loudly.
 
 // TestEmptyDateIsSkipped completes the family. An empty
 // dc:date is invalid, and skipping it matters more than skipping an empty title
@@ -1110,18 +1096,13 @@ func TestUnmodelledMetadataSurvives(t *testing.T) {
 // --- a collection-type we do not own ------------------------------------------
 
 // TestSchemedCollectionTypeSurvivesASeriesEdit pins that a series edit leaves a
-// schemed collection-type alone. The reader resolves collection-type to the
-// first *unschemed* refinement, because series/set are only defined "when no
-// scheme is specified" (D.3.4); the writer resolves it the same way, so a
-// collection-type drawn from someone else's code list is left as it was.
-// Overwriting it with "series" would be the same class of loss as the dropped
-// creator refinements this file exists for.
+// schemed collection-type alone. Both sides resolve to the first *unschemed*
+// refinement, since series/set are only defined "when no scheme is specified"
+// (D.3.4), so a value from someone else's code list is left as it was.
 //
-// This is ours, not conformance: D.3.4 gives collection-type cardinality "zero
-// or one", so the two refinements the fixture needs cannot occur in a conforming
-// file and the spec never has to arbitrate between them. We handle it anyway.
-// Two refinements are what it takes to show, which is why the corpus above never
-// caught it.
+// Ours, not conformance: D.3.4 gives collection-type cardinality "zero or one",
+// so the two refinements this needs cannot occur in a conforming file. We handle
+// it anyway. The corpus above never produces two, which is why it is here.
 func TestSchemedCollectionTypeSurvivesASeriesEdit(t *testing.T) {
 	path := buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>The Title</dc:title>

@@ -7,8 +7,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/xml"
 )
 
-// The whole etree-facing surface. Everything else in this package reads and
-// writes the document through these.
+// The whole etree-facing surface: everything else goes through these.
 
 // text is nil-safe: primary returns nil for an absent element and every caller
 // wants "" for that.
@@ -19,9 +18,8 @@ func text(e *etree.Element) string {
 	return xml.Collapse(e.Text())
 }
 
-// attr collapses too. Nothing upstream does it for us: XML 1.0 §3.3.3 would
-// normalize a newline in an attribute value to a space, but encoding/xml, which
-// etree wraps, does not implement it, so a tab or newline arrives verbatim.
+// attr collapses: etree wraps encoding/xml, which does not apply XML 1.0
+// §3.3.3, so a tab or newline in an attribute value arrives verbatim.
 func attr(e *etree.Element, name string) string {
 	return xml.Collapse(e.SelectAttrValue(name, ""))
 }
@@ -34,9 +32,8 @@ func detach(e *etree.Element) {
 	}
 }
 
-// qualify joins an XML namespace prefix to a local name: the dcPrefix or
-// ensureOPFPrefix kind, never a vocabulary prefix. vocab.go's spell is the
-// vocabulary-side twin.
+// qualify joins an xmlns: prefix to a local name — never a vocabulary prefix,
+// which is vocab.go's spell.
 func qualify(prefix, tag string) string {
 	if prefix == "" {
 		return tag

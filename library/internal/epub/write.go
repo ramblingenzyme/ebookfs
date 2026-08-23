@@ -16,19 +16,16 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-// Rewrite applies the changes in e to the epub at epubPath atomically. Every
-// refusal check runs before any file is written, so the original is untouched
-// on error. It returns the book's authoritative Bib, read from the epub, except
-// on the one path that never opens it: an e with no bib or cover edits returns
-// b.Bib untouched.
+// Rewrite applies e to the epub at epubPath atomically. Every refusal runs
+// before anything is written, so the original survives an error. It returns the
+// Bib read back from the file, except when e has no edits at all and b.Bib is
+// returned untouched.
 //
-// A bib edit asking for what the package document already says skips the zip
-// rebuild but is still re-parsed, so the answer comes from the file either way.
-// Refusals apply before that is known: an edit is checked against the epub
-// before it is found to be a no-op.
+// An edit asking for what the file already says skips the zip rebuild but is
+// still re-parsed, and refusals apply before that is known.
 //
-// b is used only for validation and for locating the cover entry; its EpubPath
-// is not read, so this package never resolves a path against the store root.
+// b is used only for validation and to locate the cover entry; its EpubPath is
+// not read, so this package never resolves against the store root.
 func Rewrite(epubPath string, b *model.Book, e model.Edits) (model.Bib, error) {
 	if !e.HasCoverEdit() && !e.HasBibEdits() {
 		return b.Bib, nil
@@ -146,20 +143,15 @@ func coverFormat(coverPath string) string {
 	}
 }
 
-// rewriteEpub creates a temporary epub in the same directory as epubPath whose
-// entries named in replace are swapped for the given bytes and whose every
-// other entry is copied verbatim, then atomically replaces the original.
-// Returns the parsed Bib on success. On any failure the temp file is cleaned up.
+// rewriteEpub writes a temp epub beside epubPath with the named entries swapped,
+// then renames it over the original. The temp file is cleaned up on any failure.
 //
-// Faithfulness rules (matching the OCF container requirements calibre's
-// safe_replace also honours):
-//   - the "mimetype" entry is written first and copied byte-for-byte, preserving
-//     its STORED (uncompressed, no-extra-field) form so magic-byte sniffers keep
-//     recognising the file;
-//   - all untouched entries are copied raw (no recompression), preserving order,
-//     modtime, and method;
-//   - every key in replace must match an existing entry, so a mistargeted edit
-//     fails loudly instead of silently dropping.
+// Faithfulness rules, matching what calibre's safe_replace honours:
+//   - mimetype is written first and copied byte-for-byte, keeping its STORED
+//     form so magic-byte sniffers still recognise the file;
+//   - untouched entries are copied raw, preserving order, modtime and method;
+//   - every key in replace must match an entry, so a mistargeted edit fails
+//     loudly rather than silently dropping.
 func rewriteEpub(epubPath string, a *archive, replace map[string][]byte) (*model.Bib, error) {
 	dir := filepath.Dir(epubPath)
 	tmp, err := os.CreateTemp(dir, ".ebookfs-*.epub.tmp")

@@ -37,8 +37,9 @@ func tinyPNG(t *testing.T) []byte {
 	return buf.Bytes()
 }
 
-// readEntryFromFile returns the entry's bytes and whether it was present. No
-// caller has ever used the header it used to return as a third value.
+// readEntryFromFile returns the entry's bytes and whether it was present.
+// readEntry in helpers_ext_test.go is the same lookup for the common case where
+// absence should fail the test.
 func readEntryFromFile(t *testing.T, path, name string) ([]byte, bool) {
 	t.Helper()
 	zrc, err := zip.OpenReader(path)
@@ -151,17 +152,14 @@ func TestWriteBibDeduplicatesMimetype(t *testing.T) {
 }
 
 // TestWriteBibHoistsMimetypeToTheFront pins the OCF §4.3.3 layout of what we
-// write. The two input orders are not two features — they show the guarantee is
-// unconditional rather than inherited from the source, which is the only thing
-// that makes it a guarantee. Every other fixture puts mimetype first, so without
-// the second row the hoist could be deleted with nothing failing.
+// write. Both input orders are run to show the guarantee is unconditional rather
+// than inherited: every other fixture puts mimetype first, so without the second
+// row the hoist could be deleted with nothing failing.
 //
-// The assertion is that byte layout rather than the entry index, because it is
-// what actually breaks: magic-byte sniffers and file(1) read "mimetype" at
-// offset 30 and its content at 38. One check covers the position, the STORED
-// method, and the MUST NOT on extra fields — a compressed entry or an added
-// extra field moves the content off 38. Parse's own validation cannot catch any
-// of it: checkMimetype reads the entry by name and never looks at where it sits.
+// Asserting the byte layout rather than the entry index, since that is what
+// breaks — sniffers read "mimetype" at offset 30 and its content at 38, so one
+// check covers position, STORED, and the MUST NOT on extra fields. validate
+// reads the entry by name and never looks at where it sits.
 func TestWriteBibHoistsMimetypeToTheFront(t *testing.T) {
 	rest := []entry{
 		{name: "META-INF/container.xml", data: []byte(containerXML)},
@@ -418,16 +416,12 @@ func TestWriteBibRefusesEncryptedOPF(t *testing.T) {
 	}
 }
 
-// TestWriteBibRefusesEncryptedOPFDeclaredAsAURL covers the other half of
-// CipherReference/@URI. It is a URL attribute, so a package document at
-// "OEBPS/my book.opf" is declared as "OEBPS/my%20book.opf" while the zip entry
-// holds the decoded name — the same rule rootfilePath already applies to the
-// container's full-path.
+// TestWriteBibRefusesEncryptedOPFDeclaredAsAURL covers the decoded half of
+// CipherReference/@URI: a URL attribute, so "OEBPS/my book.opf" is declared
+// "OEBPS/my%20book.opf" while the zip entry holds the decoded name.
 //
-// Undecoded, the algorithm map is keyed by a name no entry has, isEncrypted
-// finds nothing, and the edit proceeds to rewrite a genuinely encrypted package
-// document. The refusal is the whole protection, so missing it is worse than
-// misreading a value.
+// Undecoded, the map is keyed by a name no entry has, IsEncrypted finds nothing,
+// and the edit rewrites a genuinely encrypted package document.
 func TestWriteBibRefusesEncryptedOPFDeclaredAsAURL(t *testing.T) {
 	const container = `<?xml version="1.0"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -1081,15 +1075,13 @@ func TestWriteBibSortTitleKeepsCalibreMetaInStepForEpub3(t *testing.T) {
 }
 
 // TestFailedValidationLeavesTheOriginal covers rewriteEpub's last line of
-// defence: it re-parses the rewritten epub before renaming it over the
-// original, so a write that would produce an unreadable book is abandoned with
-// the original untouched. Nothing else exercises that path.
+// defence: it re-parses the rewritten epub before renaming, so a write that
+// would produce an unreadable book is abandoned. Nothing else exercises it.
 //
-// The trigger is a sort-title-only edit against a package with no <dc:title>.
-// Writing a refinement needs an element to bind to, so one is minted empty, and
-// an empty title is not a book. A titleless package is malformed — both specs
-// require one, and Parse rejects it — so this is reachable only if the file
-// changed on disk after it was indexed.
+// The trigger is a sort-title-only edit on a package with no <dc:title>: the
+// refinement needs an element to bind to, so one is minted empty, and an empty
+// title is not a book. Reachable only if the file changed on disk after being
+// indexed, since Parse rejects a titleless package.
 func TestFailedValidationLeavesTheOriginal(t *testing.T) {
 	opf := opf3
 	for _, drop := range []string{

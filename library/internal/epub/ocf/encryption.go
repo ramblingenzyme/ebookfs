@@ -8,14 +8,10 @@ import (
 	epubxml "github.com/ramblingenzyme/ebookfs/library/internal/epub/xml"
 )
 
-// Reading META-INF/encryption.xml, which an epub uses for two unrelated things:
-// real DRM, and font obfuscation. They are spelled identically — an EncryptedData
-// entry naming a zip entry and an algorithm — so telling them apart is a matter
-// of recognising the two obfuscation algorithms by URI.
-//
-// That distinction is the whole point of this file. Treating obfuscation as DRM
-// would make every book with an embedded font uneditable; treating DRM as
-// readable would let an edit corrupt a protected entry.
+// Reading META-INF/encryption.xml, which covers two unrelated things spelled
+// identically: real DRM and font obfuscation. Telling them apart is the point.
+// Treating obfuscation as DRM makes every book with an embedded font
+// uneditable; treating DRM as readable lets an edit corrupt a protected entry.
 
 const EncryptionPath = "META-INF/encryption.xml"
 
@@ -24,19 +20,17 @@ type encryptionXML struct {
 		Method struct {
 			Algorithm epubxml.AttrText `xml:"Algorithm,attr"`
 		} `xml:"EncryptionMethod"`
-		// Keep the nesting. The > path works because it sits on this element
-		// field; an attr-mode tag containing > is read as a literal attribute
-		// name and would silently match nothing.
+		// Keep the nesting: > works on an element field, but an attr-mode tag
+		// containing it is read as a literal attribute name and matches nothing.
 		Ref struct {
 			URI epubxml.AttrURL `xml:"URI,attr"`
 		} `xml:"CipherData>CipherReference"`
 	} `xml:"EncryptedData"`
 }
 
-// obfuscationAlgorithms are the two font-obfuscation schemes the EPUB ecosystem
-// uses. They appear in encryption.xml exactly like real DRM but are not actually
-// encryption — calibre deliberately treats them as readable, and so do we, so a
-// book with obfuscated fonts stays editable.
+// obfuscationAlgorithms are the two font-obfuscation schemes. They appear like
+// real DRM but are not encryption; calibre treats them as readable and so do we,
+// so a book with obfuscated fonts stays editable.
 var obfuscationAlgorithms = map[string]bool{
 	"http://ns.adobe.com/pdf/enc#RC":     true,
 	"http://www.idpf.org/2008/embedding": true,

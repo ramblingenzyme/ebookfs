@@ -215,13 +215,10 @@ func TestParseResolvesEncodedCoverHref(t *testing.T) {
 
 // TestParseResolvesEncodedRootfilePath is the container-side half of the test
 // above. §4.2.6.3.1.3 makes full-path "a path-relative-scheme-less-URL string",
-// so a package document at "OEBPS/My Book.opf" is declared as "My%20Book.opf"
-// and the zip entry it names holds the decoded form.
-//
-// Undecoded, the entry lookup misses and Parse reports ErrRootfileMissing — the
-// book is not merely mis-read but unopenable, blamed on a rootfile that is
-// present. The write path resolves the OPF through the same function, so an
-// edit has to find it too.
+// so "OEBPS/My Book.opf" is declared "My%20Book.opf" while the entry holds the
+// decoded name. Undecoded, the book is unopenable and blamed on a rootfile that
+// is present. The edit path resolves through the same function, so it is checked
+// too.
 func TestParseResolvesEncodedRootfilePath(t *testing.T) {
 	const container = `<?xml version="1.0"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -283,13 +280,9 @@ func TestParseCollapsesRootfileMediaType(t *testing.T) {
 }
 
 // TestParseAndWriteAgreeOnADuplicateEntry pins that a read and the edit that
-// follows it resolve a duplicated entry name the same way. A zip may carry two
-// entries under one name — badly repacked epubs do — and the two sides had
-// opposite rules: Parse built its filemap by assignment, so the last copy won,
-// while findEntry on the write side returns the first.
-//
-// Disagreeing means an edit is computed from one copy's metadata and reported
-// from the other's, which is invisible until the two copies differ. Either rule
+// follows resolve a duplicated entry name alike — badly repacked epubs do carry
+// two entries under one name. Disagreeing means an edit computed from one copy
+// and reported from the other, invisible until the copies differ. Either rule
 // would do; what matters is that it is one rule.
 func TestParseAndWriteAgreeOnADuplicateEntry(t *testing.T) {
 	first := strings.Replace(opf3, "Original Title", "First Copy", 1)
@@ -327,14 +320,11 @@ func TestParseAndWriteAgreeOnADuplicateEntry(t *testing.T) {
 }
 
 // TestParseRootfilePathEdgeCases covers what decoding full-path must not break.
-// §4.2.6.3.1.3 makes it a path-relative-scheme-less-URL, so %20 decodes — but
-// url.Parse would also read "C:/..." as a scheme and truncate at '#' or '?',
-// silently naming an entry the archive does not hold. PathUnescape decodes the
-// escapes and touches nothing else.
+// %20 decodes, but url.Parse would also read "C:/..." as a scheme and truncate
+// at '#' or '?'; PathUnescape touches nothing but the escapes.
 //
-// The literal case is the other direction: a producer that wrote an unencoded
-// name into both container.xml and the zip has an entry whose name really does
-// contain '%20', so the raw value has to be tried when the decoded one misses.
+// The literal rows are the other direction: an entry whose name really does
+// contain '%20', so the raw value is tried when the decoded one misses.
 func TestParseRootfilePathEdgeCases(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
@@ -373,18 +363,14 @@ func TestParseRootfilePathEdgeCases(t *testing.T) {
 
 // --- container & mimetype validation ---------------------------------------
 
-// TestEntryPointsAgreeOnABadEpub pins that the three ways into this package
-// classify a failure to open the archive the same way. Each opens the file
-// itself, so each had its own rule: Parse mapped zip.ErrFormat to ErrNotEpub,
-// OpenReader mapped every zip error to it, and Rewrite mapped nothing.
+// TestEntryPointsAgreeOnABadEpub pins that the three ways in classify a failure
+// to open the archive alike — each opens the file itself, so each could grow its
+// own rule. Callers tell "not a book" from "the disk is broken" with errors.Is
+// on ErrNotEpub.
 //
-// A caller distinguishing "this is not a book" from "the disk is broken" does it
-// with errors.Is on ErrNotEpub, and got the right answer from two paths and the
-// wrong one from the third.
-//
-// The missing-file row matters as much as the malformed ones: a path that does
-// not exist says nothing about the contents, so labelling it ErrNotEpub would be
-// the obvious wrong fix.
+// The missing-file row matters as much as the malformed ones: a nonexistent path
+// says nothing about contents, so labelling it ErrNotEpub is the obvious wrong
+// fix.
 func TestEntryPointsAgreeOnABadEpub(t *testing.T) {
 	good := writeEpub(t, baseEntries(opf3))
 	raw, err := os.ReadFile(good)
@@ -533,15 +519,13 @@ func TestRewriteReplacesOnlyTheResolvedDuplicate(t *testing.T) {
 	}
 }
 
-// TestParseDistinguishesMissingFromUndeclared covers what getMetadataPath's
-// `first` variable exists for, and nothing else does: telling a container that
-// names a package document we cannot find from one that names none at all.
+// TestParseDistinguishesMissingFromUndeclared is what metadataPath's `first`
+// variable exists for: telling a container that names a package document we
+// cannot find from one that names none. A broken archive and a container that
+// never pointed at an OPF send a reader to different places.
 //
-// The two errors send a reader to different places — a broken archive versus a
-// container that never pointed at an OPF — and the distinction survives only
-// because `first` is kept separate from the path being probed. Collapsing them
-// into one variable also breaks TestMultipleRootfilesKobo, but that test passes
-// for a package that *is* found, so it cannot catch the errors themselves.
+// TestMultipleRootfilesKobo cannot catch this — it exercises a package that *is*
+// found, so it never reaches either error.
 func TestParseDistinguishesMissingFromUndeclared(t *testing.T) {
 	for _, tc := range []struct {
 		name, container string

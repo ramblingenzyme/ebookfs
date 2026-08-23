@@ -2,15 +2,11 @@ package opf
 
 import "github.com/beevik/etree"
 
-// Finding metadata elements and creating them: which children of <metadata> a
-// tag means, which of them a field acts on, where a new one belongs, and what
-// prefix to give it. Reading and writing are kept side by side here so the two
-// cannot drift — a write has to land on the element the matching read returned.
+// Finding metadata elements and creating them. Reading and writing sit side by
+// side so a write lands on the element the matching read returned.
 //
-// The deprecated OPF 2.0 §2.2 wrappers are the reason most of this is not a
-// one-liner. They are an EPUB 2 mechanism, but they decide where every element
-// is found and created regardless of version, so they live here rather than
-// with the version-specific encodings in the fields.
+// The deprecated OPF 2.0 §2.2 wrappers are why most of this is not a one-liner:
+// they decide where every element is found and created regardless of version.
 
 const (
 	opfNamespace = "http://www.idpf.org/2007/opf"
@@ -18,11 +14,8 @@ const (
 )
 
 // elements returns the metadata children with the given tag, flattening the
-// dc-metadata/x-metadata wrappers so no field has to know about them.
-// dcParent and metaParent are the write half of the same rule.
-//
-// Matching is on etree's Tag, the local name with the prefix held separately,
-// so it matches whatever prefix the document binds Dublin Core to.
+// dc-metadata/x-metadata wrappers; dcParent and metaParent are the write half.
+// Matching is on etree's Tag, the local name, so any dc prefix matches.
 func (o *Doc) elements(tag string) []*etree.Element {
 	var out []*etree.Element
 	for _, c := range o.md.ChildElements() {
@@ -51,10 +44,9 @@ func (o *Doc) dcParent() *etree.Element {
 }
 
 // metaParent creates the x-metadata wrapper when the file uses dc-metadata
-// without one. §2.2 binds what we add as much as what we found: "all other
-// metadata elements, if any, must go into x-metadata". A producer with no non-DC
-// metadata to write has no reason to emit the wrapper, so this is the common
-// shape of such a file rather than an odd one.
+// without one — the common shape, since a producer with no non-DC metadata has
+// no reason to emit it. §2.2: "all other metadata elements, if any, must go
+// into x-metadata".
 func (o *Doc) metaParent() *etree.Element {
 	if w := o.md.SelectElement("x-metadata"); w != nil {
 		return w
@@ -65,12 +57,10 @@ func (o *Doc) metaParent() *etree.Element {
 	return o.md.CreateElement("x-metadata")
 }
 
-// primary is the element a read and a write of a field both mean: the first
-// with a non-empty value (§5.5.3.1.2 for the title), or the first present when
-// they are all empty, since a write has to land somewhere.
-//
-// Empty values are skipped because §5.5.2 requires non-empty ones: an empty
-// element is a malformed file, and the usable value after it beats no book.
+// primary is the element a read and a write of a field both mean: the first with
+// a non-empty value (§5.5.3.1.2 for the title), or the first present if all are
+// empty, since a write has to land somewhere. §5.5.2 requires non-empty values,
+// so skipping an empty one recovers a book rather than losing it.
 func (o *Doc) primary(tag string) *etree.Element {
 	els := o.elements(tag)
 	for _, e := range els {
@@ -96,34 +86,27 @@ func (o *Doc) namedMetaElements(name string) []*etree.Element {
 	return out
 }
 
-// dcPrefix takes the Dublin Core xmlns: prefix from the always-present
-// <dc:title>, so a new dc element matches the existing declaration. Defaults to
-// "dc". An XML namespace prefix, not the vocabulary kind vocab.go resolves.
+// dcPrefix takes the Dublin Core xmlns: prefix from <dc:title>, so a new dc
+// element matches the existing declaration.
 func (o *Doc) dcPrefix() string {
 	if els := o.elements("title"); len(els) > 0 {
 		return els[0].Space
 	}
-	// No dc element to copy, so fall back to the declarations rather than
-	// assuming "dc" is bound — asserting a prefix the document never declared
-	// would put a new element in no namespace at all.
+	// Nothing to copy, so use the declarations: an undeclared prefix would put
+	// the new element in no namespace at all.
 	return o.ensureNSPrefix(dcNamespace, "dc")
 }
 
-// ensureOPFPrefix returns the xmlns: prefix bound to the OPF namespace,
-// declaring xmlns:opf if the document only has it as the default namespace.
-// Attributes cannot use a default namespace, so opf:role and opf:file-as need a
-// prefix. vocab.go's spell is this same get-or-declare step for the other
-// naming system.
+// ensureOPFPrefix returns the xmlns: prefix bound to the OPF namespace. opf:role
+// and opf:file-as need one because attributes cannot use a default namespace.
 func (o *Doc) ensureOPFPrefix() string { return o.ensureNSPrefix(opfNamespace, "opf") }
 
 // ensureNSPrefix returns the xmlns: prefix bound to ns, declaring preferred if
-// the document binds it to nothing. The vocabulary-side twin is vocab.go's
-// spell/declarePrefix, which does the same for the other naming system.
+// the document binds none. vocab.go's spell is the vocabulary-side twin.
 //
-// Only <package>'s own attributes are scanned. A declaration further down —
-// OPF 2.0 §2.2's example puts xmlns:opf on <metadata> — is not found, so a
-// redundant second declaration is added at the top. Valid, and harmless because
-// both bind the same URI.
+// Only <package>'s attributes are scanned, so a declaration further down (OPF
+// 2.0 §2.2's example puts xmlns:opf on <metadata>) gets a redundant second one
+// at the top. Harmless: both bind the same URI.
 func (o *Doc) ensureNSPrefix(ns, preferred string) string {
 	for i := range o.pkg.Attr {
 		a := o.pkg.Attr[i]

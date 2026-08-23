@@ -174,10 +174,8 @@ const UnknownAuthor = "Unknown"
 //     named ".." makes filepath.Join walk out of the library root and a book is
 //     written outside it. "." is the same bug one level up.
 //
-// Trimming is what naming.Sanitize did before this moved out of the epub
-// parser; dropping it was how the escape got in. Unlike Sanitize this cannot
-// fail: a value that trims away entirely becomes "_" rather than an error, so
-// callers need no fallback.
+// This cannot fail: a value that trims away entirely becomes "_" rather than an
+// error, so callers need no fallback.
 func PathSafe(s string) string {
 	out := strings.Trim(strings.ReplaceAll(s, "/", "-"), ". \t")
 	if out == "" {

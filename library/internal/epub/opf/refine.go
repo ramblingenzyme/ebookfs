@@ -8,13 +8,12 @@ import (
 )
 
 // EPUB 3 refinements: a <meta property="..."> carrying a value for another
-// element, bound to it by id. The EPUB 2 name/content encoding that predates
-// them is in epub2.go.
+// element, bound to it by id. The EPUB 2 name/content encoding is in
+// metadata.go.
 
 // refinesID reports whether m refines the element with the given id. Per §5.3.6
-// both "#c1" and "content.opf#c1" target c1, and a value with no fragment
-// refines the document rather than an element in it. An empty id matches
-// nothing: every meta without a refines attribute would otherwise equal it.
+// both "#c1" and "content.opf#c1" target c1; no fragment refines the document
+// itself. An empty id matches nothing, or every meta without a refines would.
 //
 // ponytail: a path naming a different document binds to a same-named local id
 // instead of failing. Revisit if a real epub refines across files; the fix is
@@ -43,16 +42,12 @@ func (o *Doc) refineElements(id, property string) []*etree.Element {
 }
 
 // addRefine appends unconditionally, for properties where an existing value may
-// be one we do not own, such as a creator's second role.
-// Both property and scheme go through spell: each is a prefixed name, and a
-// document that rebound the vocabulary either resolves in would otherwise turn
-// our value into one from somebody else's. scheme matters most today — role refinements
-// carry marc:relators — since every property we write is default-vocabulary.
-// Two choices §5.3.6 leaves open, both deliberate: the refinement is appended at
-// the end of its parent rather than placed beside the element it refines, since
-// the binding is by id and position carries no meaning; and refines is written
-// fragment-only, never path-qualified, though a reader must accept both (see
-// TestSpecPathQualifiedRefines).
+// be one we do not own, such as a creator's second role. property and scheme are
+// spelled, since a rebound vocabulary would otherwise make them someone else's.
+//
+// Two choices §5.3.6 leaves open, both deliberate: appended at the end rather
+// than beside the element it refines, since the binding is by id; and refines
+// written fragment-only, though a reader must accept path-qualified too.
 func (o *Doc) addRefine(id, property, value, scheme string) {
 	m := o.metaParent().CreateElement("meta")
 	m.CreateAttr("refines", "#"+id)

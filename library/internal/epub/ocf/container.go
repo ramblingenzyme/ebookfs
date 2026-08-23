@@ -7,20 +7,17 @@ import (
 	epubxml "github.com/ramblingenzyme/ebookfs/library/internal/epub/xml"
 )
 
-// Reading META-INF/container.xml, the file that says where the package document
-// is. Everything here is about what the container declares; whether the archive
-// actually holds what it names is zip.go's question, and the two errors that
-// distinction produces land on opposite sides of it — ErrNoRootfile means the
-// file declared none, ErrRootfileMissing means it named one the zip lacks.
+// Reading META-INF/container.xml, which says where the package document is.
+// This is only what the container declares; whether the archive holds it is the
+// caller's question.
 
 const (
 	ContainerPath = "META-INF/container.xml"
 	metadataType  = "application/oebps-package+xml"
 )
 
-// container is the entry point to the epub. Its rootfile elements point at the
-// package documents; an epub may declare more than one. It is never written, so
-// unlike the package document a struct is shape enough.
+// Container's rootfile elements point at the package documents; an epub may
+// declare more than one. Never written, so a struct is shape enough.
 type Container struct {
 	Rootfiles []*rootfile `xml:"rootfiles>rootfile"`
 }
@@ -38,12 +35,9 @@ func NewContainer(r io.Reader) (*Container, error) {
 	return &c, nil
 }
 
-// packagePaths returns every package document the container declares, in the
-// order they should be tried. Empty means none was declared at all.
-//
-// The field types carry the normalization and the decoded/raw fallback, so this
-// is only the selection rule: which declarations are package documents, and in
-// what order to try what each one names.
+// PackagePaths returns every package document declared, in the order to try
+// them. Empty means none was declared. The field types carry the normalization
+// and the decoded/raw fallback.
 func (c *Container) PackagePaths() []string {
 	var out []string
 	for _, rf := range c.Rootfiles {
