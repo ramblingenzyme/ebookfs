@@ -456,6 +456,84 @@ func TestWriteBibRefusesEncryptedOPFDeclaredAsAURL(t *testing.T) {
 	}
 }
 
+// Both values read from encryption.xml are XML attributes, which encoding/xml
+// does not normalize. A wrapped Algorithm should still be recognised as font
+// obfuscation (so the edit is allowed); a wrapped URI should still identify the
+// entry (so an encrypted OPF edit is refused).
+func TestEncryptionAttributesAreCollapsed(t *testing.T) {
+	t.Run("wrapped obfuscation algorithm still allows the edit", func(t *testing.T) {
+		enc := `<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" xmlns:enc="http://www.w3.org/2001/04/xmlenc#">
+  <enc:EncryptedData>
+    <enc:EncryptionMethod Algorithm="
+        http://www.idpf.org/2008/embedding
+      "/>
+    <enc:CipherData><enc:CipherReference URI="OEBPS/fonts/x.otf"/></enc:CipherData>
+  </enc:EncryptedData>
+</encryption>`
+		path := writeEpub(t, baseEntries(opf3,
+			entry{name: "META-INF/encryption.xml", data: []byte(enc)},
+			entry{name: "OEBPS/fonts/x.otf", data: []byte("obfuscated")},
+		))
+		if _, err := writeBib(path, model.Edits{Title: new("Fine")}); err != nil {
+			t.Errorf("font obfuscation with a wrapped algorithm blocked the edit: %v", err)
+		}
+	})
+
+	t.Run("wrapped URI still identifies the encrypted OPF", func(t *testing.T) {
+		enc := `<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" xmlns:enc="http://www.w3.org/2001/04/xmlenc#">
+  <enc:EncryptedData>
+    <enc:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes256-cbc"/>
+    <enc:CipherData><enc:CipherReference URI="
+        OEBPS/content.opf
+      "/></enc:CipherData>
+  </enc:EncryptedData>
+</encryption>`
+		path := writeEpub(t, baseEntries(opf3, entry{name: "META-INF/encryption.xml", data: []byte(enc)}))
+		if _, err := epub.Rewrite(path, book(t, path), model.Edits{Title: new("Hack")}); err == nil {
+			t.Error("edited an encrypted OPF whose URI was wrapped")
+		}
+	})
+}
+
+// TestWriteBibRefusesEncryptedEntryNamedLiterally is the fail-open half of the
+// URI rule. A producer that wrote an unencoded name into both encryption.xml and
+// the zip has an entry whose name really does contain "%20", so the decoded form
+// matches nothing and isEncrypted reports a genuinely encrypted entry as
+// readable — and createReplace refuses edits on the strength of that answer.
+//
+// packagePaths already guards the same producer for the container's full-path by
+// trying the decoded form and then the literal. This is that rule applied where
+// getting it wrong lets an edit rewrite encrypted content.
+func TestWriteBibRefusesEncryptedEntryNamedLiterally(t *testing.T) {
+	const container = `<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/a%20b.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`
+	enc := `<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" xmlns:enc="http://www.w3.org/2001/04/xmlenc#">
+  <enc:EncryptedData>
+    <enc:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes256-cbc"/>
+    <enc:CipherData><enc:CipherReference URI="OEBPS/a%20b.opf"/></enc:CipherData>
+  </enc:EncryptedData>
+</encryption>`
+
+	// The entry name contains the percent-encoding literally, so the raw value is
+	// what matches and the decoded one does not.
+	path := writeEpub(t, []entry{
+		{name: "mimetype", data: []byte(mimetypeValue), store: true},
+		{name: "META-INF/container.xml", data: []byte(container)},
+		{name: "META-INF/encryption.xml", data: []byte(enc)},
+		{name: "OEBPS/a%20b.opf", data: []byte(opf3)},
+		{name: "OEBPS/cover.jpg", data: coverBytes},
+		{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
+	})
+
+	if _, err := writeBib(path, model.Edits{Title: new("Hack")}); err == nil {
+		t.Fatal("edited an encrypted package document whose URI was written literally")
+	}
+}
+
 func TestWriteBibAllowsFontObfuscation(t *testing.T) {
 	// Font obfuscation looks like encryption but must not block metadata edits.
 	enc := `<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" xmlns:enc="http://www.w3.org/2001/04/xmlenc#">

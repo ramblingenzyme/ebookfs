@@ -23,7 +23,7 @@ func refinesID(m *etree.Element, id string) bool {
 	if id == "" {
 		return false
 	}
-	_, frag, ok := strings.Cut(Collapse(m.SelectAttrValue("refines", "")), "#")
+	_, frag, ok := strings.Cut(attr(m, "refines"), "#")
 	return ok && frag == id
 }
 

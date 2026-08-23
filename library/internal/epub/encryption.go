@@ -20,10 +20,13 @@ const encryptionPath = "META-INF/encryption.xml"
 type encryptionXML struct {
 	Data []struct {
 		Method struct {
-			Algorithm string `xml:"Algorithm,attr"`
+			Algorithm attrText `xml:"Algorithm,attr"`
 		} `xml:"EncryptionMethod"`
+		// Keep the nesting. The > path works because it sits on this element
+		// field; an attr-mode tag containing > is read as a literal attribute
+		// name and would silently match nothing.
 		Ref struct {
-			URI string `xml:"URI,attr"`
+			URI attrURL `xml:"URI,attr"`
 		} `xml:"CipherData>CipherReference"`
 	} `xml:"EncryptedData"`
 }
@@ -52,12 +55,17 @@ func newEncryptionInfo(r io.Reader) (*encryptionInfo, error) {
 
 	info := &encryptionInfo{algorithms: make(map[string]string, len(doc.Data))}
 	for _, d := range doc.Data {
-		if d.Ref.URI != "" && d.Method.Algorithm != "" {
-			// Keyed by the zip entry name isEncrypted will be asked about.
-			// CipherReference/@URI is a URL like the container's full-path, so a
-			// space arrives as %20 and the raw value would key the map by a name
-			// no entry has — silently reporting an encrypted entry as readable.
-			info.algorithms[rootfilePath(d.Ref.URI)] = d.Method.Algorithm
+		algo := string(d.Method.Algorithm)
+		if algo == "" {
+			continue
+		}
+		// Keyed under every name the URI could mean, because isEncrypted is
+		// asked about zip entry names and a producer may have written either
+		// form into both files.
+		for _, name := range d.Ref.URI.candidates() {
+			if name != "" {
+				info.algorithms[name] = algo
+			}
 		}
 	}
 	return info, nil

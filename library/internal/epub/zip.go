@@ -2,14 +2,10 @@ package epub
 
 import (
 	"archive/zip"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
 	"strings"
-
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf"
 )
 
 var (
@@ -20,8 +16,6 @@ var (
 )
 
 const (
-	containerPath = "META-INF/container.xml"
-	metadataType  = "application/oebps-package+xml"
 	mimetypePath  = "mimetype"
 	mimetypeValue = "application/epub+zip"
 )
@@ -150,37 +144,25 @@ func (a *archive) metadataPath() (string, error) {
 	}
 	defer r.Close()
 
-	var c container
-	if err := xml.NewDecoder(r).Decode(&c); err != nil {
+	c, err := newContainer(r)
+	if err != nil {
 		return "", err
 	}
 
-	var first string
-	for _, rf := range c.Rootfiles {
-		if opf.Collapse(rf.MediaType) != metadataType {
-			continue
-		}
-
-		// Decoded first, then the literal. A producer that wrote an unencoded
-		// name into both container.xml and the zip has an entry whose name
-		// really does contain "%20", so the raw value is the one that matches.
-		for _, candidate := range []string{rootfilePath(rf.FullPath), rf.FullPath} {
-			if first == "" {
-				first = candidate
-			}
-			if a.has(candidate) {
-				return candidate, nil
-			}
+	// container.go decides what the file declares and in what order to try it;
+	// only "which of these does this archive actually hold" is the archive's to
+	// answer. That is the Kobo case: several rootfiles declared, one present.
+	paths := c.packagePaths()
+	if len(paths) == 0 {
+		return "", ErrNoRootfile
+	}
+	for _, p := range paths {
+		if a.has(p) {
+			return p, nil
 		}
 	}
-
-	if first != "" {
-		return "", ErrRootfileMissing
-	}
-
-	return "", ErrNoRootfile
+	return "", ErrRootfileMissing
 }
-
 func (a *archive) writeTo(zw *zip.Writer, replace map[string][]byte) error {
 	used := make(map[string]bool, len(replace))
 	writeEntry := func(f *zip.File) error {
@@ -236,17 +218,6 @@ func (a *archive) writeTo(zw *zip.Writer, replace map[string][]byte) error {
 	}
 
 	return nil
-}
-
-// rootfilePath decodes a container's full-path. §4.2.6.3.1.3 makes it a
-// path-relative-scheme-less-URL string, so a space is written %20 while the zip
-// entry it names holds the decoded form.
-func rootfilePath(fullPath string) string {
-	decoded, err := url.PathUnescape(fullPath)
-	if err != nil {
-		return fullPath
-	}
-	return decoded
 }
 
 // readEncryption parses META-INF/encryption.xml if present. A missing file means
