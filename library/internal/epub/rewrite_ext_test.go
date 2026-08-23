@@ -202,7 +202,45 @@ func TestRewritePreservesForeignMetadata(t *testing.T) {
 				if !bytes.Contains(opf, []byte("<!-- a comment nobody should eat -->")) {
 					t.Error("the XML comment was removed")
 				}
+				assertOutsideMetadataUnchanged(t, c.opf, opf)
 			})
+		}
+	}
+}
+
+// assertOutsideMetadataUnchanged pins the widest form of the preservation rule:
+// a metadata edit changes nothing outside <metadata>. Serializing the manifest
+// and the spine and requiring them byte-identical catches more than naming the
+// attributes would — a dropped properties="cover-image", a lost spine toc, a
+// reordered item — and needs no list to keep in step with the fixtures.
+//
+// Only metadata edits. A cover edit is supposed to touch the manifest, and the
+// tests that own that behaviour assert it themselves.
+func assertOutsideMetadataUnchanged(t *testing.T, before string, after []byte) {
+	t.Helper()
+
+	serialize := func(src []byte, tag string) string {
+		doc := etree.NewDocument()
+		if err := doc.ReadFromBytes(src); err != nil {
+			t.Fatalf("not parseable XML: %v", err)
+		}
+		el := doc.FindElement("//" + tag)
+		if el == nil {
+			t.Fatalf("no <%s>", tag)
+		}
+		d := etree.NewDocument()
+		d.SetRoot(el.Copy())
+		out, err := d.WriteToString()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+
+	for _, tag := range []string{"manifest", "spine"} {
+		want := serialize([]byte(before), tag)
+		if got := serialize(after, tag); got != want {
+			t.Errorf("<%s> changed by a metadata-only edit:\n before: %s\n  after: %s", tag, want, got)
 		}
 	}
 }

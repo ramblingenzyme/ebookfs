@@ -100,6 +100,9 @@ func (o *Doc) identifiers() map[string]string {
 // picks it: "publication" is authoritative, and any other event means the file
 // saying this is not the publication date, leaving the untagged elements.
 // Exactly one of those is used; zero or several leaves the date unset.
+//
+// §5.5.3.2.4 forbids more than one dc:date, so coping with several is tolerance
+// for a malformed file rather than a case the spec allows.
 func (o *Doc) pubdate() string {
 	var (
 		untagged string

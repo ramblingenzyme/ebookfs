@@ -1174,6 +1174,51 @@ func TestSpecSchemedCollectionTypeIsNotOurSeries(t *testing.T) {
 //    identified using the cover-image property on the manifest item for the
 //    image."
 
+// TestSpecCoverImagePropertyIsAToken pins that the manifest properties attribute
+// is read as what it is. §5.9.1's properties attribute takes "a space-separated
+// list of property values", so membership is a token comparison: a substring
+// test matches "my-cover-image", which is a different property belonging to
+// someone else, and misses nothing only by luck when the list has one entry.
+func TestSpecCoverImagePropertyIsAToken(t *testing.T) {
+	opf := func(properties string) string {
+		return `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>The Title</dc:title>
+    <dc:creator id="c1">Ann Rand</dc:creator>
+    <dc:language>en</dc:language>
+    <meta name="cover" content="legacy-cover"/>
+  </metadata>
+  <manifest>
+    <item id="legacy-cover" href="old.jpg" media-type="image/jpeg"/>
+    <item id="candidate" href="candidate.jpg" media-type="image/jpeg" properties="` + properties + `"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine><itemref idref="ch1"/></spine>
+</package>`
+	}
+
+	for _, tc := range []struct {
+		name, properties, want string
+	}{
+		{"the property alone", "cover-image", "OEBPS/candidate.jpg"},
+		{"one token among several", "svg cover-image scripted", "OEBPS/candidate.jpg"},
+		{"a different property that contains it", "my-cover-image", "OEBPS/old.jpg"},
+		{"a different property it is a prefix of", "cover-image-thumbnail", "OEBPS/old.jpg"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bib, err := epub.Parse(buildEpub(t, opf(tc.properties)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if bib.CoverPath != tc.want {
+				t.Errorf("properties=%q gave cover %q, want %q", tc.properties, bib.CoverPath, tc.want)
+			}
+		})
+	}
+}
+
 // TestSpecCoverImagePropertyBeatsLegacyMeta pins behaviour that is already
 // correct but stated only by the order of two loops in translateCover: reorder
 // them in a rewrite and the result flips with nothing failing.
@@ -1200,7 +1245,7 @@ func TestSpecCoverImagePropertyBeatsLegacyMeta(t *testing.T) {
 		t.Fatal(err)
 	}
 	if bib.CoverPath != "OEBPS/cover.jpg" {
-		t.Errorf("cover = %q, want the cover-image manifest item to win per §5.9.3", bib.CoverPath)
+		t.Errorf("cover = %q, want the cover-image manifest item to win per §5.9.2", bib.CoverPath)
 	}
 }
 

@@ -12,7 +12,10 @@ import "github.com/beevik/etree"
 // is found and created regardless of version, so they live here rather than
 // with the version-specific encodings in the fields.
 
-const opfNamespace = "http://www.idpf.org/2007/opf"
+const (
+	opfNamespace = "http://www.idpf.org/2007/opf"
+	dcNamespace  = "http://purl.org/dc/elements/1.1/"
+)
 
 // elements returns the metadata children with the given tag, flattening the
 // dc-metadata/x-metadata wrappers so no field has to know about them.
@@ -100,7 +103,10 @@ func (o *Doc) dcPrefix() string {
 	if els := o.elements("title"); len(els) > 0 {
 		return els[0].Space
 	}
-	return "dc"
+	// No dc element to copy, so fall back to the declarations rather than
+	// assuming "dc" is bound — asserting a prefix the document never declared
+	// would put a new element in no namespace at all.
+	return o.ensureNSPrefix(dcNamespace, "dc")
 }
 
 // ensureOPFPrefix returns the xmlns: prefix bound to the OPF namespace,
@@ -108,13 +114,23 @@ func (o *Doc) dcPrefix() string {
 // Attributes cannot use a default namespace, so opf:role and opf:file-as need a
 // prefix. vocab.go's spell is this same get-or-declare step for the other
 // naming system.
-func (o *Doc) ensureOPFPrefix() string {
+func (o *Doc) ensureOPFPrefix() string { return o.ensureNSPrefix(opfNamespace, "opf") }
+
+// ensureNSPrefix returns the xmlns: prefix bound to ns, declaring preferred if
+// the document binds it to nothing. The vocabulary-side twin is vocab.go's
+// spell/declarePrefix, which does the same for the other naming system.
+//
+// Only <package>'s own attributes are scanned. A declaration further down —
+// OPF 2.0 §2.2's example puts xmlns:opf on <metadata> — is not found, so a
+// redundant second declaration is added at the top. Valid, and harmless because
+// both bind the same URI.
+func (o *Doc) ensureNSPrefix(ns, preferred string) string {
 	for i := range o.pkg.Attr {
 		a := o.pkg.Attr[i]
-		if a.Space == "xmlns" && a.Value == opfNamespace {
+		if a.Space == "xmlns" && a.Value == ns {
 			return a.Key
 		}
 	}
-	o.pkg.CreateAttr("xmlns:opf", opfNamespace)
-	return "opf"
+	o.pkg.CreateAttr("xmlns:"+preferred, ns)
+	return preferred
 }

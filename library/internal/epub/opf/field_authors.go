@@ -75,7 +75,9 @@ func (f authorsField) set(authors []model.Author) {
 		}
 
 		// Roles are "zero or more" (D.3.10), so aut is added only when absent
-		// and any other role is left alone.
+		// and any other role is left alone. D.3.10 only SHOULDs a scheme, and
+		// names no particular one; marc:relators is our choice, reserved by
+		// D.1.5 so it needs no declaration.
 		if !slices.Contains(creatorRoles(c), "aut") {
 			c.refine("role").add("aut", "marc:relators")
 		}

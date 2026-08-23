@@ -48,6 +48,11 @@ func (o *Doc) refineElements(id, property string) []*etree.Element {
 // document that rebound the vocabulary either resolves in would otherwise turn
 // our value into one from somebody else's. scheme matters most today — role refinements
 // carry marc:relators — since every property we write is default-vocabulary.
+// Two choices §5.3.6 leaves open, both deliberate: the refinement is appended at
+// the end of its parent rather than placed beside the element it refines, since
+// the binding is by id and position carries no meaning; and refines is written
+// fragment-only, never path-qualified, though a reader must accept both (see
+// TestSpecPathQualifiedRefines).
 func (o *Doc) addRefine(id, property, value, scheme string) {
 	m := o.metaParent().CreateElement("meta")
 	m.CreateAttr("refines", "#"+id)

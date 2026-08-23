@@ -95,6 +95,20 @@ func (o *Doc) sameProperty(inDoc, ours string) bool {
 	return expand(inDoc, o.vocabularies()) == expand(ours, reservedPrefixes)
 }
 
+// hasProperty reports whether a space-separated property list contains one.
+// §5.9.1's properties attribute is "a space-separated list of property values",
+// so membership is a token comparison: a substring test would match
+// my-cover-image, which is a different property belonging to someone else. Each
+// token is a name like any other, so it resolves the same way.
+func (o *Doc) hasProperty(list, want string) bool {
+	for _, token := range strings.Fields(list) {
+		if o.sameProperty(token, want) {
+			return true
+		}
+	}
+	return false
+}
+
 // spell returns how to write one of our property names in this document. Almost
 // always the name unchanged — but a document that rebound our prefix would make
 // that name mean something else, so another prefix bound to the right vocabulary

@@ -33,7 +33,7 @@ func (o *Doc) cover(base string) string {
 	manifest := o.manifest()
 
 	for _, item := range manifest {
-		if strings.Contains(item.Properties, "cover-image") && isRasterCoverType(item.MediaType) {
+		if o.hasProperty(item.Properties, "cover-image") && isRasterCoverType(item.MediaType) {
 			return coverUrl(base, item.Href)
 		}
 	}
