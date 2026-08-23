@@ -73,7 +73,7 @@ func (o *Doc) sameProperty(inDoc, ours string) bool {
 // space-separated list of property values", so membership is a token comparison:
 // a substring test would match my-cover-image, someone else's property.
 func (o *Doc) hasProperty(list, want string) bool {
-	for _, token := range strings.Fields(list) {
+	for token := range strings.FieldsSeq(list) {
 		if o.sameProperty(token, want) {
 			return true
 		}
