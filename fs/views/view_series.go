@@ -28,7 +28,7 @@ func seriesEntryName(b *model.Book, pad int32) string {
 			s += "." + rest
 		}
 	}
-	return fmt.Sprintf("%s - %s", s, b.Title)
+	return fmt.Sprintf("%s - %s", s, model.PathSafe(b.Title))
 }
 
 // seriesLevel reads the first level of a series position, which is the only
@@ -111,8 +111,11 @@ func NewBySeriesDir(reg *registry.BookRegistry) *bySeriesDir {
 }
 
 // seriesDir returns the subdir for a series name, creating it on first use.
+// PathSafe for the same reason as by-author and by-tag: a series name is
+// metadata read verbatim from the epub, and a '/' in one would make an entry a
+// 9P client cannot walk to. Remove must mint the same name or removals miss.
 func (d *bySeriesDir) seriesDir(name string) registry.BookView {
-	return d.childDir(name, func(s *proto.Stat) fs.FSNode {
+	return d.childDir(model.PathSafe(name), func(s *proto.Stat) fs.FSNode {
 		return newSeriesBookListDir(s, d.f)
 	}).(registry.BookView)
 }
@@ -130,5 +133,5 @@ func (d *bySeriesDir) Remove(dir *book.BookDir) {
 	if !b.HasSeries() {
 		return
 	}
-	d.removeLister(b.SeriesName(), dir)
+	d.removeLister(model.PathSafe(b.SeriesName()), dir)
 }

@@ -17,11 +17,12 @@ var ErrClosed = errors.New("epub reader is closed")
 //
 // Reader satisfies model.EpubReader (io.ReaderAt + io.Closer + OPF + Cover).
 type Reader struct {
-	f         *os.File
-	zr        *zip.Reader // entries read from f; built once at construction
-	opfPath   string      // resolved once from container.xml at construction
-	coverPath string      // zip-relative path to cover image; empty if none
-	closed    bool        // true after Close; accessors return ErrClosed
+	f *os.File
+	// a indexes the entries and holds the resolved package document path. The
+	// same seam Parse and Rewrite use, so all three resolve an entry alike.
+	a         *archive
+	coverPath string // zip-relative path to cover image; empty if none
+	closed    bool   // true after Close; accessors return ErrClosed
 }
 
 // OpenReader opens the epub at epubPath and reads the zip central directory.
@@ -41,14 +42,18 @@ func OpenReader(epubPath, coverPath string) (model.EpubReader, error) {
 	zr, err := zip.NewReader(f, fi.Size())
 	if err != nil {
 		f.Close()
-		return nil, fmt.Errorf("%w: %w", ErrNotEpub, err)
+		return nil, notEpub(epubPath, err)
 	}
-	opfPath, err := opfPath(zr)
+	a, err := openArchive(zr)
 	if err != nil {
 		f.Close()
 		return nil, err
 	}
-	return &Reader{f: f, zr: zr, opfPath: opfPath, coverPath: coverPath}, nil
+	if err := a.validate(); err != nil {
+		f.Close()
+		return nil, err
+	}
+	return &Reader{f: f, a: a, coverPath: coverPath}, nil
 }
 
 // ReadAt implements io.ReaderAt on the raw epub bytes.
@@ -74,7 +79,7 @@ func (r *Reader) OPF() ([]byte, error) {
 	if r.closed {
 		return nil, ErrClosed
 	}
-	return readEntry(r.zr, r.opfPath)
+	return r.a.read(r.a.opf)
 }
 
 // Cover returns the cover image bytes from the already-open zip. When coverPath
@@ -86,5 +91,5 @@ func (r *Reader) Cover() ([]byte, error) {
 	if r.coverPath == "" {
 		return nil, fmt.Errorf("no cover in epub")
 	}
-	return readEntry(r.zr, r.coverPath)
+	return r.a.read(r.coverPath)
 }

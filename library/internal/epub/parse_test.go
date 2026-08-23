@@ -1,12 +1,17 @@
-package epub
+package epub_test
 
 import (
+	"archive/zip"
 	"bytes"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -159,33 +164,12 @@ func withoutEntry(entries []entry, name string) []entry {
 
 func TestTranslateCoverSkipsMarkupCoverImage(t *testing.T) {
 	path := writeEpub(t, baseEntries(opfMarkupCoverImage))
-	book, err := Parse(path)
+	book, err := epub.Parse(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if book.CoverPath != "OEBPS/cover.jpg" {
 		t.Errorf("cover path = %q, want OEBPS/cover.jpg (markup cover-image must be skipped)", book.CoverPath)
-	}
-}
-
-func TestCoverUrl(t *testing.T) {
-	for _, tc := range []struct {
-		name, base, href, want string
-	}{
-		{"relative", "OEBPS", "cover.jpg", "OEBPS/cover.jpg"},
-		{"root dir", ".", "cover.jpg", "cover.jpg"},
-		{"nested base", "OEBPS/images", "cover.jpg", "OEBPS/images/cover.jpg"},
-		{"parent traversal", "OEBPS/text", "../images/cover.jpg", "OEBPS/images/cover.jpg"},
-		{"container-absolute", "OEBPS", "/images/cover.jpg", "images/cover.jpg"},
-		{"percent-encoded space", "OEBPS", "cover%20image.jpg", "OEBPS/cover image.jpg"},
-		{"percent-encoded utf8", "OEBPS", "couv%C3%A9.jpg", "OEBPS/couvé.jpg"},
-		{"absolute and encoded", "OEBPS", "/img/a%20b.jpg", "img/a b.jpg"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := coverUrl(tc.base, tc.href); got != tc.want {
-				t.Errorf("coverUrl(%q, %q) = %q, want %q", tc.base, tc.href, got, tc.want)
-			}
-		})
 	}
 }
 
@@ -200,7 +184,7 @@ func TestParseResolvesEncodedCoverHref(t *testing.T) {
     <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`,
 	)
 	entries := []entry{
-		{name: "mimetype", data: []byte("application/epub+zip"), store: true},
+		{name: "mimetype", data: []byte(mimetypeValue), store: true},
 		{name: "META-INF/container.xml", data: []byte(containerXML)},
 		{name: "OEBPS/content.opf", data: []byte(opfEncoded)},
 		{name: "OEBPS/cover image.jpg", data: coverBytes}, // literal space in the entry name
@@ -208,14 +192,14 @@ func TestParseResolvesEncodedCoverHref(t *testing.T) {
 	}
 	path := writeEpub(t, entries)
 
-	book, err := Parse(path)
+	book, err := epub.Parse(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if book.CoverPath != "OEBPS/cover image.jpg" {
 		t.Fatalf("cover path = %q, want OEBPS/cover image.jpg", book.CoverPath)
 	}
-	r, err := OpenReader(path, book.CoverPath)
+	r, err := epub.OpenReader(path, book.CoverPath)
 	if err != nil {
 		t.Fatalf("OpenReader failed for an encoded-href cover: %v", err)
 	}
@@ -229,34 +213,241 @@ func TestParseResolvesEncodedCoverHref(t *testing.T) {
 	}
 }
 
+// TestParseResolvesEncodedRootfilePath is the container-side half of the test
+// above. §4.2.6.3.1.3 makes full-path "a path-relative-scheme-less-URL string",
+// so "OEBPS/My Book.opf" is declared "My%20Book.opf" while the entry holds the
+// decoded name. Undecoded, the book is unopenable and blamed on a rootfile that
+// is present. The edit path resolves through the same function, so it is checked
+// too.
+func TestParseResolvesEncodedRootfilePath(t *testing.T) {
+	const container = `<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/My%20Book.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`
+
+	path := writeEpub(t, []entry{
+		{name: "mimetype", data: []byte(mimetypeValue), store: true},
+		{name: "META-INF/container.xml", data: []byte(container)},
+		{name: "OEBPS/My Book.opf", data: []byte(opf3)}, // literal space in the entry name
+		{name: "OEBPS/cover.jpg", data: coverBytes},
+		{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
+	})
+
+	if _, err := epub.Parse(path); err != nil {
+		t.Fatalf("Parse failed for a percent-encoded full-path: %v", err)
+	}
+	if _, err := writeBib(path, model.Edits{Title: new("Another Title")}); err != nil {
+		t.Fatalf("edit failed for a percent-encoded full-path: %v", err)
+	}
+	bib, err := epub.Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bib.Title != "Another Title" {
+		t.Errorf("title = %q, want the edit to have landed in the resolved package document", bib.Title)
+	}
+}
+
+// TestParseCollapsesRootfileMediaType covers the other container attribute read
+// through encoding/xml, which does not apply XML 1.0 §3.3.3 attribute-value
+// normalization. §4.2.6.3.1.3 requires the value to be the package media type;
+// a container that wraps it would otherwise have every rootfile skipped and
+// report ErrNoRootfile for a package document that is right there.
+func TestParseCollapsesRootfileMediaType(t *testing.T) {
+	const container = `<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf"
+              media-type="
+                application/oebps-package+xml
+              "/>
+  </rootfiles>
+</container>`
+
+	path := writeEpub(t, []entry{
+		{name: "mimetype", data: []byte(mimetypeValue), store: true},
+		{name: "META-INF/container.xml", data: []byte(container)},
+		{name: "OEBPS/content.opf", data: []byte(opf3)},
+		{name: "OEBPS/cover.jpg", data: coverBytes},
+		{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
+	})
+
+	if _, err := epub.Parse(path); err != nil {
+		t.Fatalf("Parse failed for a padded rootfile media-type: %v", err)
+	}
+}
+
+// TestParseAndWriteAgreeOnADuplicateEntry pins that a read and the edit that
+// follows resolve a duplicated entry name alike — badly repacked epubs do carry
+// two entries under one name. Disagreeing means an edit computed from one copy
+// and reported from the other, invisible until the copies differ. Either rule
+// would do; what matters is that it is one rule.
+func TestParseAndWriteAgreeOnADuplicateEntry(t *testing.T) {
+	first := strings.Replace(opf3, "Original Title", "First Copy", 1)
+	second := strings.Replace(opf3, "Original Title", "Second Copy", 1)
+
+	path := writeEpub(t, []entry{
+		{name: "mimetype", data: []byte(mimetypeValue), store: true},
+		{name: "META-INF/container.xml", data: []byte(containerXML)},
+		{name: "OEBPS/content.opf", data: []byte(first)},
+		{name: "OEBPS/content.opf", data: []byte(second)}, // same name, different content
+		{name: "OEBPS/cover.jpg", data: coverBytes},
+		{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
+	})
+
+	bib, err := epub.Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bib.Title != "First Copy" {
+		t.Errorf("title = %q, want First Copy — Parse must resolve it the way findEntry does", bib.Title)
+	}
+
+	// The edit is computed from whichever copy the writer reads; the re-parse
+	// has to see the result, which it only can if both picked the same one.
+	if _, err := writeBib(path, model.Edits{Title: new("Edited Title")}); err != nil {
+		t.Fatal(err)
+	}
+	bib, err = epub.Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bib.Title != "Edited Title" {
+		t.Errorf("title = %q, want the edit to be visible to the next read", bib.Title)
+	}
+}
+
+// TestParseRootfilePathEdgeCases covers what decoding full-path must not break.
+// %20 decodes, but url.Parse would also read "C:/..." as a scheme and truncate
+// at '#' or '?'; PathUnescape touches nothing but the escapes.
+//
+// The literal rows are the other direction: an entry whose name really does
+// contain '%20', so the raw value is tried when the decoded one misses.
+func TestParseRootfilePathEdgeCases(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		declared string // full-path as written in container.xml
+		entry    string // the zip entry that actually exists
+	}{
+		{"percent-encoded space", "OEBPS/My%20Book.opf", "OEBPS/My Book.opf"},
+		{"literal percent-encoding in the entry name", "OEBPS/My%20Book.opf", "OEBPS/My%20Book.opf"},
+		{"fragment character", "OEBPS/a#b.opf", "OEBPS/a#b.opf"},
+		{"query character", "OEBPS/a?b.opf", "OEBPS/a?b.opf"},
+		{"drive-letter shape", "C:/content.opf", "C:/content.opf"},
+		{"stray percent", "OEBPS/100%.opf", "OEBPS/100%.opf"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			container := `<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="` + tc.declared + `" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`
+
+			path := writeEpub(t, []entry{
+				{name: "mimetype", data: []byte(mimetypeValue), store: true},
+				{name: "META-INF/container.xml", data: []byte(container)},
+				{name: tc.entry, data: []byte(opf3)},
+				{name: "OEBPS/cover.jpg", data: coverBytes},
+				{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
+			})
+
+			if _, err := epub.Parse(path); err != nil {
+				t.Fatalf("full-path %q naming entry %q: %v", tc.declared, tc.entry, err)
+			}
+		})
+	}
+}
+
 // --- container & mimetype validation ---------------------------------------
+
+// TestEntryPointsAgreeOnABadEpub pins that the three ways in classify a failure
+// to open the archive alike — each opens the file itself, so each could grow its
+// own rule. Callers tell "not a book" from "the disk is broken" with errors.Is
+// on ErrNotEpub.
+//
+// The missing-file row matters as much as the malformed ones: a nonexistent path
+// says nothing about contents, so labelling it ErrNotEpub is the obvious wrong
+// fix.
+func TestEntryPointsAgreeOnABadEpub(t *testing.T) {
+	good := writeEpub(t, baseEntries(opf3))
+	raw, err := os.ReadFile(good)
+	if err != nil {
+		t.Fatal(err)
+	}
+	write := func(name string, data []byte) string {
+		p := filepath.Join(t.TempDir(), name)
+		if err := os.WriteFile(p, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+
+	for _, tc := range []struct {
+		name    string
+		path    string
+		notEpub bool // ErrNotEpub, rather than the os error verbatim
+	}{
+		{name: "not a zip", path: write("junk.epub", []byte("this is plainly not a zip archive")), notEpub: true},
+		{name: "empty file", path: write("empty.epub", nil), notEpub: true},
+		{name: "truncated epub", path: write("trunc.epub", raw[:len(raw)/2]), notEpub: true},
+		{name: "missing file", path: filepath.Join(t.TempDir(), "nope.epub")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, parseErr := epub.Parse(tc.path)
+			_, readerErr := epub.OpenReader(tc.path, "")
+			_, rewriteErr := epub.Rewrite(tc.path,
+				&model.Book{Location: model.Location{EpubPath: tc.path}},
+				model.Edits{Title: new("X")})
+
+			for _, e := range []struct {
+				from string
+				err  error
+			}{{"Parse", parseErr}, {"OpenReader", readerErr}, {"Rewrite", rewriteErr}} {
+				if e.err == nil {
+					t.Errorf("%s returned no error", e.from)
+					continue
+				}
+				if got := errors.Is(e.err, epub.ErrNotEpub); got != tc.notEpub {
+					t.Errorf("%s: errors.Is(err, ErrNotEpub) = %v, want %v (err = %v)",
+						e.from, got, tc.notEpub, e.err)
+				}
+				if !tc.notEpub && !errors.Is(e.err, os.ErrNotExist) {
+					t.Errorf("%s: err = %v, want the os error to survive", e.from, e.err)
+				}
+			}
+		})
+	}
+}
 
 func TestParseRejectsNonZip(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "junk.epub")
 	if err := os.WriteFile(p, []byte("this is plainly not a zip archive"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Parse(p); !errors.Is(err, ErrNotEpub) {
+	if _, err := epub.Parse(p); !errors.Is(err, epub.ErrNotEpub) {
 		t.Fatalf("err = %v, want ErrNotEpub", err)
 	}
 }
 
 func TestParseReportsMissingFile(t *testing.T) {
-	if _, err := Parse(filepath.Join(t.TempDir(), "absent.epub")); err == nil {
+	if _, err := epub.Parse(filepath.Join(t.TempDir(), "absent.epub")); err == nil {
 		t.Fatal("expected an error for a missing file, got nil")
 	}
 }
 
 func TestParseRejectsWrongMimetype(t *testing.T) {
 	p := writeEpub(t, withMimetype(baseEntries(opf3), "application/zip"))
-	if _, err := Parse(p); !errors.Is(err, ErrNotEpub) {
+	if _, err := epub.Parse(p); !errors.Is(err, epub.ErrNotEpub) {
 		t.Fatalf("err = %v, want ErrNotEpub", err)
 	}
 }
 
 func TestParseRejectsMissingMimetype(t *testing.T) {
 	p := writeEpub(t, withoutEntry(baseEntries(opf3), "mimetype"))
-	if _, err := Parse(p); !errors.Is(err, ErrNotEpub) {
+	if _, err := epub.Parse(p); !errors.Is(err, epub.ErrNotEpub) {
 		t.Fatalf("err = %v, want ErrNotEpub", err)
 	}
 }
@@ -264,8 +455,118 @@ func TestParseRejectsMissingMimetype(t *testing.T) {
 func TestParseToleratesMimetypeWhitespace(t *testing.T) {
 	// A trailing newline on the mimetype is tolerated (trimmed), matching calibre.
 	p := writeEpub(t, withMimetype(baseEntries(opf3), "application/epub+zip\n"))
-	if _, err := Parse(p); err != nil {
+	if _, err := epub.Parse(p); err != nil {
 		t.Fatalf("Parse rejected a whitespace-padded mimetype: %v", err)
+	}
+}
+
+// TestRewriteReplacesOnlyTheResolvedDuplicate is the write half of the
+// duplicate-entry rule. Lookup was unified on first-wins, but writeUpdatedEpub
+// matches its replacement map by name against every entry it copies, so both
+// copies of a duplicated package document were being overwritten.
+//
+// That is not merely untidy: the copy nobody resolved is somebody else's data,
+// and the archive is contractually copied verbatim. Only the entry the lookup
+// chose is ours to rewrite.
+func TestRewriteReplacesOnlyTheResolvedDuplicate(t *testing.T) {
+	first := strings.Replace(opf3, "Original Title", "First Copy", 1)
+	second := strings.Replace(opf3, "Original Title", "Second Copy", 1)
+
+	path := writeEpub(t, []entry{
+		{name: "mimetype", data: []byte(mimetypeValue), store: true},
+		{name: "META-INF/container.xml", data: []byte(containerXML)},
+		{name: "OEBPS/content.opf", data: []byte(first)},
+		{name: "OEBPS/content.opf", data: []byte(second)},
+		{name: "OEBPS/cover.jpg", data: coverBytes},
+		{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
+	})
+
+	if _, err := writeBib(path, model.Edits{Title: new("Edited Title")}); err != nil {
+		t.Fatal(err)
+	}
+
+	zrc, err := zip.OpenReader(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer zrc.Close()
+
+	var copies []string
+	for _, f := range zrc.File {
+		if f.Name != "OEBPS/content.opf" {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch {
+		case bytes.Contains(b, []byte("Edited Title")):
+			copies = append(copies, "edited")
+		case bytes.Contains(b, []byte("Second Copy")):
+			copies = append(copies, "second, untouched")
+		default:
+			copies = append(copies, "other")
+		}
+	}
+	if want := []string{"edited", "second, untouched"}; !slices.Equal(copies, want) {
+		t.Errorf("content.opf copies = %v, want %v", copies, want)
+	}
+}
+
+// TestParseDistinguishesMissingFromUndeclared is what metadataPath's `first`
+// variable exists for: telling a container that names a package document we
+// cannot find from one that names none. A broken archive and a container that
+// never pointed at an OPF send a reader to different places.
+//
+// TestMultipleRootfilesKobo cannot catch this — it exercises a package that *is*
+// found, so it never reaches either error.
+func TestParseDistinguishesMissingFromUndeclared(t *testing.T) {
+	for _, tc := range []struct {
+		name, container string
+		want            error
+	}{
+		{
+			name: "declared but absent from the archive",
+			container: `<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/nowhere.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`,
+			want: epub.ErrRootfileMissing,
+		},
+		{
+			name: "no rootfile of the package media type",
+			container: `<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/x-something-else"/>
+  </rootfiles>
+</container>`,
+			want: epub.ErrNoRootfile,
+		},
+		{
+			name: "no rootfiles at all",
+			container: `<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles></rootfiles>
+</container>`,
+			want: epub.ErrNoRootfile,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeEpub(t, withContainer(baseEntries(opf3), tc.container))
+			_, err := epub.Parse(path)
+			if !errors.Is(err, tc.want) {
+				t.Errorf("err = %v, want %v", err, tc.want)
+			}
+		})
 	}
 }
 
@@ -274,7 +575,7 @@ func TestParseToleratesMimetypeWhitespace(t *testing.T) {
 func TestMultipleRootfilesKobo(t *testing.T) {
 	path := writeEpub(t, withContainer(baseEntries(opf3), multiRootContainer))
 
-	book, err := Parse(path)
+	book, err := epub.Parse(path)
 	if err != nil {
 		t.Fatalf("Parse failed on Kobo multi-rootfile epub: %v", err)
 	}
@@ -295,7 +596,7 @@ func TestMultipleRootfilesKobo(t *testing.T) {
 // and the legacy calibre:series read instead — not mistaken for the series.
 func TestTranslateSeriesSetCollectionIgnored(t *testing.T) {
 	path := writeEpub(t, baseEntries(opfSeriesSetCollection))
-	book, err := Parse(path)
+	book, err := epub.Parse(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -364,7 +665,7 @@ func TestTranslateDateSelection(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEpub(t, baseEntries(opfWithDates(tc.dates)))
-			book, err := Parse(path)
+			book, err := epub.Parse(path)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -379,7 +680,7 @@ func TestTranslateDateSelection(t *testing.T) {
 // be mistaken for the publication date.
 func TestTranslateDateIgnoresDctermsModified(t *testing.T) {
 	path := writeEpub(t, baseEntries(opfV3WithModified))
-	book, err := Parse(path)
+	book, err := epub.Parse(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -400,7 +701,7 @@ func TestTranslateSeriesDefaultsIndexToOne(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEpub(t, baseEntries(tc.opf))
-			book, err := Parse(path)
+			book, err := epub.Parse(path)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -47,7 +47,9 @@ func (d *BookDir) SetSnapshot(b *model.Book) {
 // Qid stays fixed, so a client with the epub open keeps its handle across a rename.
 func (d *BookDir) Stat() proto.Stat {
 	s := d.StaticDir.Stat()
-	s.Name = d.Book().Title
+	// PathSafe because a title is stored as the epub wrote it and a 9P entry
+	// name is a single component.
+	s.Name = model.PathSafe(d.Book().Title)
 	return s
 }
 
@@ -155,7 +157,7 @@ var fields = map[string]field{
 // than the registry itself, so this package stays a leaf below the registry.
 func NewBookDir(f *fs.FS, lib library.Library, edit func(int64, model.Edits) error, book *model.Book) *BookDir {
 	d := &BookDir{
-		StaticDir: *fs.NewStaticDir(newStat(f, book.Title, 0755|proto.DMDIR)),
+		StaticDir: *fs.NewStaticDir(newStat(f, model.PathSafe(book.Title), 0755|proto.DMDIR)),
 	}
 	d.book.Store(book)
 

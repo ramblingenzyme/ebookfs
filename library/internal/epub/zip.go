@@ -2,99 +2,95 @@ package epub
 
 import (
 	"archive/zip"
-	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 
-	"github.com/ramblingenzyme/ebookfs/library/model"
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub/ocf"
+)
+
+var (
+	ErrContainer       = errors.New("no container file found")
+	ErrNoRootfile      = errors.New("no package rootfile declared in container")
+	ErrRootfileMissing = errors.New("declared package rootfile not found in archive")
+	ErrNotEpub         = errors.New("not a valid epub")
 )
 
 const (
-	mimetypePath   = "mimetype"
-	mimetypeValue  = "application/epub+zip"
-	encryptionPath = "META-INF/encryption.xml"
+	mimetypePath  = "mimetype"
+	mimetypeValue = "application/epub+zip"
 )
 
-// obfuscationAlgorithms are the two font-obfuscation schemes the EPUB ecosystem
-// uses. They appear in encryption.xml exactly like real DRM but are not actually
-// encryption — calibre deliberately treats them as readable, and so do we, so a
-// book with obfuscated fonts stays editable.
-var obfuscationAlgorithms = map[string]bool{
-	"http://ns.adobe.com/pdf/enc#RC":     true,
-	"http://www.idpf.org/2008/embedding": true,
-}
-
-// encryptionInfo records which zip entries are listed in META-INF/encryption.xml
-// and under which algorithm, so a real-DRM entry can be distinguished from a
-// merely font-obfuscated one (see obfuscationAlgorithms).
-type encryptionInfo struct {
-	algorithms map[string]string // zip entry name -> EncryptionMethod algorithm
-}
-
-// isEncrypted reports whether name is protected by real encryption (as opposed
-// to font obfuscation). An entry absent from encryption.xml is not encrypted.
-func (e *encryptionInfo) isEncrypted(name string) bool {
-	if e == nil {
-		return false
+// notEpub classifies a failure to open the archive. A malformed zip is not an
+// epub; anything else — a missing file, a permission problem, a disk error — is
+// the caller's to see verbatim, since it says nothing about the file's contents.
+//
+// Shared by every entry point, so one broken file is one error however the
+// caller got here.
+func notEpub(path string, err error) error {
+	if errors.Is(err, zip.ErrFormat) {
+		return fmt.Errorf("%w: %s: %w", ErrNotEpub, path, err)
 	}
-	algo, ok := e.algorithms[name]
-	return ok && !obfuscationAlgorithms[algo]
+	return err
 }
 
-type encryptionXML struct {
-	Data []struct {
-		Method struct {
-			Algorithm string `xml:"Algorithm,attr"`
-		} `xml:"EncryptionMethod"`
-		Ref struct {
-			URI string `xml:"URI,attr"`
-		} `xml:"CipherData>CipherReference"`
-	} `xml:"EncryptedData"`
+// archive owns how an entry is located, so a read and the write that follows it
+// cannot resolve a duplicated name, the package document's path, or "present"
+// differently.
+//
+// files indexes zr.File rather than replacing it: writeTo walks the slice in
+// order and copies every entry, duplicates included.
+//
+// Closing is the caller's — Parse drops the archive, Rewrite holds it for the
+// copy, Reader for the life of the handle.
+type archive struct {
+	zr    *zip.Reader
+	files map[string]*zip.File // index over zr.File; first wins
+	opf   string               // package document path, resolved once
 }
 
-// readEncryption parses META-INF/encryption.xml if present. A missing file means
-// nothing is encrypted (nil info); a malformed file is reported as an error
-// rather than silently treated as "no encryption", since proceeding could
-// corrupt a protected entry.
-func readEncryption(zr *zip.Reader) (*encryptionInfo, error) {
-	f := findEntry(zr, encryptionPath)
-	if f == nil {
-		return nil, nil
+// openArchive indexes the entries and resolves the package document. It does
+// not validate: Parse wants a malformed container reported as ErrNotEpub, and
+// callers that only need an entry by name should not pay for the mimetype read.
+func openArchive(zr *zip.Reader) (*archive, error) {
+	a := &archive{zr: zr, files: make(map[string]*zip.File, len(zr.File))}
+	for _, f := range a.zr.File {
+		// First wins. A duplicate name is malformed either way; what matters is
+		// that every caller resolves it to the same entry.
+		if _, dup := a.files[f.Name]; !dup {
+			a.files[f.Name] = f
+		}
 	}
-	rc, err := f.Open()
+
+	opf, err := a.metadataPath()
 	if err != nil {
 		return nil, err
 	}
-	defer rc.Close()
-
-	var doc encryptionXML
-	if err := xml.NewDecoder(rc).Decode(&doc); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", encryptionPath, err)
-	}
-
-	info := &encryptionInfo{algorithms: make(map[string]string, len(doc.Data))}
-	for _, d := range doc.Data {
-		if d.Ref.URI != "" && d.Method.Algorithm != "" {
-			info.algorithms[d.Ref.URI] = d.Method.Algorithm
-		}
-	}
-	return info, nil
+	a.opf = opf
+	return a, nil
 }
 
-func findEntry(zr *zip.Reader, name string) *zip.File {
-	for _, f := range zr.File {
-		if f.Name == name {
-			return f
-		}
+// file returns the entry, or nil. Callers that need the *zip.File rather than
+// its bytes read UncompressedSize64 from the central directory without
+// decompressing, or Method and Modified when copying.
+func (a *archive) file(name string) *zip.File { return a.files[name] }
+
+func (a *archive) has(name string) bool { return a.files[name] != nil }
+
+// size is the entry's uncompressed length from the central directory, so it
+// costs no decompression. Absent entries are 0, which is what a caller recording
+// a size for something optional wants.
+func (a *archive) size(name string) int64 {
+	f := a.file(name)
+	if f == nil {
+		return 0
 	}
-	return nil
+	return int64(f.UncompressedSize64)
 }
 
-func readEntry(zr *zip.Reader, name string) ([]byte, error) {
-	f := findEntry(zr, name)
+func (a *archive) read(name string) ([]byte, error) {
+	f := a.file(name)
 	if f == nil {
 		return nil, fmt.Errorf("entry not found in epub: %s", name)
 	}
@@ -106,62 +102,98 @@ func readEntry(zr *zip.Reader, name string) ([]byte, error) {
 	return io.ReadAll(rc)
 }
 
-// opfPath resolves the package document's zip-relative path via
-// META-INF/container.xml, the same way Parse does on the read side.
-func opfPath(zr *zip.Reader) (string, error) {
-	container := findEntry(zr, containerPath)
-	if container == nil {
-		return "", ErrContainer
+// validate enforces the OCF mimetype declaration. Unlike calibre we reject
+// rather than warn: a wrong mimetype usually means a non-epub zip, such as a
+// mis-added .cbz.
+func (a *archive) validate() error {
+	if !a.has(mimetypePath) {
+		return fmt.Errorf("%w: missing mimetype declaration", ErrNotEpub)
 	}
-	// getMetadataPath resolves the package path and, via this predicate, skips
-	// Kobo's non-existent rootfile entries and guarantees the returned path is
-	// present in the container.
-	return getMetadataPath(container, func(name string) bool {
-		return findEntry(zr, name) != nil
-	})
+	data, err := a.read(mimetypePath)
+	if err != nil {
+		return err
+	}
+	if got := strings.TrimSpace(string(data)); got != mimetypeValue {
+		return fmt.Errorf("%w: unexpected mimetype %q", ErrNotEpub, got)
+	}
+	return nil
 }
 
-func writeUpdatedEpub(zw *zip.Writer, zrc *zip.ReadCloser, replace map[string][]byte) error {
+// metadataPath returns the package document's path, and guarantees the archive
+// holds an entry under it — callers rely on that rather than re-checking.
+//
+// Some Kobo epubs declare several <rootfile> entries where only one exists, so
+// missing ones are skipped and the first present one wins.
+func (a *archive) metadataPath() (string, error) {
+	f := a.file(ocf.ContainerPath)
+	if f == nil {
+		return "", ErrContainer
+	}
+	r, err := f.Open()
+	if err != nil {
+		return "", err
+	}
+	defer r.Close()
+
+	c, err := ocf.NewContainer(r)
+	if err != nil {
+		return "", err
+	}
+
+	// container.go decides what the file declares and in what order to try it;
+	// only "which of these does this archive actually hold" is the archive's to
+	// answer. That is the Kobo case: several rootfiles declared, one present.
+	paths := c.PackagePaths()
+	if len(paths) == 0 {
+		return "", ErrNoRootfile
+	}
+	for _, p := range paths {
+		if a.has(p) {
+			return p, nil
+		}
+	}
+	return "", ErrRootfileMissing
+}
+func (a *archive) writeTo(zw *zip.Writer, replace map[string][]byte) error {
 	used := make(map[string]bool, len(replace))
 	writeEntry := func(f *zip.File) error {
+		// Matched by identity, not by name. A zip may carry two entries under
+		// one name; the archive resolved the replacement against exactly one of
+		// them, and the other is somebody else's data that this function is
+		// contracted to copy verbatim.
 		data, ok := replace[f.Name]
+		ok = ok && a.file(f.Name) == f
 
+		hdr := &zip.FileHeader{Name: f.Name, Method: f.Method, Modified: f.Modified}
 		switch {
 		case ok:
 			used[f.Name] = true
-			w, err := zw.CreateHeader(&zip.FileHeader{
-				Name:     f.Name,
-				Method:   f.Method,
-				Modified: f.Modified,
-			})
+			w, err := zw.CreateHeader(hdr)
 			if err != nil {
 				return err
 			}
 			_, err = w.Write(data)
 			return err
 		case strings.HasSuffix(f.Name, "/"):
-			_, err := zw.CreateHeader(&zip.FileHeader{
-				Name:     f.Name,
-				Method:   f.Method,
-				Modified: f.Modified,
-			})
+			_, err := zw.CreateHeader(hdr)
 			return err
 		default:
 			return zw.Copy(f)
 		}
 	}
 
-	// mimetype must come first per the OCF spec; write it before anything else
-	// (and skip it in the main loop) regardless of its position in the source.
-	if mt := findEntry(&zrc.Reader, mimetypePath); mt == nil {
-		return fmt.Errorf("mimetype not found in epub")
-	} else {
-		if err := writeEntry(mt); err != nil {
-			return err
-		}
+	// mimetype must come first per the OCF spec. Written before anything else and
+	// skipped in the main loop, so the guarantee holds for whatever order the
+	// source happened to use rather than inheriting it.
+	mt := a.file(mimetypePath)
+	if mt == nil {
+		return fmt.Errorf("%w: missing mimetype declaration", ErrNotEpub)
+	}
+	if err := writeEntry(mt); err != nil {
+		return err
 	}
 
-	for _, f := range zrc.File {
+	for _, f := range a.zr.File {
 		if f.Name == mimetypePath {
 			continue
 		}
@@ -179,52 +211,20 @@ func writeUpdatedEpub(zw *zip.Writer, zrc *zip.ReadCloser, replace map[string][]
 	return nil
 }
 
-// rewriteEpub creates a temporary epub in the same directory as epubPath whose
-// entries named in replace are swapped for the given bytes and whose every
-// other entry is copied verbatim, then atomically replaces the original.
-// Returns the parsed Bib on success. On any failure the temp file is cleaned up.
-//
-// Faithfulness rules (matching the OCF container requirements calibre's
-// safe_replace also honours):
-//   - the "mimetype" entry is written first and copied byte-for-byte, preserving
-//     its STORED (uncompressed, no-extra-field) form so magic-byte sniffers keep
-//     recognising the file;
-//   - all untouched entries are copied raw (no recompression), preserving order,
-//     modtime, and method;
-//   - every key in replace must match an existing entry, so a mistargeted edit
-//     fails loudly instead of silently dropping.
-func rewriteEpub(epubPath string, zrc *zip.ReadCloser, replace map[string][]byte) (*model.Bib, error) {
-	dir := filepath.Dir(epubPath)
-	tmp, err := os.CreateTemp(dir, ".ebookfs-*.epub.tmp")
+// readEncryption parses META-INF/encryption.xml if present. A missing file means
+// nothing is encrypted (nil info); a malformed file is reported as an error
+// rather than silently treated as "no encryption", since proceeding could
+// corrupt a protected entry.
+func (a *archive) readEncryption() (*ocf.EncryptionInfo, error) {
+	f := a.file(ocf.EncryptionPath)
+	if f == nil {
+		return nil, nil
+	}
+	rc, err := f.Open()
 	if err != nil {
 		return nil, err
 	}
+	defer rc.Close()
 
-	tmpPath := tmp.Name()
-	defer os.Remove(tmpPath)
-	defer tmp.Close()
-
-	zw := zip.NewWriter(tmp)
-	if err := writeUpdatedEpub(zw, zrc, replace); err != nil {
-		return nil, err
-	}
-
-	if err := zw.Close(); err != nil {
-		return nil, err
-	}
-	if err := tmp.Sync(); err != nil {
-		return nil, err
-	}
-	if err := tmp.Close(); err != nil {
-		return nil, err
-	}
-
-	// Verify by re-parsing before we touch the original. A blanked title, dropped
-	// authors, or any structural breakage fails here and the original survives.
-	book, err := Parse(tmpPath)
-	if err != nil {
-		return nil, fmt.Errorf("rewritten epub failed validation: %w", err)
-	}
-
-	return book, os.Rename(tmpPath, epubPath)
+	return ocf.NewEncryptionInfo(rc)
 }

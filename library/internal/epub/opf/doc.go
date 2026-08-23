@@ -1,0 +1,149 @@
+// Package opf reads and writes the EPUB package document: the .opf file holding
+// a book's metadata. The zip container around it belongs to the parent epub
+// package.
+//
+// A field is one piece of metadata ebookfs owns. Reading (get) and writing (set)
+// both go through it so the two cannot disagree. Book-level validation and
+// presentation defaults live in Bib instead, so set(get()) never invents
+// metadata the file did not carry.
+//
+// Three rules keep the fields readable:
+//
+//   - A field with a write side is a type with get/set (title, authors, series,
+//     modified). A read-only field is a single Doc method (description,
+//     language, pubdate, identifiers, cover).
+//
+//   - A field says what a value should be, never where it is kept. Slots
+//     (slot.go) know where: element text, a refinement, an opf: attribute, a
+//     named meta. Under them sit the finders — metadata.go for the children of
+//     <metadata> and the xmlns: prefixes new ones need, refine.go for the EPUB 3
+//     refinement binding, vocab.go for the vocabulary a property name resolves
+//     in.
+//
+//     Those last two are different naming systems: xmlns: prefixes are resolved
+//     by the XML parser, vocabulary prefixes live inside attribute values and
+//     are bound by the package element's prefix attribute. Each has a
+//     get-or-declare step — ensureNSPrefix and spell/declarePrefix.
+//
+//   - The EPUB 2 / EPUB 3 branch stays visible in each field. The specs
+//     genuinely differ, and v2 has no sort-title mechanism at all; hiding that
+//     behind a common writer would hide what matters.
+package opf
+
+import (
+	"bytes"
+	"errors"
+	"strings"
+	"time"
+
+	"github.com/beevik/etree"
+	"github.com/ramblingenzyme/ebookfs/library/model"
+)
+
+type Doc struct {
+	doc *etree.Document
+	pkg *etree.Element // <package>
+	md  *etree.Element // <metadata>
+}
+
+func Parse(b []byte) (*Doc, error) {
+	doc := etree.NewDocument()
+	if err := doc.ReadFromBytes(b); err != nil {
+		return nil, err
+	}
+	pkg := doc.SelectElement("package")
+	if pkg == nil {
+		return nil, errors.New("opf: no <package> element")
+	}
+	md := pkg.SelectElement("metadata")
+	if md == nil {
+		return nil, errors.New("opf: no <metadata> element")
+	}
+	return &Doc{doc: doc, pkg: pkg, md: md}, nil
+}
+
+func (o *Doc) Bytes() ([]byte, error) { return o.doc.WriteToBytes() }
+
+// epub3 decides how metadata is written: refinements for v3, opf: attributes and
+// calibre metas for v2. Through attr, since a padded version would otherwise read
+// as EPUB 2 — which costs the §5.5.5 dcterms:modified update and injects calibre
+// metas. No version attribute at all is malformed; EPUB 2 is the safer guess.
+func (o *Doc) epub3() bool {
+	return strings.HasPrefix(attr(o.pkg, "version"), "3")
+}
+
+// Apply writes the edits into the document and reports whether that changed
+// anything; nothing is serialized until Bytes. A false means the file already
+// said what the edit asked for, so the caller has nothing to write back.
+//
+// etree is used rather than encoding/xml because it round-trips namespace
+// declarations, dc: prefixes, comments and formatting untouched.
+func (o *Doc) Apply(e model.Edits) bool {
+	before, _ := o.Bytes()
+
+	o.title().set(e.Title, e.SortTitle)
+
+	if e.Description != nil {
+		o.dcElement("description", "").set(*e.Description)
+	}
+	if e.Language != nil {
+		o.dcElement("language", "").set(*e.Language)
+	}
+	if e.Authors != nil {
+		o.authors().set(*e.Authors)
+	}
+	if e.Series != nil || e.SeriesIndex != nil {
+		o.series().set(e.Series, e.SeriesIndex)
+	}
+
+	// §5.5.5 asks for the timestamp when the creator makes changes, so an edit
+	// that asks for what the file already says is not one. Comparing the whole
+	// serialization is the only honest test of that: a field's set is free to
+	// decide the document already carries the value, and only the bytes know.
+	if after, _ := o.Bytes(); bytes.Equal(before, after) {
+		return false
+	}
+	o.modified().set(time.Now())
+	return true
+}
+
+// Bib reads the book's metadata out of the document, adding what is not a
+// field's business: whole-book validation and presentation defaults. base is the
+// OPF's own directory, needed only to resolve the cover href.
+func (o *Doc) Bib(base string) (*model.Bib, error) {
+	b := &model.Bib{}
+
+	// Reported as written. §5.5.2 licenses stripping and collapsing whitespace,
+	// which get already did, and nothing else: a value is text, not a path
+	// component. Making it safe to use as one is the business of whoever builds
+	// the path — model.PathSafe, called by the store and the 9P names.
+	title, sortTitle := o.title().get()
+	if title == "" {
+		return nil, errors.New("no title")
+	}
+	b.Title = title
+	b.SortTitle = sortTitle
+	// TODO: decide whether to derive a sort title heuristically when none is set
+	// (calibre strips leading articles, e.g. "The Hobbit" -> "Hobbit, The"); it is
+	// language-dependent, so for now an unset sort title is left empty.
+
+	if b.Authors = o.authors().get(); len(b.Authors) == 0 {
+		return nil, errors.New("no authors")
+	}
+
+	if s := o.series().get(); s != nil {
+		// Defaulted here, not in the field, so a rewrite cannot write it back.
+		if !model.ValidSeriesIndex(s.Index) {
+			s.Index = "1"
+		}
+		b.Series = s
+	}
+
+	b.Description = o.description()
+	b.Language = o.language()
+	b.Pubdate = o.pubdate()
+	b.Identifiers = o.identifiers()
+	b.CoverPath = o.cover(base)
+
+	return b, nil
+}

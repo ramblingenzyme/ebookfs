@@ -197,6 +197,43 @@ func TestLayout(t *testing.T) {
 	}
 }
 
+// TestLayoutSlashInTitleStaysOneDirectory pins that a '/' in a title or an
+// author name cannot split a library directory in two. The epub package reports
+// metadata as the file wrote it (EPUB 3.3 §5.5.2), so a title like "Either/Or"
+// reaches Layout intact and this is the only thing standing between it and a
+// stray nested directory.
+func TestLayoutSlashInTitleStaysOneDirectory(t *testing.T) {
+	s, _ := newStore(t)
+
+	loc := s.Layout([]model.Author{{Name: "AC/DC"}}, "Either/Or", 7)
+	dir := filepath.Dir(loc.EpubPath)
+	if got := strings.Count(dir, string(filepath.Separator)); got != 1 {
+		t.Errorf("directory = %q, want exactly two components, got %d separators", dir, got)
+	}
+	if want := filepath.Join("AC-DC", "Either-Or (7)"); dir != want {
+		t.Errorf("directory = %q, want %q", dir, want)
+	}
+}
+
+// TestLayoutCannotEscapeTheLibraryRoot pins the other half of PathSafe. An
+// author name is read verbatim from the epub, so ".." is a value a file can
+// carry, and filepath.Join would walk it out of the library root — the book
+// written outside the library entirely, with ingest, move and delete all then
+// operating on the escaped path. "." collapses into the root instead.
+func TestLayoutCannotEscapeTheLibraryRoot(t *testing.T) {
+	s, _ := newStore(t)
+
+	for _, name := range []string{"..", ".", "...", " "} {
+		loc := s.Layout([]model.Author{{Name: name}}, "Title", 5)
+		if strings.HasPrefix(loc.EpubPath, ".") || strings.Contains(loc.EpubPath, ".."+string(filepath.Separator)) {
+			t.Errorf("author %q gave EpubPath %q, which leaves the library root", name, loc.EpubPath)
+		}
+		if got := len(strings.Split(filepath.Dir(loc.EpubPath), string(filepath.Separator))); got != 2 {
+			t.Errorf("author %q gave directory %q, want exactly two components", name, filepath.Dir(loc.EpubPath))
+		}
+	}
+}
+
 func TestLayoutUnknownAuthor(t *testing.T) {
 	s, _ := newStore(t)
 

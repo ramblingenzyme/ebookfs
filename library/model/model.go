@@ -162,6 +162,28 @@ type Bib struct {
 // and export directory computations.
 const UnknownAuthor = "Unknown"
 
+// PathSafe makes s usable as a single path component. Metadata values are text
+// and are stored as the file wrote them (EPUB 3.3 §5.5.2), so every place that
+// turns one into a name — a library directory, a 9P entry — has to make it safe
+// itself.
+//
+// Two rules, and both are load-bearing:
+//
+//   - '/' becomes '-', or one component would become two.
+//   - leading and trailing dots, spaces and tabs are trimmed, or an author
+//     named ".." makes filepath.Join walk out of the library root and a book is
+//     written outside it. "." is the same bug one level up.
+//
+// This cannot fail: a value that trims away entirely becomes "_" rather than an
+// error, so callers need no fallback.
+func PathSafe(s string) string {
+	out := strings.Trim(strings.ReplaceAll(s, "/", "-"), ". \t")
+	if out == "" {
+		return "_"
+	}
+	return out
+}
+
 // JoinAuthors renders authors as a display string joined by sep, skipping empty
 // names and falling back to UnknownAuthor when none remain. Callers differ only
 // in sep (" & " for directory names, ", " for log lines), so the filter and

@@ -1,4 +1,4 @@
-package epub
+package epub_test
 
 import (
 	"archive/zip"
@@ -6,8 +6,14 @@ import (
 	"image"
 	"image/jpeg"
 	"image/png"
+	"os"
+	"slices"
+	"strings"
 	"testing"
+	"testing/synctest"
+	"time"
 
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -31,7 +37,10 @@ func tinyPNG(t *testing.T) []byte {
 	return buf.Bytes()
 }
 
-func readEntryFromFile(t *testing.T, path, name string) ([]byte, bool, zip.FileHeader) {
+// readEntryFromFile returns the entry's bytes and whether it was present.
+// readEntry in helpers_ext_test.go is the same lookup for the common case where
+// absence should fail the test.
+func readEntryFromFile(t *testing.T, path, name string) ([]byte, bool) {
 	t.Helper()
 	zrc, err := zip.OpenReader(path)
 	if err != nil {
@@ -49,10 +58,10 @@ func readEntryFromFile(t *testing.T, path, name string) ([]byte, bool, zip.FileH
 			if _, err := b.ReadFrom(rc); err != nil {
 				t.Fatal(err)
 			}
-			return b.Bytes(), true, f.FileHeader
+			return b.Bytes(), true
 		}
 	}
-	return nil, false, zip.FileHeader{}
+	return nil, false
 }
 
 // --- WriteBib --------------------------------------------------------------
@@ -82,7 +91,7 @@ func TestWriteBibSimpleFields(t *testing.T) {
 				t.Errorf("language = %q, want fr", book.Language)
 			}
 			// Re-parse from disk independently to confirm it persisted.
-			reparsed, err := Parse(path)
+			reparsed, err := epub.Parse(path)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -99,27 +108,111 @@ func TestWriteBibPreservesContainerLayout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// mimetype must be first and STORED.
+	// Untouched entries copied verbatim.
+	got, ok := readEntryFromFile(t, path, "OEBPS/chapter1.xhtml")
+	if !ok || !bytes.Equal(got, chapterBytes) {
+		t.Errorf("chapter bytes changed: %q", got)
+	}
+	cover, ok := readEntryFromFile(t, path, "OEBPS/cover.jpg")
+	if !ok || !bytes.Equal(cover, coverBytes) {
+		t.Errorf("cover bytes changed by a metadata-only edit")
+	}
+}
+
+// TestWriteBibDeduplicatesMimetype pins the one place the rewrite deliberately
+// does not copy verbatim. A source with two "mimetype" entries is malformed —
+// OCF requires exactly one, first and stored — so emitting both would preserve
+// the defect in the very respect the hoist exists to fix.
+func TestWriteBibDeduplicatesMimetype(t *testing.T) {
+	mt := entry{name: mimetypePath, data: []byte(mimetypeValue), store: true}
+	entries := append([]entry{mt}, baseEntries(opf3)[1:]...)
+	entries = append(entries, mt)
+
+	path := writeEpub(t, entries)
+	if _, err := writeBib(path, model.Edits{Title: new("Another Title")}); err != nil {
+		t.Fatal(err)
+	}
+
 	zrc, err := zip.OpenReader(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer zrc.Close()
-	if zrc.File[0].Name != "mimetype" {
-		t.Fatalf("first entry = %q, want mimetype", zrc.File[0].Name)
-	}
-	if zrc.File[0].Method != zip.Store {
-		t.Errorf("mimetype method = %d, want Store(%d)", zrc.File[0].Method, zip.Store)
-	}
 
-	// Untouched entries copied verbatim.
-	got, ok, _ := readEntryFromFile(t, path, "OEBPS/chapter1.xhtml")
-	if !ok || !bytes.Equal(got, chapterBytes) {
-		t.Errorf("chapter bytes changed: %q", got)
+	var n int
+	for _, f := range zrc.File {
+		if f.Name == mimetypePath {
+			n++
+		}
 	}
-	cover, ok, _ := readEntryFromFile(t, path, "OEBPS/cover.jpg")
-	if !ok || !bytes.Equal(cover, coverBytes) {
-		t.Errorf("cover bytes changed by a metadata-only edit")
+	if n != 1 {
+		t.Errorf("mimetype entries = %d, want exactly one", n)
+	}
+	assertOCFHeader(t, path, "after the write")
+}
+
+// TestWriteBibHoistsMimetypeToTheFront pins the OCF §4.3.3 layout of what we
+// write. Both input orders are run to show the guarantee is unconditional rather
+// than inherited: every other fixture puts mimetype first, so without the second
+// row the hoist could be deleted with nothing failing.
+//
+// Asserting the byte layout rather than the entry index, since that is what
+// breaks — sniffers read "mimetype" at offset 30 and its content at 38, so one
+// check covers position, STORED, and the MUST NOT on extra fields. validate
+// reads the entry by name and never looks at where it sits.
+func TestWriteBibHoistsMimetypeToTheFront(t *testing.T) {
+	rest := []entry{
+		{name: "META-INF/container.xml", data: []byte(containerXML)},
+		{name: "OEBPS/content.opf", data: []byte(opf3)},
+		{name: "OEBPS/cover.jpg", data: coverBytes},
+		{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
+	}
+	mimetype := entry{name: mimetypePath, data: []byte(mimetypeValue), store: true}
+
+	for _, tc := range []struct {
+		name    string
+		entries []entry
+		// conformingInput says the fixture already satisfies §4.3.3, so the
+		// layout is asserted before the write as well. Without that precondition
+		// this row proves nothing: a fixture that did not conform would come out
+		// conforming anyway, and the assertion would pass without showing that
+		// the input order was preserved rather than overridden.
+		conformingInput bool
+	}{
+		{name: "mimetype last", entries: append(slices.Clone(rest), mimetype)},
+		{name: "mimetype already first", entries: append([]entry{mimetype}, rest...), conformingInput: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeEpub(t, tc.entries)
+			if tc.conformingInput {
+				assertOCFHeader(t, path, "before the write")
+			}
+
+			if _, err := writeBib(path, model.Edits{Title: new("Another Title")}); err != nil {
+				t.Fatal(err)
+			}
+			assertOCFHeader(t, path, "after the write")
+		})
+	}
+}
+
+// assertOCFHeader checks the byte layout OCF §4.3.3 guarantees: the local file
+// header first, "mimetype" as its name at offset 30, and the media type
+// immediately after at 38.
+func assertOCFHeader(t *testing.T, path, when string) {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	end := 38 + len(mimetypeValue)
+	if len(raw) < end {
+		t.Fatalf("%s: archive is %d bytes, too short to carry an OCF header", when, len(raw))
+	}
+	if !bytes.HasPrefix(raw, []byte("PK\x03\x04")) ||
+		string(raw[30:38]) != mimetypePath ||
+		string(raw[38:end]) != mimetypeValue {
+		t.Errorf("%s: OCF header = %q, want mimetype at offset 30 and %q at 38", when, raw[:end], mimetypeValue)
 	}
 }
 
@@ -199,7 +292,7 @@ func TestWriteBibSetsSortTitle(t *testing.T) {
 	}
 
 	// Stored as the standard EPUB 3 file-as refine, never calibre:title_sort.
-	opf, ok, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
+	opf, ok := readEntryFromFile(t, path, "OEBPS/content.opf")
 	if !ok {
 		t.Fatal("OPF entry not found")
 	}
@@ -231,7 +324,7 @@ func TestWriteBibTitleChangeClearsStaleSortTitle(t *testing.T) {
 	// new sort title must clear it rather than leave a value derived from the old
 	// title.
 	path := writeEpub(t, baseEntries(opf3))
-	before, err := Parse(path)
+	before, err := epub.Parse(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,27 +341,37 @@ func TestWriteBibTitleChangeClearsStaleSortTitle(t *testing.T) {
 	}
 }
 
-func TestWriteBibSortTitleIgnoredForEpub2(t *testing.T) {
-	// Sort titles are an EPUB 3 feature; setting one on an EPUB 2 file is a no-op
-	// and must not introduce a file-as refine or a calibre:title_sort meta.
+func TestWriteBibSortTitleForEpub2UsesCalibreMeta(t *testing.T) {
+	// EPUB 2 has no standard sort-title mechanism, so the proprietary meta calibre
+	// writes is used instead — the same fallback this package already uses for the
+	// series. A refinement is an EPUB 3 construct and must not appear.
 	path := writeEpub(t, baseEntries(opf2))
-	book, err := writeBib(path, model.Edits{SortTitle: new("Ignored, This")})
+	book, err := writeBib(path, model.Edits{SortTitle: new("Sorted, This")})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if book.SortTitle != "" {
-		t.Errorf("sort title = %q, want empty (ignored for EPUB 2)", book.SortTitle)
+	if book.SortTitle != "Sorted, This" {
+		t.Errorf("sort title = %q, want %q", book.SortTitle, "Sorted, This")
 	}
 
-	opf, ok, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
+	opf, ok := readEntryFromFile(t, path, "OEBPS/content.opf")
 	if !ok {
 		t.Fatal("OPF entry not found")
+	}
+	if !bytes.Contains(opf, []byte(`<meta name="calibre:title_sort" content="Sorted, This"/>`)) {
+		t.Errorf("expected calibre:title_sort, got:\n%s", opf)
 	}
 	if bytes.Contains(opf, []byte(`property="file-as"`)) {
 		t.Error("EPUB 2 OPF must not gain a file-as refine")
 	}
+
+	// Clearing it takes the meta with it rather than leaving a stale value.
+	if _, err := writeBib(path, model.Edits{Title: new("Retitled")}); err != nil {
+		t.Fatal(err)
+	}
+	opf, _ = readEntryFromFile(t, path, "OEBPS/content.opf")
 	if bytes.Contains(opf, []byte("calibre:title_sort")) {
-		t.Error("EPUB 2 OPF must not gain calibre:title_sort")
+		t.Errorf("a title change left a stale calibre:title_sort:\n%s", opf)
 	}
 }
 
@@ -291,7 +394,7 @@ func TestWriteBibBlankTitleRejected(t *testing.T) {
 		t.Fatal("expected error blanking title, got nil")
 	}
 	// Original must be untouched and still valid.
-	book, err := Parse(path)
+	book, err := epub.Parse(path)
 	if err != nil {
 		t.Fatalf("original epub broken after rejected edit: %v", err)
 	}
@@ -310,6 +413,118 @@ func TestWriteBibRefusesEncryptedOPF(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3, entry{name: "META-INF/encryption.xml", data: []byte(enc)}))
 	if _, err := writeBib(path, model.Edits{Title: new("Hack")}); err == nil {
 		t.Fatal("expected refusal on encrypted OPF, got nil")
+	}
+}
+
+// TestWriteBibRefusesEncryptedOPFDeclaredAsAURL covers the decoded half of
+// CipherReference/@URI: a URL attribute, so "OEBPS/my book.opf" is declared
+// "OEBPS/my%20book.opf" while the zip entry holds the decoded name.
+//
+// Undecoded, the map is keyed by a name no entry has, IsEncrypted finds nothing,
+// and the edit rewrites a genuinely encrypted package document.
+func TestWriteBibRefusesEncryptedOPFDeclaredAsAURL(t *testing.T) {
+	const container = `<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/my%20book.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`
+	enc := `<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" xmlns:enc="http://www.w3.org/2001/04/xmlenc#">
+  <enc:EncryptedData>
+    <enc:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes256-cbc"/>
+    <enc:CipherData><enc:CipherReference URI="OEBPS/my%20book.opf"/></enc:CipherData>
+  </enc:EncryptedData>
+</encryption>`
+
+	path := writeEpub(t, []entry{
+		{name: mimetypePath, data: []byte(mimetypeValue), store: true},
+		{name: "META-INF/container.xml", data: []byte(container)},
+		{name: "META-INF/encryption.xml", data: []byte(enc)},
+		{name: "OEBPS/my book.opf", data: []byte(opf3)}, // literal space
+		{name: "OEBPS/cover.jpg", data: coverBytes},
+		{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
+	})
+
+	if _, err := writeBib(path, model.Edits{Title: new("Hack")}); err == nil {
+		t.Fatal("edited an encrypted package document declared with a percent-encoded URI")
+	}
+}
+
+// Both values read from encryption.xml are XML attributes, which encoding/xml
+// does not normalize. A wrapped Algorithm should still be recognised as font
+// obfuscation (so the edit is allowed); a wrapped URI should still identify the
+// entry (so an encrypted OPF edit is refused).
+func TestEncryptionAttributesAreCollapsed(t *testing.T) {
+	t.Run("wrapped obfuscation algorithm still allows the edit", func(t *testing.T) {
+		enc := `<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" xmlns:enc="http://www.w3.org/2001/04/xmlenc#">
+  <enc:EncryptedData>
+    <enc:EncryptionMethod Algorithm="
+        http://www.idpf.org/2008/embedding
+      "/>
+    <enc:CipherData><enc:CipherReference URI="OEBPS/fonts/x.otf"/></enc:CipherData>
+  </enc:EncryptedData>
+</encryption>`
+		path := writeEpub(t, baseEntries(opf3,
+			entry{name: "META-INF/encryption.xml", data: []byte(enc)},
+			entry{name: "OEBPS/fonts/x.otf", data: []byte("obfuscated")},
+		))
+		if _, err := writeBib(path, model.Edits{Title: new("Fine")}); err != nil {
+			t.Errorf("font obfuscation with a wrapped algorithm blocked the edit: %v", err)
+		}
+	})
+
+	t.Run("wrapped URI still identifies the encrypted OPF", func(t *testing.T) {
+		enc := `<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" xmlns:enc="http://www.w3.org/2001/04/xmlenc#">
+  <enc:EncryptedData>
+    <enc:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes256-cbc"/>
+    <enc:CipherData><enc:CipherReference URI="
+        OEBPS/content.opf
+      "/></enc:CipherData>
+  </enc:EncryptedData>
+</encryption>`
+		path := writeEpub(t, baseEntries(opf3, entry{name: "META-INF/encryption.xml", data: []byte(enc)}))
+		if _, err := epub.Rewrite(path, book(t, path), model.Edits{Title: new("Hack")}); err == nil {
+			t.Error("edited an encrypted OPF whose URI was wrapped")
+		}
+	})
+}
+
+// TestWriteBibRefusesEncryptedEntryNamedLiterally is the fail-open half of the
+// URI rule. A producer that wrote an unencoded name into both encryption.xml and
+// the zip has an entry whose name really does contain "%20", so the decoded form
+// matches nothing and isEncrypted reports a genuinely encrypted entry as
+// readable — and createReplace refuses edits on the strength of that answer.
+//
+// packagePaths already guards the same producer for the container's full-path by
+// trying the decoded form and then the literal. This is that rule applied where
+// getting it wrong lets an edit rewrite encrypted content.
+func TestWriteBibRefusesEncryptedEntryNamedLiterally(t *testing.T) {
+	const container = `<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/a%20b.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`
+	enc := `<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" xmlns:enc="http://www.w3.org/2001/04/xmlenc#">
+  <enc:EncryptedData>
+    <enc:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes256-cbc"/>
+    <enc:CipherData><enc:CipherReference URI="OEBPS/a%20b.opf"/></enc:CipherData>
+  </enc:EncryptedData>
+</encryption>`
+
+	// The entry name contains the percent-encoding literally, so the raw value is
+	// what matches and the decoded one does not.
+	path := writeEpub(t, []entry{
+		{name: "mimetype", data: []byte(mimetypeValue), store: true},
+		{name: "META-INF/container.xml", data: []byte(container)},
+		{name: "META-INF/encryption.xml", data: []byte(enc)},
+		{name: "OEBPS/a%20b.opf", data: []byte(opf3)},
+		{name: "OEBPS/cover.jpg", data: coverBytes},
+		{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
+	})
+
+	if _, err := writeBib(path, model.Edits{Title: new("Hack")}); err == nil {
+		t.Fatal("edited an encrypted package document whose URI was written literally")
 	}
 }
 
@@ -379,7 +594,7 @@ func TestWriteCoverWithDirectoryEntries(t *testing.T) {
 	if _, err := writeCover(path, "OEBPS/cover.jpg", newCover); err != nil {
 		t.Fatal(err)
 	}
-	r, err := OpenReader(path, "OEBPS/cover.jpg")
+	r, err := epub.OpenReader(path, "OEBPS/cover.jpg")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -418,7 +633,7 @@ func TestWriteCoverReplaces(t *testing.T) {
 	if _, err := writeCover(path, "OEBPS/cover.jpg", newCover); err != nil {
 		t.Fatal(err)
 	}
-	r, err := OpenReader(path, "OEBPS/cover.jpg")
+	r, err := epub.OpenReader(path, "OEBPS/cover.jpg")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -431,7 +646,7 @@ func TestWriteCoverReplaces(t *testing.T) {
 		t.Errorf("cover = %q, want the supplied JPEG bytes", got)
 	}
 	// A cover swap leaves the chapter untouched.
-	ch, ok, _ := readEntryFromFile(t, path, "OEBPS/chapter1.xhtml")
+	ch, ok := readEntryFromFile(t, path, "OEBPS/chapter1.xhtml")
 	if !ok || !bytes.Equal(ch, chapterBytes) {
 		t.Errorf("chapter changed by cover swap")
 	}
@@ -482,7 +697,7 @@ func reindexSeries(t *testing.T, path, series, index string) model.Bib {
 		Location: model.Location{EpubPath: path},
 		Bib:      model.Bib{Series: &model.SeriesRef{Name: series, Index: "1"}},
 	}
-	bib, err := Rewrite(path, b, model.Edits{SeriesIndex: new(index)})
+	bib, err := epub.Rewrite(path, b, model.Edits{SeriesIndex: new(index)})
 	if err != nil {
 		t.Fatalf("Rewrite: %v", err)
 	}
@@ -581,7 +796,7 @@ func TestSetSeriesReusesCollection(t *testing.T) {
 		t.Fatalf("series = %+v, want The Quartet at 2", book.Series)
 	}
 
-	opfBytes, ok, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
+	opfBytes, ok := readEntryFromFile(t, path, "OEBPS/content.opf")
 	if !ok {
 		t.Fatal("OPF entry not found")
 	}
@@ -604,7 +819,7 @@ func TestSetSeriesReusesCollection(t *testing.T) {
 	if _, err := writeBib(path, model.Edits{Series: new(string)}); err != nil {
 		t.Fatal(err)
 	}
-	opfBytes, ok, _ = readEntryFromFile(t, path, "OEBPS/content.opf")
+	opfBytes, ok = readEntryFromFile(t, path, "OEBPS/content.opf")
 	if !ok {
 		t.Fatal("OPF entry not found")
 	}
@@ -637,7 +852,7 @@ func TestSetSeriesPreservesSets(t *testing.T) {
 	}
 
 	// The set should still be present in the OPF
-	opfBytes, ok, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
+	opfBytes, ok := readEntryFromFile(t, path, "OEBPS/content.opf")
 	if !ok {
 		t.Fatal("OPF entry not found")
 	}
@@ -663,7 +878,7 @@ func TestSetAuthorsReuseBookkeeping(t *testing.T) {
 
 	opf := func(t *testing.T) []byte {
 		t.Helper()
-		b, ok, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
+		b, ok := readEntryFromFile(t, path, "OEBPS/content.opf")
 		if !ok {
 			t.Fatal("OPF entry not found")
 		}
@@ -722,4 +937,178 @@ func TestSetAuthorsReuseBookkeeping(t *testing.T) {
 			t.Error("refinements still point at creator1 after the author was dropped")
 		}
 	})
+}
+
+// TestModifiedStampIsWrittenOnlyForARealChange pins both halves of the
+// dcterms:modified rule. synctest gives the bubble a fake clock that only moves
+// when the test sleeps, so the stamp is an exact value rather than a format
+// check: a real edit records the time, and an edit asking for what the file
+// already says records nothing, even an hour later.
+func TestModifiedStampIsWrittenOnlyForARealChange(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		path := writeEpub(t, baseEntries(opf3With("")))
+		opfOf := func() []byte {
+			t.Helper()
+			b, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
+			return b
+		}
+
+		title := "A New Title"
+		if _, err := writeBib(path, model.Edits{Title: &title}); err != nil {
+			t.Fatal(err)
+		}
+		want := []byte(`<meta property="dcterms:modified">2000-01-01T00:00:00Z</meta>`)
+		if !bytes.Contains(opfOf(), want) {
+			t.Errorf("stamp is not the time of the edit:\n%s", opfOf())
+		}
+
+		// Same title an hour later: nothing changes, so nothing is restamped.
+		time.Sleep(time.Hour)
+		if _, err := writeBib(path, model.Edits{Title: &title}); err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Contains(opfOf(), want) {
+			t.Errorf("a no-op edit restamped dcterms:modified:\n%s", opfOf())
+		}
+	})
+}
+
+// TestNoOpBibEditDoesNotRewriteTheFile pins the skip: an edit asking for what
+// the OPF already says leaves the epub alone. os.SameFile compares device and
+// inode, so it catches the rewrite even when the rebuilt zip is byte-identical
+// — rewriteEpub builds a temp file and renames it over the original.
+//
+// The returned Bib still comes from the file, which is the half the skip must
+// not cost us.
+func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
+	path := writeEpub(t, baseEntries(opf3))
+	statOf := func() os.FileInfo {
+		t.Helper()
+		fi, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return fi
+	}
+
+	before := statOf()
+	current, err := epub.Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Both halves: a Title with no SortTitle clears a stale sort title, which is
+	// a real change (TestWriteBibTitleChangeClearsStaleSortTitle), and opf3
+	// carries one.
+	for _, tc := range []struct {
+		name string
+		e    model.Edits
+	}{
+		{"title with its existing sort title", model.Edits{Title: &current.Title, SortTitle: &current.SortTitle}},
+		{"description already equal", model.Edits{Description: &current.Description}},
+		{"language already equal", model.Edits{Language: &current.Language}},
+	} {
+		bib, err := writeBib(path, tc.e)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if !os.SameFile(before, statOf()) {
+			t.Errorf("%s: an edit asking for what the OPF already carries rewrote the epub", tc.name)
+		}
+		if bib.Title != current.Title {
+			t.Errorf("%s: bib.Title = %q, want %q read back from the file", tc.name, bib.Title, current.Title)
+		}
+	}
+
+	// Control: a real change must still land, or the check above proves nothing.
+	changed := current.Title + " (Revised)"
+	if _, err := writeBib(path, model.Edits{Title: &changed}); err != nil {
+		t.Fatal(err)
+	}
+	if os.SameFile(before, statOf()) {
+		t.Error("a real title change did not rewrite the epub")
+	}
+}
+
+// TestParseReadsCalibreTitleSortFromEpub2 is the read half. calibre records a v2
+// sort title in calibre:title_sort and nowhere else, so without this fallback
+// every calibre-managed v2 book reads back as having no sort title at all.
+func TestParseReadsCalibreTitleSortFromEpub2(t *testing.T) {
+	opf := strings.Replace(opf2, "  </metadata>",
+		`    <meta name="calibre:title_sort" content="Hobbit, The"/>`+"\n  </metadata>", 1)
+	bib, err := epub.Parse(writeEpub(t, baseEntries(opf)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bib.SortTitle != "Hobbit, The" {
+		t.Errorf("sort title = %q, want %q from calibre:title_sort", bib.SortTitle, "Hobbit, The")
+	}
+}
+
+// TestWriteBibSortTitleKeepsCalibreMetaInStepForEpub3 pins the v3 half of the
+// same rule the series follows: the calibre meta is updated when the file
+// already carries one, so it cannot be left contradicting the refinement, but is
+// never injected into a file without one (TestWriteBibSetsSortTitle).
+func TestWriteBibSortTitleKeepsCalibreMetaInStepForEpub3(t *testing.T) {
+	path := writeEpub(t, baseEntries(opf3With(`    <meta name="calibre:title_sort" content="Stale, The"/>`)))
+	book, err := writeBib(path, model.Edits{SortTitle: new("Fresh, The")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if book.SortTitle != "Fresh, The" {
+		t.Errorf("sort title = %q, want %q", book.SortTitle, "Fresh, The")
+	}
+
+	opf, ok := readEntryFromFile(t, path, "OEBPS/content.opf")
+	if !ok {
+		t.Fatal("OPF entry not found")
+	}
+	if bytes.Contains(opf, []byte("Stale, The")) {
+		t.Errorf("calibre:title_sort left contradicting the refinement:\n%s", opf)
+	}
+	if !bytes.Contains(opf, []byte(`<meta name="calibre:title_sort" content="Fresh, The"/>`)) {
+		t.Errorf("calibre:title_sort not kept in step:\n%s", opf)
+	}
+	if !bytes.Contains(opf, []byte(`property="file-as">Fresh, The<`)) {
+		t.Errorf("file-as refinement not updated:\n%s", opf)
+	}
+}
+
+// TestFailedValidationLeavesTheOriginal covers rewriteEpub's last line of
+// defence: it re-parses the rewritten epub before renaming, so a write that
+// would produce an unreadable book is abandoned. Nothing else exercises it.
+//
+// The trigger is a sort-title-only edit on a package with no <dc:title>: the
+// refinement needs an element to bind to, so one is minted empty, and an empty
+// title is not a book. Reachable only if the file changed on disk after being
+// indexed, since Parse rejects a titleless package.
+func TestFailedValidationLeavesTheOriginal(t *testing.T) {
+	opf := opf3
+	for _, drop := range []string{
+		`    <dc:title id="t1">Original Title</dc:title>` + "\n",
+		`    <meta refines="#t1" property="file-as">Title, Original</meta>` + "\n",
+	} {
+		if !strings.Contains(opf, drop) {
+			t.Fatalf("opf3 changed; cannot drop %q to build a titleless package", drop)
+		}
+		opf = strings.Replace(opf, drop, "", 1)
+	}
+	path := writeEpub(t, baseEntries(opf))
+
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := writeBib(path, model.Edits{SortTitle: new("Hobbit, The")}); err == nil {
+		t.Fatal("expected the rewrite to be rejected, got nil")
+	}
+
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Error("a rejected rewrite modified the original epub")
+	}
 }

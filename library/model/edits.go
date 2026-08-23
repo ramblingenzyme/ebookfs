@@ -170,10 +170,16 @@ func (e Edits) validateAuthors() string {
 	if len(*e.Authors) == 0 {
 		return "at least one author is required"
 	}
+	seen := map[string]bool{}
 	for i, a := range *e.Authors {
-		if strings.TrimSpace(a.Name) == "" {
+		name := strings.TrimSpace(a.Name)
+		if name == "" {
 			return fmt.Sprintf("author %d has an empty name", i+1)
 		}
+		if seen[name] {
+			return fmt.Sprintf("author %d duplicates %q", i+1, name)
+		}
+		seen[name] = true
 	}
 	return ""
 }

@@ -7,60 +7,79 @@ import (
 	"image"
 	_ "image/jpeg" // register JPEG decoder for image.DecodeConfig
 	_ "image/png"  // register PNG decoder for image.DecodeConfig
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-// Rewrite applies the requested changes from e to the epub at epubPath
-// atomically. Every refusal check runs before any file is written — the
-// original is never touched on error.
+// Rewrite applies e to the epub at epubPath atomically. Every refusal runs
+// before anything is written, so the original survives an error. It returns the
+// Bib read back from the file, except when e has no edits at all and b.Bib is
+// returned untouched.
 //
-// It returns the book's authoritative Bib: the re-parsed result when a rewrite
-// happened, or b.Bib unchanged when e carried no bib or cover edits (the
-// no-op case). The result is a value, never a nil-pointer sentinel.
+// An edit asking for what the file already says skips the zip rebuild but is
+// still re-parsed, and refusals apply before that is known.
 //
-// b is used only for validation and for locating the cover entry within the
-// zip; its EpubPath field is not read — the caller provides the resolved
-// absolute path separately so the epub package does not need to know the store
-// root.
+// b is used only for validation and to locate the cover entry; its EpubPath is
+// not read, so this package never resolves against the store root.
 func Rewrite(epubPath string, b *model.Book, e model.Edits) (model.Bib, error) {
 	if !e.HasCoverEdit() && !e.HasBibEdits() {
 		return b.Bib, nil
 	}
 
-	// Library.Edit is the enforcement point that validates every edit
-	// (including the meta-only ones that noop out above); this re-check is a
-	// defensive backstop so an unvalidated Edits can never rewrite an epub.
+	// Backstop: Library.Edit is the enforcement point, and an unvalidated Edits
+	// must never reach a file.
 	if v := e.Validate(b); v != nil {
 		return model.Bib{}, v
 	}
 
 	zrc, err := zip.OpenReader(epubPath)
 	if err != nil {
-		return model.Bib{}, err
+		return model.Bib{}, notEpub(epubPath, err)
 	}
 	defer zrc.Close()
 
-	replace, err := createReplace(zrc, b, e)
+	a, err := openArchive(&zrc.Reader)
 	if err != nil {
 		return model.Bib{}, err
 	}
+	if err := a.validate(); err != nil {
+		return model.Bib{}, err
+	}
 
-	bib, err := rewriteEpub(epubPath, zrc, replace)
+	replace, err := createReplace(a, b, e)
+	if err != nil {
+		return model.Bib{}, err
+	}
+	// Nothing to write, but the file is still re-read rather than trusting the
+	// Bib the caller handed in: library.Edit builds that from the index, which
+	// can disagree with the epub, and an edit is an occasion to reconcile it.
+	// Only the zip rebuild is skipped.
+	if len(replace) == 0 {
+		bib, err := Parse(epubPath)
+		if err != nil {
+			return model.Bib{}, err
+		}
+		return *bib, nil
+	}
+
+	bib, err := rewriteEpub(epubPath, a, replace)
 	if err != nil {
 		return model.Bib{}, err
 	}
 	return *bib, nil
 }
 
-func createReplace(zrc *zip.ReadCloser, b *model.Book, e model.Edits) (map[string][]byte, error) {
-	enc, err := readEncryption(&zrc.Reader)
+func createReplace(a *archive, b *model.Book, e model.Edits) (map[string][]byte, error) {
+	enc, err := a.readEncryption()
 	if err != nil {
 		return nil, err
 	}
-	replace := make(map[string][]byte, 2) // only 2 possible entries
+	replace := make(map[string][]byte, 2)
 
 	if e.HasCoverEdit() {
 		want := coverFormat(b.CoverPath)
@@ -74,41 +93,45 @@ func createReplace(zrc *zip.ReadCloser, b *model.Book, e model.Edits) (map[strin
 		if got != want {
 			return nil, fmt.Errorf("cover image is %s but the epub's cover entry %q is %s; a matching format is required (no transcoding)", got, b.CoverPath, want)
 		}
-		if findEntry(&zrc.Reader, b.CoverPath) == nil {
+		if !a.has(b.CoverPath) {
 			return nil, fmt.Errorf("cover not found in epub: %s", b.CoverPath)
 		}
-		if enc.isEncrypted(b.CoverPath) {
+		if enc.IsEncrypted(b.CoverPath) {
 			return nil, fmt.Errorf("refusing to replace encrypted cover: %s", b.CoverPath)
 		}
 		replace[b.CoverPath] = *e.Cover
 	}
 
 	if e.HasBibEdits() {
-		opf, err := opfPath(&zrc.Reader)
+		opfEntry := a.opf
+		if enc.IsEncrypted(opfEntry) {
+			return nil, fmt.Errorf("refusing to edit: package document %q is encrypted", opfEntry)
+		}
+		opfBytes, err := a.read(opfEntry)
 		if err != nil {
 			return nil, err
 		}
-		if enc.isEncrypted(opf) {
-			return nil, fmt.Errorf("refusing to edit: package document %q is encrypted", opf)
-		}
-		opfBytes, err := readEntry(&zrc.Reader, opf)
+		doc, err := opf.Parse(opfBytes)
 		if err != nil {
 			return nil, err
 		}
-		newOPF, err := editOPF(opfBytes, e)
-		if err != nil {
-			return nil, err
+		// An edit asking for what the file already says leaves no entry to
+		// replace, which is what lets Rewrite skip the rewrite entirely.
+		if doc.Apply(e) {
+			newOPF, err := doc.Bytes()
+			if err != nil {
+				return nil, err
+			}
+			replace[opfEntry] = newOPF
 		}
-		replace[opf] = newOPF
 	}
 
 	return replace, nil
 }
 
-// coverFormat maps a cover entry's path to the image format name (as reported by
-// image.DecodeConfig) that may replace it in place, or "" if the extension is
-// not an in-place-replaceable raster cover (matching calibre's png/jpg/jpeg
-// restriction).
+// coverFormat maps a cover entry's path to the image.DecodeConfig format name
+// that may replace it in place, or "" for anything outside calibre's png/jpg/jpeg
+// restriction.
 func coverFormat(coverPath string) string {
 	switch strings.ToLower(path.Ext(coverPath)) {
 	case ".jpg", ".jpeg":
@@ -118,4 +141,49 @@ func coverFormat(coverPath string) string {
 	default:
 		return ""
 	}
+}
+
+// rewriteEpub writes a temp epub beside epubPath with the named entries swapped,
+// then renames it over the original. The temp file is cleaned up on any failure.
+//
+// Faithfulness rules, matching what calibre's safe_replace honours:
+//   - mimetype is written first and copied byte-for-byte, keeping its STORED
+//     form so magic-byte sniffers still recognise the file;
+//   - untouched entries are copied raw, preserving order, modtime and method;
+//   - every key in replace must match an entry, so a mistargeted edit fails
+//     loudly rather than silently dropping.
+func rewriteEpub(epubPath string, a *archive, replace map[string][]byte) (*model.Bib, error) {
+	dir := filepath.Dir(epubPath)
+	tmp, err := os.CreateTemp(dir, ".ebookfs-*.epub.tmp")
+	if err != nil {
+		return nil, err
+	}
+
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	defer tmp.Close()
+
+	zw := zip.NewWriter(tmp)
+	if err := a.writeTo(zw, replace); err != nil {
+		return nil, err
+	}
+
+	if err := zw.Close(); err != nil {
+		return nil, err
+	}
+	if err := tmp.Sync(); err != nil {
+		return nil, err
+	}
+	if err := tmp.Close(); err != nil {
+		return nil, err
+	}
+
+	// Verify by re-parsing before we touch the original. A blanked title, dropped
+	// authors, or any structural breakage fails here and the original survives.
+	book, err := Parse(tmpPath)
+	if err != nil {
+		return nil, fmt.Errorf("rewritten epub failed validation: %w", err)
+	}
+
+	return book, os.Rename(tmpPath, epubPath)
 }

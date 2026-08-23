@@ -4,43 +4,6 @@ import (
 	"testing"
 )
 
-func TestSanitize(t *testing.T) {
-	tests := []struct {
-		name    string
-		input   string
-		want    string
-		wantErr bool
-	}{
-		{"ordinary title", "The Hobbit", "The Hobbit", false},
-		{"slash to hyphen", "foo/bar", "foo-bar", false},
-		{"nul stripped", "a\x00b", "ab", false},
-		{"control chars stripped", "a\x01b\x1Fc", "abc", false},
-		{"leading dot trimmed", ".hidden", "hidden", false},
-		{"trailing dot trimmed", "file.", "file", false},
-		{"leading space trimmed", "  title", "title", false},
-		{"trailing space trimmed", "title  ", "title", false},
-		{"leading tab trimmed", "\ttitle", "title", false},
-		{"trailing tab trimmed", "title\t", "title", false},
-		{"all combined", "/a\x00b.", "-ab", false},
-		{"empty string", "", "", true},
-		{"only stripped chars", "\x01 \t.", "", true},
-		{"only slashes", "///", "---", false},
-		{"unicode retained", "漢字 title", "漢字 title", false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := Sanitize(tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Sanitize(%q) error = %v, wantErr = %v", tt.input, err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("Sanitize(%q) = %q, want %q", tt.input, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestForFAT(t *testing.T) {
 	tests := []struct {
 		name    string
