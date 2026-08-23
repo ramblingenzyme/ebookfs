@@ -1,4 +1,4 @@
-package epub
+package epub_test
 
 import (
 	"archive/zip"
@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -163,7 +164,7 @@ func withoutEntry(entries []entry, name string) []entry {
 
 func TestTranslateCoverSkipsMarkupCoverImage(t *testing.T) {
 	path := writeEpub(t, baseEntries(opfMarkupCoverImage))
-	book, err := Parse(path)
+	book, err := epub.Parse(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +184,7 @@ func TestParseResolvesEncodedCoverHref(t *testing.T) {
     <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`,
 	)
 	entries := []entry{
-		{name: "mimetype", data: []byte("application/epub+zip"), store: true},
+		{name: "mimetype", data: []byte(mimetypeValue), store: true},
 		{name: "META-INF/container.xml", data: []byte(containerXML)},
 		{name: "OEBPS/content.opf", data: []byte(opfEncoded)},
 		{name: "OEBPS/cover image.jpg", data: coverBytes}, // literal space in the entry name
@@ -191,14 +192,14 @@ func TestParseResolvesEncodedCoverHref(t *testing.T) {
 	}
 	path := writeEpub(t, entries)
 
-	book, err := Parse(path)
+	book, err := epub.Parse(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if book.CoverPath != "OEBPS/cover image.jpg" {
 		t.Fatalf("cover path = %q, want OEBPS/cover image.jpg", book.CoverPath)
 	}
-	r, err := OpenReader(path, book.CoverPath)
+	r, err := epub.OpenReader(path, book.CoverPath)
 	if err != nil {
 		t.Fatalf("OpenReader failed for an encoded-href cover: %v", err)
 	}
@@ -230,20 +231,20 @@ func TestParseResolvesEncodedRootfilePath(t *testing.T) {
 </container>`
 
 	path := writeEpub(t, []entry{
-		{name: "mimetype", data: []byte("application/epub+zip"), store: true},
+		{name: "mimetype", data: []byte(mimetypeValue), store: true},
 		{name: "META-INF/container.xml", data: []byte(container)},
 		{name: "OEBPS/My Book.opf", data: []byte(opf3)}, // literal space in the entry name
 		{name: "OEBPS/cover.jpg", data: coverBytes},
 		{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
 	})
 
-	if _, err := Parse(path); err != nil {
+	if _, err := epub.Parse(path); err != nil {
 		t.Fatalf("Parse failed for a percent-encoded full-path: %v", err)
 	}
 	if _, err := writeBib(path, model.Edits{Title: new("Another Title")}); err != nil {
 		t.Fatalf("edit failed for a percent-encoded full-path: %v", err)
 	}
-	bib, err := Parse(path)
+	bib, err := epub.Parse(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,14 +270,14 @@ func TestParseCollapsesRootfileMediaType(t *testing.T) {
 </container>`
 
 	path := writeEpub(t, []entry{
-		{name: "mimetype", data: []byte("application/epub+zip"), store: true},
+		{name: "mimetype", data: []byte(mimetypeValue), store: true},
 		{name: "META-INF/container.xml", data: []byte(container)},
 		{name: "OEBPS/content.opf", data: []byte(opf3)},
 		{name: "OEBPS/cover.jpg", data: coverBytes},
 		{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
 	})
 
-	if _, err := Parse(path); err != nil {
+	if _, err := epub.Parse(path); err != nil {
 		t.Fatalf("Parse failed for a padded rootfile media-type: %v", err)
 	}
 }
@@ -303,7 +304,7 @@ func TestParseAndWriteAgreeOnADuplicateEntry(t *testing.T) {
 		{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
 	})
 
-	bib, err := Parse(path)
+	bib, err := epub.Parse(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,7 +317,7 @@ func TestParseAndWriteAgreeOnADuplicateEntry(t *testing.T) {
 	if _, err := writeBib(path, model.Edits{Title: new("Edited Title")}); err != nil {
 		t.Fatal(err)
 	}
-	bib, err = Parse(path)
+	bib, err = epub.Parse(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -363,7 +364,7 @@ func TestParseRootfilePathEdgeCases(t *testing.T) {
 				{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
 			})
 
-			if _, err := Parse(path); err != nil {
+			if _, err := epub.Parse(path); err != nil {
 				t.Fatalf("full-path %q naming entry %q: %v", tc.declared, tc.entry, err)
 			}
 		})
@@ -377,27 +378,27 @@ func TestParseRejectsNonZip(t *testing.T) {
 	if err := os.WriteFile(p, []byte("this is plainly not a zip archive"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Parse(p); !errors.Is(err, ErrNotEpub) {
+	if _, err := epub.Parse(p); !errors.Is(err, epub.ErrNotEpub) {
 		t.Fatalf("err = %v, want ErrNotEpub", err)
 	}
 }
 
 func TestParseReportsMissingFile(t *testing.T) {
-	if _, err := Parse(filepath.Join(t.TempDir(), "absent.epub")); err == nil {
+	if _, err := epub.Parse(filepath.Join(t.TempDir(), "absent.epub")); err == nil {
 		t.Fatal("expected an error for a missing file, got nil")
 	}
 }
 
 func TestParseRejectsWrongMimetype(t *testing.T) {
 	p := writeEpub(t, withMimetype(baseEntries(opf3), "application/zip"))
-	if _, err := Parse(p); !errors.Is(err, ErrNotEpub) {
+	if _, err := epub.Parse(p); !errors.Is(err, epub.ErrNotEpub) {
 		t.Fatalf("err = %v, want ErrNotEpub", err)
 	}
 }
 
 func TestParseRejectsMissingMimetype(t *testing.T) {
 	p := writeEpub(t, withoutEntry(baseEntries(opf3), "mimetype"))
-	if _, err := Parse(p); !errors.Is(err, ErrNotEpub) {
+	if _, err := epub.Parse(p); !errors.Is(err, epub.ErrNotEpub) {
 		t.Fatalf("err = %v, want ErrNotEpub", err)
 	}
 }
@@ -405,7 +406,7 @@ func TestParseRejectsMissingMimetype(t *testing.T) {
 func TestParseToleratesMimetypeWhitespace(t *testing.T) {
 	// A trailing newline on the mimetype is tolerated (trimmed), matching calibre.
 	p := writeEpub(t, withMimetype(baseEntries(opf3), "application/epub+zip\n"))
-	if _, err := Parse(p); err != nil {
+	if _, err := epub.Parse(p); err != nil {
 		t.Fatalf("Parse rejected a whitespace-padded mimetype: %v", err)
 	}
 }
@@ -491,7 +492,7 @@ func TestParseDistinguishesMissingFromUndeclared(t *testing.T) {
     <rootfile full-path="OEBPS/nowhere.opf" media-type="application/oebps-package+xml"/>
   </rootfiles>
 </container>`,
-			want: ErrRootfileMissing,
+			want: epub.ErrRootfileMissing,
 		},
 		{
 			name: "no rootfile of the package media type",
@@ -501,7 +502,7 @@ func TestParseDistinguishesMissingFromUndeclared(t *testing.T) {
     <rootfile full-path="OEBPS/content.opf" media-type="application/x-something-else"/>
   </rootfiles>
 </container>`,
-			want: ErrNoRootfile,
+			want: epub.ErrNoRootfile,
 		},
 		{
 			name: "no rootfiles at all",
@@ -509,12 +510,12 @@ func TestParseDistinguishesMissingFromUndeclared(t *testing.T) {
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
   <rootfiles></rootfiles>
 </container>`,
-			want: ErrNoRootfile,
+			want: epub.ErrNoRootfile,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEpub(t, withContainer(baseEntries(opf3), tc.container))
-			_, err := Parse(path)
+			_, err := epub.Parse(path)
 			if !errors.Is(err, tc.want) {
 				t.Errorf("err = %v, want %v", err, tc.want)
 			}
@@ -527,7 +528,7 @@ func TestParseDistinguishesMissingFromUndeclared(t *testing.T) {
 func TestMultipleRootfilesKobo(t *testing.T) {
 	path := writeEpub(t, withContainer(baseEntries(opf3), multiRootContainer))
 
-	book, err := Parse(path)
+	book, err := epub.Parse(path)
 	if err != nil {
 		t.Fatalf("Parse failed on Kobo multi-rootfile epub: %v", err)
 	}
@@ -548,7 +549,7 @@ func TestMultipleRootfilesKobo(t *testing.T) {
 // and the legacy calibre:series read instead — not mistaken for the series.
 func TestTranslateSeriesSetCollectionIgnored(t *testing.T) {
 	path := writeEpub(t, baseEntries(opfSeriesSetCollection))
-	book, err := Parse(path)
+	book, err := epub.Parse(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -617,7 +618,7 @@ func TestTranslateDateSelection(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEpub(t, baseEntries(opfWithDates(tc.dates)))
-			book, err := Parse(path)
+			book, err := epub.Parse(path)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -632,7 +633,7 @@ func TestTranslateDateSelection(t *testing.T) {
 // be mistaken for the publication date.
 func TestTranslateDateIgnoresDctermsModified(t *testing.T) {
 	path := writeEpub(t, baseEntries(opfV3WithModified))
-	book, err := Parse(path)
+	book, err := epub.Parse(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -653,7 +654,7 @@ func TestTranslateSeriesDefaultsIndexToOne(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEpub(t, baseEntries(tc.opf))
-			book, err := Parse(path)
+			book, err := epub.Parse(path)
 			if err != nil {
 				t.Fatal(err)
 			}

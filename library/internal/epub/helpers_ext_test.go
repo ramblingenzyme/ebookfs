@@ -5,9 +5,9 @@ package epub_test
 
 import (
 	"archive/zip"
-	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/beevik/etree"
@@ -15,7 +15,129 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-const opfPath = "OEBPS/content.opf"
+const (
+	opfPath = "OEBPS/content.opf"
+
+	// The OCF names, redeclared here rather than reached for in the package
+	// under test: these tests drive epub from the outside, and the spec fixes
+	// both values (§4.3.3), so a test asserting them is asserting the spec
+	// rather than whatever the implementation happens to call them.
+	mimetypePath  = "mimetype"
+	mimetypeValue = "application/epub+zip"
+)
+
+// writeBib applies edits to the package document of the epub at epubPath,
+// rewrites the file in place, and returns the re-parsed Book. Production code
+// drives that flow through library.Edit.
+func writeBib(epubPath string, e model.Edits) (model.Bib, error) {
+	return epub.Rewrite(epubPath, &model.Book{Location: model.Location{EpubPath: epubPath}}, e)
+}
+
+// writeCover replaces the cover image entry (coverPath, as resolved by Parse)
+// with img, rewrites the file in place, and returns the re-parsed Book.
+func writeCover(epubPath, coverPath string, img []byte) (model.Bib, error) {
+	return epub.Rewrite(epubPath, &model.Book{Location: model.Location{EpubPath: epubPath}, Bib: model.Bib{CoverPath: coverPath}}, model.Edits{Cover: &img})
+}
+
+type entry struct {
+	name  string
+	data  []byte
+	store bool // stored (uncompressed) rather than deflated
+}
+
+func writeEpub(t *testing.T, entries []entry) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "book.epub")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	zw := zip.NewWriter(f)
+	for _, e := range entries {
+		method := zip.Deflate
+		if e.store {
+			method = zip.Store
+		}
+		w, err := zw.CreateHeader(&zip.FileHeader{Name: e.name, Method: method})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write(e.data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+const opf3 = `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="bookid">urn:uuid:1234</dc:identifier>
+    <dc:title id="t1">Original Title</dc:title>
+    <meta refines="#t1" property="file-as">Title, Original</meta>
+    <dc:creator id="creator1">Jane Doe</dc:creator>
+    <meta refines="#creator1" property="role" scheme="marc:relators">aut</meta>
+    <meta refines="#creator1" property="file-as">Doe, Jane</meta>
+    <dc:language>en</dc:language>
+    <dc:date>2020-01-02</dc:date>
+    <dc:description>Original description.</dc:description>
+    <meta name="cover" content="cover-img"/>
+  </metadata>
+  <manifest>
+    <item id="cover-img" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine><itemref idref="ch1"/></spine>
+</package>`
+
+const opf2 = `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" xmlns:opf="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="bookid" opf:scheme="uuid">urn:uuid:1234</dc:identifier>
+    <dc:title>Original Title</dc:title>
+    <dc:creator opf:role="aut" opf:file-as="Doe, Jane">Jane Doe</dc:creator>
+    <dc:language>en</dc:language>
+    <dc:date>2020-01-02</dc:date>
+    <dc:description>Original description.</dc:description>
+    <meta name="cover" content="cover-img"/>
+  </metadata>
+  <manifest>
+    <item id="cover-img" href="cover.jpg" media-type="image/jpeg"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine toc="ncx"><itemref idref="ch1"/></spine>
+</package>`
+
+// opf3With returns opf3 with extra metadata spliced in before </metadata>, so a
+// fixture that needs one more <meta> does not restate the whole package.
+func opf3With(extra string) string {
+	const close = "  </metadata>"
+	before, after, ok := strings.Cut(opf3, close)
+	if !ok {
+		panic("opf3 has no </metadata>")
+	}
+	return before + extra + "\n" + close + after
+}
+
+var (
+	chapterBytes = []byte("<html><body><p>chapter one</p></body></html>")
+	coverBytes   = []byte("ORIGINAL-COVER-BYTES")
+)
+
+func baseEntries(opf string, extra ...entry) []entry {
+	es := []entry{
+		{name: "mimetype", data: []byte(mimetypeValue), store: true},
+		{name: "META-INF/container.xml", data: []byte(containerXML)},
+		{name: "OEBPS/content.opf", data: []byte(opf)},
+		{name: "OEBPS/cover.jpg", data: coverBytes},
+		{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
+	}
+	return append(es, extra...)
+}
 
 func metadata(t *testing.T, path string) *etree.Element {
 	t.Helper()
@@ -81,67 +203,22 @@ const containerXML = `<?xml version="1.0"?>
   </rootfiles>
 </container>`
 
+// buildEpub writes the standard five-entry archive around a package document.
+// The layout lives in baseEntries so there is one definition of what a fixture
+// epub looks like, and writeEpub is the only thing in these tests that writes a
+// zip; tests needing a different archive call those two directly.
 func buildEpub(t *testing.T, opf string) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "book.epub")
-	f, err := os.Create(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-
-	zw := zip.NewWriter(f)
-	for _, e := range []struct {
-		name  string
-		data  string
-		store bool
-	}{
-		{"mimetype", "application/epub+zip", true},
-		{"META-INF/container.xml", containerXML, false},
-		{opfPath, opf, false},
-		{"OEBPS/cover.jpg", "COVER-BYTES", false},
-		{"OEBPS/chapter1.xhtml", "<html><body><p>one</p></body></html>", false},
-	} {
-		method := zip.Deflate
-		if e.store {
-			method = zip.Store
-		}
-		w, err := zw.CreateHeader(&zip.FileHeader{Name: e.name, Method: method})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := w.Write([]byte(e.data)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := zw.Close(); err != nil {
-		t.Fatal(err)
-	}
-	return path
+	return writeEpub(t, baseEntries(opf))
 }
 
+// readEntry returns the entry's bytes, failing the test when it is absent.
+// readEntryFromFile is the same lookup for tests that need to assert on absence.
 func readEntry(t *testing.T, path, name string) []byte {
 	t.Helper()
-	zrc, err := zip.OpenReader(path)
-	if err != nil {
-		t.Fatal(err)
+	b, ok := readEntryFromFile(t, path, name)
+	if !ok {
+		t.Fatalf("entry %q not found", name)
 	}
-	defer zrc.Close()
-	for _, f := range zrc.File {
-		if f.Name != name {
-			continue
-		}
-		rc, err := f.Open()
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer rc.Close()
-		b, err := io.ReadAll(rc)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return b
-	}
-	t.Fatalf("entry %q not found", name)
-	return nil
+	return b
 }

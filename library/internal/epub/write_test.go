@@ -1,4 +1,4 @@
-package epub
+package epub_test
 
 import (
 	"archive/zip"
@@ -13,6 +13,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -36,7 +37,9 @@ func tinyPNG(t *testing.T) []byte {
 	return buf.Bytes()
 }
 
-func readEntryFromFile(t *testing.T, path, name string) ([]byte, bool, zip.FileHeader) {
+// readEntryFromFile returns the entry's bytes and whether it was present. No
+// caller has ever used the header it used to return as a third value.
+func readEntryFromFile(t *testing.T, path, name string) ([]byte, bool) {
 	t.Helper()
 	zrc, err := zip.OpenReader(path)
 	if err != nil {
@@ -54,10 +57,10 @@ func readEntryFromFile(t *testing.T, path, name string) ([]byte, bool, zip.FileH
 			if _, err := b.ReadFrom(rc); err != nil {
 				t.Fatal(err)
 			}
-			return b.Bytes(), true, f.FileHeader
+			return b.Bytes(), true
 		}
 	}
-	return nil, false, zip.FileHeader{}
+	return nil, false
 }
 
 // --- WriteBib --------------------------------------------------------------
@@ -87,7 +90,7 @@ func TestWriteBibSimpleFields(t *testing.T) {
 				t.Errorf("language = %q, want fr", book.Language)
 			}
 			// Re-parse from disk independently to confirm it persisted.
-			reparsed, err := Parse(path)
+			reparsed, err := epub.Parse(path)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -105,11 +108,11 @@ func TestWriteBibPreservesContainerLayout(t *testing.T) {
 	}
 
 	// Untouched entries copied verbatim.
-	got, ok, _ := readEntryFromFile(t, path, "OEBPS/chapter1.xhtml")
+	got, ok := readEntryFromFile(t, path, "OEBPS/chapter1.xhtml")
 	if !ok || !bytes.Equal(got, chapterBytes) {
 		t.Errorf("chapter bytes changed: %q", got)
 	}
-	cover, ok, _ := readEntryFromFile(t, path, "OEBPS/cover.jpg")
+	cover, ok := readEntryFromFile(t, path, "OEBPS/cover.jpg")
 	if !ok || !bytes.Equal(cover, coverBytes) {
 		t.Errorf("cover bytes changed by a metadata-only edit")
 	}
@@ -291,7 +294,7 @@ func TestWriteBibSetsSortTitle(t *testing.T) {
 	}
 
 	// Stored as the standard EPUB 3 file-as refine, never calibre:title_sort.
-	opf, ok, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
+	opf, ok := readEntryFromFile(t, path, "OEBPS/content.opf")
 	if !ok {
 		t.Fatal("OPF entry not found")
 	}
@@ -323,7 +326,7 @@ func TestWriteBibTitleChangeClearsStaleSortTitle(t *testing.T) {
 	// new sort title must clear it rather than leave a value derived from the old
 	// title.
 	path := writeEpub(t, baseEntries(opf3))
-	before, err := Parse(path)
+	before, err := epub.Parse(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -353,7 +356,7 @@ func TestWriteBibSortTitleForEpub2UsesCalibreMeta(t *testing.T) {
 		t.Errorf("sort title = %q, want %q", book.SortTitle, "Sorted, This")
 	}
 
-	opf, ok, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
+	opf, ok := readEntryFromFile(t, path, "OEBPS/content.opf")
 	if !ok {
 		t.Fatal("OPF entry not found")
 	}
@@ -368,7 +371,7 @@ func TestWriteBibSortTitleForEpub2UsesCalibreMeta(t *testing.T) {
 	if _, err := writeBib(path, model.Edits{Title: new("Retitled")}); err != nil {
 		t.Fatal(err)
 	}
-	opf, _, _ = readEntryFromFile(t, path, "OEBPS/content.opf")
+	opf, _ = readEntryFromFile(t, path, "OEBPS/content.opf")
 	if bytes.Contains(opf, []byte("calibre:title_sort")) {
 		t.Errorf("a title change left a stale calibre:title_sort:\n%s", opf)
 	}
@@ -393,7 +396,7 @@ func TestWriteBibBlankTitleRejected(t *testing.T) {
 		t.Fatal("expected error blanking title, got nil")
 	}
 	// Original must be untouched and still valid.
-	book, err := Parse(path)
+	book, err := epub.Parse(path)
 	if err != nil {
 		t.Fatalf("original epub broken after rejected edit: %v", err)
 	}
@@ -440,7 +443,7 @@ func TestWriteBibRefusesEncryptedOPFDeclaredAsAURL(t *testing.T) {
 </encryption>`
 
 	path := writeEpub(t, []entry{
-		{name: "mimetype", data: []byte(mimetypeValue), store: true},
+		{name: mimetypePath, data: []byte(mimetypeValue), store: true},
 		{name: "META-INF/container.xml", data: []byte(container)},
 		{name: "META-INF/encryption.xml", data: []byte(enc)},
 		{name: "OEBPS/my book.opf", data: []byte(opf3)}, // literal space
@@ -519,7 +522,7 @@ func TestWriteCoverWithDirectoryEntries(t *testing.T) {
 	if _, err := writeCover(path, "OEBPS/cover.jpg", newCover); err != nil {
 		t.Fatal(err)
 	}
-	r, err := OpenReader(path, "OEBPS/cover.jpg")
+	r, err := epub.OpenReader(path, "OEBPS/cover.jpg")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -558,7 +561,7 @@ func TestWriteCoverReplaces(t *testing.T) {
 	if _, err := writeCover(path, "OEBPS/cover.jpg", newCover); err != nil {
 		t.Fatal(err)
 	}
-	r, err := OpenReader(path, "OEBPS/cover.jpg")
+	r, err := epub.OpenReader(path, "OEBPS/cover.jpg")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -571,7 +574,7 @@ func TestWriteCoverReplaces(t *testing.T) {
 		t.Errorf("cover = %q, want the supplied JPEG bytes", got)
 	}
 	// A cover swap leaves the chapter untouched.
-	ch, ok, _ := readEntryFromFile(t, path, "OEBPS/chapter1.xhtml")
+	ch, ok := readEntryFromFile(t, path, "OEBPS/chapter1.xhtml")
 	if !ok || !bytes.Equal(ch, chapterBytes) {
 		t.Errorf("chapter changed by cover swap")
 	}
@@ -622,7 +625,7 @@ func reindexSeries(t *testing.T, path, series, index string) model.Bib {
 		Location: model.Location{EpubPath: path},
 		Bib:      model.Bib{Series: &model.SeriesRef{Name: series, Index: "1"}},
 	}
-	bib, err := Rewrite(path, b, model.Edits{SeriesIndex: new(index)})
+	bib, err := epub.Rewrite(path, b, model.Edits{SeriesIndex: new(index)})
 	if err != nil {
 		t.Fatalf("Rewrite: %v", err)
 	}
@@ -721,7 +724,7 @@ func TestSetSeriesReusesCollection(t *testing.T) {
 		t.Fatalf("series = %+v, want The Quartet at 2", book.Series)
 	}
 
-	opfBytes, ok, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
+	opfBytes, ok := readEntryFromFile(t, path, "OEBPS/content.opf")
 	if !ok {
 		t.Fatal("OPF entry not found")
 	}
@@ -744,7 +747,7 @@ func TestSetSeriesReusesCollection(t *testing.T) {
 	if _, err := writeBib(path, model.Edits{Series: new(string)}); err != nil {
 		t.Fatal(err)
 	}
-	opfBytes, ok, _ = readEntryFromFile(t, path, "OEBPS/content.opf")
+	opfBytes, ok = readEntryFromFile(t, path, "OEBPS/content.opf")
 	if !ok {
 		t.Fatal("OPF entry not found")
 	}
@@ -777,7 +780,7 @@ func TestSetSeriesPreservesSets(t *testing.T) {
 	}
 
 	// The set should still be present in the OPF
-	opfBytes, ok, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
+	opfBytes, ok := readEntryFromFile(t, path, "OEBPS/content.opf")
 	if !ok {
 		t.Fatal("OPF entry not found")
 	}
@@ -803,7 +806,7 @@ func TestSetAuthorsReuseBookkeeping(t *testing.T) {
 
 	opf := func(t *testing.T) []byte {
 		t.Helper()
-		b, ok, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
+		b, ok := readEntryFromFile(t, path, "OEBPS/content.opf")
 		if !ok {
 			t.Fatal("OPF entry not found")
 		}
@@ -874,7 +877,7 @@ func TestModifiedStampIsWrittenOnlyForARealChange(t *testing.T) {
 		path := writeEpub(t, baseEntries(opf3With("")))
 		opfOf := func() []byte {
 			t.Helper()
-			b, _, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
+			b, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
 			return b
 		}
 
@@ -917,7 +920,7 @@ func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 	}
 
 	before := statOf()
-	current, err := Parse(path)
+	current, err := epub.Parse(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -961,7 +964,7 @@ func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 func TestParseReadsCalibreTitleSortFromEpub2(t *testing.T) {
 	opf := strings.Replace(opf2, "  </metadata>",
 		`    <meta name="calibre:title_sort" content="Hobbit, The"/>`+"\n  </metadata>", 1)
-	bib, err := Parse(writeEpub(t, baseEntries(opf)))
+	bib, err := epub.Parse(writeEpub(t, baseEntries(opf)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -984,7 +987,7 @@ func TestWriteBibSortTitleKeepsCalibreMetaInStepForEpub3(t *testing.T) {
 		t.Errorf("sort title = %q, want %q", book.SortTitle, "Fresh, The")
 	}
 
-	opf, ok, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
+	opf, ok := readEntryFromFile(t, path, "OEBPS/content.opf")
 	if !ok {
 		t.Fatal("OPF entry not found")
 	}

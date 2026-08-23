@@ -1,9 +1,11 @@
-package epub
+package epub_test
 
 import (
 	"bytes"
 	"errors"
 	"testing"
+
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 )
 
 // Reader documents a closed contract in three places — the closed field, Close's
@@ -13,7 +15,7 @@ import (
 // exactly how a use-after-close arises.
 func TestReaderClosedContract(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
-	r, err := OpenReader(path, "OEBPS/cover.jpg")
+	r, err := epub.OpenReader(path, "OEBPS/cover.jpg")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +49,7 @@ func TestReaderClosedContract(t *testing.T) {
 		{"Close again", r.Close},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := tc.call(); !errors.Is(err, ErrClosed) {
+			if err := tc.call(); !errors.Is(err, epub.ErrClosed) {
 				t.Errorf("err = %v, want ErrClosed", err)
 			}
 		})
@@ -59,7 +61,7 @@ func TestReaderClosedContract(t *testing.T) {
 // that value is handed straight to OpenReader.
 func TestReaderWithNoCover(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
-	r, err := OpenReader(path, "")
+	r, err := epub.OpenReader(path, "")
 	if err != nil {
 		t.Fatal(err)
 	}
