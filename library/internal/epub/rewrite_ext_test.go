@@ -20,12 +20,10 @@ package epub_test
 
 import (
 	"bytes"
-	"os"
 	"slices"
 	"strings"
 	"testing"
 	"testing/synctest"
-	"time"
 
 	"github.com/beevik/etree"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
@@ -762,52 +760,6 @@ func TestUnprefixedFileAsIsUpdatedNotDuplicated(t *testing.T) {
 	}
 	if len(fileAs) != 1 {
 		t.Errorf("file-as attributes = %v, want exactly one", fileAs)
-	}
-}
-
-// TestRewriteSkipsTheWriteWhenNothingChanges pins the optimization in Rewrite:
-// when the edits leave the OPF byte-identical there is nothing to replace, so
-// the zip is not rebuilt. Every other test here checks returned values, and the
-// returned Bib is the same either way — the file is re-parsed regardless — so a
-// regression that rebuilt the archive on every edit would pass all of them.
-//
-// Mind what counts as a no-op. A title edit carrying no sort title clears the
-// file-as refine the file had, so "the same title" is only unchanged when the
-// sort title comes with it; the third case below is the one that catches this.
-//
-// mtime rather than bytes: a faithful rebuild can produce identical bytes, so
-// only the timestamp shows whether the file was written at all. Set to a fixed
-// past time first so the check needs no sleep.
-func TestRewriteSkipsTheWriteWhenNothingChanges(t *testing.T) {
-	past := time.Date(2020, 1, 2, 3, 4, 5, 0, time.UTC)
-
-	for _, tc := range []struct {
-		name    string
-		e       model.Edits
-		rewrite bool
-	}{
-		{"description already equal", model.Edits{Description: new("Original description.")}, false},
-		{"language already equal", model.Edits{Language: new("en")}, false},
-		{"title with its existing sort title", model.Edits{Title: new("Original Title"), SortTitle: new("Title, Original")}, false},
-		{"a title edit that drops the sort title is a change", model.Edits{Title: new("Original Title")}, true},
-		{"a different description is a change", model.Edits{Description: new("Something else")}, true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			path := buildEpub(t, richOPF3)
-			if err := os.Chtimes(path, past, past); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := epub.Rewrite(path, book(t, path), tc.e); err != nil {
-				t.Fatal(err)
-			}
-			fi, err := os.Stat(path)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if rewritten := !fi.ModTime().Equal(past); rewritten != tc.rewrite {
-				t.Errorf("rewritten = %v, want %v", rewritten, tc.rewrite)
-			}
-		})
 	}
 }
 

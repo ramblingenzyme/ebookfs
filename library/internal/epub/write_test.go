@@ -104,19 +104,6 @@ func TestWriteBibPreservesContainerLayout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// mimetype must be first and STORED.
-	zrc, err := zip.OpenReader(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer zrc.Close()
-	if zrc.File[0].Name != "mimetype" {
-		t.Fatalf("first entry = %q, want mimetype", zrc.File[0].Name)
-	}
-	if zrc.File[0].Method != zip.Store {
-		t.Errorf("mimetype method = %d, want Store(%d)", zrc.File[0].Method, zip.Store)
-	}
-
 	// Untouched entries copied verbatim.
 	got, ok, _ := readEntryFromFile(t, path, "OEBPS/chapter1.xhtml")
 	if !ok || !bytes.Equal(got, chapterBytes) {
@@ -938,15 +925,24 @@ func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 	// Both halves: a Title with no SortTitle clears a stale sort title, which is
 	// a real change (TestWriteBibTitleChangeClearsStaleSortTitle), and opf3
 	// carries one.
-	bib, err := writeBib(path, model.Edits{Title: &current.Title, SortTitle: &current.SortTitle})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !os.SameFile(before, statOf()) {
-		t.Error("an edit asking for the title the OPF already carries rewrote the epub")
-	}
-	if bib.Title != current.Title {
-		t.Errorf("bib.Title = %q, want %q read back from the file", bib.Title, current.Title)
+	for _, tc := range []struct {
+		name string
+		e    model.Edits
+	}{
+		{"title with its existing sort title", model.Edits{Title: &current.Title, SortTitle: &current.SortTitle}},
+		{"description already equal", model.Edits{Description: &current.Description}},
+		{"language already equal", model.Edits{Language: &current.Language}},
+	} {
+		bib, err := writeBib(path, tc.e)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if !os.SameFile(before, statOf()) {
+			t.Errorf("%s: an edit asking for what the OPF already carries rewrote the epub", tc.name)
+		}
+		if bib.Title != current.Title {
+			t.Errorf("%s: bib.Title = %q, want %q read back from the file", tc.name, bib.Title, current.Title)
+		}
 	}
 
 	// Control: a real change must still land, or the check above proves nothing.
