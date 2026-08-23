@@ -1,11 +1,12 @@
-package epub
+package xml
 
 import (
 	"encoding/xml"
 	"net/url"
-
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf"
+	"strings"
 )
+
+func Collapse(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // Attribute types for the container's XML files, carrying the two rules that
 // apply to every value we read out of them. Declaring a field as one of these is
@@ -23,10 +24,10 @@ import (
 // attrText is an attribute value with the normalization XML 1.0 §3.3.3 requires.
 // encoding/xml does not apply it, so a container that wraps or pads an attribute
 // would otherwise fail every comparison against it.
-type attrText string
+type AttrText string
 
-func (a *attrText) UnmarshalXMLAttr(x xml.Attr) error {
-	*a = attrText(opf.Collapse(x.Value))
+func (a *AttrText) UnmarshalXMLAttr(x xml.Attr) error {
+	*a = AttrText(Collapse(x.Value))
 	return nil
 }
 
@@ -38,17 +39,17 @@ func (a *attrText) UnmarshalXMLAttr(x xml.Attr) error {
 // because a producer that wrote an unencoded name into both the XML and the zip
 // has an entry whose name really does contain "%20", and only the raw form
 // matches that.
-type attrURL struct{ Raw, Decoded string }
+type AttrURL struct{ Raw, Decoded string }
 
-func (u *attrURL) UnmarshalXMLAttr(x xml.Attr) error {
-	u.Raw = opf.Collapse(x.Value)
+func (u *AttrURL) UnmarshalXMLAttr(x xml.Attr) error {
+	u.Raw = Collapse(x.Value)
 	u.Decoded = unescapePath(u.Raw)
 	return nil
 }
 
 // candidates returns the entry names this attribute could name, in the order to
 // try them: what a conforming file means first, then what a careless one wrote.
-func (u attrURL) candidates() []string {
+func (u AttrURL) Candidates() []string {
 	if u.Decoded == u.Raw {
 		return []string{u.Raw}
 	}

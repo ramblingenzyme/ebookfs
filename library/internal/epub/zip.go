@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub/ocf"
 )
 
 var (
@@ -134,7 +136,7 @@ func (a *archive) validate() error {
 // skipping is why the lookup is the archive's own: a caller supplying its own
 // notion of "present" is how the read and write paths came to disagree.
 func (a *archive) metadataPath() (string, error) {
-	f := a.file(containerPath)
+	f := a.file(ocf.ContainerPath)
 	if f == nil {
 		return "", ErrContainer
 	}
@@ -144,7 +146,7 @@ func (a *archive) metadataPath() (string, error) {
 	}
 	defer r.Close()
 
-	c, err := newContainer(r)
+	c, err := ocf.NewContainer(r)
 	if err != nil {
 		return "", err
 	}
@@ -152,7 +154,7 @@ func (a *archive) metadataPath() (string, error) {
 	// container.go decides what the file declares and in what order to try it;
 	// only "which of these does this archive actually hold" is the archive's to
 	// answer. That is the Kobo case: several rootfiles declared, one present.
-	paths := c.packagePaths()
+	paths := c.PackagePaths()
 	if len(paths) == 0 {
 		return "", ErrNoRootfile
 	}
@@ -224,8 +226,8 @@ func (a *archive) writeTo(zw *zip.Writer, replace map[string][]byte) error {
 // nothing is encrypted (nil info); a malformed file is reported as an error
 // rather than silently treated as "no encryption", since proceeding could
 // corrupt a protected entry.
-func (a *archive) readEncryption() (*encryptionInfo, error) {
-	f := a.file(encryptionPath)
+func (a *archive) readEncryption() (*ocf.EncryptionInfo, error) {
+	f := a.file(ocf.EncryptionPath)
 	if f == nil {
 		return nil, nil
 	}
@@ -235,5 +237,5 @@ func (a *archive) readEncryption() (*encryptionInfo, error) {
 	}
 	defer rc.Close()
 
-	return newEncryptionInfo(rc)
+	return ocf.NewEncryptionInfo(rc)
 }

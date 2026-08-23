@@ -99,7 +99,7 @@ func createReplace(a *archive, b *model.Book, e model.Edits) (map[string][]byte,
 		if !a.has(b.CoverPath) {
 			return nil, fmt.Errorf("cover not found in epub: %s", b.CoverPath)
 		}
-		if enc.isEncrypted(b.CoverPath) {
+		if enc.IsEncrypted(b.CoverPath) {
 			return nil, fmt.Errorf("refusing to replace encrypted cover: %s", b.CoverPath)
 		}
 		replace[b.CoverPath] = *e.Cover
@@ -107,7 +107,7 @@ func createReplace(a *archive, b *model.Book, e model.Edits) (map[string][]byte,
 
 	if e.HasBibEdits() {
 		opfEntry := a.opf
-		if enc.isEncrypted(opfEntry) {
+		if enc.IsEncrypted(opfEntry) {
 			return nil, fmt.Errorf("refusing to edit: package document %q is encrypted", opfEntry)
 		}
 		opfBytes, err := a.read(opfEntry)

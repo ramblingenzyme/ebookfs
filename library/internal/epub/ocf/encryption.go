@@ -1,9 +1,11 @@
-package epub
+package ocf
 
 import (
 	"encoding/xml"
 	"fmt"
 	"io"
+
+	epubxml "github.com/ramblingenzyme/ebookfs/library/internal/epub/xml"
 )
 
 // Reading META-INF/encryption.xml, which an epub uses for two unrelated things:
@@ -15,18 +17,18 @@ import (
 // would make every book with an embedded font uneditable; treating DRM as
 // readable would let an edit corrupt a protected entry.
 
-const encryptionPath = "META-INF/encryption.xml"
+const EncryptionPath = "META-INF/encryption.xml"
 
 type encryptionXML struct {
 	Data []struct {
 		Method struct {
-			Algorithm attrText `xml:"Algorithm,attr"`
+			Algorithm epubxml.AttrText `xml:"Algorithm,attr"`
 		} `xml:"EncryptionMethod"`
 		// Keep the nesting. The > path works because it sits on this element
 		// field; an attr-mode tag containing > is read as a literal attribute
 		// name and would silently match nothing.
 		Ref struct {
-			URI attrURL `xml:"URI,attr"`
+			URI epubxml.AttrURL `xml:"URI,attr"`
 		} `xml:"CipherData>CipherReference"`
 	} `xml:"EncryptedData"`
 }
@@ -43,17 +45,17 @@ var obfuscationAlgorithms = map[string]bool{
 // encryptionInfo records which zip entries are listed in META-INF/encryption.xml
 // and under which algorithm, so a real-DRM entry can be distinguished from a
 // merely font-obfuscated one (see obfuscationAlgorithms).
-type encryptionInfo struct {
+type EncryptionInfo struct {
 	algorithms map[string]string // zip entry name -> EncryptionMethod algorithm
 }
 
-func newEncryptionInfo(r io.Reader) (*encryptionInfo, error) {
+func NewEncryptionInfo(r io.Reader) (*EncryptionInfo, error) {
 	var doc encryptionXML
 	if err := xml.NewDecoder(r).Decode(&doc); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", encryptionPath, err)
+		return nil, fmt.Errorf("parse %s: %w", EncryptionPath, err)
 	}
 
-	info := &encryptionInfo{algorithms: make(map[string]string, len(doc.Data))}
+	info := &EncryptionInfo{algorithms: make(map[string]string, len(doc.Data))}
 	for _, d := range doc.Data {
 		algo := string(d.Method.Algorithm)
 		if algo == "" {
@@ -62,7 +64,7 @@ func newEncryptionInfo(r io.Reader) (*encryptionInfo, error) {
 		// Keyed under every name the URI could mean, because isEncrypted is
 		// asked about zip entry names and a producer may have written either
 		// form into both files.
-		for _, name := range d.Ref.URI.candidates() {
+		for _, name := range d.Ref.URI.Candidates() {
 			if name != "" {
 				info.algorithms[name] = algo
 			}
@@ -73,7 +75,7 @@ func newEncryptionInfo(r io.Reader) (*encryptionInfo, error) {
 
 // isEncrypted reports whether name is protected by real encryption (as opposed
 // to font obfuscation). An entry absent from encryption.xml is not encrypted.
-func (e *encryptionInfo) isEncrypted(name string) bool {
+func (e *EncryptionInfo) IsEncrypted(name string) bool {
 	if e == nil {
 		return false
 	}

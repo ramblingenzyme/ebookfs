@@ -1,8 +1,10 @@
-package epub
+package ocf
 
 import (
 	"encoding/xml"
 	"io"
+
+	epubxml "github.com/ramblingenzyme/ebookfs/library/internal/epub/xml"
 )
 
 // Reading META-INF/container.xml, the file that says where the package document
@@ -12,24 +14,24 @@ import (
 // file declared none, ErrRootfileMissing means it named one the zip lacks.
 
 const (
-	containerPath = "META-INF/container.xml"
+	ContainerPath = "META-INF/container.xml"
 	metadataType  = "application/oebps-package+xml"
 )
 
 // container is the entry point to the epub. Its rootfile elements point at the
 // package documents; an epub may declare more than one. It is never written, so
 // unlike the package document a struct is shape enough.
-type container struct {
+type Container struct {
 	Rootfiles []*rootfile `xml:"rootfiles>rootfile"`
 }
 
 type rootfile struct {
-	FullPath  attrURL  `xml:"full-path,attr"`
-	MediaType attrText `xml:"media-type,attr"`
+	FullPath  epubxml.AttrURL  `xml:"full-path,attr"`
+	MediaType epubxml.AttrText `xml:"media-type,attr"`
 }
 
-func newContainer(r io.Reader) (*container, error) {
-	var c container
+func NewContainer(r io.Reader) (*Container, error) {
+	var c Container
 	if err := xml.NewDecoder(r).Decode(&c); err != nil {
 		return nil, err
 	}
@@ -42,13 +44,13 @@ func newContainer(r io.Reader) (*container, error) {
 // The field types carry the normalization and the decoded/raw fallback, so this
 // is only the selection rule: which declarations are package documents, and in
 // what order to try what each one names.
-func (c *container) packagePaths() []string {
+func (c *Container) PackagePaths() []string {
 	var out []string
 	for _, rf := range c.Rootfiles {
 		if rf.MediaType != metadataType {
 			continue
 		}
-		out = append(out, rf.FullPath.candidates()...)
+		out = append(out, rf.FullPath.Candidates()...)
 	}
 	return out
 }

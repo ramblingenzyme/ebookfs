@@ -2,21 +2,13 @@ package opf
 
 import (
 	"strconv"
-	"strings"
 
 	"github.com/beevik/etree"
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub/xml"
 )
 
 // The whole etree-facing surface. Everything else in this package reads and
 // writes the document through these.
-
-// Collapse is the whitespace normalization §5.5.2 requires of a reader. Every
-// value this layer hands out passes through it.
-//
-// Exported for the container attributes in the parent package: they decode
-// through encoding/xml, which does not implement XML 1.0 §3.3.3 either, so they
-// need the same treatment and there is no reason for a second copy of the rule.
-func Collapse(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // text is nil-safe: primary returns nil for an absent element and every caller
 // wants "" for that.
@@ -24,14 +16,14 @@ func text(e *etree.Element) string {
 	if e == nil {
 		return ""
 	}
-	return Collapse(e.Text())
+	return xml.Collapse(e.Text())
 }
 
 // attr collapses too. Nothing upstream does it for us: XML 1.0 §3.3.3 would
 // normalize a newline in an attribute value to a space, but encoding/xml, which
 // etree wraps, does not implement it, so a tab or newline arrives verbatim.
 func attr(e *etree.Element, name string) string {
-	return Collapse(e.SelectAttrValue(name, ""))
+	return xml.Collapse(e.SelectAttrValue(name, ""))
 }
 
 // detach removes an element from wherever it sits: the parent may be a

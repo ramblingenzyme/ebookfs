@@ -3,6 +3,8 @@ package opf
 import (
 	"strings"
 	"time"
+
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub/xml"
 )
 
 // The fields whose whole encoding fits in a few lines. The three with more to
@@ -46,7 +48,7 @@ func (f titleField) set(title, sort *string) {
 	// A title written without one drops the sort title it used to carry.
 	value := ""
 	if sort != nil {
-		value = Collapse(*sort)
+		value = xml.Collapse(*sort)
 	}
 
 	// Rewritten in place wherever the file has a refinement, whatever version it

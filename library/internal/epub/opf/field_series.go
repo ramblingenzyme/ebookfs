@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/beevik/etree"
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub/xml"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -41,7 +42,7 @@ func (f seriesField) set(name, index *string) {
 		series, position = cur.Name, cur.Index
 	}
 	if name != nil {
-		series = Collapse(*name)
+		series = xml.Collapse(*name)
 	}
 	if index != nil {
 		position = *index
