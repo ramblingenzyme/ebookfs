@@ -1,4 +1,4 @@
-package opf
+package pkgdoc
 
 import (
 	"strconv"
@@ -50,12 +50,12 @@ func qualify(prefix, tag string) string {
 //
 // ponytail: rescans per call, O(n²) over a document holding tens of elements.
 // Thread a set through the callers only if a profile ever says to.
-func (o *Doc) ensureID(el *etree.Element, stem string) string {
+func (d *Doc) ensureID(el *etree.Element, stem string) string {
 	if id := attr(el, "id"); id != "" {
 		return id
 	}
 	taken := map[string]bool{}
-	for _, e := range o.pkg.FindElements("//*[@id]") {
+	for _, e := range d.pkg.FindElements("//*[@id]") {
 		taken[attr(e, "id")] = true
 	}
 	id := stem

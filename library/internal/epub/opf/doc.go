@@ -1,6 +1,6 @@
 // Package opf reads and writes the EPUB package document: the .opf file holding
 // a book's metadata. The zip container around it belongs to the parent epub
-// package.
+// package, and the XML under it to pkgdoc.
 //
 // A field is one piece of metadata ebookfs owns. Reading (get) and writing (set)
 // both go through it so the two cannot disagree. Book-level validation and
@@ -13,17 +13,9 @@
 //     modified). A read-only field is a single Doc method (description,
 //     language, pubdate, identifiers, cover).
 //
-//   - A field says what a value should be, never where it is kept. Slots
-//     (slot.go) know where: element text, a refinement, an opf: attribute, a
-//     named meta. Under them sit the finders — metadata.go for the children of
-//     <metadata> and the xmlns: prefixes new ones need, refine.go for the EPUB 3
-//     refinement binding, vocab.go for the vocabulary a property name resolves
-//     in.
-//
-//     Those last two are different naming systems: xmlns: prefixes are resolved
-//     by the XML parser, vocabulary prefixes live inside attribute values and
-//     are bound by the package element's prefix attribute. Each has a
-//     get-or-declare step — ensureNSPrefix and spell/declarePrefix.
+//   - A field says what a value should be, never where it is kept. The slots
+//     pkgdoc hands out know where, and nothing here touches the XML: this
+//     package does not import etree, and that is the point of the split.
 //
 //   - The EPUB 2 / EPUB 3 branch stays visible in each field. The specs
 //     genuinely differ, and v2 has no sort-title mechanism at all; hiding that
@@ -33,65 +25,37 @@ package opf
 import (
 	"bytes"
 	"errors"
-	"strings"
 	"time"
 
-	"github.com/beevik/etree"
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf/pkgdoc"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-type Doc struct {
-	doc *etree.Document
-	pkg *etree.Element // <package>
-	md  *etree.Element // <metadata>
-}
+type Doc struct{ d *pkgdoc.Doc }
 
 func Parse(b []byte) (*Doc, error) {
-	doc := etree.NewDocument()
-	// A CDATA section is a spelling of a value, not a different value: a
-	// description wrapped in one reads the same either way. Preserving it keeps
-	// an edit from rewriting the spelling of a field it was not asked to touch.
-	doc.ReadSettings.PreserveCData = true
-	if err := doc.ReadFromBytes(b); err != nil {
+	d, err := pkgdoc.Parse(b)
+	if err != nil {
 		return nil, err
 	}
-	pkg := doc.SelectElement("package")
-	if pkg == nil {
-		return nil, errors.New("opf: no <package> element")
-	}
-	md := pkg.SelectElement("metadata")
-	if md == nil {
-		return nil, errors.New("opf: no <metadata> element")
-	}
-	return &Doc{doc: doc, pkg: pkg, md: md}, nil
+	return &Doc{d}, nil
 }
 
-func (o *Doc) Bytes() ([]byte, error) { return o.doc.WriteToBytes() }
-
-// epub3 decides how metadata is written: refinements for v3, opf: attributes and
-// calibre metas for v2. Through attr, since a padded version would otherwise read
-// as EPUB 2 — which costs the §5.5.5 dcterms:modified update and injects calibre
-// metas. No version attribute at all is malformed; EPUB 2 is the safer guess.
-func (o *Doc) epub3() bool {
-	return strings.HasPrefix(attr(o.pkg, "version"), "3")
-}
+func (o *Doc) Bytes() ([]byte, error) { return o.d.Bytes() }
 
 // Apply writes the edits into the document and reports whether that changed
 // anything; nothing is serialized until Bytes. A false means the file already
 // said what the edit asked for, so the caller has nothing to write back.
-//
-// etree is used rather than encoding/xml because it round-trips namespace
-// declarations, dc: prefixes, comments and formatting untouched.
 func (o *Doc) Apply(e model.Edits) bool {
 	before, _ := o.Bytes()
 
 	o.title().set(e.Title, e.SortTitle)
 
 	if e.Description != nil {
-		o.dcElement("description", "").set(*e.Description)
+		o.d.DC("description").Set(*e.Description)
 	}
 	if e.Language != nil {
-		o.dcElement("language", "").set(*e.Language)
+		o.d.DC("language").Set(*e.Language)
 	}
 	if e.Authors != nil {
 		o.authors().set(*e.Authors)

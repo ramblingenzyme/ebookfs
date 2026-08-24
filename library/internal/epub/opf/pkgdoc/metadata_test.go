@@ -1,4 +1,4 @@
-package opf
+package pkgdoc
 
 import "testing"
 
@@ -38,7 +38,7 @@ func TestDCPrefix(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			o, err := Parse([]byte(`<?xml version="1.0" encoding="utf-8"?>
+			d, err := Parse([]byte(`<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id"` + tc.pkgAttrs + `>
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
     ` + tc.metadata + `
@@ -48,13 +48,13 @@ func TestDCPrefix(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			got := o.dcPrefix()
+			got := d.dcPrefix()
 			if got != tc.want {
 				t.Errorf("dcPrefix() = %q, want %q", got, tc.want)
 			}
 			// Whatever it returns must actually be bound, or a new element lands
 			// in no namespace.
-			if bound := o.pkg.SelectAttrValue("xmlns:"+got, ""); tc.declares != "" && bound != tc.declares {
+			if bound := d.pkg.SelectAttrValue("xmlns:"+got, ""); tc.declares != "" && bound != tc.declares {
 				t.Errorf("xmlns:%s = %q, want %q declared", got, bound, tc.declares)
 			}
 		})

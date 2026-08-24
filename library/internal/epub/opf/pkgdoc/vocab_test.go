@@ -1,4 +1,4 @@
-package opf
+package pkgdoc
 
 import (
 	"strings"
@@ -38,8 +38,8 @@ func TestExpand(t *testing.T) {
 		{"empty stays empty", "", "", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			o := pkgWithPrefix(t, tc.prefix)
-			if got := expand(tc.in, o.vocabularies()); got != tc.want {
+			d := pkgWithPrefix(t, tc.prefix)
+			if got := expand(tc.in, d.vocab.bindings()); got != tc.want {
 				t.Errorf("expand(%q) = %q, want %q", tc.in, got, tc.want)
 			}
 		})
@@ -61,7 +61,7 @@ func TestVocabulariesParsesThePrefixAttribute(t *testing.T) {
 		{"absent attribute leaves the reserved set", "", nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := pkgWithPrefix(t, tc.prefix).vocabularies()
+			got := pkgWithPrefix(t, tc.prefix).vocab.bindings()
 
 			// The reserved set is always present and unmodified unless declared over.
 			for name, url := range reservedPrefixes {
@@ -131,12 +131,12 @@ func TestSpell(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			o := pkgWithPrefix(t, tc.prefix)
-			if got := o.spell(tc.in); got != tc.want {
+			d := pkgWithPrefix(t, tc.prefix)
+			if got := d.vocab.spell(tc.in); got != tc.want {
 				t.Errorf("spell(%q) = %q, want %q", tc.in, got, tc.want)
 			}
 
-			declared := attr(o.pkg, "prefix")
+			declared := attr(d.pkg, "prefix")
 			if tc.declares == "" {
 				if declared != tc.prefix {
 					t.Errorf("prefix attribute = %q, want it untouched at %q", declared, tc.prefix)

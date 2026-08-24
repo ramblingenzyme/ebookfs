@@ -1,4 +1,4 @@
-package opf
+package pkgdoc
 
 import (
 	"slices"
@@ -31,10 +31,10 @@ func refinesID(m *etree.Element, id string) bool {
 //
 // A property whose meaning depends on the scheme attribute — collection-type,
 // per D.3.4 — is filtered by its own field, not here.
-func (o *Doc) refineElements(id, property string) []*etree.Element {
+func (d *Doc) refineElements(id, property string) []*etree.Element {
 	var out []*etree.Element
-	for _, m := range o.elements("meta") {
-		if o.sameProperty(attr(m, "property"), property) && refinesID(m, id) {
+	for _, m := range d.elements("meta") {
+		if d.vocab.Same(attr(m, "property"), property) && refinesID(m, id) {
 			out = append(out, m)
 		}
 	}
@@ -48,20 +48,20 @@ func (o *Doc) refineElements(id, property string) []*etree.Element {
 // Two choices §5.3.6 leaves open, both deliberate: appended at the end rather
 // than beside the element it refines, since the binding is by id; and refines
 // written fragment-only, though a reader must accept path-qualified too.
-func (o *Doc) addRefine(id, property, value, scheme string) {
-	m := o.metaParent().CreateElement("meta")
+func (d *Doc) addRefine(id, property, value, scheme string) {
+	m := d.metaParent().CreateElement("meta")
 	m.CreateAttr("refines", "#"+id)
-	m.CreateAttr("property", o.spell(property))
+	m.CreateAttr("property", d.vocab.spell(property))
 	if scheme != "" {
-		m.CreateAttr("scheme", o.spell(scheme))
+		m.CreateAttr("scheme", d.vocab.spell(scheme))
 	}
 	m.SetText(value)
 }
 
 // removeRefinements drops every meta refining any of ids, for use once the
 // elements they refine are themselves gone.
-func (o *Doc) removeRefinements(ids []string) {
-	for _, m := range o.elements("meta") {
+func (d *Doc) removeRefinements(ids []string) {
+	for _, m := range d.elements("meta") {
 		if slices.ContainsFunc(ids, func(id string) bool { return refinesID(m, id) }) {
 			detach(m)
 		}

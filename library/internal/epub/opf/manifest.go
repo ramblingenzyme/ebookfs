@@ -7,34 +7,8 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/xml"
 )
 
-// The manifest, and the two things read out of it that are not fields: where the
-// NCX lives, and which document displays the cover.
-
-func (o *Doc) manifest() []manifestItem {
-	m := o.pkg.SelectElement("manifest")
-	if m == nil {
-		return nil
-	}
-	var out []manifestItem
-	for _, it := range m.SelectElements("item") {
-		out = append(out, manifestItem{
-			ID: attr(it, "id"),
-			// Only trimmed, not collapsed: href is a percent-encoded URL, and
-			// collapsing could rewrite a literal filename.
-			Href:       strings.TrimSpace(it.SelectAttrValue("href", "")),
-			MediaType:  attr(it, "media-type"),
-			Properties: attr(it, "properties"),
-		})
-	}
-	return out
-}
-
-type manifestItem struct {
-	ID         string
-	Href       string
-	MediaType  string
-	Properties string
-}
+// The two things read out of the manifest that are not fields: where the NCX
+// lives, and which document displays the cover.
 
 // Required of the NCX item by OPF 2.0 §2.4.1.2, and §3.2's core media type
 // table names it too.
@@ -47,7 +21,7 @@ const ncxMediaType = "application/x-dtbncx+xml"
 // that attribute to optional and legacy while the media type is required either
 // way.
 func (o *Doc) NCXPath(base string) string {
-	for _, item := range o.manifest() {
+	for _, item := range o.d.Manifest() {
 		if item.MediaType == ncxMediaType {
 			return xml.ResolveHref(base, item.Href)
 		}
@@ -66,7 +40,6 @@ func (o *Doc) NCXPath(base string) string {
 func (o *Doc) CoverPages(base string) []string {
 	var out []string
 	add := func(href string) {
-		href = strings.TrimSpace(href)
 		if href == "" {
 			return
 		}
@@ -75,13 +48,11 @@ func (o *Doc) CoverPages(base string) []string {
 		}
 	}
 
-	if g := o.pkg.SelectElement("guide"); g != nil {
-		for _, r := range g.SelectElements("reference") {
-			// §2.6 fixes the type as "cover" case-sensitively, but producers
-			// disagree often enough that matching exactly would only miss it.
-			if strings.EqualFold(attr(r, "type"), "cover") {
-				add(r.SelectAttrValue("href", ""))
-			}
+	for _, r := range o.d.Guide() {
+		// §2.6 fixes the type as "cover" case-sensitively, but producers
+		// disagree often enough that matching exactly would only miss it.
+		if strings.EqualFold(r.Type, "cover") {
+			add(r.Href)
 		}
 	}
 	add(o.firstSpineHref())
@@ -89,17 +60,14 @@ func (o *Doc) CoverPages(base string) []string {
 }
 
 // firstSpineHref is the href of the first document in the reading order, or "".
+// An idref the spine does not carry matches nothing, rather than the manifest
+// item that also has none.
 func (o *Doc) firstSpineHref() string {
-	spine := o.pkg.SelectElement("spine")
-	if spine == nil {
+	idref := o.d.SpineFirst()
+	if idref == "" {
 		return ""
 	}
-	first := spine.SelectElement("itemref")
-	if first == nil {
-		return ""
-	}
-	idref := attr(first, "idref")
-	for _, item := range o.manifest() {
+	for _, item := range o.d.Manifest() {
 		if item.ID == idref {
 			return item.Href
 		}

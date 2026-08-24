@@ -17,15 +17,15 @@ func isRasterCoverType(mediaType string) bool {
 // the legacy <meta name="cover"> (§5.9.3 fixes that order), then a heuristic.
 // The order of the loops is the whole rule.
 func (o *Doc) cover(base string) string {
-	manifest := o.manifest()
+	manifest := o.d.Manifest()
 
 	for _, item := range manifest {
-		if o.hasProperty(item.Properties, "cover-image") && isRasterCoverType(item.MediaType) {
+		if o.d.HasProperty(item.Properties, "cover-image") && isRasterCoverType(item.MediaType) {
 			return xml.ResolveHref(base, item.Href)
 		}
 	}
 
-	coverID := o.namedMeta("cover").get()
+	coverID := o.d.Named("cover").Get()
 	if coverID != "" {
 		for _, item := range manifest {
 			if item.ID == coverID && isRasterCoverType(item.MediaType) {
