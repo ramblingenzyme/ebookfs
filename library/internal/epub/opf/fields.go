@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/beevik/etree"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/xml"
 )
 
@@ -43,6 +44,7 @@ func (f titleField) set(title, sort *string) {
 	el := f.element()
 	if title != nil {
 		el.set(*title)
+		f.dropSegments(el.ensure())
 	}
 
 	// A title written without one drops the sort title it used to carry.
@@ -65,6 +67,38 @@ func (f titleField) set(title, sort *string) {
 		return
 	}
 	put(f.calibreSort(), value)
+}
+
+// dropSegments removes every dc:title except keep, with its refinements, so a
+// replaced title leaves the document recording exactly the one it now has.
+//
+// A further dc:title is another segment of the same title — §5.5.3.1.2's
+// multipart example is "THE LORD OF THE RINGS" followed by "Part One: The
+// Fellowship of the Ring" — rather than a separate field. Once the title has
+// been replaced they describe a title the book no longer has, and §5.5.3.1.2
+// asks for a single element regardless: "EPUB creators should use only a
+// single dc:title element to ensure consistent rendering of the title in
+// reading systems."
+//
+// It is also what stops an edit from silently not taking. A reading system
+// honouring the deprecated title-type refinement, as calibre does, shows the
+// segment labelled "main" — which need not be the element §5.5.3.1.2 makes
+// ours to write. Leaving the others would rename the book everywhere except
+// there.
+//
+// keep's own refinements stay, including a title-type that may now be the only
+// one left and read oddly. Harmless: with one element left, first in document
+// order and "the one labelled main" resolve to it either way.
+func (f titleField) dropSegments(keep *etree.Element) {
+	var ids []string
+	for _, el := range f.o.elements("title") {
+		if el == keep {
+			continue
+		}
+		ids = append(ids, attr(el, "id"))
+		detach(el)
+	}
+	f.o.removeRefinements(ids)
 }
 
 type modifiedField struct{ o *Doc }

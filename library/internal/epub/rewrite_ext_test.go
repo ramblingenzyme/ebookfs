@@ -1389,3 +1389,73 @@ func TestCDataDescriptionKeepsItsSpelling(t *testing.T) {
 		t.Errorf("the CDATA section was re-encoded:\n%s", got)
 	}
 }
+
+// --- multipart titles --------------------------------------------------------
+//
+// §5.5.3.1.2's own example of one: "THE LORD OF THE RINGS" followed by "Part
+// One: The Fellowship of the Ring". The second element is another segment of
+// the same title, so replacing the title has to take it too — left behind it
+// describes a title the book no longer has, and the file would claim a name
+// nothing reported when it was read.
+
+var opfMultipartTitle = epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>THE LORD OF THE RINGS</dc:title>
+    <dc:title>Part One: The Fellowship of the Ring</dc:title>
+    <dc:creator id="c1">Ann Rand</dc:creator>
+    <dc:language>en</dc:language>`)
+
+func TestTitleEditTakesTheOtherSegments(t *testing.T) {
+	path := buildEpub(t, opfMultipartTitle)
+
+	want := "The Hobbit"
+	bib, err := epub.Rewrite(path, book(t, path), model.Edits{Title: &want})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bib.Title != want {
+		t.Errorf("title = %q, want %q", bib.Title, want)
+	}
+
+	els := metadata(t, path).SelectElements("title")
+	if len(els) != 1 {
+		t.Fatalf("dc:title count = %d, want 1", len(els))
+	}
+	if got := strings.TrimSpace(els[0].Text()); got != want {
+		t.Errorf("dc:title = %q, want %q", got, want)
+	}
+}
+
+// Only a title write takes them. A sort title is a property of the title the
+// file already has, and setting one is not a claim that the book has been
+// renamed.
+func TestSortTitleEditLeavesTheOtherSegments(t *testing.T) {
+	path := buildEpub(t, opfMultipartTitle)
+
+	sort := "Lord of the Rings, The"
+	if _, err := epub.Rewrite(path, book(t, path), model.Edits{SortTitle: &sort}); err != nil {
+		t.Fatal(err)
+	}
+
+	if els := metadata(t, path).SelectElements("title"); len(els) != 2 {
+		t.Errorf("dc:title count = %d, want the two the file had", len(els))
+	}
+}
+
+// Twice is once: the second edit finds one title and nothing to drop, so it
+// leaves the file alone rather than churning it.
+func TestTitleEditIsIdempotentAcrossSegments(t *testing.T) {
+	path := buildEpub(t, opfMultipartTitle)
+
+	want := "The Hobbit"
+	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Title: &want}); err != nil {
+		t.Fatal(err)
+	}
+	first := readEntry(t, path, opfPath)
+
+	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Title: &want}); err != nil {
+		t.Fatal(err)
+	}
+	if second := readEntry(t, path, opfPath); !bytes.Equal(first, second) {
+		t.Errorf("a repeated edit rewrote the package document:\n%s", second)
+	}
+}
