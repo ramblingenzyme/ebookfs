@@ -7,6 +7,7 @@ import (
 	"image"
 	_ "image/jpeg" // register JPEG decoder for image.DecodeConfig
 	_ "image/png"  // register PNG decoder for image.DecodeConfig
+	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
@@ -259,9 +260,13 @@ func rewriteEpub(epubPath string, a *archive, replace map[string][]byte) (*model
 // and the edit touches a field it carries. Package ncx says why it is kept in
 // step with the package document.
 //
-// An encrypted NCX is left alone rather than refused: unlike the package
-// document, it holds no metadata that is ours, and blocking a title edit over
-// a table of contents no reader can read either would be the worse trade.
+// An NCX that cannot be read — encrypted, or not well-formed — is left alone
+// rather than failing the edit. The package document is the metadata of record
+// and the caller asked for it to be changed; the NCX is a courtesy copy, and a
+// book that arrived carrying an unreadable one is a book whose two copies
+// already disagreed. Refusing would make it permanently unrenameable to avoid
+// an inconsistency we did not create, over a table of contents no reader can
+// read either.
 func replaceNCX(a *archive, pkg *opf.Doc, enc *ocf.EncryptionInfo, e model.Edits, replace map[string][]byte) error {
 	if e.Title == nil && e.Authors == nil {
 		return nil
@@ -275,12 +280,14 @@ func replaceNCX(a *archive, pkg *opf.Doc, enc *ocf.EncryptionInfo, e model.Edits
 	if err != nil {
 		return err
 	}
-	// A syntactically broken NCX fails the edit. Parse never reads the file, so
-	// such a book ingests and only stops here — loudly, which beats writing a
-	// title into one of the two places that claim to hold it.
+	// Logged rather than returned, because the edit is going to succeed and the
+	// user would otherwise have no way to learn that half of what the book says
+	// about itself is now stale.
 	doc, err := ncx.Parse(data)
 	if err != nil {
-		return fmt.Errorf("%s: %w", entry, err)
+		slog.Warn("epub: skipping unreadable NCX; its title and authors will not match the package document",
+			"entry", entry, "error", err)
+		return nil
 	}
 	if doc.Apply(e) {
 		out, err := doc.Bytes()

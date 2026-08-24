@@ -4,7 +4,7 @@ go 1.26.1
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/beevik/etree v1.1.0
+	github.com/beevik/etree v1.7.1
 	github.com/knusbaum/go9p v1.18.0
 	github.com/pgaskin/kepubify/v4 v4.0.4
 	golang.org/x/text v0.3.6

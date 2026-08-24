@@ -48,6 +48,10 @@ type Doc struct {
 
 func Parse(b []byte) (*Doc, error) {
 	doc := etree.NewDocument()
+	// A CDATA section is a spelling of a value, not a different value: a
+	// description wrapped in one reads the same either way. Preserving it keeps
+	// an edit from rewriting the spelling of a field it was not asked to touch.
+	doc.ReadSettings.PreserveCData = true
 	if err := doc.ReadFromBytes(b); err != nil {
 		return nil, err
 	}

@@ -36,8 +36,22 @@ type Doc struct {
 	ncx *etree.Element // <ncx>
 }
 
+// Parse rejects a document it cannot round-trip. etree refuses a malformed one
+// either way since v1.7.0 — before that it corrected mismatched tags and
+// truncation silently, and Apply would have written the correction back over a
+// real table of contents. ValidateInput is what makes the refusal legible: it
+// reports the syntax error and its line instead of a bare "invalid XML format",
+// and that message is all the caller has to log.
+//
+// Strict here and permissive in opf.Parse is the difference between a write
+// gate and a read gate. The caller skips an NCX this rejects, so strictness
+// costs only the file it declines to touch; a package document rejected the
+// same way is a book dropped from the library.
 func Parse(b []byte) (*Doc, error) {
 	doc := etree.NewDocument()
+	doc.ReadSettings.ValidateInput = true
+	// A navLabel may be wrapped in CDATA; opf.Parse says why that is preserved.
+	doc.ReadSettings.PreserveCData = true
 	if err := doc.ReadFromBytes(b); err != nil {
 		return nil, err
 	}
@@ -53,13 +67,6 @@ func (d *Doc) Bytes() ([]byte, error) { return d.doc.WriteToBytes() }
 // Apply writes the two edits the NCX carries a copy of into the document and
 // reports whether that changed anything; nothing is serialized until Bytes. No
 // other field has an NCX representation.
-//
-// ponytail: etree v1.1.0 has no ReadSettings.ValidateInput, so it corrects a
-// truncated or mismatched-tag NCX instead of failing, and a correction that
-// dropped content would be written back. Only an outright syntax error is
-// caught, by Parse. opf.Parse reads the package document on the same terms, so
-// this is the one parser behaviour rather than a second one; upgrade etree and
-// set the flag in both places if a real book ever loses a navMap to it.
 func (d *Doc) Apply(e model.Edits) bool {
 	before, _ := d.Bytes()
 

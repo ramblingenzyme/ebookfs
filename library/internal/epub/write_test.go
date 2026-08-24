@@ -1325,3 +1325,30 @@ func TestRefusesToEditASignedEpub(t *testing.T) {
 		t.Errorf("cover = %q, want the original", got)
 	}
 }
+
+// A <style> block uses CDATA so it can hold < and & unescaped. Re-encoding it
+// as escaped text leaves the document meaning the same thing to an XML parser
+// and something else to the lenient HTML parsers reading systems actually use —
+// so a refit must resize the image without touching the stylesheet.
+func TestCoverPageCDataStyleSurvivesARefit(t *testing.T) {
+	const page = `<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>Cover</title><style type="text/css"><![CDATA[
+body { margin: 0; }
+div > img { width: 100%; }
+]]></style></head>
+<body><div><img src="cover.jpg" width="600" height="800" alt="Cover"/></div></body>
+</html>`
+	path := coverPageEpub(t, coverPageOPF("ch1", true), page, 1200, 1600)
+
+	got := string(readEntry(t, path, "OEBPS/cover.xhtml"))
+	if !strings.Contains(got, `width="1200"`) {
+		t.Errorf("img was not refitted:\n%s", got)
+	}
+	if !strings.Contains(got, "<![CDATA[") || !strings.Contains(got, "div > img") {
+		t.Errorf("the stylesheet was re-encoded:\n%s", got)
+	}
+	if strings.Contains(got, "&gt;") {
+		t.Errorf("the stylesheet's > was escaped:\n%s", got)
+	}
+}

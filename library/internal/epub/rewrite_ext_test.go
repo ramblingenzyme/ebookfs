@@ -1327,18 +1327,65 @@ func TestNCXUntouchedByAnUnrelatedEdit(t *testing.T) {
 	}
 }
 
-// A syntactically broken NCX fails the edit rather than leaving the two copies
-// of the title disagreeing. Parse never reads the file, so such a book ingests
-// fine and only stops here. etree corrects milder breakage instead of reporting
-// it — see the ponytail note on ncx.Doc.Apply.
-func TestUnparseableNCXFailsTheEdit(t *testing.T) {
-	path := buildNCXEpub(t, "<ncx><docTitle<</ncx>")
+// An NCX that cannot be read does not fail the edit: the package document is
+// the metadata of record, and a book that arrived with an unreadable table of
+// contents must not become permanently unrenameable because of it. The stale
+// copy is left exactly as it was, and the skip is logged.
+//
+// The second case is malformed only in its nesting. etree corrected exactly
+// this kind of document silently before v1.7.0, which would have written the
+// correction back over a real table of contents; it is pinned here because
+// that is the behaviour the edit path depends on, not the parser version.
+func TestUnreadableNCXDoesNotFailTheEdit(t *testing.T) {
+	for _, tc := range []struct{ name, ncx string }{
+		{"syntax error", "<ncx><docTitle<</ncx>"},
+		{"mismatched end tag", `<ncx><docTitle><text>Original Title</text></docTitle>` +
+			`<navMap><navPoint id="p1"><content src="chapter1.xhtml"/></navPoint></wrong></ncx>`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := buildNCXEpub(t, tc.ncx)
+
+			title := "New Title"
+			bib, err := writeBib(path, model.Edits{Title: &title})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if bib.Title != title {
+				t.Errorf("title = %q, want %q", bib.Title, title)
+			}
+			if got := string(readEntry(t, path, "OEBPS/toc.ncx")); got != tc.ncx {
+				t.Errorf("unreadable ncx was rewritten:\n%s", got)
+			}
+		})
+	}
+}
+
+// A CDATA section is a spelling of a value, not a different value: the
+// description below reads the same either way, and an edit to the title has no
+// business re-encoding it. Nothing else in the corpus uses CDATA, so without
+// this the round-trip rule would be pinned only for documents that never
+// exercise it.
+func TestCDataDescriptionKeepsItsSpelling(t *testing.T) {
+	// Inside a CDATA section &amp; is five literal characters, not an escape,
+	// so this is also the value the reader must report.
+	const value = `<p>Fancy &amp; <b>bold</b></p>`
+	path := buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
+    <dc:title>Original Title</dc:title>
+    <dc:creator>Jane Doe</dc:creator>
+    <dc:language>en</dc:language>
+    <dc:description><![CDATA[`+value+`]]></dc:description>`))
 
 	title := "New Title"
-	if _, err := writeBib(path, model.Edits{Title: &title}); err == nil {
-		t.Fatal("expected an error")
+	bib, err := writeBib(path, model.Edits{Title: &title})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if bib, err := epub.Parse(path); err != nil || bib.Title != "Original Title" {
-		t.Errorf("original did not survive: %v, %+v", err, bib)
+	if bib.Description != value {
+		t.Errorf("description = %q, want %q", bib.Description, value)
+	}
+
+	got := string(readEntry(t, path, opfPath))
+	if !strings.Contains(got, "<![CDATA["+value+"]]>") {
+		t.Errorf("the CDATA section was re-encoded:\n%s", got)
 	}
 }

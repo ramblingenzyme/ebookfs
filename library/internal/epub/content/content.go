@@ -37,9 +37,19 @@ type Doc struct {
 // may use any of them (§6.1.2 makes these HTML documents in XML syntax), and
 // encoding/xml knows only the five XML ones. Without this a stray &nbsp; would
 // read as a syntax error.
+//
+// Validated as it reads, for the reason ncx.Parse gives: this package only ever
+// parses a document in order to write it back, so one that cannot be
+// round-tripped is one to leave alone — and the caller skips what this rejects.
 func Parse(b []byte, entry string) (*Doc, error) {
 	doc := etree.NewDocument()
 	doc.ReadSettings.Entity = stdxml.HTMLEntity
+	doc.ReadSettings.ValidateInput = true
+	// Content documents are where CDATA earns its keep: a <style> or <script>
+	// block uses one so it can contain < and & unescaped. Re-encoding that as
+	// escaped text leaves the document meaning the same thing to an XML parser
+	// and something else to the lenient HTML parsers reading systems use.
+	doc.ReadSettings.PreserveCData = true
 	if err := doc.ReadFromBytes(b); err != nil {
 		return nil, err
 	}
