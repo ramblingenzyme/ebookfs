@@ -69,26 +69,17 @@ func (f titleField) set(title, sort *string) {
 	put(f.calibreSort(), value)
 }
 
-// dropSegments removes every dc:title except keep, with its refinements, so a
-// replaced title leaves the document recording exactly the one it now has.
+// dropSegments removes every dc:title except keep, with its refinements. A
+// further dc:title is another segment of the same title (§5.5.3.1.2's multipart
+// example), so once the title is replaced they describe one the book no longer
+// has; §5.5.3.1.2 asks for "only a single dc:title element" regardless.
 //
-// A further dc:title is another segment of the same title — §5.5.3.1.2's
-// multipart example is "THE LORD OF THE RINGS" followed by "Part One: The
-// Fellowship of the Ring" — rather than a separate field. Once the title has
-// been replaced they describe a title the book no longer has, and §5.5.3.1.2
-// asks for a single element regardless: "EPUB creators should use only a
-// single dc:title element to ensure consistent rendering of the title in
-// reading systems."
+// It also stops the edit silently not taking: a reader honouring the deprecated
+// title-type refinement, as calibre does, shows the segment labelled "main",
+// which need not be the element we write.
 //
-// It is also what stops an edit from silently not taking. A reading system
-// honouring the deprecated title-type refinement, as calibre does, shows the
-// segment labelled "main" — which need not be the element §5.5.3.1.2 makes
-// ours to write. Leaving the others would rename the book everywhere except
-// there.
-//
-// keep's own refinements stay, including a title-type that may now be the only
-// one left and read oddly. Harmless: with one element left, first in document
-// order and "the one labelled main" resolve to it either way.
+// keep's own refinements stay. A title-type left alone on the last element is
+// harmless — both readings resolve to it.
 func (f titleField) dropSegments(keep *etree.Element) {
 	var ids []string
 	for _, el := range f.o.elements("title") {

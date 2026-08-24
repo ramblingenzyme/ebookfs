@@ -79,10 +79,8 @@ func Rewrite(epubPath string, b *model.Book, e model.Edits) (model.Bib, error) {
 }
 
 func createReplace(a *archive, b *model.Book, e model.Edits) (map[string][]byte, error) {
-	// Before any other refusal, because it does not depend on which entries the
-	// edit turns out to touch: every one of them may be one a signature covers,
-	// and none of them can be re-signed. ocf/signatures.go says why this is not
-	// narrowed to the entries actually being replaced.
+	// Before any other refusal: it does not depend on which entries the edit
+	// turns out to touch. DECISIONS.md #23 says why it is not narrowed to them.
 	if a.has(ocf.SignaturesPath) {
 		return nil, fmt.Errorf("refusing to edit: the epub is signed (%s) and an edit would invalidate the signature", ocf.SignaturesPath)
 	}
@@ -91,9 +89,7 @@ func createReplace(a *archive, b *model.Book, e model.Edits) (map[string][]byte,
 	if err != nil {
 		return nil, err
 	}
-	// Parsed whichever edit this is: a cover edit needs it to find the page
-	// displaying the cover, and a book whose package document will not parse
-	// could not have been ingested.
+	// Parsed whichever edit this is: a cover edit needs it to find the cover page.
 	opfBytes, err := a.read(a.opf)
 	if err != nil {
 		return nil, err
@@ -133,11 +129,9 @@ func createReplace(a *archive, b *model.Book, e model.Edits) (map[string][]byte,
 	return replace, nil
 }
 
-// replaceCover swaps the cover image entry for e's, in place and in the same
-// format: transcoding, re-encoding and moving the entry are all rewrites of the
-// package document this avoids needing, so the manifest, the cover-image
-// property and the legacy <meta name="cover"> all keep pointing at what they
-// already pointed at.
+// replaceCover swaps the cover image entry in place and in the same format, so
+// the manifest, the cover-image property and the legacy <meta name="cover">
+// keep pointing at what they already did.
 func replaceCover(a *archive, pkg *opf.Doc, enc *ocf.EncryptionInfo, b *model.Book, e model.Edits, replace map[string][]byte) error {
 	want := coverFormat(b.CoverPath)
 	if want == "" {
@@ -161,17 +155,10 @@ func replaceCover(a *archive, pkg *opf.Doc, enc *ocf.EncryptionInfo, b *model.Bo
 	return replaceCoverPage(a, pkg, enc, b.CoverPath, cfg.Width, cfg.Height, replace)
 }
 
-// replaceCoverPage refits the page displaying the cover to the new image's
-// dimensions. Package content says why a cover page needs refitting; opf
-// decides which documents are candidates, and finding the cover image inside
-// one is what confirms it.
-//
-// A candidate that cannot be read is skipped rather than failing the edit. That
-// is the opposite of what replaceNCX does with a broken file, and for the
-// opposite reason: the NCX is known to hold a stale copy of what is being
-// edited, while a candidate here is a guess that has not been confirmed yet —
-// and the cover replacement itself, which is what the caller asked for, does
-// not depend on it.
+// replaceCoverPage refits the page displaying the cover; package content says
+// why. A candidate from opf is confirmed by finding the cover image inside it,
+// so an unreadable one is skipped silently — it was never confirmed to be the
+// cover page.
 func replaceCoverPage(a *archive, pkg *opf.Doc, enc *ocf.EncryptionInfo, coverPath string, width, height int, replace map[string][]byte) error {
 	for _, entry := range pkg.CoverPages(path.Dir(a.opf)) {
 		if !a.has(entry) || enc.IsEncrypted(entry) {
@@ -257,16 +244,12 @@ func rewriteEpub(epubPath string, a *archive, replace map[string][]byte) (*model
 }
 
 // replaceNCX adds the rewritten NCX to replace, when the package declares one
-// and the edit touches a field it carries. Package ncx says why it is kept in
-// step with the package document.
+// and the edit touches a field it carries; package ncx says why.
 //
-// An NCX that cannot be read — encrypted, or not well-formed — is left alone
-// rather than failing the edit. The package document is the metadata of record
-// and the caller asked for it to be changed; the NCX is a courtesy copy, and a
-// book that arrived carrying an unreadable one is a book whose two copies
-// already disagreed. Refusing would make it permanently unrenameable to avoid
-// an inconsistency we did not create, over a table of contents no reader can
-// read either.
+// An NCX that cannot be read — encrypted, or malformed — is skipped rather than
+// failing the edit. The package document is the metadata of record, and
+// refusing would leave a book that arrived with an unreadable NCX permanently
+// unrenameable.
 func replaceNCX(a *archive, pkg *opf.Doc, enc *ocf.EncryptionInfo, e model.Edits, replace map[string][]byte) error {
 	if e.Title == nil && e.Authors == nil {
 		return nil
@@ -280,9 +263,8 @@ func replaceNCX(a *archive, pkg *opf.Doc, enc *ocf.EncryptionInfo, e model.Edits
 	if err != nil {
 		return err
 	}
-	// Logged rather than returned, because the edit is going to succeed and the
-	// user would otherwise have no way to learn that half of what the book says
-	// about itself is now stale.
+	// Logged rather than returned: the edit succeeds, and nothing else reports
+	// that half of what the book says about itself is now stale.
 	doc, err := ncx.Parse(data)
 	if err != nil {
 		slog.Warn("epub: skipping unreadable NCX; its title and authors will not match the package document",

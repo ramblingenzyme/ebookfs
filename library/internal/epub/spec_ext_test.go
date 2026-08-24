@@ -54,10 +54,9 @@ var opfTitleTypes = epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:iden
 // first in document order, read and written. calibre would pick t2 — a deliberate divergence, not a bug.
 // Revisit only if round-tripping with calibre becomes a goal.
 //
-// The write half is ours rather than the spec's, and it is what makes that
-// divergence safe: replacing the title leaves one dc:title, so there is no
-// longer a file on which the two readings can disagree. The spec half of this
-// is only that §5.5.3.1.2 asks for a single element to begin with.
+// The write half is ours, and it makes that divergence safe: replacing the
+// title leaves one dc:title, so no file remains on which the two readings can
+// disagree.
 func TestSpecFirstTitleWins(t *testing.T) {
 	path := buildEpub(t, opfTitleTypes)
 
@@ -80,8 +79,7 @@ func TestSpecFirstTitleWins(t *testing.T) {
 		t.Errorf("first title = %q, want %q — read and write must resolve the same element", got, want)
 	}
 
-	// The segments of the replaced title go with it, refinements and all. Left
-	// behind, t2 is what calibre would still show as this book's title.
+	// Left behind, t2 is what calibre would still show as this book's title.
 	if els := md.SelectElements("title"); len(els) != 1 {
 		t.Errorf("dc:title count = %d, want the one the edit left", len(els))
 	}

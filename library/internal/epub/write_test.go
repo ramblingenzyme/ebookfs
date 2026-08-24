@@ -1115,13 +1115,10 @@ func TestFailedValidationLeavesTheOriginal(t *testing.T) {
 
 // --- cover page dimensions -------------------------------------------------
 //
-// Replacing the cover image leaves the page that displays it claiming the old
-// image's pixel dimensions. The usual cover page is an SVG wrapper whose
-// viewBox is the coordinate space the image is drawn into, so a replacement of
-// a different size renders cropped or letterboxed while every file in the book
-// stays valid. These pin the repair, and the limits on it: the page is only
-// touched where it already said something, and only when it is really the page
-// showing the cover.
+// Replacing the cover leaves the page displaying it claiming the old image's
+// dimensions; package content says why that crops. These pin the repair and its
+// limits: only where the page already said something, and only on the real
+// cover page.
 
 func jpegSized(t *testing.T, w, h int) []byte {
 	t.Helper()
@@ -1132,8 +1129,7 @@ func jpegSized(t *testing.T, w, h int) []byte {
 	return buf.Bytes()
 }
 
-// svgCoverPage is the shape calibre and Sigil both produce: an image scaled to
-// fill the viewport through a viewBox fixed to its pixel size.
+// The shape calibre and Sigil both produce.
 const svgCoverPage = `<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -1145,9 +1141,9 @@ const svgCoverPage = `<?xml version="1.0" encoding="utf-8"?>
 </body>
 </html>`
 
-// coverPageOPF puts cover.xhtml in the manifest and reaches it by exactly one
-// pointer, so a test says which of them it is exercising. first names the spine's
-// opening document; guide adds the legacy <guide> reference when true.
+// coverPageOPF reaches cover.xhtml by exactly one pointer, so a test says which
+// it exercises: first names the spine's opening document, guide adds the
+// legacy <guide> reference.
 func coverPageOPF(first string, guide bool) string {
 	g := ""
 	if guide {
@@ -1215,8 +1211,8 @@ func TestCoverPageRefitByTheFirstSpineItem(t *testing.T) {
 	}
 }
 
-// A candidate that does not draw the cover image is not the cover page, whatever
-// the guide says, and an edit must not resize whatever it does draw.
+// A candidate not drawing the cover image is not the cover page, whatever the
+// guide says.
 func TestCoverPageNotDrawingTheCoverIsUntouched(t *testing.T) {
 	page := strings.Replace(svgCoverPage, "cover.jpg", "frontispiece.jpg", 1)
 	path := coverPageEpub(t, coverPageOPF("ch1", true), page, 1200, 1600)
@@ -1226,9 +1222,8 @@ func TestCoverPageNotDrawingTheCoverIsUntouched(t *testing.T) {
 	}
 }
 
-// A page that sizes its cover in CSS is already correct at any size. The repair
-// only ever updates a dimension the document already stated, so this one comes
-// back byte for byte.
+// A page sizing its cover in CSS is already correct at any size, and the repair
+// only updates what the document already stated.
 func TestCoverPageWithoutStatedDimensionsIsUntouched(t *testing.T) {
 	const page = `<?xml version="1.0" encoding="utf-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -1242,9 +1237,7 @@ func TestCoverPageWithoutStatedDimensionsIsUntouched(t *testing.T) {
 	}
 }
 
-// A replacement the same size as the old cover leaves nothing to refit, so the
-// entry is copied rather than rewritten — an edit does not churn a file it has
-// nothing to say about.
+// A same-sized replacement leaves nothing to refit, so the entry is copied.
 func TestCoverPageUnchangedBySameSizedReplacement(t *testing.T) {
 	path := coverPageEpub(t, coverPageOPF("ch1", true), svgCoverPage, 600, 800)
 
@@ -1253,9 +1246,7 @@ func TestCoverPageUnchangedBySameSizedReplacement(t *testing.T) {
 	}
 }
 
-// XHTML content documents are HTML in XML syntax (§6.1.2), so they may use any
-// of HTML's named entities. encoding/xml knows only the five XML ones, and a
-// cover page carrying &nbsp; must still be refitted rather than read as broken.
+// §6.1.2 allows any HTML named entity, so &nbsp; must not read as broken.
 func TestCoverPageWithAnHTMLEntityIsRefitted(t *testing.T) {
 	page := strings.Replace(svgCoverPage, "<title>Cover</title>", "<title>Cover&nbsp;Page</title>", 1)
 	path := coverPageEpub(t, coverPageOPF("ch1", true), page, 1200, 1600)
@@ -1265,9 +1256,8 @@ func TestCoverPageWithAnHTMLEntityIsRefitted(t *testing.T) {
 	}
 }
 
-// The other spelling: an HTML <img> sized by attributes rather than an SVG
-// wrapper. Its src is resolved the same way an SVG image's href is, and the
-// dimensions it does state are refitted.
+// The other spelling: an HTML <img> sized by attributes, its src resolved the
+// same way an SVG image's href is.
 func TestCoverPageImgAttributesAreRefitted(t *testing.T) {
 	const page = `<?xml version="1.0" encoding="utf-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -1287,10 +1277,8 @@ func TestCoverPageImgAttributesAreRefitted(t *testing.T) {
 
 // --- signed containers -----------------------------------------------------
 
-// A signature names by URL the files it covers, and every entry an edit
-// replaces may be one of them. We hold no key to re-sign with, so the only
-// honest answer is to refuse — and to refuse before anything is written, the
-// same as for an encrypted entry. Reading a signed book is unaffected.
+// Every entry an edit replaces may be one a signature covers, and we cannot
+// re-sign. DECISIONS.md #23 says why the check is not narrower than this.
 func TestRefusesToEditASignedEpub(t *testing.T) {
 	const signatures = `<?xml version="1.0"?>
 <signatures xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><Signature/></signatures>`
@@ -1326,10 +1314,8 @@ func TestRefusesToEditASignedEpub(t *testing.T) {
 	}
 }
 
-// A <style> block uses CDATA so it can hold < and & unescaped. Re-encoding it
-// as escaped text leaves the document meaning the same thing to an XML parser
-// and something else to the lenient HTML parsers reading systems actually use —
-// so a refit must resize the image without touching the stylesheet.
+// A refit must resize the image without re-encoding the CDATA a <style> block
+// uses to hold < and & unescaped; package content says why that matters.
 func TestCoverPageCDataStyleSurvivesARefit(t *testing.T) {
 	const page = `<?xml version="1.0" encoding="utf-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml">

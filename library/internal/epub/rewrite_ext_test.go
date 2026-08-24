@@ -1183,10 +1183,9 @@ func TestSeriesRenameDoesNotDuplicate(t *testing.T) {
 	}
 }
 
-// The NCX carries its own <docTitle> and <docAuthor>, which an EPUB 2 reading
-// system shows instead of the package document's. Neither spec makes them track
-// dc:title and dc:creator, so what these tests pin is our own rule: an edit
-// keeps them in step, and never creates one that was not there.
+// Neither spec makes <docTitle> and <docAuthor> track dc:title and dc:creator,
+// so these pin our rule: an edit keeps them in step, and never creates one that
+// was not there.
 
 const ncxOPF = `<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" xmlns:opf="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="bookid">
@@ -1279,9 +1278,7 @@ func TestNCXDocAuthorsAreReconciled(t *testing.T) {
 	}
 }
 
-// An NCX naming no author is not disagreeing with the package document about
-// who wrote the book, and where a first <docAuthor> would go is the NCX content
-// model's business rather than ours.
+// Where a first <docAuthor> would go is the content model's business, not ours.
 func TestNCXWithNoDocAuthorGainsNone(t *testing.T) {
 	path := buildNCXEpub(t, ncxWith(`  <docTitle><text>Original Title</text></docTitle>`))
 
@@ -1310,9 +1307,8 @@ func TestTitleEditWithoutAnNCX(t *testing.T) {
 	}
 }
 
-// The NCX is only read when the edit touches a field it carries, and the entry
-// is only replaced when that changed something: a series edit leaves it byte
-// for byte as it was, method and all.
+// The NCX is read only for a field it carries, so a series edit leaves the
+// entry byte for byte as it was.
 func TestNCXUntouchedByAnUnrelatedEdit(t *testing.T) {
 	ncx := ncxWith(`  <docTitle><text>Original Title</text></docTitle>`)
 	path := buildNCXEpub(t, ncx)
@@ -1327,15 +1323,9 @@ func TestNCXUntouchedByAnUnrelatedEdit(t *testing.T) {
 	}
 }
 
-// An NCX that cannot be read does not fail the edit: the package document is
-// the metadata of record, and a book that arrived with an unreadable table of
-// contents must not become permanently unrenameable because of it. The stale
-// copy is left exactly as it was, and the skip is logged.
-//
-// The second case is malformed only in its nesting. etree corrected exactly
-// this kind of document silently before v1.7.0, which would have written the
-// correction back over a real table of contents; it is pinned here because
-// that is the behaviour the edit path depends on, not the parser version.
+// An unreadable NCX does not fail the edit, and is left exactly as it was. The
+// second case is malformed only in its nesting, which is the kind of document
+// etree used to correct silently.
 func TestUnreadableNCXDoesNotFailTheEdit(t *testing.T) {
 	for _, tc := range []struct{ name, ncx string }{
 		{"syntax error", "<ncx><docTitle<</ncx>"},
@@ -1360,11 +1350,8 @@ func TestUnreadableNCXDoesNotFailTheEdit(t *testing.T) {
 	}
 }
 
-// A CDATA section is a spelling of a value, not a different value: the
-// description below reads the same either way, and an edit to the title has no
-// business re-encoding it. Nothing else in the corpus uses CDATA, so without
-// this the round-trip rule would be pinned only for documents that never
-// exercise it.
+// A CDATA section is a spelling of a value, not a different value, so a title
+// edit has no business re-encoding it. Nothing else in the corpus uses CDATA.
 func TestCDataDescriptionKeepsItsSpelling(t *testing.T) {
 	// Inside a CDATA section &amp; is five literal characters, not an escape,
 	// so this is also the value the reader must report.
@@ -1392,11 +1379,8 @@ func TestCDataDescriptionKeepsItsSpelling(t *testing.T) {
 
 // --- multipart titles --------------------------------------------------------
 //
-// §5.5.3.1.2's own example of one: "THE LORD OF THE RINGS" followed by "Part
-// One: The Fellowship of the Ring". The second element is another segment of
-// the same title, so replacing the title has to take it too — left behind it
-// describes a title the book no longer has, and the file would claim a name
-// nothing reported when it was read.
+// The fixture is §5.5.3.1.2's own example. The second element is another segment
+// of the same title, so replacing the title has to take it too.
 
 var opfMultipartTitle = epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>THE LORD OF THE RINGS</dc:title>
@@ -1425,9 +1409,8 @@ func TestTitleEditTakesTheOtherSegments(t *testing.T) {
 	}
 }
 
-// Only a title write takes them. A sort title is a property of the title the
-// file already has, and setting one is not a claim that the book has been
-// renamed.
+// Only a title write takes them: a sort title is a property of the title the
+// file already has, not a claim the book was renamed.
 func TestSortTitleEditLeavesTheOtherSegments(t *testing.T) {
 	path := buildEpub(t, opfMultipartTitle)
 
@@ -1441,8 +1424,7 @@ func TestSortTitleEditLeavesTheOtherSegments(t *testing.T) {
 	}
 }
 
-// Twice is once: the second edit finds one title and nothing to drop, so it
-// leaves the file alone rather than churning it.
+// The second edit finds nothing to drop, so it leaves the file alone.
 func TestTitleEditIsIdempotentAcrossSegments(t *testing.T) {
 	path := buildEpub(t, opfMultipartTitle)
 
