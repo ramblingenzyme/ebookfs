@@ -1112,3 +1112,216 @@ func TestFailedValidationLeavesTheOriginal(t *testing.T) {
 		t.Error("a rejected rewrite modified the original epub")
 	}
 }
+
+// --- cover page dimensions -------------------------------------------------
+//
+// Replacing the cover image leaves the page that displays it claiming the old
+// image's pixel dimensions. The usual cover page is an SVG wrapper whose
+// viewBox is the coordinate space the image is drawn into, so a replacement of
+// a different size renders cropped or letterboxed while every file in the book
+// stays valid. These pin the repair, and the limits on it: the page is only
+// touched where it already said something, and only when it is really the page
+// showing the cover.
+
+func jpegSized(t *testing.T, w, h int) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, w, h)), nil); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+// svgCoverPage is the shape calibre and Sigil both produce: an image scaled to
+// fill the viewport through a viewBox fixed to its pixel size.
+const svgCoverPage = `<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>Cover</title></head>
+<body style="margin:0">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="100%" height="100%" viewBox="0 0 600 800" preserveAspectRatio="xMidYMid meet">
+  <image width="600" height="800" xlink:href="cover.jpg"/>
+</svg>
+</body>
+</html>`
+
+// coverPageOPF puts cover.xhtml in the manifest and reaches it by exactly one
+// pointer, so a test says which of them it is exercising. first names the spine's
+// opening document; guide adds the legacy <guide> reference when true.
+func coverPageOPF(first string, guide bool) string {
+	g := ""
+	if guide {
+		g = `<guide><reference type="cover" href="cover.xhtml" title="Cover"/></guide>`
+	}
+	return `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="bookid">urn:uuid:1234</dc:identifier>
+    <dc:title>Original Title</dc:title>
+    <dc:creator>Jane Doe</dc:creator>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="cover-img" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
+    <item id="coverpage" href="cover.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine><itemref idref="` + first + `"/><itemref idref="ch1"/></spine>
+  ` + g + `
+</package>`
+}
+
+// coverPageEpub builds a book whose cover page is page, and replaces the cover
+// with a w by h image. It returns the epub's path.
+func coverPageEpub(t *testing.T, opf, page string, w, h int) string {
+	t.Helper()
+	path := writeEpub(t, baseEntries(opf, entry{name: "OEBPS/cover.xhtml", data: []byte(page)}))
+	if _, err := writeCover(path, "OEBPS/cover.jpg", jpegSized(t, w, h)); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestCoverPageRefitByTheGuideReference(t *testing.T) {
+	// The spine opens on a chapter, so only the guide reaches the cover page.
+	path := coverPageEpub(t, coverPageOPF("ch1", true), svgCoverPage, 1200, 1600)
+
+	page := string(readEntry(t, path, "OEBPS/cover.xhtml"))
+	for _, want := range []string{
+		`viewBox="0 0 1200 1600"`,
+		`width="1200"`,
+		`height="1600"`,
+		// Untouched: the svg fills the viewport at any image size, and the
+		// doctype and the rest of the document are not ours to rewrite.
+		`width="100%"`,
+		`preserveAspectRatio="xMidYMid meet"`,
+		`<!DOCTYPE html>`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("cover page is missing %s:\n%s", want, page)
+		}
+	}
+	if strings.Contains(page, "600 800") {
+		t.Errorf("cover page still carries the old dimensions:\n%s", page)
+	}
+}
+
+func TestCoverPageRefitByTheFirstSpineItem(t *testing.T) {
+	// No guide at all, which is the EPUB 3 norm.
+	path := coverPageEpub(t, coverPageOPF("coverpage", false), svgCoverPage, 1200, 1600)
+
+	if page := string(readEntry(t, path, "OEBPS/cover.xhtml")); !strings.Contains(page, `viewBox="0 0 1200 1600"`) {
+		t.Errorf("cover page was not refitted:\n%s", page)
+	}
+}
+
+// A candidate that does not draw the cover image is not the cover page, whatever
+// the guide says, and an edit must not resize whatever it does draw.
+func TestCoverPageNotDrawingTheCoverIsUntouched(t *testing.T) {
+	page := strings.Replace(svgCoverPage, "cover.jpg", "frontispiece.jpg", 1)
+	path := coverPageEpub(t, coverPageOPF("ch1", true), page, 1200, 1600)
+
+	if got := string(readEntry(t, path, "OEBPS/cover.xhtml")); got != page {
+		t.Errorf("cover page was rewritten:\n%s", got)
+	}
+}
+
+// A page that sizes its cover in CSS is already correct at any size. The repair
+// only ever updates a dimension the document already stated, so this one comes
+// back byte for byte.
+func TestCoverPageWithoutStatedDimensionsIsUntouched(t *testing.T) {
+	const page = `<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>Cover</title><style>img { width: 100%; }</style></head>
+<body><img src="cover.jpg" alt="Cover"/></body>
+</html>`
+	path := coverPageEpub(t, coverPageOPF("ch1", true), page, 1200, 1600)
+
+	if got := string(readEntry(t, path, "OEBPS/cover.xhtml")); got != page {
+		t.Errorf("cover page was rewritten:\n%s", got)
+	}
+}
+
+// A replacement the same size as the old cover leaves nothing to refit, so the
+// entry is copied rather than rewritten — an edit does not churn a file it has
+// nothing to say about.
+func TestCoverPageUnchangedBySameSizedReplacement(t *testing.T) {
+	path := coverPageEpub(t, coverPageOPF("ch1", true), svgCoverPage, 600, 800)
+
+	if got := string(readEntry(t, path, "OEBPS/cover.xhtml")); got != svgCoverPage {
+		t.Errorf("cover page was rewritten:\n%s", got)
+	}
+}
+
+// XHTML content documents are HTML in XML syntax (§6.1.2), so they may use any
+// of HTML's named entities. encoding/xml knows only the five XML ones, and a
+// cover page carrying &nbsp; must still be refitted rather than read as broken.
+func TestCoverPageWithAnHTMLEntityIsRefitted(t *testing.T) {
+	page := strings.Replace(svgCoverPage, "<title>Cover</title>", "<title>Cover&nbsp;Page</title>", 1)
+	path := coverPageEpub(t, coverPageOPF("ch1", true), page, 1200, 1600)
+
+	if got := string(readEntry(t, path, "OEBPS/cover.xhtml")); !strings.Contains(got, `viewBox="0 0 1200 1600"`) {
+		t.Errorf("cover page was not refitted:\n%s", got)
+	}
+}
+
+// The other spelling: an HTML <img> sized by attributes rather than an SVG
+// wrapper. Its src is resolved the same way an SVG image's href is, and the
+// dimensions it does state are refitted.
+func TestCoverPageImgAttributesAreRefitted(t *testing.T) {
+	const page = `<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>Cover</title></head>
+<body><img src="cover.jpg" width="600" height="800" alt="Cover"/></body>
+</html>`
+	path := coverPageEpub(t, coverPageOPF("ch1", true), page, 1200, 1600)
+
+	got := string(readEntry(t, path, "OEBPS/cover.xhtml"))
+	if !strings.Contains(got, `width="1200"`) || !strings.Contains(got, `height="1600"`) {
+		t.Errorf("img was not refitted:\n%s", got)
+	}
+	if !strings.Contains(got, `alt="Cover"`) {
+		t.Errorf("img lost an attribute that was not ours:\n%s", got)
+	}
+}
+
+// --- signed containers -----------------------------------------------------
+
+// A signature names by URL the files it covers, and every entry an edit
+// replaces may be one of them. We hold no key to re-sign with, so the only
+// honest answer is to refuse — and to refuse before anything is written, the
+// same as for an encrypted entry. Reading a signed book is unaffected.
+func TestRefusesToEditASignedEpub(t *testing.T) {
+	const signatures = `<?xml version="1.0"?>
+<signatures xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><Signature/></signatures>`
+	path := writeEpub(t, baseEntries(opf3, entry{name: "META-INF/signatures.xml", data: []byte(signatures)}))
+
+	title := "New Title"
+	cover := tinyJPEG(t)
+	for _, tc := range []struct {
+		name string
+		e    model.Edits
+	}{
+		{"bib edit", model.Edits{Title: &title}},
+		{"cover edit", model.Edits{Cover: &cover}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			b := &model.Book{Location: model.Location{EpubPath: path}, Bib: model.Bib{CoverPath: "OEBPS/cover.jpg"}}
+			if _, err := epub.Rewrite(path, b, tc.e); err == nil {
+				t.Fatal("expected a refusal")
+			}
+		})
+	}
+
+	// Untouched, down to the entry that would have been rewritten first.
+	bib, err := epub.Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bib.Title != "Original Title" {
+		t.Errorf("title = %q, want the original", bib.Title)
+	}
+	if got := readEntry(t, path, "OEBPS/cover.jpg"); !bytes.Equal(got, coverBytes) {
+		t.Errorf("cover = %q, want the original", got)
+	}
+}

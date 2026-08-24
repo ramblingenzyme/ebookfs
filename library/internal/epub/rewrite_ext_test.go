@@ -1182,3 +1182,163 @@ func TestSeriesRenameDoesNotDuplicate(t *testing.T) {
 		t.Errorf("series = %+v, want the position preserved across a rename", bib.Series)
 	}
 }
+
+// The NCX carries its own <docTitle> and <docAuthor>, which an EPUB 2 reading
+// system shows instead of the package document's. Neither spec makes them track
+// dc:title and dc:creator, so what these tests pin is our own rule: an edit
+// keeps them in step, and never creates one that was not there.
+
+const ncxOPF = `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" xmlns:opf="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="bookid">urn:uuid:1234</dc:identifier>
+    <dc:title>Original Title</dc:title>
+    <dc:creator opf:role="aut">Jane Doe</dc:creator>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="cover-img" href="cover.jpg" media-type="image/jpeg"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+  </manifest>
+  <spine toc="ncx"><itemref idref="ch1"/></spine>
+</package>`
+
+func ncxWith(body string) string {
+	return `<?xml version="1.0" encoding="utf-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+  <head><meta name="dtb:uid" content="urn:uuid:1234"/></head>
+` + body + `
+  <navMap><navPoint id="p1" playOrder="1"><navLabel><text>Chapter One</text></navLabel><content src="chapter1.xhtml"/></navPoint></navMap>
+</ncx>`
+}
+
+// buildNCXEpub writes the standard archive with an NCX beside the package
+// document, and returns the epub's path.
+func buildNCXEpub(t *testing.T, ncx string) string {
+	t.Helper()
+	return writeEpub(t, baseEntries(ncxOPF, entry{name: "OEBPS/toc.ncx", data: []byte(ncx)}))
+}
+
+// ncxTexts returns the <text> values under every element with the given tag, so
+// a test can assert on what the NCX now says without walking etree itself.
+func ncxTexts(t *testing.T, epubPath, tag string) []string {
+	t.Helper()
+	doc := etree.NewDocument()
+	if err := doc.ReadFromBytes(readEntry(t, epubPath, "OEBPS/toc.ncx")); err != nil {
+		t.Fatalf("result is not parseable XML: %v", err)
+	}
+	var out []string
+	for _, el := range doc.FindElements("//" + tag) {
+		out = append(out, strings.TrimSpace(el.SelectElement("text").Text()))
+	}
+	return out
+}
+
+func TestNCXDocTitleFollowsATitleEdit(t *testing.T) {
+	path := buildNCXEpub(t, ncxWith(`  <docTitle><text>Original Title</text></docTitle>`))
+
+	title := "New Title"
+	if _, err := writeBib(path, model.Edits{Title: &title}); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := ncxTexts(t, path, "docTitle"); len(got) != 1 || got[0] != title {
+		t.Errorf("docTitle = %q, want [%q]", got, title)
+	}
+}
+
+func TestNCXDocAuthorsAreReconciled(t *testing.T) {
+	path := buildNCXEpub(t, ncxWith(`  <docTitle><text>Original Title</text></docTitle>
+  <docAuthor><text>Jane Doe</text></docAuthor>
+  <docAuthor><text>Dropped Coauthor</text></docAuthor>`))
+
+	authors := []model.Author{{Name: "Ann Rewrite"}, {Name: "Bo Second"}, {Name: "Cy Third"}}
+	if _, err := writeBib(path, model.Edits{Authors: &authors}); err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{"Ann Rewrite", "Bo Second", "Cy Third"}
+	if got := ncxTexts(t, path, "docAuthor"); !slices.Equal(got, want) {
+		t.Errorf("docAuthor = %q, want %q", got, want)
+	}
+
+	// The added ones must land before <navMap>, which the NCX content model
+	// puts after docAuthor: appending to <ncx> would have made the file invalid.
+	doc := etree.NewDocument()
+	if err := doc.ReadFromBytes(readEntry(t, path, "OEBPS/toc.ncx")); err != nil {
+		t.Fatal(err)
+	}
+	var tags []string
+	for _, el := range doc.SelectElement("ncx").ChildElements() {
+		tags = append(tags, el.Tag)
+	}
+	wantTags := []string{"head", "docTitle", "docAuthor", "docAuthor", "docAuthor", "navMap"}
+	if !slices.Equal(tags, wantTags) {
+		t.Errorf("ncx children = %q, want %q", tags, wantTags)
+	}
+}
+
+// An NCX naming no author is not disagreeing with the package document about
+// who wrote the book, and where a first <docAuthor> would go is the NCX content
+// model's business rather than ours.
+func TestNCXWithNoDocAuthorGainsNone(t *testing.T) {
+	path := buildNCXEpub(t, ncxWith(`  <docTitle><text>Original Title</text></docTitle>`))
+
+	authors := []model.Author{{Name: "Ann Rewrite"}}
+	if _, err := writeBib(path, model.Edits{Authors: &authors}); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := ncxTexts(t, path, "docAuthor"); len(got) != 0 {
+		t.Errorf("docAuthor = %q, want none", got)
+	}
+}
+
+// A book with no NCX at all is the EPUB 3 norm, and an edit must not fail over
+// the manifest not declaring one.
+func TestTitleEditWithoutAnNCX(t *testing.T) {
+	path := buildEpub(t, opf3)
+
+	title := "New Title"
+	bib, err := writeBib(path, model.Edits{Title: &title})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bib.Title != title {
+		t.Errorf("title = %q, want %q", bib.Title, title)
+	}
+}
+
+// The NCX is only read when the edit touches a field it carries, and the entry
+// is only replaced when that changed something: a series edit leaves it byte
+// for byte as it was, method and all.
+func TestNCXUntouchedByAnUnrelatedEdit(t *testing.T) {
+	ncx := ncxWith(`  <docTitle><text>Original Title</text></docTitle>`)
+	path := buildNCXEpub(t, ncx)
+
+	series := "A Series"
+	if _, err := writeBib(path, model.Edits{Series: &series}); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := string(readEntry(t, path, "OEBPS/toc.ncx")); got != ncx {
+		t.Errorf("ncx was rewritten:\n%s", got)
+	}
+}
+
+// A syntactically broken NCX fails the edit rather than leaving the two copies
+// of the title disagreeing. Parse never reads the file, so such a book ingests
+// fine and only stops here. etree corrects milder breakage instead of reporting
+// it — see the ponytail note on ncx.Doc.Apply.
+func TestUnparseableNCXFailsTheEdit(t *testing.T) {
+	path := buildNCXEpub(t, "<ncx><docTitle<</ncx>")
+
+	title := "New Title"
+	if _, err := writeBib(path, model.Edits{Title: &title}); err == nil {
+		t.Fatal("expected an error")
+	}
+	if bib, err := epub.Parse(path); err != nil || bib.Title != "Original Title" {
+		t.Errorf("original did not survive: %v, %+v", err, bib)
+	}
+}

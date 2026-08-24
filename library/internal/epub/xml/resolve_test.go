@@ -1,8 +1,8 @@
-package opf
+package xml
 
 import "testing"
 
-func TestCoverUrl(t *testing.T) {
+func TestResolveHref(t *testing.T) {
 	for _, tc := range []struct {
 		name, base, href, want string
 	}{
@@ -14,10 +14,13 @@ func TestCoverUrl(t *testing.T) {
 		{"percent-encoded space", "OEBPS", "cover%20image.jpg", "OEBPS/cover image.jpg"},
 		{"percent-encoded utf8", "OEBPS", "couv%C3%A9.jpg", "OEBPS/couvé.jpg"},
 		{"absolute and encoded", "OEBPS", "/img/a%20b.jpg", "img/a b.jpg"},
+		// A guide or landmarks reference into the cover page carries one, and
+		// still names the document.
+		{"fragment dropped", "OEBPS", "cover.xhtml#cover-image", "OEBPS/cover.xhtml"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := coverUrl(tc.base, tc.href); got != tc.want {
-				t.Errorf("coverUrl(%q, %q) = %q, want %q", tc.base, tc.href, got, tc.want)
+			if got := ResolveHref(tc.base, tc.href); got != tc.want {
+				t.Errorf("ResolveHref(%q, %q) = %q, want %q", tc.base, tc.href, got, tc.want)
 			}
 		})
 	}
