@@ -4,14 +4,9 @@
 //
 // A slot (slot.go) is one place a value is kept — element text, a refinement,
 // an opf: attribute, a named meta. Under them sit the finders: metadata.go for
-// the children of <metadata> and the xmlns: prefixes new ones need, refine.go
-// for the EPUB 3 refinement binding, vocab.go for the vocabulary a property
-// name resolves in.
-//
-// Those last two are different naming systems: xmlns: prefixes are resolved by
-// the XML parser, vocabulary prefixes live inside attribute values and are
-// bound by the package element's prefix attribute. Each has a get-or-declare
-// step — ensureNSPrefix and spell/declare.
+// the children of <metadata>, refine.go for the EPUB 3 refinement binding, and
+// the two naming systems anything new has to be spelled in — ns.go for xmlns:
+// prefixes, vocab.go for vocabulary ones. ns says how those two differ.
 package pkgdoc
 
 import (
@@ -24,8 +19,9 @@ import (
 type Doc struct {
 	doc   *etree.Document
 	pkg   *etree.Element // <package>
-	md    *etree.Element // <metadata>
-	vocab vocab
+	md    metadata       // the children of <metadata>
+	ns    ns             // xmlns: prefixes
+	vocab vocab          // vocabulary prefixes
 }
 
 // Parse reads the package document. etree is used rather than encoding/xml
@@ -48,7 +44,7 @@ func Parse(b []byte) (*Doc, error) {
 	if md == nil {
 		return nil, errors.New("opf: no <metadata> element")
 	}
-	return &Doc{doc: doc, pkg: pkg, md: md, vocab: vocab{pkg}}, nil
+	return &Doc{doc: doc, pkg: pkg, md: metadata{md}, ns: ns{pkg}, vocab: vocab{pkg}}, nil
 }
 
 func (d *Doc) Bytes() ([]byte, error) { return d.doc.WriteToBytes() }

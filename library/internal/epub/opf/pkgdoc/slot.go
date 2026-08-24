@@ -203,7 +203,7 @@ func (a *OPFAttr) Set(value string) {
 		existing.Value = value
 		return
 	}
-	el.CreateAttr(qualify(a.d.ensureOPFPrefix(), a.name), value)
+	el.CreateAttr(qualify(a.d.ns.opf(), a.name), value)
 }
 
 func (a *OPFAttr) Clear() {
@@ -223,28 +223,28 @@ type Named struct {
 }
 
 func (n *Named) Get() string {
-	if ms := n.d.namedMetaElements(n.name); len(ms) > 0 {
+	if ms := n.d.md.named(n.name); len(ms) > 0 {
 		return attr(ms[0], "content")
 	}
 	return ""
 }
 
-func (n *Named) Exists() bool { return len(n.d.namedMetaElements(n.name)) > 0 }
+func (n *Named) Exists() bool { return len(n.d.md.named(n.name)) > 0 }
 
 // Set updates the meta already there rather than replacing it, so it keeps its
 // position in the document.
 func (n *Named) Set(value string) {
-	if ms := n.d.namedMetaElements(n.name); len(ms) > 0 {
+	if ms := n.d.md.named(n.name); len(ms) > 0 {
 		ms[0].CreateAttr("content", value)
 		return
 	}
-	m := n.d.metaParent().CreateElement("meta")
+	m := n.d.md.metaParent().CreateElement("meta")
 	m.CreateAttr("name", n.name)
 	m.CreateAttr("content", value)
 }
 
 func (n *Named) Clear() {
-	for _, m := range n.d.namedMetaElements(n.name) {
+	for _, m := range n.d.md.named(n.name) {
 		detach(m)
 	}
 }
@@ -257,18 +257,18 @@ func (d *Doc) dcSlot(tag string, el *etree.Element) *Element {
 		el:       el,
 		idPrefix: "ebookfs-" + tag,
 		newEl:    func() *etree.Element { return etree.NewElement(qualify(d.dcPrefix(), tag)) },
-		parent:   d.dcParent,
+		parent:   d.md.dcParent,
 	}
 }
 
 // DC is the Dublin Core element a read and a write of a field both mean,
 // created in the right parent if the file has none.
-func (d *Doc) DC(tag string) *Element { return d.dcSlot(tag, d.primary(tag)) }
+func (d *Doc) DC(tag string) *Element { return d.dcSlot(tag, d.md.primary(tag)) }
 
 // DCAll is every one of them, for the fields that are a list (creators) or that
 // have to reconcile the extras (titles).
 func (d *Doc) DCAll(tag string) []*Element {
-	els := d.elements(tag)
+	els := d.md.children(tag)
 	out := make([]*Element, len(els))
 	for i, el := range els {
 		out[i] = d.dcSlot(tag, el)
@@ -295,14 +295,14 @@ func (d *Doc) metaSlot(property, idPrefix string, el *etree.Element) *Element {
 			m.CreateAttr("property", d.vocab.spell(property))
 			return m
 		},
-		parent: d.metaParent,
+		parent: d.md.metaParent,
 	}
 }
 
 // UnrefinedMeta is a <meta property="..."> carrying a value for the package
 // itself rather than for another element in it.
 func (d *Doc) UnrefinedMeta(property, idPrefix string) *Element {
-	for _, m := range d.elements("meta") {
+	for _, m := range d.md.children("meta") {
 		if d.vocab.Same(attr(m, "property"), property) && attr(m, "refines") == "" {
 			return d.metaSlot(property, idPrefix, m)
 		}
@@ -314,7 +314,7 @@ func (d *Doc) UnrefinedMeta(property, idPrefix string) *Element {
 // field that picks among them by some rule of its own.
 func (d *Doc) PropertyMetas(property, idPrefix string) []*Element {
 	var out []*Element
-	for _, m := range d.elements("meta") {
+	for _, m := range d.md.children("meta") {
 		if d.vocab.Same(attr(m, "property"), property) {
 			out = append(out, d.metaSlot(property, idPrefix, m))
 		}

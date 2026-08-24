@@ -33,7 +33,7 @@ func refinesID(m *etree.Element, id string) bool {
 // per D.3.4 — is filtered by its own field, not here.
 func (d *Doc) refineElements(id, property string) []*etree.Element {
 	var out []*etree.Element
-	for _, m := range d.elements("meta") {
+	for _, m := range d.md.children("meta") {
 		if d.vocab.Same(attr(m, "property"), property) && refinesID(m, id) {
 			out = append(out, m)
 		}
@@ -49,7 +49,7 @@ func (d *Doc) refineElements(id, property string) []*etree.Element {
 // than beside the element it refines, since the binding is by id; and refines
 // written fragment-only, though a reader must accept path-qualified too.
 func (d *Doc) addRefine(id, property, value, scheme string) {
-	m := d.metaParent().CreateElement("meta")
+	m := d.md.metaParent().CreateElement("meta")
 	m.CreateAttr("refines", "#"+id)
 	m.CreateAttr("property", d.vocab.spell(property))
 	if scheme != "" {
@@ -61,7 +61,7 @@ func (d *Doc) addRefine(id, property, value, scheme string) {
 // removeRefinements drops every meta refining any of ids, for use once the
 // elements they refine are themselves gone.
 func (d *Doc) removeRefinements(ids []string) {
-	for _, m := range d.elements("meta") {
+	for _, m := range d.md.children("meta") {
 		if slices.ContainsFunc(ids, func(id string) bool { return refinesID(m, id) }) {
 			detach(m)
 		}
