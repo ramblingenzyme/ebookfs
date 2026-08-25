@@ -3,33 +3,38 @@ package opf
 import (
 	"strings"
 
-	"github.com/beevik/etree"
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf/pkgdoc"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/xml"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-type seriesField struct{ o *Doc }
+const (
+	collectionProperty = "belongs-to-collection"
+	seriesIDPrefix     = "ebookfs-series"
+)
 
-func (o *Doc) series() seriesField { return seriesField{o} }
+type seriesField struct{ d *pkgdoc.Doc }
+
+func (o *Doc) series() seriesField { return seriesField{o.d} }
 
 // get returns the series as the document records it: no index means an empty
 // Index, not a default.
 func (f seriesField) get() *model.SeriesRef {
-	if coll := f.collection(); coll.exists() {
+	if coll := f.collection(); coll.Exists() {
 		return &model.SeriesRef{
-			Name:  coll.get(),
-			Index: coll.refine("group-position").get(),
+			Name:  coll.Get(),
+			Index: coll.Refine("group-position").Get(),
 		}
 	}
 	// calibre:series and its siblings are <meta name=…> values matched
-	// literally (metadata.go), not property names: the colon is part of a
+	// literally (pkgdoc), not property names: the colon is part of a
 	// proprietary flat string, not a vocabulary prefix, so nothing here goes
 	// through spell.
-	name := f.o.namedMeta("calibre:series").get()
+	name := f.d.Named("calibre:series").Get()
 	if name == "" {
 		return nil
 	}
-	return &model.SeriesRef{Name: name, Index: f.o.namedMeta("calibre:series_index").get()}
+	return &model.SeriesRef{Name: name, Index: f.d.Named("calibre:series_index").Get()}
 }
 
 // set writes the series membership, or clears it when the name is empty. EPUB 3
@@ -49,14 +54,14 @@ func (f seriesField) set(name, index *string) {
 	}
 
 	coll := f.collection()
-	calibreName := f.o.namedMeta("calibre:series")
-	calibreIdx := f.o.namedMeta("calibre:series_index")
+	calibreName := f.d.Named("calibre:series")
+	calibreIdx := f.d.Named("calibre:series_index")
 
 	// Clearing, or an index edit with no series to move.
 	if series == "" {
-		coll.clear()
-		calibreName.clear()
-		calibreIdx.clear()
+		coll.Clear()
+		calibreName.Clear()
+		calibreIdx.Clear()
 		return
 	}
 
@@ -64,110 +69,81 @@ func (f seriesField) set(name, index *string) {
 	// since a stale collection would outrank the calibre metas on the way back
 	// in. A v3 package with none gets one; a v2 package with none stays without
 	// one, but still loses any duplicate or empty-named collection.
-	if coll.exists() || f.o.epub3() {
-		coll.set(series)
-		put(coll.refine("group-position"), position)
+	if coll.Exists() || f.d.EPUB3() {
+		coll.Set(series)
+		pkgdoc.Put(coll.Refine("group-position"), position)
 	} else {
-		coll.clear()
+		coll.Clear()
 	}
 
 	// A v2 package always gets the calibre metas; a v3 package only if it already
 	// carried them, kept in step rather than left contradicting the collection.
-	if f.o.epub3() && !calibreName.exists() {
+	if f.d.EPUB3() && !calibreName.Exists() {
 		return
 	}
-	calibreName.set(series)
-	put(calibreIdx, calibreIndex(position))
+	calibreName.Set(series)
+	pkgdoc.Put(calibreIdx, calibreIndex(position))
 }
 
 // seriesCollection is the belongs-to-collection meta recording the series. It is
-// an elementSlot with two extra duties: a write marks the collection as a
+// a pkgdoc.Element with two extra duties: a write marks the collection as a
 // series, and both a write and a clear drop the other series collections, so the
 // document is left recording exactly one.
 type seriesCollection struct {
-	*elementSlot
+	*pkgdoc.Element
 	f seriesField
 }
 
-// collection finds the collection recording the series, or nil when the series
-// lives in the calibre metas instead, or nowhere.
+// collection finds the collection recording the series, or an unbound slot when
+// the series lives in the calibre metas instead, or nowhere.
 func (f seriesField) collection() seriesCollection {
-	o := f.o
-	var found *etree.Element
-	for _, m := range o.elements("meta") {
-		if f.isSeriesCollection(m) && text(m) != "" {
-			found = m
-			break
+	for _, m := range f.collections() {
+		if f.isSeries(m) && m.Get() != "" {
+			return seriesCollection{f: f, Element: m}
 		}
 	}
-	return seriesCollection{
-		f: f,
-		elementSlot: &elementSlot{
-			o:        o,
-			el:       found,
-			idPrefix: "ebookfs-series",
-			create: func() *etree.Element {
-				m := o.metaParent().CreateElement("meta")
-				m.CreateAttr("property", o.spell("belongs-to-collection"))
-				return m
-			},
-		},
-	}
+	return seriesCollection{f: f, Element: f.d.NewPropertyMeta(collectionProperty, seriesIDPrefix)}
 }
 
-func (s seriesCollection) set(value string) {
-	s.elementSlot.set(value)
+// collections is every collection the document records, series or not.
+func (f seriesField) collections() []*pkgdoc.Element {
+	return f.d.PropertyMetas(collectionProperty, seriesIDPrefix)
+}
+
+func (s seriesCollection) Set(value string) {
+	s.Element.Set(value)
 	s.markSeries()
 	// Only the extra collections go; this one's refinements may hold metadata we
 	// did not write.
-	s.f.dropCollections(s.el)
+	s.f.dropCollections(s.Element)
 }
 
-func (s seriesCollection) clear() {
+func (s seriesCollection) Clear() {
+	s.Element.Remove()
 	s.f.dropCollections(nil)
-	s.elementSlot.el = nil
-}
-
-// unschemedType returns the collection-type refinement that is ours to read and
-// to write. Only an unschemed one is: D.3.4 defines series and set only "when no
-// scheme is specified", so a value from someone else's code list is neither.
-func (f seriesField) unschemedType(id string) *etree.Element {
-	for _, r := range f.o.refineElements(id, "collection-type") {
-		if attr(r, "scheme") == "" {
-			return r
-		}
-	}
-	return nil
 }
 
 // markSeries records the collection as a series rather than a set or a
 // publisher bundle.
-func (s seriesCollection) markSeries() {
-	if m := s.f.unschemedType(s.id()); m != nil {
-		m.SetText("series")
-		return
-	}
-	s.refine("collection-type").add("series", "")
+func (s seriesCollection) markSeries() { s.f.seriesType(s.Element).Set("series") }
+
+// seriesType is the collection-type refinement saying which kind a collection
+// is. Only an unschemed one is ours to read or to write.
+func (f seriesField) seriesType(m *pkgdoc.Element) *pkgdoc.Refine {
+	return m.Refine("collection-type").Unschemed()
 }
 
-func (f seriesField) isSeriesCollection(m *etree.Element) bool {
-	return f.o.sameProperty(attr(m, "property"), "belongs-to-collection") &&
-		text(f.unschemedType(attr(m, "id"))) == "series"
-}
+func (f seriesField) isSeries(m *pkgdoc.Element) bool { return f.seriesType(m).Get() == "series" }
 
 // dropCollections removes every series collection except keep, with its
 // refinements. Sets and publisher bundles are recorded the same way and are not
 // ours to remove. Unlike collection an empty name is still ours to clear.
-func (f seriesField) dropCollections(keep *etree.Element) {
-	var ids []string
-	for _, m := range f.o.elements("meta") {
-		if m == keep || !f.isSeriesCollection(m) {
-			continue
+func (f seriesField) dropCollections(keep *pkgdoc.Element) {
+	for _, m := range f.collections() {
+		if !m.Same(keep) && f.isSeries(m) {
+			m.Remove()
 		}
-		ids = append(ids, attr(m, "id"))
-		detach(m)
 	}
-	f.o.removeRefinements(ids)
 }
 
 // calibreIndex narrows a series position to the float calibre:series_index is by
