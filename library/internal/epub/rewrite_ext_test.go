@@ -877,7 +877,7 @@ func TestEmptyElementIsWrittenInPlace(t *testing.T) {
 // --- a repeated author name ---------------------------------------------------
 
 // TestRewriteRefusesDuplicateAuthors covers an author list naming the same
-// person twice. Edits.Validate rejects it, and Rewrite re-checks so an
+// person twice. edits.Validate rejects it, and Rewrite re-checks so an
 // unvalidated Edits cannot reach the file: two creators of one name have no
 // meaning in either spec, and reusing one element for both would silently
 // collapse the list instead.

@@ -28,9 +28,9 @@ type EpubReader interface {
 	Cover() ([]byte, error) // cover image from the open epub
 }
 
-// Reading-status vocabulary. This package owns the set: Edits.Validate, the
-// NewBook default, and config's reader.statuses validation all consult it, so
-// adding a status is a one-line change here.
+// Reading-status vocabulary. This package defines the valid set; edits.Validate
+// and config's reader.statuses validation consult Statuses, so adding a status
+// requires updating both the const block and the Statuses slice.
 const (
 	StatusUnread    = "unread"
 	StatusReading   = "reading"
