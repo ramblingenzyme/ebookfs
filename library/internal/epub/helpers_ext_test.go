@@ -5,6 +5,7 @@ package epub_test
 
 import (
 	"archive/zip"
+	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,14 +30,14 @@ const (
 // writeBib applies edits to the package document of the epub at epubPath,
 // rewrites the file in place, and returns the re-parsed Book. Production code
 // drives that flow through library.Edit.
-func writeBib(epubPath string, e model.Edits) (model.Bib, error) {
-	return epub.Rewrite(epubPath, &model.Book{Location: model.Location{EpubPath: epubPath}}, e)
+func writeBib(epubPath string, e model.Edits) (bookmodel.Bib, error) {
+	return epub.Rewrite(epubPath, &bookmodel.Book{Location: bookmodel.Location{EpubPath: epubPath}}, e)
 }
 
 // writeCover replaces the cover image entry (coverPath, as resolved by Parse)
 // with img, rewrites the file in place, and returns the re-parsed Book.
-func writeCover(epubPath, coverPath string, img []byte) (model.Bib, error) {
-	return epub.Rewrite(epubPath, &model.Book{Location: model.Location{EpubPath: epubPath}, Bib: model.Bib{CoverPath: coverPath}}, model.Edits{Cover: &img})
+func writeCover(epubPath, coverPath string, img []byte) (bookmodel.Bib, error) {
+	return epub.Rewrite(epubPath, &bookmodel.Book{Location: bookmodel.Location{EpubPath: epubPath}, Bib: bookmodel.Bib{CoverPath: coverPath}}, model.Edits{Cover: &img})
 }
 
 type entry struct {
@@ -187,13 +188,13 @@ func epub2(meta string) string {
 // book builds the Book that Rewrite validates against, the way library.Edit
 // does: from the file's current state. An index edit is refused unless the book
 // already has a series, so an empty Bib is not a usable stand-in.
-func book(t *testing.T, path string) *model.Book {
+func book(t *testing.T, path string) *bookmodel.Book {
 	t.Helper()
 	bib, err := epub.Parse(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &model.Book{Location: model.Location{EpubPath: path}, Bib: *bib}
+	return &bookmodel.Book{Location: bookmodel.Location{EpubPath: path}, Bib: *bib}
 }
 
 const containerXML = `<?xml version="1.0"?>

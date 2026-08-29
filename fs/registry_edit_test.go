@@ -1,6 +1,8 @@
 package fs
 
 import (
+	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/library"
 	"testing"
 
 	"github.com/knusbaum/go9p/fs"
@@ -35,7 +37,7 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 	// The real library fetches the edit base by id; the fake closes over the
 	// test's book instead.
 	lib := libfake.Lib{
-		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
+		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
 			updated := *book
 			if e.Title != nil {
 				updated.Title = *e.Title
@@ -44,7 +46,7 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 				updated.SortTitle = *e.SortTitle
 			}
 			updated.Meta.DateModified = book.Meta.DateModified
-			return &updated, nil
+			return bookmodel.NewImmutableBook(&updated), nil
 		},
 	}
 	reg := registry.NewBookRegistry(f, lib)
@@ -53,7 +55,7 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 	byAuthor := views.NewByAuthorDir(reg)
 	byID := views.NewByIDDir(reg)
 
-	reg.Add(book)
+	reg.Add(bookmodel.NewImmutableBook(book))
 
 	// Edit the title via its fieldFile.
 	bd := allBooks.Children()["Old Title"].(fs.Dir)
@@ -86,13 +88,13 @@ func TestRegistryEditAuthorsRehomesInByAuthor(t *testing.T) {
 	f := newTestFS(t)
 	book := makeBook(1, "Test", "Alice")
 	lib := libfake.Lib{
-		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
+		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
 			updated := *book
 			if e.Authors != nil {
 				updated.Authors = *e.Authors
 			}
 			updated.Meta.DateModified = book.Meta.DateModified
-			return &updated, nil
+			return bookmodel.NewImmutableBook(&updated), nil
 		},
 	}
 	reg := registry.NewBookRegistry(f, lib)
@@ -100,7 +102,7 @@ func TestRegistryEditAuthorsRehomesInByAuthor(t *testing.T) {
 	allBooks := views.NewAllBooksDir(reg)
 	byAuthor := views.NewByAuthorDir(reg)
 
-	reg.Add(book)
+	reg.Add(bookmodel.NewImmutableBook(book))
 
 	// Change authors from Alice to Bob.
 	bd := allBooks.Children()["Test"].(fs.Dir)
@@ -130,20 +132,20 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 	book.EpubPath = "Test.epub"
 	book.Meta.Status = "unread"
 	lib := libfake.Lib{
-		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
+		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
 			updated := *book
 			if e.Status != nil {
 				updated.Meta.Status = *e.Status
 			}
 			updated.Meta.DateModified = book.Meta.DateModified
-			return &updated, nil
+			return bookmodel.NewImmutableBook(&updated), nil
 		},
 	}
 	reg := registry.NewBookRegistry(f, lib)
 	allBooks := views.NewAllBooksDir(reg)
 	readerDir := views.NewReaderDir(reg, libfake.Exporter{StatusList: []string{"reading"}})
 
-	reg.Add(book)
+	reg.Add(bookmodel.NewImmutableBook(book))
 
 	// Reader view should not show the book when status is "unread".
 	if n := len(readerDir.Children()); n != 0 {

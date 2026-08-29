@@ -65,11 +65,11 @@ func NewEpubReader(data []byte, opfFn, coverFn func() ([]byte, error)) *EpubRead
 // hook yields a benign zero result (except Edit and Content, which error to
 // catch unstubbed edit/read paths).
 type Lib struct {
-	EditFn         func(int64, model.Edits) (*model.Book, error)
-	IngestFn       func(string) (*model.Book, error)
+	EditFn         func(int64, model.Edits) (*library.Book, error)
+	IngestFn       func(string) (*library.Book, error)
 	CreateIngestFn func() (library.IngestHandle, error)
 	ContentFn      func(int64) (model.EpubReader, error)
-	SearchFn       func(model.Query) ([]*model.Book, error)
+	SearchFn       func(model.Query) ([]*library.Book, error)
 	StatsFn        func() (*model.Stats, error)
 	ReindexFn      func() error
 	DeleteFn       func(int64) error
@@ -80,7 +80,7 @@ var _ library.Library = (Lib{})
 func (l Lib) Close() error                                             { return nil }
 func (l Lib) Exporter(_ config.ReaderConfig) (library.Exporter, error) { return nil, nil }
 
-func (l Lib) Edit(id int64, e model.Edits) (*model.Book, error) {
+func (l Lib) Edit(id int64, e model.Edits) (*library.Book, error) {
 	if l.EditFn != nil {
 		return l.EditFn(id, e)
 	}
@@ -101,7 +101,7 @@ func (l Lib) Content(id int64) (model.EpubReader, error) {
 	return nil, errors.New("libfake.Lib: no ContentFn")
 }
 
-func (l Lib) Search(q model.Query) ([]*model.Book, error) {
+func (l Lib) Search(q model.Query) ([]*library.Book, error) {
 	if l.SearchFn != nil {
 		return l.SearchFn(q)
 	}
@@ -133,11 +133,11 @@ func (l Lib) Delete(id int64) error {
 // bytes (tests never read them back); Ingest delegates to IngestFn, with a nil
 // hook yielding a nil book.
 type IngestHandle struct {
-	IngestFn func(string) (*model.Book, error)
+	IngestFn func(string) (*library.Book, error)
 }
 
 func (h IngestHandle) WriteAt(p []byte, _ int64) (int, error) { return len(p), nil }
-func (h IngestHandle) Ingest() (*model.Book, error) {
+func (h IngestHandle) Ingest() (*library.Book, error) {
 	if h.IngestFn == nil {
 		return nil, nil
 	}
@@ -149,12 +149,12 @@ func (h IngestHandle) Ingest() (*model.Book, error) {
 // exporters' status policy.
 type Exporter struct {
 	StatusList []string
-	OpenFn     func(*model.Book) (model.EpubReader, error)
-	SizeFn     func(*model.Book) (int64, bool)
-	FilenameFn func(*model.Book) string
+	OpenFn     func(*library.Book) (model.EpubReader, error)
+	SizeFn     func(*library.Book) (int64, bool)
+	FilenameFn func(*library.Book) string
 }
 
-func (e Exporter) Open(b *model.Book) (model.EpubReader, error) {
+func (e Exporter) Open(b *library.Book) (model.EpubReader, error) {
 	if e.OpenFn != nil {
 		return e.OpenFn(b)
 	}
@@ -163,24 +163,24 @@ func (e Exporter) Open(b *model.Book) (model.EpubReader, error) {
 
 func (e Exporter) Close() error { return nil }
 
-func (e Exporter) Size(b *model.Book) (int64, bool) {
+func (e Exporter) Size(b *library.Book) (int64, bool) {
 	if e.SizeFn != nil {
 		return e.SizeFn(b)
 	}
 	return 0, false
 }
 
-func (e Exporter) Warm(*model.Book) {}
+func (e Exporter) Warm(*library.Book) {}
 
-func (e Exporter) Filename(b *model.Book) string {
+func (e Exporter) Filename(b *library.Book) string {
 	if e.FilenameFn != nil {
 		return e.FilenameFn(b)
 	}
 	return b.Filename()
 }
 
-func (e Exporter) Dirname(b *model.Book) string {
-	return model.JoinAuthors(b.Authors, " & ")
+func (e Exporter) Dirname(b *library.Book) string {
+	return model.JoinAuthors(b.Authors(), " & ")
 }
 
-func (e Exporter) Includes(b *model.Book) bool { return slices.Contains(e.StatusList, b.Meta.Status) }
+func (e Exporter) Includes(b *library.Book) bool { return slices.Contains(e.StatusList, b.Status()) }

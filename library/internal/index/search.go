@@ -3,6 +3,7 @@ package index
 import (
 	"strings"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index/dbsqlc"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
@@ -10,7 +11,7 @@ import (
 // Search returns the books matching q, using SQL-level filtering for all fields
 // including title (LIKE, or "=" when q.ExactTitles). Within each field values
 // are OR'd; across fields they're AND'd. Empty fields are ignored, so Query{} returns every book.
-func (idx *Index) Search(q model.Query) ([]*model.Book, error) {
+func (idx *Index) Search(q model.Query) ([]*book.Book, error) {
 	bq := &bookQuery{order: orderClause(q.Order), limit: q.Limit}
 
 	// Either column: a sort-name search must find the book filed under its display name.

@@ -22,7 +22,7 @@ func tagEntryName(tag string) string {
 }
 
 func (d *byTagDir) Add(dir *book.BookDir) {
-	for _, tag := range dir.Book().Meta.Tags {
+	for _, tag := range dir.Book().Tags() {
 		if tag == "" {
 			continue
 		}
@@ -31,7 +31,7 @@ func (d *byTagDir) Add(dir *book.BookDir) {
 }
 
 func (d *byTagDir) Remove(dir *book.BookDir) {
-	for _, tag := range dir.Book().Meta.Tags {
+	for _, tag := range dir.Book().Tags() {
 		if tag == "" {
 			continue
 		}

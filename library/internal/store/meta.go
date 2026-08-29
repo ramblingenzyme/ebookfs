@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
-	"github.com/ramblingenzyme/ebookfs/library/model"
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
 // metaFilename is the per-book sidecar the store writes alongside each epub.
@@ -15,33 +15,33 @@ const metaFilename = "meta.toml"
 
 // metaPath returns the absolute path of the meta.toml sidecar for the book at
 // loc.
-func (s *Store) metaPath(loc model.Location) string {
+func (s *Store) metaPath(loc book.Location) string {
 	return filepath.Join(s.root, loc.Dir(), metaFilename)
 }
 
 // ReadMeta reads the meta.toml sidecar for the book at loc.
-func (s *Store) ReadMeta(loc model.Location) (*model.Meta, error) {
+func (s *Store) ReadMeta(loc book.Location) (*book.Meta, error) {
 	return readMeta(s.metaPath(loc))
 }
 
 // writeMeta atomically replaces the meta.toml sidecar for the book at loc.
-func (s *Store) writeMeta(loc model.Location, meta *model.Meta) error {
+func (s *Store) writeMeta(loc book.Location, meta *book.Meta) error {
 	return writeMeta(s.metaPath(loc), meta)
 }
 
-func readMeta(path string) (*model.Meta, error) {
+func readMeta(path string) (*book.Meta, error) {
 	buf, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	meta := &model.Meta{}
+	meta := &book.Meta{}
 	if err = toml.Unmarshal(buf, meta); err != nil {
 		return nil, err
 	}
 	return meta, nil
 }
 
-func writeMeta(path string, meta *model.Meta) error {
+func writeMeta(path string, meta *book.Meta) error {
 	buf, err := toml.Marshal(meta)
 	if err != nil {
 		return err

@@ -11,6 +11,7 @@ import (
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -18,8 +19,8 @@ import (
 // the string the epub carries, so it is used as written and only the first
 // level is zero-padded — that is the level entries sort on, and padding it is
 // what keeps "9" ahead of "10" in a plain lexical listing.
-func seriesEntryName(b *model.Book, pad int32) string {
-	s := b.Series.Index
+func seriesEntryName(b *library.Book, pad int32) string {
+	s := b.SeriesIndex()
 
 	if pad > 0 {
 		head, rest, _ := strings.Cut(s, ".")
@@ -28,7 +29,7 @@ func seriesEntryName(b *model.Book, pad int32) string {
 			s += "." + rest
 		}
 	}
-	return fmt.Sprintf("%s - %s", s, model.PathSafe(b.Title))
+	return fmt.Sprintf("%s - %s", s, model.PathSafe(b.Title()))
 }
 
 // seriesLevel reads the first level of a series position, which is the only
@@ -67,15 +68,15 @@ func (s *seriesBookListDir) Add(dir *book.BookDir) {
 	n := &namedBookDir{
 		BookDir:  dir,
 		baseStat: *newStat(s.f, "", 0555|proto.DMDIR),
-		name:     func(b *model.Book) string { return seriesEntryName(b, s.pad.Load()) },
+		name:     func(b *library.Book) string { return seriesEntryName(b, s.pad.Load()) },
 	}
-	s.children[dir.Book().Meta.ID] = n
+	s.children[dir.Book().ID()] = n
 	s.StaticDir.AddChild(n)
 	s.repad()
 }
 
 func (s *seriesBookListDir) Remove(dir *book.BookDir) {
-	id := dir.Book().Meta.ID
+	id := dir.Book().ID()
 	n, ok := s.children[id]
 	if !ok {
 		return
@@ -91,8 +92,8 @@ func (s *seriesBookListDir) Remove(dir *book.BookDir) {
 func (s *seriesBookListDir) repad() {
 	var maxIdx int
 	for _, n := range s.children {
-		if b := n.Book(); b.HasSeries() && seriesLevel(b.Series.Index) > maxIdx {
-			maxIdx = seriesLevel(b.Series.Index)
+		if b := n.Book(); b.HasSeries() && seriesLevel(b.SeriesIndex()) > maxIdx {
+			maxIdx = seriesLevel(b.SeriesIndex())
 		}
 	}
 	var pad int32

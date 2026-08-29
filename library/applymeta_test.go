@@ -1,6 +1,7 @@
 package library
 
 import (
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"slices"
 	"testing"
 	"time"
@@ -15,7 +16,7 @@ import (
 // Independence of the result is TestApplyMetaClonesTags' job; the value receiver
 // makes it uninteresting for every field except Tags.
 func TestApplyMeta(t *testing.T) {
-	start := model.Meta{ID: 1, Status: "unread", Rating: 2.5, Tags: []string{"keep"}}
+	start := book.Meta{ID: 1, Status: "unread", Rating: 2.5, Tags: []string{"keep"}}
 
 	tests := []struct {
 		name   string
@@ -70,7 +71,7 @@ func TestApplyMeta(t *testing.T) {
 // since a len-1 slice hides a write past its own end.
 func TestApplyMetaClonesTags(t *testing.T) {
 	t.Run("from the meta", func(t *testing.T) {
-		meta := model.Meta{ID: 1, Tags: []string{"keep"}}
+		meta := book.Meta{ID: 1, Tags: []string{"keep"}}
 
 		updated := applyMeta(meta, model.Edits{})
 		updated.Tags[0] = "changed"
@@ -83,7 +84,7 @@ func TestApplyMetaClonesTags(t *testing.T) {
 	t.Run("from the edits", func(t *testing.T) {
 		tags := []string{"new"}
 
-		updated := applyMeta(model.Meta{ID: 1}, model.Edits{Tags: &tags})
+		updated := applyMeta(book.Meta{ID: 1}, model.Edits{Tags: &tags})
 		updated.Tags[0] = "changed"
 
 		if tags[0] != "new" {
@@ -94,7 +95,7 @@ func TestApplyMetaClonesTags(t *testing.T) {
 	t.Run("nil stays nil", func(t *testing.T) {
 		// Cloning must not turn an absent tag list into an empty one: the
 		// sidecar writer distinguishes them.
-		if got := applyMeta(model.Meta{ID: 1}, model.Edits{}).Tags; got != nil {
+		if got := applyMeta(book.Meta{ID: 1}, model.Edits{}).Tags; got != nil {
 			t.Errorf("Tags = %v, want nil", got)
 		}
 	})

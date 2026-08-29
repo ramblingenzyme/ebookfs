@@ -26,7 +26,7 @@ type Reader struct {
 }
 
 // OpenReader opens the epub at epubPath and reads the zip central directory.
-// coverPath is the zip-relative path to the cover image (from model.Bib.CoverPath);
+// coverPath is the zip-relative path to the cover image (from book.Bib.CoverPath);
 // it may be empty. The returned reader keeps the file open; the caller must call
 // Close. The reader is non-nil iff err is nil.
 func OpenReader(epubPath, coverPath string) (model.EpubReader, error) {

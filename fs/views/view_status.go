@@ -14,9 +14,9 @@ func NewByStatusDir(reg *registry.BookRegistry) *byStatusDir {
 }
 
 func (d *byStatusDir) Add(dir *book.BookDir) {
-	d.listerDir(dir.Book().Meta.Status).Add(dir)
+	d.listerDir(dir.Book().Status()).Add(dir)
 }
 
 func (d *byStatusDir) Remove(dir *book.BookDir) {
-	d.removeLister(dir.Book().Meta.Status, dir)
+	d.removeLister(dir.Book().Status(), dir)
 }

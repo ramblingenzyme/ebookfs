@@ -1,6 +1,8 @@
 package book
 
 import (
+	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/library"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/library/model"
@@ -9,37 +11,37 @@ import (
 func TestAuthorsFieldGet(t *testing.T) {
 	tests := []struct {
 		name string
-		book *model.Book
+		book *library.Book
 		want string
 	}{
 		{
 			"no authors",
-			model.NewBook(model.Bib{Title: "T"}, model.Meta{ID: 1}, model.Location{}),
+			bookmodel.NewImmutableBook(bookmodel.NewBook(bookmodel.Bib{Title: "T"}, bookmodel.Meta{ID: 1}, bookmodel.Location{})),
 			"",
 		},
 		{
 			"no sort name",
-			model.NewBook(model.Bib{Title: "T", Authors: []model.Author{{Name: "Alice"}}}, model.Meta{ID: 1}, model.Location{}),
+			bookmodel.NewImmutableBook(bookmodel.NewBook(bookmodel.Bib{Title: "T", Authors: []model.Author{{Name: "Alice"}}}, bookmodel.Meta{ID: 1}, bookmodel.Location{})),
 			"Alice",
 		},
 		{
 			"with sort name",
-			model.NewBook(
-				model.Bib{Title: "T", Authors: []model.Author{{Name: "Alice", SortName: "Smith, Alice"}}},
-				model.Meta{ID: 1},
-				model.Location{},
+			bookmodel.NewImmutableBook(bookmodel.NewBook(
+				bookmodel.Bib{Title: "T", Authors: []model.Author{{Name: "Alice", SortName: "Smith, Alice"}}},
+				bookmodel.Meta{ID: 1},
+				bookmodel.Location{}),
 			),
 			"Alice | Smith, Alice",
 		},
 		{
 			"multi-author mixed",
-			model.NewBook(
-				model.Bib{Title: "T", Authors: []model.Author{
+			bookmodel.NewImmutableBook(bookmodel.NewBook(
+				bookmodel.Bib{Title: "T", Authors: []model.Author{
 					{Name: "Alice", SortName: "Smith, Alice"},
 					{Name: "Bob"},
 				}},
-				model.Meta{ID: 1},
-				model.Location{},
+				bookmodel.Meta{ID: 1},
+				bookmodel.Location{}),
 			),
 			"Alice | Smith, Alice\nBob",
 		},

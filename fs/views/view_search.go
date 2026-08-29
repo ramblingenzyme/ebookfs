@@ -15,6 +15,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/fs/textfmt"
 	"github.com/ramblingenzyme/ebookfs/fs/vfile"
+	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -24,44 +25,44 @@ import (
 
 // matchesAuthors matches any of q.Authors against either author column, as
 // Index.Search does in SQL.
-func matchesAuthors(q model.Query, b *model.Book) bool {
-	return len(q.Authors) == 0 || slices.ContainsFunc(b.Authors, func(a model.Author) bool {
+func matchesAuthors(q model.Query, b *library.Book) bool {
+	return len(q.Authors) == 0 || slices.ContainsFunc(b.Authors(), func(a model.Author) bool {
 		return slices.Contains(q.Authors, a.Name) || slices.Contains(q.Authors, a.SortName)
 	})
 }
 
 // matchesTags matches any of q.Tags against the book's tags.
-func matchesTags(q model.Query, b *model.Book) bool {
+func matchesTags(q model.Query, b *library.Book) bool {
 	return len(q.Tags) == 0 || slices.ContainsFunc(q.Tags, func(t string) bool {
-		return slices.Contains(b.Meta.Tags, t)
+		return slices.Contains(b.Tags(), t)
 	})
 }
 
 // matchesSeries matches any of q.Series against the book's series.
-func matchesSeries(q model.Query, b *model.Book) bool {
+func matchesSeries(q model.Query, b *library.Book) bool {
 	return len(q.Series) == 0 || (b.HasSeries() && slices.Contains(q.Series, b.SeriesName()))
 }
 
 // matchesStatus matches any of q.Status against the book's reading status.
-func matchesStatus(q model.Query, b *model.Book) bool {
-	return len(q.Status) == 0 || slices.Contains(q.Status, b.Meta.Status)
+func matchesStatus(q model.Query, b *library.Book) bool {
+	return len(q.Status) == 0 || slices.Contains(q.Status, b.Status())
 }
 
 // matchesIDs matches any of q.IDs against the book's id.
-func matchesIDs(q model.Query, b *model.Book) bool {
-	return len(q.IDs) == 0 || slices.Contains(q.IDs, b.Meta.ID)
+func matchesIDs(q model.Query, b *library.Book) bool {
+	return len(q.IDs) == 0 || slices.Contains(q.IDs, b.ID())
 }
 
 // matchesTitles matches any of q.Titles against the book's title: exactly when
 // q.ExactTitles, otherwise as a case-insensitive substring.
-func matchesTitles(q model.Query, b *model.Book) bool {
+func matchesTitles(q model.Query, b *library.Book) bool {
 	if len(q.Titles) == 0 {
 		return true
 	}
 	if q.ExactTitles {
-		return slices.Contains(q.Titles, b.Title)
+		return slices.Contains(q.Titles, b.Title())
 	}
-	lower := strings.ToLower(b.Title)
+	lower := strings.ToLower(b.Title())
 	return slices.ContainsFunc(q.Titles, func(title string) bool {
 		return strings.Contains(lower, strings.ToLower(title))
 	})
@@ -78,8 +79,8 @@ func matchesTitles(q model.Query, b *model.Book) bool {
 // which books are in it, but textfmt.ParseQuery has no syntax that sets it and
 // must not grow one: it is shared with ctl, where a limited selection would
 // mutate an arbitrary subset of the books the operator named.
-func makeMatchesFn(q model.Query) func(*model.Book) bool {
-	return func(b *model.Book) bool {
+func makeMatchesFn(q model.Query) func(*library.Book) bool {
+	return func(b *library.Book) bool {
 		return matchesAuthors(q, b) && matchesTags(q, b) && matchesSeries(q, b) &&
 			matchesStatus(q, b) && matchesIDs(q, b) && matchesTitles(q, b)
 	}
@@ -91,7 +92,7 @@ func makeMatchesFn(q model.Query) func(*model.Book) bool {
 type searchResultsDir struct {
 	*bookListDir
 	mu        sync.RWMutex
-	matchesFn func(*model.Book) bool
+	matchesFn func(*library.Book) bool
 }
 
 func newSearchResultsDir(stat *proto.Stat) *searchResultsDir {

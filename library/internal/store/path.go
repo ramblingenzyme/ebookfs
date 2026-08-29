@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/naming"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
@@ -15,10 +16,10 @@ import (
 // set; the Store resolves it to an absolute path internally when touching the
 // filesystem. It is the single source of the naming convention; ingest and move
 // both lay books down through it.
-func (s *Store) Layout(authors []model.Author, title string, id int64) model.Location {
+func (s *Store) Layout(authors []model.Author, title string, id int64) book.Location {
 	libPath := canonicalDir(authors, title, id)
 	filename := epubFilename(authors, title)
-	return model.Location{
+	return book.Location{
 		EpubPath: filepath.Join(libPath, filename),
 	}
 }

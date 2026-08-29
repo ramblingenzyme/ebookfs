@@ -4,9 +4,9 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index/dbsqlc"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // Op represents a single mutation operation. The caller calls BeginOp to
@@ -68,7 +68,7 @@ func (o *Op) Cancel() {
 
 // Put writes b into the index, inserting or replacing the record for b.Meta.ID.
 // mt carries the on-disk file state used for drift detection.
-func (o *Op) Put(b *model.Book, mt drift.PathInfo) error {
+func (o *Op) Put(b *book.Book, mt drift.PathInfo) error {
 	return o.finish(func(q *dbsqlc.Queries, tx *sql.Tx) error { return o.idx.putBook(q, b, mt) })
 }
 

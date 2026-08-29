@@ -34,7 +34,7 @@ var ErrDuplicateOnDisk = errors.New("book already on disk but not indexed")
 // book collection. The concrete implementation is unexported; construct via New.
 //
 // Concurrency contract: methods are safe for concurrent use. Search returns
-// *model.Book values that are immutable snapshots — the library never mutates a
+// *Book values that are immutable snapshots — the library never mutates a
 // Book after returning it. Every other operation addresses a book by id and
 // resolves its current state fresh, so callers never pass stale snapshots back
 // in: Content opens the book's live on-disk file, and mutations (Edit, Delete)
@@ -47,7 +47,7 @@ type Library interface {
 	// resources it holds are released by Library.Close — the caller has no
 	// teardown to perform, which is why Exporter has no Close method.
 	Exporter(config.ReaderConfig) (Exporter, error)
-	Search(model.Query) ([]*model.Book, error)
+	Search(model.Query) ([]*Book, error)
 	Stats() (*model.Stats, error)
 	Reindex() error
 	// Content returns an open handle to the book's epub content. The caller
@@ -55,7 +55,7 @@ type Library interface {
 	// after a concurrent Edit, call Content again to read updated content.
 	// The returned reader is non-nil iff err is nil.
 	Content(id int64) (model.EpubReader, error)
-	Edit(id int64, e model.Edits) (*model.Book, error)
+	Edit(id int64, e model.Edits) (*Book, error)
 	Delete(id int64) error
 }
 
@@ -73,12 +73,12 @@ type Exporter interface {
 	// Open returns a handle to the book's export rendition. The handle is a
 	// snapshot — after the book is edited, call Open again for updated content.
 	// The returned reader is non-nil iff err is nil.
-	Open(*model.Book) (model.EpubReader, error)
-	Size(*model.Book) (int64, bool) // cheap; 9P stat length, false when cold
-	Warm(*model.Book)               // non-blocking proactive warm hint
-	Filename(*model.Book) string    // FAT-safe export name
-	Dirname(*model.Book) string     // FAT-safe export directory name
-	Includes(*model.Book) bool      // whether the book appears in the reader view
+	Open(*Book) (model.EpubReader, error)
+	Size(*Book) (int64, bool) // cheap; 9P stat length, false when cold
+	Warm(*Book)               // non-blocking proactive warm hint
+	Filename(*Book) string    // FAT-safe export name
+	Dirname(*Book) string     // FAT-safe export directory name
+	Includes(*Book) bool      // whether the book appears in the reader view
 }
 
 func Open(cfg config.LibraryConfig, forceReindex bool) (Library, error) {

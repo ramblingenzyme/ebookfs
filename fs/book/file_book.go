@@ -18,10 +18,10 @@ const maxCoverFileSize = 32 << 20 // 32 MiB
 // opfFile serves a book's raw OPF XML, loading bytes from the epub on each open.
 type opfFile struct {
 	vfile.SnapshotFile
-	book func() *model.Book
+	book func() *library.Book
 }
 
-func newOPFFile(stat *proto.Stat, lib library.Library, book func() *model.Book) *opfFile {
+func newOPFFile(stat *proto.Stat, lib library.Library, book func() *library.Book) *opfFile {
 	return &opfFile{
 		SnapshotFile: vfile.NewSnapshotFile(stat, func() ([]byte, error) {
 			if lib == nil {
@@ -31,7 +31,7 @@ func newOPFFile(stat *proto.Stat, lib library.Library, book func() *model.Book) 
 			if b == nil {
 				return nil, errors.New("book snapshot not available")
 			}
-			r, err := lib.Content(b.Meta.ID)
+			r, err := lib.Content(b.ID())
 			if err != nil {
 				return nil, err
 			}
@@ -45,7 +45,7 @@ func newOPFFile(stat *proto.Stat, lib library.Library, book func() *model.Book) 
 func (o *opfFile) Stat() proto.Stat {
 	s := o.BaseFile.Stat()
 	if b := o.book(); b != nil {
-		s.Length = uint64(b.OpfSize)
+		s.Length = uint64(b.OpfSize())
 	}
 	return s
 }
@@ -56,11 +56,11 @@ func (o *opfFile) Stat() proto.Stat {
 type coverFile struct {
 	vfile.SnapshotFile
 	edit   func(int64, model.Edits) error
-	book   func() *model.Book
+	book   func() *library.Book
 	writes vfile.WriteBuffer
 }
 
-func newCoverFile(stat *proto.Stat, lib library.Library, edit func(int64, model.Edits) error, book func() *model.Book) *coverFile {
+func newCoverFile(stat *proto.Stat, lib library.Library, edit func(int64, model.Edits) error, book func() *library.Book) *coverFile {
 	return &coverFile{
 		SnapshotFile: vfile.NewSnapshotFile(stat, func() ([]byte, error) {
 			if lib == nil {
@@ -70,7 +70,7 @@ func newCoverFile(stat *proto.Stat, lib library.Library, edit func(int64, model.
 			if b == nil {
 				return nil, errors.New("book snapshot not available")
 			}
-			r, err := lib.Content(b.Meta.ID)
+			r, err := lib.Content(b.ID())
 			if err != nil {
 				return nil, err
 			}
@@ -86,7 +86,7 @@ func newCoverFile(stat *proto.Stat, lib library.Library, edit func(int64, model.
 func (c *coverFile) Stat() proto.Stat {
 	s := c.BaseFile.Stat()
 	if b := c.book(); b != nil {
-		s.Length = uint64(b.CoverSize)
+		s.Length = uint64(b.CoverSize())
 	}
 	return s
 }
@@ -103,7 +103,7 @@ func (c *coverFile) Close(fid uint64) error {
 	if len(data) == 0 {
 		return nil
 	}
-	return c.edit(c.book().Meta.ID, model.Edits{Cover: &data})
+	return c.edit(c.book().ID(), model.Edits{Cover: &data})
 }
 
 // epubFile serves a book's epub through the library, holding one reader per fid.
@@ -111,10 +111,10 @@ func (c *coverFile) Close(fid uint64) error {
 // book snapshot (set during parse), so Stat never touches the disk.
 type epubFile struct {
 	vfile.ReadAtFile
-	book func() *model.Book
+	book func() *library.Book
 }
 
-func newEpubFile(stat *proto.Stat, lib library.Library, book func() *model.Book) *epubFile {
+func newEpubFile(stat *proto.Stat, lib library.Library, book func() *library.Book) *epubFile {
 	return &epubFile{
 		ReadAtFile: vfile.NewReadAtFile(stat, func() (model.EpubReader, error) {
 			if lib == nil {
@@ -124,7 +124,7 @@ func newEpubFile(stat *proto.Stat, lib library.Library, book func() *model.Book)
 			if b == nil {
 				return nil, errors.New("book snapshot not available")
 			}
-			r, err := lib.Content(b.Meta.ID)
+			r, err := lib.Content(b.ID())
 			if err != nil {
 				return nil, err
 			}
@@ -138,7 +138,7 @@ func (e *epubFile) Stat() proto.Stat {
 	s := e.BaseFile.Stat()
 	if b := e.book(); b != nil {
 		s.Name = b.Filename()
-		s.Length = uint64(b.EpubSize)
+		s.Length = uint64(b.EpubSize())
 	}
 	return s
 }

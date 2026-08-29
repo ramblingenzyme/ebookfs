@@ -6,11 +6,12 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-func (idx *Index) queryBooks(q *bookQuery) ([]*model.Book, error) {
+func (idx *Index) queryBooks(q *bookQuery) ([]*book.Book, error) {
 	sql, args := q.sql()
 	rows, err := idx.readDB.QueryContext(idx.ctx, sql, args...)
 	if err != nil {
@@ -57,7 +58,7 @@ func (idx *Index) AllPathInfo() (map[string]drift.PathInfo, error) {
 }
 
 // Get returns the book with the given id, or sql.ErrNoRows if it is absent.
-func (idx *Index) Get(bookID int64) (*model.Book, error) {
+func (idx *Index) Get(bookID int64) (*book.Book, error) {
 	books, err := idx.Search(model.Query{IDs: []int64{bookID}})
 	if err != nil {
 		return nil, err

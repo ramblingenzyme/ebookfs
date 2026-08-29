@@ -1,6 +1,7 @@
 package book
 
 import (
+	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 	"testing"
 
 	"github.com/knusbaum/go9p/proto"
@@ -26,7 +27,7 @@ func TestWriteFileSizeLimits(t *testing.T) {
 		open  func(t *testing.T) limitedWriteFile
 	}{
 		{"coverFile", maxCoverFileSize, func(t *testing.T) limitedWriteFile {
-			b := testutil.MakeBook(1, "Test", "Author")
+			b := bookmodel.MakeBook(1, "Test", "Author")
 			return newCoverFile(newStat(testutil.NewTestFS(t), "cover.jpg", 0644), libfake.Lib{}, func(int64, model.Edits) error { return nil }, testutil.Fixed(b))
 		}},
 		{"fieldFile", maxFieldFileSize, func(t *testing.T) limitedWriteFile {

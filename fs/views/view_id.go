@@ -8,14 +8,15 @@ import (
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/fs/book"
 	"github.com/ramblingenzyme/ebookfs/fs/registry"
+	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-func idEntryName(b *model.Book, pad int) string {
+func idEntryName(b *library.Book, pad int) string {
 	if pad > 0 {
-		return fmt.Sprintf("%0*d. %s", pad, b.Meta.ID, model.PathSafe(b.Title))
+		return fmt.Sprintf("%0*d. %s", pad, b.ID(), model.PathSafe(b.Title()))
 	}
-	return fmt.Sprintf("%d. %s", b.Meta.ID, model.PathSafe(b.Title))
+	return fmt.Sprintf("%d. %s", b.ID(), model.PathSafe(b.Title()))
 }
 
 type byIDDir struct {
@@ -33,7 +34,7 @@ func NewByIDDir(reg *registry.BookRegistry) *byIDDir {
 }
 
 func (d *byIDDir) Add(dir *book.BookDir) {
-	id := dir.Book().Meta.ID
+	id := dir.Book().ID()
 	if id > d.maxID.Load() {
 		d.maxID.Store(id)
 		d.updatePad(id)
@@ -41,7 +42,7 @@ func (d *byIDDir) Add(dir *book.BookDir) {
 	n := &namedBookDir{
 		BookDir:  dir,
 		baseStat: *newStat(d.f, "", 0555|proto.DMDIR),
-		name:     func(b *model.Book) string { return idEntryName(b, int(d.pad.Load())) },
+		name:     func(b *library.Book) string { return idEntryName(b, int(d.pad.Load())) },
 	}
 	d.StaticDir.AddChild(n)
 }

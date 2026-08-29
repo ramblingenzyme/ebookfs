@@ -22,14 +22,14 @@ func TestEditSelfHealsLegacyUnsanitizedFilename(t *testing.T) {
 	lib := openTestLibrary(t)
 	title := "Some Title: With Colon"
 	book := ingestTestEpub(t, lib, buildTestEpub(t, title))
-	id := book.Meta.ID
+	id := book.ID()
 
 	// Simulate legacy drift: rename the on-disk epub to an unsanitized name
 	// that Layout() would no longer produce, then reindex so the index's
 	// stored EpubFilename reflects the manual rename.
 	root := lib.(*libraryImpl).store.Root()
-	dir := filepath.Join(root, filepath.Dir(book.EpubPath))
-	absEpub := filepath.Join(root, book.EpubPath)
+	dir := filepath.Join(root, filepath.Dir(book.EpubPath()))
+	absEpub := filepath.Join(root, book.EpubPath())
 	legacyName := "Some Title: With Colon - Alice.epub"
 	if err := os.Rename(absEpub, filepath.Join(dir, legacyName)); err != nil {
 		t.Fatal(err)
@@ -45,15 +45,15 @@ func TestEditSelfHealsLegacyUnsanitizedFilename(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Edit: %v (same-directory Move must not fail)", err)
 	}
-	if updated.Meta.Status != status {
-		t.Errorf("status = %q, want %q", updated.Meta.Status, status)
+	if updated.Status() != status {
+		t.Errorf("status = %q, want %q", updated.Status(), status)
 	}
 
 	// Self-heal: filename should now be FAT-sanitized.
-	if strings.Contains(filepath.Base(updated.EpubPath), ":") {
-		t.Errorf("filename not sanitized after edit: %q", filepath.Base(updated.EpubPath))
+	if strings.Contains(filepath.Base(updated.EpubPath()), ":") {
+		t.Errorf("filename not sanitized after edit: %q", filepath.Base(updated.EpubPath()))
 	}
-	if _, err := os.Stat(filepath.Join(root, updated.EpubPath)); err != nil {
+	if _, err := os.Stat(filepath.Join(root, updated.EpubPath())); err != nil {
 		t.Errorf("updated EpubPath does not exist: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, legacyName)); !os.IsNotExist(err) {

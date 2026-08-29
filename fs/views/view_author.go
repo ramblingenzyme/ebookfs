@@ -20,13 +20,13 @@ func NewByAuthorDir(reg *registry.BookRegistry) *byAuthorDir {
 func authorEntryName(name string) string { return model.PathSafe(name) }
 
 func (d *byAuthorDir) Add(dir *book.BookDir) {
-	for _, a := range dir.Book().Authors {
+	for _, a := range dir.Book().Authors() {
 		d.listerDir(authorEntryName(a.Name)).Add(dir)
 	}
 }
 
 func (d *byAuthorDir) Remove(dir *book.BookDir) {
-	for _, a := range dir.Book().Authors {
+	for _, a := range dir.Book().Authors() {
 		d.removeLister(authorEntryName(a.Name), dir)
 	}
 }

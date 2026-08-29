@@ -16,6 +16,7 @@
 package epub_test
 
 import (
+	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 	"slices"
 	"strings"
 	"testing"
@@ -494,7 +495,7 @@ func titleByID(md *etree.Element, id string) string {
 	return ""
 }
 
-func authorNames(b *model.Bib) []string {
+func authorNames(b *bookmodel.Bib) []string {
 	var out []string
 	for _, a := range b.Authors {
 		out = append(out, a.Name)

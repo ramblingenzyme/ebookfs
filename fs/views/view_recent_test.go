@@ -16,8 +16,8 @@ func TestRecentDirOrdersNewestFirst(t *testing.T) {
 	b2 := makeBook(2, "Newest", "Author")
 	b2.Meta.DateAdded = base
 
-	reg.Add(b1)
-	reg.Add(b2)
+	reg.Add(wrapBook(b1))
+	reg.Add(wrapBook(b2))
 
 	children := dirChildNames(d)
 	if len(children) != 2 {
@@ -39,7 +39,7 @@ func TestRecentDirCapsAtLimitAndBackfillsOnRemove(t *testing.T) {
 	for i := int64(1); i <= int64(recentLimit)+1; i++ {
 		b := makeBook(i, fmt.Sprintf("Title %d", i), "Author")
 		b.Meta.DateAdded = base.Add(time.Duration(i) * time.Minute)
-		reg.Add(b)
+		reg.Add(wrapBook(b))
 	}
 
 	if len(d.visible) != recentLimit {
@@ -73,7 +73,7 @@ func TestRecentDirRemoveNotVisibleNoOp(t *testing.T) {
 	for i := int64(1); i <= int64(recentLimit)+1; i++ {
 		b := makeBook(i, fmt.Sprintf("Title %d", i), "Author")
 		b.Meta.DateAdded = base.Add(time.Duration(i) * time.Minute)
-		reg.Add(b)
+		reg.Add(wrapBook(b))
 	}
 
 	before := dirChildNames(d)
@@ -103,7 +103,7 @@ func TestRecentDirOutOfOrderArrival(t *testing.T) {
 	for _, id := range []int64{4, 1, 8, 6, 2, 7, 3, 5} {
 		b := makeBook(id, fmt.Sprintf("Title %d", id), "Author")
 		b.Meta.DateAdded = base.Add(time.Duration(id) * time.Minute)
-		reg.Add(b)
+		reg.Add(wrapBook(b))
 	}
 
 	if len(d.visible) != recentLimit {
@@ -120,8 +120,8 @@ func TestRecentDirOutOfOrderArrival(t *testing.T) {
 	// all must stay ordered newest-first for the binary insert to hold.
 	for i := 1; i < len(d.all); i++ {
 		prev, cur := d.all[i-1].Book(), d.all[i].Book()
-		if prev.Meta.DateAdded.Before(cur.Meta.DateAdded) {
-			t.Fatalf("all out of order at %d: %s before %s", i, prev.Title, cur.Title)
+		if prev.DateAdded().Before(cur.DateAdded()) {
+			t.Fatalf("all out of order at %d: %s before %s", i, prev.Title(), cur.Title())
 		}
 	}
 }

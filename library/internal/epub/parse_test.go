@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"errors"
+	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 	"io"
 	"os"
 	"path/filepath"
@@ -399,7 +400,7 @@ func TestEntryPointsAgreeOnABadEpub(t *testing.T) {
 			_, parseErr := epub.Parse(tc.path)
 			_, readerErr := epub.OpenReader(tc.path, "")
 			_, rewriteErr := epub.Rewrite(tc.path,
-				&model.Book{Location: model.Location{EpubPath: tc.path}},
+				&bookmodel.Book{Location: bookmodel.Location{EpubPath: tc.path}},
 				model.Edits{Title: new("X")})
 
 			for _, e := range []struct {

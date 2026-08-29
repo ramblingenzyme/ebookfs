@@ -1,6 +1,9 @@
 package views
 
 import (
+	"github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/library"
+	"github.com/ramblingenzyme/ebookfs/library/model"
 	"testing"
 
 	"github.com/knusbaum/go9p/fs"
@@ -9,9 +12,19 @@ import (
 )
 
 var (
-	makeBook  = testutil.MakeBook
+	makeBook  = book.MakeMutableBook
 	newTestFS = testutil.NewTestFS
 )
+
+func wrapBook(b *book.Book) *library.Book {
+	return book.NewImmutableBook(b)
+}
+
+func makeBookWithSeries(id int64, title, author string, seriesName, seriesIndex string) *library.Book {
+	b := makeBook(id, title, author)
+	b.Series = &model.SeriesRef{Name: seriesName, Index: seriesIndex}
+	return wrapBook(b)
+}
 
 // newTestRegistry builds a registry over a fresh in-memory FS with no backing
 // library, for driving views through their Add/Remove notifications.

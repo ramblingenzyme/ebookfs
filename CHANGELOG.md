@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Book types moved to internal/book; `library.Book` is now an immutable wrapper.** `Book`, `Bib`, `Location`, and `Meta` moved from `library/model` to `internal/book` and are no longer part of the public API. `model.Author` and `model.SeriesRef` remain as type aliases. The old `model.Book` struct (direct field access) is replaced by `library.Book`, an alias for `book.ImmutableBook` — a read-only wrapper that exposes fields via getter methods (`Title()`, `Authors()`, `Status()`, etc.) instead of struct fields. `Library.Search`, `Library.Edit`, and all `Exporter` methods now return or accept `*library.Book` instead of `*model.Book`. Callers must use the getter methods and re-fetch after mutations.
+
 ## [1.0.0-beta4] - 2026-08-29
 
 ### Added

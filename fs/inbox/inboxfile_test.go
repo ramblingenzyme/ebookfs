@@ -5,6 +5,7 @@ package inbox
 
 import (
 	"errors"
+	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 	"testing"
 	"time"
 
@@ -12,7 +13,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 func TestInboxFileOpenCreateIngestError(t *testing.T) {
@@ -31,15 +31,15 @@ func TestInboxFileOpenCreateIngestError(t *testing.T) {
 }
 
 func TestInboxFileOpenWriteCloseIngests(t *testing.T) {
-	ingested := make(chan *model.Book, 1)
+	ingested := make(chan *library.Book, 1)
 	f := testutil.NewTestFS(t)
 	lib := libfake.Lib{
-		IngestFn: func(_ string) (*model.Book, error) {
-			return testutil.MakeBook(42, "Ingested", "Author"), nil
+		IngestFn: func(_ string) (*library.Book, error) {
+			return bookmodel.MakeBook(42, "Ingested", "Author"), nil
 		},
 	}
 
-	inf := NewInboxFile(f, lib, "test.epub", 0644, func(b *model.Book) {
+	inf := NewInboxFile(f, lib, "test.epub", 0644, func(b *library.Book) {
 		ingested <- b
 	})
 
@@ -58,8 +58,8 @@ func TestInboxFileOpenWriteCloseIngests(t *testing.T) {
 
 	select {
 	case b := <-ingested:
-		if b.Meta.ID != 42 {
-			t.Errorf("ingested book id = %d, want 42", b.Meta.ID)
+		if b.ID() != 42 {
+			t.Errorf("ingested book id = %d, want 42", b.ID())
 		}
 	default:
 		t.Fatal("onIngest was not called after close")
@@ -121,7 +121,7 @@ func TestInboxFileCloseWithoutOpen(t *testing.T) {
 func TestInboxFileIngestErrorReturnsError(t *testing.T) {
 	f := testutil.NewTestFS(t)
 	lib := libfake.Lib{
-		IngestFn: func(_ string) (*model.Book, error) {
+		IngestFn: func(_ string) (*library.Book, error) {
 			return nil, testutil.ErrTest
 		},
 	}
@@ -146,13 +146,13 @@ func TestInboxFileReopenAfterClose(t *testing.T) {
 	ingestCount := 0
 	f := testutil.NewTestFS(t)
 	lib := libfake.Lib{
-		IngestFn: func(_ string) (*model.Book, error) {
+		IngestFn: func(_ string) (*library.Book, error) {
 			ingestCount++
-			return testutil.MakeBook(int64(ingestCount), "Test", "Author"), nil
+			return bookmodel.NewImmutableBook(bookmodel.MakeMutableBook(int64(ingestCount), "Test", "Author")), nil
 		},
 	}
 
-	noop := func(b *model.Book) {}
+	noop := func(b *library.Book) {}
 	inf := NewInboxFile(f, lib, "test.epub", 0644, noop)
 
 	// First open/write/close
@@ -181,15 +181,15 @@ func TestInboxFileReopenAfterClose(t *testing.T) {
 // a deadlock where Close held the file's lock while calling DeleteChild, which
 // in turn called SetParent on the removed child, trying to acquire the same lock.
 func TestInboxFileCloseWithParentDeadlockRegression(t *testing.T) {
-	ingested := make(chan *model.Book, 1)
+	ingested := make(chan *library.Book, 1)
 	f := testutil.NewTestFS(t)
 	lib := libfake.Lib{
-		IngestFn: func(_ string) (*model.Book, error) {
-			return testutil.MakeBook(42, "Test", "Author"), nil
+		IngestFn: func(_ string) (*library.Book, error) {
+			return bookmodel.MakeBook(42, "Test", "Author"), nil
 		},
 	}
 
-	dir := NewInboxDir(f, lib, func(b *model.Book) {
+	dir := NewInboxDir(f, lib, func(b *library.Book) {
 		ingested <- b
 	})
 
@@ -225,8 +225,8 @@ func TestInboxFileCloseWithParentDeadlockRegression(t *testing.T) {
 	// Verify ingest was called
 	select {
 	case b := <-ingested:
-		if b.Meta.ID != 42 {
-			t.Errorf("ingested book id = %d, want 42", b.Meta.ID)
+		if b.ID() != 42 {
+			t.Errorf("ingested book id = %d, want 42", b.ID())
 		}
 	default:
 		t.Fatal("onIngest was not called")

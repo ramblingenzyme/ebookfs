@@ -23,7 +23,7 @@ import (
 func TestEditWriteCoverConcurrentSameBook(t *testing.T) {
 	lib := openTestLibrary(t)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Race Book"))
-	id := book.Meta.ID
+	id := book.ID()
 
 	var newCover bytes.Buffer
 	if err := jpeg.Encode(&newCover, image.NewRGBA(image.Rect(0, 0, 1, 1)), nil); err != nil {
@@ -37,7 +37,7 @@ func TestEditWriteCoverConcurrentSameBook(t *testing.T) {
 
 		var (
 			wg       sync.WaitGroup
-			edited   *model.Book
+			edited   *Book
 			editErr  error
 			coverErr error
 		)
@@ -63,14 +63,14 @@ func TestEditWriteCoverConcurrentSameBook(t *testing.T) {
 
 		// The book must still be a valid epub at its new location, carrying
 		// both changes.
-		parsed, err := epub.Parse(filepath.Join(root, book.EpubPath))
+		parsed, err := epub.Parse(filepath.Join(root, book.EpubPath()))
 		if err != nil {
 			t.Fatalf("iteration %d: final epub does not parse: %v", i, err)
 		}
 		if parsed.Title != title {
 			t.Fatalf("iteration %d: title = %q, want %q (Edit's change was lost)", i, parsed.Title, title)
 		}
-		reader, err := epub.OpenReader(filepath.Join(root, book.EpubPath), book.CoverPath)
+		reader, err := epub.OpenReader(filepath.Join(root, book.EpubPath()), book.CoverPath())
 		if err != nil {
 			t.Fatalf("iteration %d: OpenReader: %v", i, err)
 		}
@@ -84,12 +84,12 @@ func TestEditWriteCoverConcurrentSameBook(t *testing.T) {
 		}
 
 		// No stray temp files may accumulate in the book directory.
-		entries, err := os.ReadDir(filepath.Join(root, filepath.Dir(book.EpubPath)))
+		entries, err := os.ReadDir(filepath.Join(root, filepath.Dir(book.EpubPath())))
 		if err != nil {
 			t.Fatalf("iteration %d: %v", i, err)
 		}
 		for _, e := range entries {
-			if name := e.Name(); name != filepath.Base(book.EpubPath) && name != "meta.toml" {
+			if name := e.Name(); name != filepath.Base(book.EpubPath()) && name != "meta.toml" {
 				t.Fatalf("iteration %d: unexpected file in book dir: %q", i, name)
 			}
 		}
@@ -104,7 +104,7 @@ func TestConcurrentDuplicateIngestRejected(t *testing.T) {
 		wg    sync.WaitGroup
 		mu    sync.Mutex
 		count int
-		books []*model.Book
+		books []*Book
 		errs  []error
 	)
 
@@ -154,7 +154,7 @@ func TestConcurrentDuplicateIngestRejected(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("expected 1 book by Alice, got %d", len(got))
 	}
-	if got[0].Title != "Concurrent Dupe" {
-		t.Errorf("book title = %q, want %q", got[0].Title, "Concurrent Dupe")
+	if got[0].Title() != "Concurrent Dupe" {
+		t.Errorf("book title = %q, want %q", got[0].Title(), "Concurrent Dupe")
 	}
 }

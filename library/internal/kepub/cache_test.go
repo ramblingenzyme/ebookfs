@@ -3,6 +3,7 @@ package kepub
 import (
 	"context"
 	"errors"
+	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 	"io"
 	"os"
 	"path/filepath"
@@ -33,7 +34,7 @@ func TestWarmerWarmsBook(t *testing.T) {
 		mu   sync.Mutex
 		seen []int64
 	)
-	w := newWarmer(func(b *model.Book) error {
+	w := newWarmer(func(b *bookmodel.Book) error {
 		mu.Lock()
 		seen = append(seen, b.Meta.ID)
 		mu.Unlock()
@@ -57,7 +58,7 @@ func TestWarmerWarmsMultipleBooks(t *testing.T) {
 		mu   sync.Mutex
 		seen []int64
 	)
-	w := newWarmer(func(b *model.Book) error {
+	w := newWarmer(func(b *bookmodel.Book) error {
 		mu.Lock()
 		seen = append(seen, b.Meta.ID)
 		mu.Unlock()
@@ -79,7 +80,7 @@ func TestWarmerWarmsMultipleBooks(t *testing.T) {
 
 func TestWarmerErrorDoesNotPanic(t *testing.T) {
 	done := make(chan struct{})
-	w := newWarmer(func(b *model.Book) error {
+	w := newWarmer(func(b *bookmodel.Book) error {
 		defer close(done)
 		return testutil.ErrTest
 	})
@@ -98,14 +99,14 @@ func TestWarmerErrorDoesNotPanic(t *testing.T) {
 // would panic). This is the shutdown-window race: the 9P server can call Warm
 // while Cache.Close is tearing the warmer down.
 func TestWarmAfterStopNoPanic(t *testing.T) {
-	w := newWarmer(func(*model.Book) error { return nil })
+	w := newWarmer(func(*bookmodel.Book) error { return nil })
 	w.stop()
 	w.warm(makeBook(1, "Test", "Author"))
 }
 
 // Warm called concurrently with stop must never panic. Run under -race.
 func TestWarmConcurrentWithStopNoPanic(t *testing.T) {
-	w := newWarmer(func(*model.Book) error { return nil })
+	w := newWarmer(func(*bookmodel.Book) error { return nil })
 
 	var wg sync.WaitGroup
 	for range 8 {
@@ -337,4 +338,4 @@ func waitForWarm(t *testing.T, f func() bool) bool {
 	}
 }
 
-var makeBook = testutil.MakeBook
+var makeBook = bookmodel.MakeMutableBook

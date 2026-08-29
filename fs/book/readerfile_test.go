@@ -1,19 +1,20 @@
 package book
 
 import (
+	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/library"
 	"testing"
 
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
-	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 func testReaderFile(t *testing.T, exp library.Exporter) *ReaderFile {
 	t.Helper()
 	f := testutil.NewTestFS(t)
-	book := testutil.MakeBook(1, "Test", "Author")
+	book := bookmodel.MakeBook(1, "Test", "Author")
 	return NewReaderFile(newStat(f, "test.epub", 0444), exp, testutil.Fixed(book))
 }
 
@@ -23,7 +24,7 @@ func testReaderFile(t *testing.T, exp library.Exporter) *ReaderFile {
 
 func TestReaderFileOpenRead(t *testing.T) {
 	rf := testReaderFile(t, libfake.Exporter{
-		OpenFn: func(b *model.Book) (model.EpubReader, error) {
+		OpenFn: func(b *library.Book) (model.EpubReader, error) {
 			return libfake.NewEpubReader([]byte("hello epub"), nil, nil), nil
 		},
 	})
@@ -46,7 +47,7 @@ func TestReaderFileOpenRead(t *testing.T) {
 
 func TestReaderFileStatReportsSize(t *testing.T) {
 	rf := testReaderFile(t, libfake.Exporter{
-		SizeFn: func(b *model.Book) (int64, bool) { return 42, true },
+		SizeFn: func(b *library.Book) (int64, bool) { return 42, true },
 	})
 
 	s := rf.Stat()
@@ -57,7 +58,7 @@ func TestReaderFileStatReportsSize(t *testing.T) {
 
 func TestReaderFileStatFallbackToZero(t *testing.T) {
 	rf := testReaderFile(t, libfake.Exporter{
-		SizeFn: func(b *model.Book) (int64, bool) { return 0, false },
+		SizeFn: func(b *library.Book) (int64, bool) { return 0, false },
 	})
 
 	s := rf.Stat()

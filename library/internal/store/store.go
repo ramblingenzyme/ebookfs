@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
@@ -65,7 +66,7 @@ func (s *Store) PathTaken(authors []model.Author, title string) bool {
 // recording one would silently force a full reindex on every startup thereafter.
 // Callers that need to record a directory they could not observe store the
 // zero drift.PathInfo instead.
-func (s *Store) Stat(loc model.Location) (drift.PathInfo, error) {
+func (s *Store) Stat(loc book.Location) (drift.PathInfo, error) {
 	epubFI, err := os.Stat(s.AbsPath(loc.EpubPath))
 	if err != nil {
 		return drift.PathInfo{}, err
@@ -85,7 +86,7 @@ func (s *Store) Stat(loc model.Location) (drift.PathInfo, error) {
 // Move relocates a book from one location to another, renaming the epub within
 // the directory if its filename differs. The caller decides the destination
 // (see Layout); the store just performs the move.
-func (s *Store) Move(from, to model.Location) error {
+func (s *Store) Move(from, to book.Location) error {
 	if from.EpubPath == to.EpubPath {
 		return nil
 	}
@@ -148,7 +149,7 @@ func removeIfEmpty(dir string) error {
 }
 
 // Delete removes the book directory at loc from the library.
-func (s *Store) Delete(loc model.Location) error {
+func (s *Store) Delete(loc book.Location) error {
 	path := filepath.Join(s.root, loc.Dir())
 	if err := os.RemoveAll(path); err != nil {
 		return err
@@ -160,7 +161,7 @@ func (s *Store) Delete(loc model.Location) error {
 // Update applies the edits to the book's on-disk state: moves it from oldLoc to
 // newLoc if necessary, writes the updated meta.toml, and returns the observed
 // state for drift detection.
-func (s *Store) Update(oldLoc, newLoc model.Location, meta *model.Meta) (drift.PathInfo, error) {
+func (s *Store) Update(oldLoc, newLoc book.Location, meta *book.Meta) (drift.PathInfo, error) {
 	if err := s.Move(oldLoc, newLoc); err != nil {
 		return drift.PathInfo{}, err
 	}

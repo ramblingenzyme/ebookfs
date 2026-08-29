@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"github.com/ramblingenzyme/ebookfs/library"
 	"strconv"
 	"sync"
 	"testing"
@@ -53,8 +54,8 @@ func TestSearchHandleResyncRebuildsMembership(t *testing.T) {
 	b1.Meta.Tags = []string{"sci-fi"}
 	b2 := makeBook(2, "The Hobbit", "J.R.R. Tolkien")
 	b2.Meta.Tags = []string{"fantasy"}
-	reg.Add(b1)
-	reg.Add(b2)
+	reg.Add(wrapBook(b1))
+	reg.Add(wrapBook(b2))
 
 	// Before any query the results dir lists nothing.
 	if n := len(dirChildNames(handle.results)); n != 0 {
@@ -75,7 +76,7 @@ func TestSearchHandleResyncRebuildsMembership(t *testing.T) {
 	// A matching book ingested after the query appears live.
 	b3 := makeBook(3, "Dune", "Frank Herbert")
 	b3.Meta.Tags = []string{"sci-fi"}
-	reg.Add(b3)
+	reg.Add(wrapBook(b3))
 	if _, ok := handle.results.Children()["Dune"]; !ok {
 		t.Errorf("expected live-added Dune in results, got %v", dirChildNames(handle.results))
 	}
@@ -119,7 +120,7 @@ func TestSearchHandleConcurrentRequeryAndRegistryEvents(t *testing.T) {
 			} else {
 				b.Meta.Tags = []string{"fantasy"}
 			}
-			reg.Add(b)
+			reg.Add(wrapBook(b))
 		}
 	}()
 	go func() {
@@ -142,23 +143,25 @@ func TestSearchHandleConcurrentRequeryAndRegistryEvents(t *testing.T) {
 // every field needs a matching and a non-matching case, and the AND across
 // fields needs one where a single field fails while the rest hold.
 func TestMakeMatchesFn(t *testing.T) {
-	base := func() *model.Book {
+	base := func() *library.Book {
 		b := makeBook(7, "Foundation and Empire", "Isaac Asimov", "Ray Bradbury")
 		b.Meta.Tags = []string{"sci-fi", "classic"}
 		b.Meta.Status = "unread"
 		b.Series = &model.SeriesRef{Name: "Foundation", Index: "2"}
-		return b
+		return wrapBook(b)
 	}
-	standalone := func() *model.Book {
-		b := base()
+	standalone := func() *library.Book {
+		b := makeBook(7, "Foundation and Empire", "Isaac Asimov", "Ray Bradbury")
+		b.Meta.Tags = []string{"sci-fi", "classic"}
+		b.Meta.Status = "unread"
 		b.Series = nil
-		return b
+		return wrapBook(b)
 	}
 
 	tests := []struct {
 		name  string
 		query model.Query
-		book  func() *model.Book
+		book  func() *library.Book
 		want  bool
 	}{
 		{"empty query matches anything", model.Query{}, base, true},
@@ -329,8 +332,8 @@ func TestSearchCtlExecutesQueryOnClunk(t *testing.T) {
 	b1.Meta.Tags = []string{"sci-fi"}
 	b2 := makeBook(2, "The Hobbit", "J.R.R. Tolkien")
 	b2.Meta.Tags = []string{"fantasy"}
-	reg.Add(b1)
-	reg.Add(b2)
+	reg.Add(wrapBook(b1))
+	reg.Add(wrapBook(b2))
 
 	// Split so the first chunk is a valid, matching query on its own: if the
 	// write path executed anything, results would be populated before the clunk
@@ -374,7 +377,7 @@ func TestSearchCtlRejectsUnparseableQuery(t *testing.T) {
 
 	b := makeBook(1, "Foundation", "Isaac Asimov")
 	b.Meta.Tags = []string{"sci-fi"}
-	reg.Add(b)
+	reg.Add(wrapBook(b))
 	handle.executeSearch(model.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
 
 	if _, err := ctl.Write(3, 0, []byte("publisher:Tor")); err != nil {
@@ -401,7 +404,7 @@ func TestSearchCtlIgnoresEmptyClunk(t *testing.T) {
 
 	b := makeBook(1, "Foundation", "Isaac Asimov")
 	b.Meta.Tags = []string{"sci-fi"}
-	reg.Add(b)
+	reg.Add(wrapBook(b))
 	handle.executeSearch(model.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
 
 	tests := []struct {
@@ -440,7 +443,7 @@ func TestSearchCtlCloseTearsDownHandle(t *testing.T) {
 
 	b := makeBook(1, "Foundation", "Isaac Asimov")
 	b.Meta.Tags = []string{"sci-fi"}
-	reg.Add(b)
+	reg.Add(wrapBook(b))
 	handle.executeSearch(model.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
 	if n := len(dirChildNames(handle.results)); n != 1 {
 		t.Fatalf("setup: results = %v, want the sci-fi book", dirChildNames(handle.results))
@@ -459,7 +462,7 @@ func TestSearchCtlCloseTearsDownHandle(t *testing.T) {
 
 	later := makeBook(2, "Dune", "Frank Herbert")
 	later.Meta.Tags = []string{"sci-fi"}
-	reg.Add(later)
+	reg.Add(wrapBook(later))
 	if _, ok := handle.results.Children()["Dune"]; ok {
 		t.Error("a book added after teardown reached the released handle's results — it was never unregistered from the registry")
 	}

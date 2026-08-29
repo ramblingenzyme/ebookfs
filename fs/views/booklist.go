@@ -8,6 +8,7 @@ import (
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -43,8 +44,8 @@ func newBookListDir(stat *proto.Stat) *bookListDir {
 // entry too. Added the other way round it is fine, since by then the plain
 // title "Foo (2)" is taken and gets disambiguated in turn. Fixing it means
 // minting until the name is free rather than assuming one pass suffices.
-func disambiguatedName(b *model.Book) string {
-	return fmt.Sprintf("%s (%d)", model.PathSafe(b.Title), b.Meta.ID)
+func disambiguatedName(b *library.Book) string {
+	return fmt.Sprintf("%s (%d)", model.PathSafe(b.Title()), b.ID())
 }
 
 func (d *bookListDir) Add(dir *book.BookDir) {
@@ -52,7 +53,7 @@ func (d *bookListDir) Add(dir *book.BookDir) {
 	// Keyed by the name the child actually carries: BookDir.Stat reports a
 	// PathSafe title, so looking up the raw one would miss the collision and
 	// entries would name a child that cannot be deleted.
-	name := model.PathSafe(b.Title)
+	name := model.PathSafe(b.Title())
 	if child, ok := d.Children()[name]; ok && child != dir {
 		// Plain title is taken by a different book — disambiguate with the id.
 		d.AddChild(&namedBookDir{
@@ -60,15 +61,15 @@ func (d *bookListDir) Add(dir *book.BookDir) {
 			baseStat: dir.Stat(),
 			name:     disambiguatedName,
 		})
-		d.entries[b.Meta.ID] = disambiguatedName(b)
+		d.entries[b.ID()] = disambiguatedName(b)
 		return
 	}
 	d.AddChild(dir)
-	d.entries[b.Meta.ID] = name
+	d.entries[b.ID()] = name
 }
 
 func (d *bookListDir) Remove(dir *book.BookDir) {
-	id := dir.Book().Meta.ID
+	id := dir.Book().ID()
 	if name, ok := d.entries[id]; ok {
 		d.DeleteChild(name)
 		delete(d.entries, id)

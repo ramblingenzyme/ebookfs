@@ -2,6 +2,8 @@ package book
 
 import (
 	"fmt"
+	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/library"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -17,13 +19,13 @@ import (
 // identifiers, a ~300-char description, and populated path fields. The id is
 // baked into the title so each book's backing strings are distinct (no interning
 // hiding real per-book cost).
-func representativeBook(id int64, withCover bool) *model.Book {
+func representativeBook(id int64, withCover bool) *library.Book {
 	title := fmt.Sprintf("The Left Hand of Darkness Volume %d", id)
 	desc := "A linguist negotiates a diplomatic mission to the planet Winter, " +
 		"whose inhabitants can change sex at will. A study of gender, loyalty, " +
 		"and otherness, and one of the foundational works of modern science " +
 		"fiction. Winner of the Hugo and Nebula awards."
-	bib := model.Bib{
+	bib := bookmodel.Bib{
 		Title:     title,
 		SortTitle: title,
 		Authors: []model.Author{{
@@ -44,9 +46,9 @@ func representativeBook(id int64, withCover bool) *model.Book {
 	}
 	libPath := "Le Guin, Ursula K/The Left Hand of Darkness (1042)"
 	epubName := "The Left Hand of Darkness - Ursula K. Le Guin.epub"
-	return model.NewBook(bib, model.Meta{ID: id, Status: "unread", Tags: []string{"sci-fi", "classic", "feminist"}}, model.Location{
+	return bookmodel.NewImmutableBook(bookmodel.NewBook(bib, bookmodel.Meta{ID: id, Status: "unread", Tags: []string{"sci-fi", "classic", "feminist"}}, bookmodel.Location{
 		EpubPath: filepath.Join(libPath, epubName),
-	})
+	}))
 }
 
 // settleGC runs enough GC cycles to drive HeapAlloc to a stable floor. One
@@ -75,7 +77,7 @@ func measureBooksOnly(n int, withCover bool) float64 {
 	var before runtime.MemStats
 	runtime.ReadMemStats(&before)
 
-	books := make([]*model.Book, 0, n)
+	books := make([]*library.Book, 0, n)
 	for i := int64(0); i < int64(n); i++ {
 		books = append(books, representativeBook(i, withCover))
 	}
@@ -118,7 +120,7 @@ func BenchmarkBookDirMemoryFootprint(b *testing.B) {
 	b.Logf("  fieldFile       = %d B", unsafe.Sizeof(fieldFile{}))
 	b.Logf("  epubFile        = %d B", unsafe.Sizeof(epubFile{}))
 	b.Logf("  coverFile       = %d B", unsafe.Sizeof(coverFile{}))
-	b.Logf("  model.Book      = %d B", unsafe.Sizeof(model.Book{}))
+	b.Logf("  library.Book      = %d B", unsafe.Sizeof(library.Book{}))
 	b.Logf("  BookDir         = %d B", unsafe.Sizeof(BookDir{}))
 	b.Logf("")
 

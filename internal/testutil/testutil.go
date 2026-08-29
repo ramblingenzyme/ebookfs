@@ -5,6 +5,9 @@
 // packages (e.g. kepub) have white-box tests that import testutil, so a
 // library import here would create a test-time import cycle. Test doubles for
 // the library facade interfaces live in the sibling package libfake instead.
+//
+// For book construction helpers, use internal/book.MakeBook or
+// internal/book.MakeMutableBook.
 package testutil
 
 import (
@@ -12,28 +15,13 @@ import (
 	"testing"
 
 	"github.com/knusbaum/go9p/fs"
-	"github.com/ramblingenzyme/ebookfs/library/model"
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
-
-// MakeBook builds a model.Book with the given id, title, and author names,
-// leaving every other field at its NewBook default. Author sort names are left
-// empty; tests that need them set fields on the returned book directly.
-func MakeBook(id int64, title string, authors ...string) *model.Book {
-	auths := make([]model.Author, len(authors))
-	for i, name := range authors {
-		auths[i] = model.Author{Name: name}
-	}
-	return model.NewBook(
-		model.Bib{Title: title, Authors: auths},
-		model.Meta{ID: id},
-		model.Location{},
-	)
-}
 
 // Fixed returns a book getter that always yields b, standing in for a live
 // snapshot accessor (e.g. bookDir.Book) in tests that construct files directly.
-func Fixed(b *model.Book) func() *model.Book {
-	return func() *model.Book { return b }
+func Fixed(b *book.ImmutableBook) func() *book.ImmutableBook {
+	return func() *book.ImmutableBook { return b }
 }
 
 // NewTestFS builds an in-memory go9p FS owned by the conventional glenda user,

@@ -3,6 +3,7 @@ package epub_test
 import (
 	"archive/zip"
 	"bytes"
+	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 	"image"
 	"image/jpeg"
 	"image/png"
@@ -691,11 +692,11 @@ func TestWriteCoverRejectsFormatMismatch(t *testing.T) {
 // book model claiming series. Validate refuses a SeriesIndex edit on a book
 // with no series at all, so the model has to carry one — which is exactly the
 // shape library.Edit hands in, having read the book from the index.
-func reindexSeries(t *testing.T, path, series, index string) model.Bib {
+func reindexSeries(t *testing.T, path, series, index string) bookmodel.Bib {
 	t.Helper()
-	b := &model.Book{
-		Location: model.Location{EpubPath: path},
-		Bib:      model.Bib{Series: &model.SeriesRef{Name: series, Index: "1"}},
+	b := &bookmodel.Book{
+		Location: bookmodel.Location{EpubPath: path},
+		Bib:      bookmodel.Bib{Series: &model.SeriesRef{Name: series, Index: "1"}},
 	}
 	bib, err := epub.Rewrite(path, b, model.Edits{SeriesIndex: new(index)})
 	if err != nil {
@@ -1294,7 +1295,7 @@ func TestRefusesToEditASignedEpub(t *testing.T) {
 		{"cover edit", model.Edits{Cover: &cover}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			b := &model.Book{Location: model.Location{EpubPath: path}, Bib: model.Bib{CoverPath: "OEBPS/cover.jpg"}}
+			b := &bookmodel.Book{Location: bookmodel.Location{EpubPath: path}, Bib: bookmodel.Bib{CoverPath: "OEBPS/cover.jpg"}}
 			if _, err := epub.Rewrite(path, b, tc.e); err == nil {
 				t.Fatal("expected a refusal")
 			}

@@ -3,6 +3,8 @@ package ctl
 import (
 	"errors"
 	"fmt"
+	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/library"
 	"reflect"
 	"slices"
 	"strings"
@@ -189,14 +191,14 @@ func TestCtlFileWriteExecutes(t *testing.T) {
 // --- execution ---
 
 func TestAddTag(t *testing.T) {
-	book := testutil.MakeBook(1, "Title", "Author")
+	book := bookmodel.MakeMutableBook(1, "Title", "Author")
 	book.Meta.Tags = []string{"existing"}
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*model.Book, error) {
-			return []*model.Book{book}, nil
+		SearchFn: func(q model.Query) ([]*library.Book, error) {
+			return []*library.Book{bookmodel.NewImmutableBook(book)}, nil
 		},
-		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
+		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
 			if id != 1 {
 				t.Fatalf("Edit called with id %d, want 1", id)
 			}
@@ -208,12 +210,12 @@ func TestAddTag(t *testing.T) {
 			}
 			updated := *book
 			updated.Meta.Tags = *e.Tags
-			return &updated, nil
+			return bookmodel.NewImmutableBook(&updated), nil
 		},
 	}
 
 	reg, cmdLog := newTestCtl(t, lib)
-	reg.Add(book)
+	reg.Add(bookmodel.NewImmutableBook(book))
 
 	result := execute(`add-tag "newtag" *`, lib, reg, cmdLog)
 	if result != "ok: 1 books edited" {
@@ -222,25 +224,25 @@ func TestAddTag(t *testing.T) {
 }
 
 func TestRemoveTag(t *testing.T) {
-	book := testutil.MakeBook(2, "Title", "Author")
+	book := bookmodel.MakeMutableBook(2, "Title", "Author")
 	book.Meta.Tags = []string{"keep", "remove"}
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*model.Book, error) {
-			return []*model.Book{book}, nil
+		SearchFn: func(q model.Query) ([]*library.Book, error) {
+			return []*library.Book{bookmodel.NewImmutableBook(book)}, nil
 		},
-		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
+		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
 			if len(*e.Tags) != 1 || (*e.Tags)[0] != "keep" {
 				t.Fatalf("Edit called with Tags = %v, want [keep]", *e.Tags)
 			}
 			updated := *book
 			updated.Meta.Tags = *e.Tags
-			return &updated, nil
+			return bookmodel.NewImmutableBook(&updated), nil
 		},
 	}
 
 	reg, cmdLog := newTestCtl(t, lib)
-	reg.Add(book)
+	reg.Add(bookmodel.NewImmutableBook(book))
 
 	result := execute(`remove-tag "remove" *`, lib, reg, cmdLog)
 	if result != "ok: 1 books edited" {
@@ -249,20 +251,20 @@ func TestRemoveTag(t *testing.T) {
 }
 
 func TestEditUnknownID(t *testing.T) {
-	book := testutil.MakeBook(1, "Title", "Author")
+	book := bookmodel.MakeMutableBook(1, "Title", "Author")
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*model.Book, error) {
+		SearchFn: func(q model.Query) ([]*library.Book, error) {
 			return nil, nil // no book matches id 999
 		},
-		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
+		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
 			t.Fatalf("Edit should not be called for a nonexistent id, got %d", id)
 			return nil, nil
 		},
 	}
 
 	reg, cmdLog := newTestCtl(t, lib)
-	reg.Add(book)
+	reg.Add(bookmodel.NewImmutableBook(book))
 
 	result := execute("add-tag foo 999", lib, reg, cmdLog)
 	if !strings.Contains(result, "book 999: not found") {
@@ -274,20 +276,20 @@ func TestEditUnknownID(t *testing.T) {
 // "not found" when the filter excludes it — the book exists, it just did not
 // match. Only a bare id-spec ("1,2,3") gets the typo-catching walk.
 func TestAddTagFilteredQueryDoesNotReportNotFound(t *testing.T) {
-	book := testutil.MakeBook(1, "Title", "Author")
+	book := bookmodel.MakeMutableBook(1, "Title", "Author")
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*model.Book, error) {
+		SearchFn: func(q model.Query) ([]*library.Book, error) {
 			return nil, nil // book 1 exists but is filtered out by status:read
 		},
-		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
+		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
 			t.Fatalf("Edit should not be called, got %d", id)
 			return nil, nil
 		},
 	}
 
 	reg, cmdLog := newTestCtl(t, lib)
-	reg.Add(book)
+	reg.Add(bookmodel.NewImmutableBook(book))
 
 	result := execute("add-tag foo id:1+status:read", lib, reg, cmdLog)
 	if strings.Contains(result, "not found") {
@@ -296,24 +298,24 @@ func TestAddTagFilteredQueryDoesNotReportNotFound(t *testing.T) {
 }
 
 func TestSetStatus(t *testing.T) {
-	book := testutil.MakeBook(3, "Title", "Author")
+	book := bookmodel.MakeMutableBook(3, "Title", "Author")
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*model.Book, error) {
-			return []*model.Book{book}, nil
+		SearchFn: func(q model.Query) ([]*library.Book, error) {
+			return []*library.Book{bookmodel.NewImmutableBook(book)}, nil
 		},
-		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
+		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
 			if e.Status == nil || *e.Status != "reading" {
 				t.Fatalf("Edit called with Status = %v, want %q", e.Status, "reading")
 			}
 			updated := *book
 			updated.Meta.Status = *e.Status
-			return &updated, nil
+			return bookmodel.NewImmutableBook(&updated), nil
 		},
 	}
 
 	reg, cmdLog := newTestCtl(t, lib)
-	reg.Add(book)
+	reg.Add(bookmodel.NewImmutableBook(book))
 
 	result := execute("set-status reading *", lib, reg, cmdLog)
 	if result != "ok: 1 books edited" {
@@ -322,25 +324,25 @@ func TestSetStatus(t *testing.T) {
 }
 
 func TestRenameTag(t *testing.T) {
-	book := testutil.MakeBook(4, "Title", "Author")
+	book := bookmodel.MakeMutableBook(4, "Title", "Author")
 	book.Meta.Tags = []string{"scifi"}
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*model.Book, error) {
-			return []*model.Book{book}, nil
+		SearchFn: func(q model.Query) ([]*library.Book, error) {
+			return []*library.Book{bookmodel.NewImmutableBook(book)}, nil
 		},
-		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
+		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
 			if len(*e.Tags) != 1 || (*e.Tags)[0] != "sci-fi" {
 				t.Fatalf("Edit called with Tags = %v, want [sci-fi]", *e.Tags)
 			}
 			updated := *book
 			updated.Meta.Tags = *e.Tags
-			return &updated, nil
+			return bookmodel.NewImmutableBook(&updated), nil
 		},
 	}
 
 	reg, cmdLog := newTestCtl(t, lib)
-	reg.Add(book)
+	reg.Add(bookmodel.NewImmutableBook(book))
 
 	result := execute(`rename-tag "scifi" "sci-fi"`, lib, reg, cmdLog)
 	if result != "ok: 1 books renamed" {
@@ -349,25 +351,25 @@ func TestRenameTag(t *testing.T) {
 }
 
 func TestRenameTagBothTags(t *testing.T) {
-	book := testutil.MakeBook(5, "Title", "Author")
+	book := bookmodel.MakeMutableBook(5, "Title", "Author")
 	book.Meta.Tags = []string{"old", "other", "new"}
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*model.Book, error) {
-			return []*model.Book{book}, nil
+		SearchFn: func(q model.Query) ([]*library.Book, error) {
+			return []*library.Book{bookmodel.NewImmutableBook(book)}, nil
 		},
-		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
+		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
 			if len(*e.Tags) != 2 || !slices.Contains(*e.Tags, "new") || !slices.Contains(*e.Tags, "other") || slices.Contains(*e.Tags, "old") {
 				t.Fatalf("rename both: unexpected Tags = %v, want [new other]", *e.Tags)
 			}
 			updated := *book
 			updated.Meta.Tags = *e.Tags
-			return &updated, nil
+			return bookmodel.NewImmutableBook(&updated), nil
 		},
 	}
 
 	reg, cmdLog := newTestCtl(t, lib)
-	reg.Add(book)
+	reg.Add(bookmodel.NewImmutableBook(book))
 
 	result := execute(`rename-tag "old" "new"`, lib, reg, cmdLog)
 	if result != "ok: 1 books renamed" {
@@ -376,16 +378,16 @@ func TestRenameTagBothTags(t *testing.T) {
 }
 
 func TestRenameAuthor(t *testing.T) {
-	book := testutil.MakeBook(7, "Title", "Asimov")
+	book := bookmodel.MakeMutableBook(7, "Title", "Asimov")
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*model.Book, error) {
+		SearchFn: func(q model.Query) ([]*library.Book, error) {
 			if !slices.Equal(q.Authors, []string{"Asimov"}) {
 				t.Errorf("Query.Authors = %q, want [Asimov]", q.Authors)
 			}
-			return []*model.Book{book}, nil
+			return []*library.Book{bookmodel.NewImmutableBook(book)}, nil
 		},
-		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
+		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
 			if e.Authors == nil || len(*e.Authors) != 1 {
 				t.Fatalf("rename author: expected one author, got %v", e.Authors)
 			}
@@ -395,12 +397,12 @@ func TestRenameAuthor(t *testing.T) {
 			}
 			updated := *book
 			updated.Authors = *e.Authors
-			return &updated, nil
+			return bookmodel.NewImmutableBook(&updated), nil
 		},
 	}
 
 	reg, cmdLog := newTestCtl(t, lib)
-	reg.Add(book)
+	reg.Add(bookmodel.NewImmutableBook(book))
 
 	result := execute(`rename-author "Asimov" "Isaac Asimov|Asimov, Isaac"`, lib, reg, cmdLog)
 	if result != "ok: 1 books renamed" {
@@ -409,17 +411,17 @@ func TestRenameAuthor(t *testing.T) {
 }
 
 func TestRenameAuthorMatchSortName(t *testing.T) {
-	book := testutil.MakeBook(8, "Title", "Isaac Asimov")
+	book := bookmodel.MakeMutableBook(8, "Title", "Isaac Asimov")
 	book.Authors[0].SortName = "Asimov, Isaac"
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*model.Book, error) {
+		SearchFn: func(q model.Query) ([]*library.Book, error) {
 			if !slices.Equal(q.Authors, []string{"Asimov, Isaac"}) {
 				t.Errorf("Query.Authors = %q, want [Asimov, Isaac]", q.Authors)
 			}
-			return []*model.Book{book}, nil
+			return []*library.Book{bookmodel.NewImmutableBook(book)}, nil
 		},
-		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
+		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
 			if e.Authors == nil || len(*e.Authors) != 1 {
 				t.Fatalf("expected one author")
 			}
@@ -429,12 +431,12 @@ func TestRenameAuthorMatchSortName(t *testing.T) {
 			}
 			updated := *book
 			updated.Authors = *e.Authors
-			return &updated, nil
+			return bookmodel.NewImmutableBook(&updated), nil
 		},
 	}
 
 	reg, cmdLog := newTestCtl(t, lib)
-	reg.Add(book)
+	reg.Add(bookmodel.NewImmutableBook(book))
 
 	result := execute(`rename-author "Asimov, Isaac" "I. Asimov"`, lib, reg, cmdLog)
 	if result != "ok: 1 books renamed" {
@@ -443,25 +445,25 @@ func TestRenameAuthorMatchSortName(t *testing.T) {
 }
 
 func TestRenameSeries(t *testing.T) {
-	book := testutil.MakeBook(9, "Title", "Author")
+	book := bookmodel.MakeMutableBook(9, "Title", "Author")
 	book.Series = &model.SeriesRef{Name: "Old", Index: "1"}
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*model.Book, error) {
-			return []*model.Book{book}, nil
+		SearchFn: func(q model.Query) ([]*library.Book, error) {
+			return []*library.Book{bookmodel.NewImmutableBook(book)}, nil
 		},
-		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
+		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
 			if e.Series == nil || *e.Series != "New" {
 				t.Fatalf("renamed series = %v, want %q", e.Series, "New")
 			}
 			updated := *book
 			updated.Series = &model.SeriesRef{Name: *e.Series, Index: book.Series.Index}
-			return &updated, nil
+			return bookmodel.NewImmutableBook(&updated), nil
 		},
 	}
 
 	reg, cmdLog := newTestCtl(t, lib)
-	reg.Add(book)
+	reg.Add(bookmodel.NewImmutableBook(book))
 
 	result := execute(`rename-series "Old" "New"`, lib, reg, cmdLog)
 	if result != "ok: 1 books renamed" {
@@ -472,17 +474,17 @@ func TestRenameSeries(t *testing.T) {
 // TestRenameAuthorMerge renames an author onto one the book already carries;
 // the result must collapse to a single author rather than duplicating it.
 func TestRenameAuthorMerge(t *testing.T) {
-	book := testutil.MakeBook(11, "Title", "Isaac Asimov")
+	book := bookmodel.MakeMutableBook(11, "Title", "Isaac Asimov")
 	book.Authors = append(book.Authors, model.Author{Name: "Paul French"})
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*model.Book, error) {
+		SearchFn: func(q model.Query) ([]*library.Book, error) {
 			if !slices.Equal(q.Authors, []string{"Paul French"}) {
 				t.Errorf("Query.Authors = %q, want [Paul French]", q.Authors)
 			}
-			return []*model.Book{book}, nil
+			return []*library.Book{bookmodel.NewImmutableBook(book)}, nil
 		},
-		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
+		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
 			if e.Authors == nil || len(*e.Authors) != 1 {
 				t.Fatalf("merge: expected one author, got %v", e.Authors)
 			}
@@ -491,12 +493,12 @@ func TestRenameAuthorMerge(t *testing.T) {
 			}
 			updated := *book
 			updated.Authors = *e.Authors
-			return &updated, nil
+			return bookmodel.NewImmutableBook(&updated), nil
 		},
 	}
 
 	reg, cmdLog := newTestCtl(t, lib)
-	reg.Add(book)
+	reg.Add(bookmodel.NewImmutableBook(book))
 
 	result := execute(`rename-author "Paul French" "Isaac Asimov"`, lib, reg, cmdLog)
 	if result != "ok: 1 books renamed" {
@@ -507,21 +509,21 @@ func TestRenameAuthorMerge(t *testing.T) {
 // TestSetRatingUnchanged verifies that setting a rating already in place is a
 // no-op: the book is skipped rather than rewritten.
 func TestSetRatingUnchanged(t *testing.T) {
-	book := testutil.MakeBook(12, "Title", "Author")
+	book := bookmodel.MakeMutableBook(12, "Title", "Author")
 	book.Meta.Rating = 4
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*model.Book, error) {
-			return []*model.Book{book}, nil
+		SearchFn: func(q model.Query) ([]*library.Book, error) {
+			return []*library.Book{bookmodel.NewImmutableBook(book)}, nil
 		},
-		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
+		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
 			t.Fatalf("Edit should not be called when the rating is unchanged")
 			return nil, nil
 		},
 	}
 
 	reg, cmdLog := newTestCtl(t, lib)
-	reg.Add(book)
+	reg.Add(bookmodel.NewImmutableBook(book))
 
 	result := execute("set-rating 4 *", lib, reg, cmdLog)
 	if result != "ok: no books edited\n1 skipped" {
@@ -592,10 +594,10 @@ func newTestCtl(t *testing.T, lib libfake.Lib) (*registry.BookRegistry, *Command
 }
 
 // taggedBook builds a minimal book with the given tags, for bulk-edit tests.
-func taggedBook(id int64, tags ...string) *model.Book {
-	b := testutil.MakeBook(id, "Title", "Author")
+func taggedBook(id int64, tags ...string) *library.Book {
+	b := bookmodel.MakeMutableBook(id, "Title", "Author")
 	b.Meta.Tags = tags
-	return b
+	return bookmodel.NewImmutableBook(b)
 }
 
 // TestCommandRejections pins what a client reads back from ctl when a command
@@ -639,7 +641,7 @@ func TestCommandRejections(t *testing.T) {
 			// EditFn and DeleteFn are left unstubbed: a rejected command must
 			// not reach the library at all, and libfake errors if it does.
 			lib := libfake.Lib{
-				EditFn: func(id int64, _ model.Edits) (*model.Book, error) {
+				EditFn: func(id int64, _ model.Edits) (*library.Book, error) {
 					t.Fatalf("rejected command still edited book %d", id)
 					return nil, nil
 				},
@@ -684,31 +686,31 @@ func TestCommandRejectionsAreLogged(t *testing.T) {
 func TestCommandSuccessStrings(t *testing.T) {
 	tests := []struct {
 		name  string
-		books []*model.Book
+		books []*library.Book
 		cmd   string
 		want  string
 	}{
 		{
 			"one book edited",
-			[]*model.Book{taggedBook(1)},
+			[]*library.Book{taggedBook(1)},
 			`add-tag "new" *`,
 			"ok: 1 books edited",
 		},
 		{
 			"several books edited",
-			[]*model.Book{taggedBook(1), taggedBook(2)},
+			[]*library.Book{taggedBook(1), taggedBook(2)},
 			`add-tag "new" *`,
 			"ok: 2 books edited",
 		},
 		{
 			"book already tagged",
-			[]*model.Book{taggedBook(1, "new")},
+			[]*library.Book{taggedBook(1, "new")},
 			`add-tag "new" *`,
 			"ok: no books edited\n1 skipped",
 		},
 		{
 			"mixed edited and skipped",
-			[]*model.Book{taggedBook(1), taggedBook(2, "new")},
+			[]*library.Book{taggedBook(1), taggedBook(2, "new")},
 			`add-tag "new" *`,
 			"ok: 1 books edited\n1 skipped",
 		},
@@ -722,15 +724,17 @@ func TestCommandSuccessStrings(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			lib := libfake.Lib{
-				SearchFn: func(model.Query) ([]*model.Book, error) { return tc.books, nil },
-				EditFn: func(id int64, e model.Edits) (*model.Book, error) {
+				SearchFn: func(model.Query) ([]*library.Book, error) { return tc.books, nil },
+				EditFn: func(id int64, e model.Edits) (*library.Book, error) {
 					for _, b := range tc.books {
-						if b.Meta.ID == id {
-							updated := *b
+						if b.ID() == id {
+							// Create a mutable copy of the book
+							updated := bookmodel.MakeMutableBook(b.ID(), b.Title(), "Author")
+							updated.Meta.Tags = b.Tags()
 							if e.Tags != nil {
 								updated.Meta.Tags = *e.Tags
 							}
-							return &updated, nil
+							return bookmodel.NewImmutableBook(updated), nil
 						}
 					}
 					return nil, fmt.Errorf("no book %d", id)
@@ -753,16 +757,18 @@ func TestCommandSuccessStrings(t *testing.T) {
 // the success line, or a bulk edit that half-failed reads as a clean run.
 func TestCommandFailureStrings(t *testing.T) {
 	t.Run("edit fails for one book", func(t *testing.T) {
-		books := []*model.Book{testutil.MakeBook(1, "A", "Author"), testutil.MakeBook(2, "B", "Author")}
+		books := []*library.Book{bookmodel.NewImmutableBook(bookmodel.MakeMutableBook(1, "A", "Author")), bookmodel.NewImmutableBook(bookmodel.MakeMutableBook(2, "B", "Author"))}
 		lib := libfake.Lib{
-			SearchFn: func(model.Query) ([]*model.Book, error) { return books, nil },
-			EditFn: func(id int64, e model.Edits) (*model.Book, error) {
+			SearchFn: func(model.Query) ([]*library.Book, error) { return books, nil },
+			EditFn: func(id int64, e model.Edits) (*library.Book, error) {
 				if id == 2 {
 					return nil, errors.New("disk on fire")
 				}
-				updated := *books[0]
+				// Create a mutable copy of the book
+				updated := bookmodel.MakeMutableBook(books[0].ID(), books[0].Title(), "Author")
+				updated.Meta.Tags = books[0].Tags()
 				updated.Meta.Tags = *e.Tags
-				return &updated, nil
+				return bookmodel.NewImmutableBook(updated), nil
 			},
 		}
 		reg, cmdLog := newTestCtl(t, lib)
@@ -780,7 +786,7 @@ func TestCommandFailureStrings(t *testing.T) {
 
 	t.Run("search fails", func(t *testing.T) {
 		lib := libfake.Lib{
-			SearchFn: func(model.Query) ([]*model.Book, error) { return nil, errors.New("index closed") },
+			SearchFn: func(model.Query) ([]*library.Book, error) { return nil, errors.New("index closed") },
 		}
 		reg, cmdLog := newTestCtl(t, lib)
 
@@ -809,7 +815,7 @@ func TestCommandFailureStrings(t *testing.T) {
 
 	t.Run("rename query fails", func(t *testing.T) {
 		lib := libfake.Lib{
-			SearchFn: func(model.Query) ([]*model.Book, error) { return nil, errors.New("index closed") },
+			SearchFn: func(model.Query) ([]*library.Book, error) { return nil, errors.New("index closed") },
 		}
 		reg, cmdLog := newTestCtl(t, lib)
 
