@@ -9,7 +9,6 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // Edits is a partial update to a Book's fields. A nil pointer leaves the field
@@ -31,7 +30,7 @@ type Edits struct {
 	SortTitle   *string
 	Description *string
 	Language    *string
-	Authors     *[]model.Author
+	Authors     *[]book.Author
 	Series      *string
 	SeriesIndex *string
 
