@@ -140,8 +140,8 @@ func Validate(e Edits, b *book.Book) *ValidationError {
 }
 
 func (e Edits) validateStatus() string {
-	if e.Status != nil && !model.IsValidStatus(*e.Status) {
-		return fmt.Sprintf("invalid status %q: must be %s", *e.Status, model.StatusList())
+	if e.Status != nil && !book.IsValidStatus(*e.Status) {
+		return fmt.Sprintf("invalid status %q: must be %s", *e.Status, book.StatusList())
 	}
 	return ""
 }

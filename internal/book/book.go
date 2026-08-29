@@ -7,6 +7,7 @@ import (
 	"maps"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -30,8 +31,32 @@ type SeriesRef struct {
 	Index string
 }
 
-// DefaultStatus is the reading status assigned to newly ingested books.
-const DefaultStatus = "unread"
+// Reading-status vocabulary. Validate and config's reader.statuses validation
+// consult Statuses, so adding a status requires updating both the const block
+// and the Statuses slice.
+const (
+	StatusUnread    = "unread"
+	StatusReading   = "reading"
+	StatusRead      = "read"
+	StatusAbandoned = "abandoned"
+
+	// DefaultStatus is the reading status assigned to newly ingested books.
+	DefaultStatus = StatusUnread
+)
+
+// Statuses lists every valid reading status, in presentation order.
+var Statuses = []string{StatusUnread, StatusReading, StatusRead, StatusAbandoned}
+
+// IsValidStatus reports whether s is one of Statuses.
+func IsValidStatus(s string) bool {
+	return slices.Contains(Statuses, s)
+}
+
+// StatusList renders Statuses for error messages: "unread, reading, read, or
+// abandoned".
+func StatusList() string {
+	return strings.Join(Statuses[:len(Statuses)-1], ", ") + ", or " + Statuses[len(Statuses)-1]
+}
 
 // Book is the complete record for a book in the library: where it lives
 // (Location), what it is (Bib), and its mutable sidecar state (Meta). Location
