@@ -98,7 +98,7 @@ func TestParseSelectionQuerySyntax(t *testing.T) {
 	}
 	// ExactTitles: a ctl selection mutates books, so title: must not match
 	// substrings the way the search view does.
-	want := model.Query{Tags: []string{"sci-fi"}, Status: []string{"unread"}, ExactTitles: true}
+	want := library.Query{Tags: []string{"sci-fi"}, Status: []string{"unread"}, ExactTitles: true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("parseSelection = %+v, want %+v", got, want)
 	}
@@ -195,7 +195,7 @@ func TestAddTag(t *testing.T) {
 	book.Meta.Tags = []string{"existing"}
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*library.Book, error) {
+		SearchFn: func(q library.Query) ([]*library.Book, error) {
 			return []*library.Book{testutil.WrapBook(book)}, nil
 		},
 		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
@@ -228,7 +228,7 @@ func TestRemoveTag(t *testing.T) {
 	book.Meta.Tags = []string{"keep", "remove"}
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*library.Book, error) {
+		SearchFn: func(q library.Query) ([]*library.Book, error) {
 			return []*library.Book{testutil.WrapBook(book)}, nil
 		},
 		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
@@ -254,7 +254,7 @@ func TestEditUnknownID(t *testing.T) {
 	book := testutil.MakeBook(1, "Title", "Author")
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*library.Book, error) {
+		SearchFn: func(q library.Query) ([]*library.Book, error) {
 			return nil, nil // no book matches id 999
 		},
 		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
@@ -279,7 +279,7 @@ func TestAddTagFilteredQueryDoesNotReportNotFound(t *testing.T) {
 	book := testutil.MakeBook(1, "Title", "Author")
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*library.Book, error) {
+		SearchFn: func(q library.Query) ([]*library.Book, error) {
 			return nil, nil // book 1 exists but is filtered out by status:read
 		},
 		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
@@ -301,7 +301,7 @@ func TestSetStatus(t *testing.T) {
 	book := testutil.MakeBook(3, "Title", "Author")
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*library.Book, error) {
+		SearchFn: func(q library.Query) ([]*library.Book, error) {
 			return []*library.Book{book}, nil
 		},
 		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
@@ -328,7 +328,7 @@ func TestRenameTag(t *testing.T) {
 	book.Meta.Tags = []string{"scifi"}
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*library.Book, error) {
+		SearchFn: func(q library.Query) ([]*library.Book, error) {
 			return []*library.Book{testutil.WrapBook(book)}, nil
 		},
 		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
@@ -355,7 +355,7 @@ func TestRenameTagBothTags(t *testing.T) {
 	book.Meta.Tags = []string{"old", "other", "new"}
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*library.Book, error) {
+		SearchFn: func(q library.Query) ([]*library.Book, error) {
 			return []*library.Book{testutil.WrapBook(book)}, nil
 		},
 		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
@@ -381,7 +381,7 @@ func TestRenameAuthor(t *testing.T) {
 	book := testutil.MakeBook(7, "Title", "Asimov")
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*library.Book, error) {
+		SearchFn: func(q library.Query) ([]*library.Book, error) {
 			if !slices.Equal(q.Authors, []string{"Asimov"}) {
 				t.Errorf("Query.Authors = %q, want [Asimov]", q.Authors)
 			}
@@ -415,7 +415,7 @@ func TestRenameAuthorMatchSortName(t *testing.T) {
 	book.Authors[0].SortName = "Asimov, Isaac"
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*library.Book, error) {
+		SearchFn: func(q library.Query) ([]*library.Book, error) {
 			if !slices.Equal(q.Authors, []string{"Asimov, Isaac"}) {
 				t.Errorf("Query.Authors = %q, want [Asimov, Isaac]", q.Authors)
 			}
@@ -449,7 +449,7 @@ func TestRenameSeries(t *testing.T) {
 	book.Series = &model.SeriesRef{Name: "Old", Index: "1"}
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*library.Book, error) {
+		SearchFn: func(q library.Query) ([]*library.Book, error) {
 			return []*library.Book{testutil.WrapBook(book)}, nil
 		},
 		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
@@ -478,7 +478,7 @@ func TestRenameAuthorMerge(t *testing.T) {
 	book.Authors = append(book.Authors, model.Author{Name: "Paul French"})
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*library.Book, error) {
+		SearchFn: func(q library.Query) ([]*library.Book, error) {
 			if !slices.Equal(q.Authors, []string{"Paul French"}) {
 				t.Errorf("Query.Authors = %q, want [Paul French]", q.Authors)
 			}
@@ -513,7 +513,7 @@ func TestSetRatingUnchanged(t *testing.T) {
 	book.Meta.Rating = 4
 
 	lib := libfake.Lib{
-		SearchFn: func(q model.Query) ([]*library.Book, error) {
+		SearchFn: func(q library.Query) ([]*library.Book, error) {
 			return []*library.Book{testutil.WrapBook(book)}, nil
 		},
 		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
@@ -724,7 +724,7 @@ func TestCommandSuccessStrings(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			lib := libfake.Lib{
-				SearchFn: func(model.Query) ([]*library.Book, error) { return tc.books, nil },
+				SearchFn: func(library.Query) ([]*library.Book, error) { return tc.books, nil },
 				EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 					for _, b := range tc.books {
 						if b.ID() == id {
@@ -759,7 +759,7 @@ func TestCommandFailureStrings(t *testing.T) {
 	t.Run("edit fails for one book", func(t *testing.T) {
 		books := []*library.Book{testutil.MakeBook(1, "A", "Author"), testutil.MakeBook(2, "B", "Author")}
 		lib := libfake.Lib{
-			SearchFn: func(model.Query) ([]*library.Book, error) { return books, nil },
+			SearchFn: func(library.Query) ([]*library.Book, error) { return books, nil },
 			EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 				if id == 2 {
 					return nil, errors.New("disk on fire")
@@ -786,7 +786,7 @@ func TestCommandFailureStrings(t *testing.T) {
 
 	t.Run("search fails", func(t *testing.T) {
 		lib := libfake.Lib{
-			SearchFn: func(model.Query) ([]*library.Book, error) { return nil, errors.New("index closed") },
+			SearchFn: func(library.Query) ([]*library.Book, error) { return nil, errors.New("index closed") },
 		}
 		reg, cmdLog := newTestCtl(t, lib)
 
@@ -815,7 +815,7 @@ func TestCommandFailureStrings(t *testing.T) {
 
 	t.Run("rename query fails", func(t *testing.T) {
 		lib := libfake.Lib{
-			SearchFn: func(model.Query) ([]*library.Book, error) { return nil, errors.New("index closed") },
+			SearchFn: func(library.Query) ([]*library.Book, error) { return nil, errors.New("index closed") },
 		}
 		reg, cmdLog := newTestCtl(t, lib)
 

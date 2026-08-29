@@ -5,13 +5,12 @@ import (
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index/dbsqlc"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // Search returns the books matching q, using SQL-level filtering for all fields
 // including title (LIKE, or "=" when q.ExactTitles). Within each field values
 // are OR'd; across fields they're AND'd. Empty fields are ignored, so Query{} returns every book.
-func (idx *Index) Search(q model.Query) ([]*book.Book, error) {
+func (idx *Index) Search(q Query) ([]*book.Book, error) {
 	bq := &bookQuery{order: orderClause(q.Order), limit: q.Limit}
 
 	// Either column: a sort-name search must find the book filed under its display name.
@@ -44,20 +43,20 @@ func (idx *Index) Search(q model.Query) ([]*book.Book, error) {
 // still read newest first, while rating and pubdate fall back alphabetically.
 // An unrecognised Order sorts by title rather than failing, since ordering is
 // presentation and a bad one should not turn a search into an error.
-func orderClause(o model.Order) string {
+func orderClause(o Order) string {
 	// sort_title is NULL for most books: its only source is the EPUB 3 file-as
 	// refine, EPUB 2 has no equivalent, and editing a title clears it. Ordering
 	// on the bare column would put every one of those in a single NULL tie and
 	// list them by id, so fall back to the title itself.
 	const byTitle = "COALESCE(b.sort_title, b.title), b.id"
 	switch o {
-	case model.OrderDateAdded:
+	case OrderDateAdded:
 		return "b.date_added DESC, b.id DESC"
-	case model.OrderDateModified:
+	case OrderDateModified:
 		return "b.date_modified DESC, b.id DESC"
-	case model.OrderRating:
+	case OrderRating:
 		return "b.rating DESC, " + byTitle
-	case model.OrderPubdate:
+	case OrderPubdate:
 		return "b.pubdate DESC, " + byTitle
 	default:
 		return byTitle
