@@ -3,7 +3,6 @@ package model
 
 import (
 	"io"
-	"slices"
 	"strings"
 	"time"
 
@@ -26,33 +25,6 @@ type EpubReader interface {
 	io.Closer
 	OPF() ([]byte, error)   // OPF XML from the open epub
 	Cover() ([]byte, error) // cover image from the open epub
-}
-
-// Reading-status vocabulary. This package owns the set: Edits.Validate, the
-// NewBook default, and config's reader.statuses validation all consult it, so
-// adding a status is a one-line change here.
-const (
-	StatusUnread    = "unread"
-	StatusReading   = "reading"
-	StatusRead      = "read"
-	StatusAbandoned = "abandoned"
-
-	// DefaultStatus is the status a freshly ingested book carries.
-	DefaultStatus = book.DefaultStatus
-)
-
-// Statuses lists every valid reading status, in presentation order.
-var Statuses = []string{StatusUnread, StatusReading, StatusRead, StatusAbandoned}
-
-// IsValidStatus reports whether s is one of Statuses.
-func IsValidStatus(s string) bool {
-	return slices.Contains(Statuses, s)
-}
-
-// StatusList renders Statuses for error messages: "unread, reading, read, or
-// abandoned".
-func StatusList() string {
-	return strings.Join(Statuses[:len(Statuses)-1], ", ") + ", or " + Statuses[len(Statuses)-1]
 }
 
 // UnknownAuthor is the fallback author name used when a book has no author

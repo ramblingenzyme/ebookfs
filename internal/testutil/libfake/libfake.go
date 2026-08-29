@@ -65,7 +65,7 @@ func NewEpubReader(data []byte, opfFn, coverFn func() ([]byte, error)) *EpubRead
 // hook yields a benign zero result (except Edit and Content, which error to
 // catch unstubbed edit/read paths).
 type Lib struct {
-	EditFn         func(int64, model.Edits) (*library.Book, error)
+	EditFn         func(int64, library.Edits) (*library.Book, error)
 	IngestFn       func(string) (*library.Book, error)
 	CreateIngestFn func() (library.IngestHandle, error)
 	ContentFn      func(int64) (model.EpubReader, error)
@@ -80,7 +80,7 @@ var _ library.Library = (Lib{})
 func (l Lib) Close() error                                             { return nil }
 func (l Lib) Exporter(_ config.ReaderConfig) (library.Exporter, error) { return nil, nil }
 
-func (l Lib) Edit(id int64, e model.Edits) (*library.Book, error) {
+func (l Lib) Edit(id int64, e library.Edits) (*library.Book, error) {
 	if l.EditFn != nil {
 		return l.EditFn(id, e)
 	}

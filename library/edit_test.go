@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // TestEditSelfHealsLegacyUnsanitizedFilename reproduces a production bug: a
@@ -41,7 +39,7 @@ func TestEditSelfHealsLegacyUnsanitizedFilename(t *testing.T) {
 	// Edit an unrelated field (Status) — Title/Authors untouched. This used
 	// to hit "destination already exists" and fail every time.
 	status := "reading"
-	updated, err := lib.Edit(id, model.Edits{Status: &status})
+	updated, err := lib.Edit(id, Edits{Status: &status})
 	if err != nil {
 		t.Fatalf("Edit: %v (same-directory Move must not fail)", err)
 	}
@@ -63,7 +61,7 @@ func TestEditSelfHealsLegacyUnsanitizedFilename(t *testing.T) {
 	// A second edit must also succeed (regression: the original bug caused
 	// every subsequent edit to fail identically, not just the first).
 	status2 := "read"
-	if _, err := lib.Edit(id, model.Edits{Status: &status2}); err != nil {
+	if _, err := lib.Edit(id, Edits{Status: &status2}); err != nil {
 		t.Fatalf("second Edit: %v", err)
 	}
 }

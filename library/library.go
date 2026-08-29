@@ -9,10 +9,15 @@ import (
 	"strings"
 
 	"github.com/ramblingenzyme/ebookfs/library/config"
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index"
 	"github.com/ramblingenzyme/ebookfs/library/internal/store"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
+
+type Edits = edits.Edits
+type ValidationError = edits.ValidationError
+type FieldError = edits.FieldError
 
 // ErrBookNotFound is wrapped into the error returned by any operation that
 // addresses a book id the index does not hold. Callers distinguish it with
@@ -55,7 +60,7 @@ type Library interface {
 	// after a concurrent Edit, call Content again to read updated content.
 	// The returned reader is non-nil iff err is nil.
 	Content(id int64) (model.EpubReader, error)
-	Edit(id int64, e model.Edits) (*Book, error)
+	Edit(id int64, e Edits) (*Book, error)
 	Delete(id int64) error
 }
 

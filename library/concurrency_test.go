@@ -44,12 +44,12 @@ func TestEditWriteCoverConcurrentSameBook(t *testing.T) {
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			edited, editErr = lib.Edit(id, model.Edits{Title: &title})
+			edited, editErr = lib.Edit(id, Edits{Title: &title})
 		}()
 		go func() {
 			defer wg.Done()
 			coverData := newCover.Bytes()
-			_, coverErr = lib.Edit(id, model.Edits{Cover: &coverData})
+			_, coverErr = lib.Edit(id, Edits{Cover: &coverData})
 		}()
 		wg.Wait()
 

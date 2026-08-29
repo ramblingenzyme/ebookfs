@@ -11,7 +11,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/fs/views"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // writeField drives a field edit the way a 9P client would: open the named
@@ -38,7 +37,7 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 	// The real library fetches the edit base by id; the fake closes over the
 	// test's book instead.
 	lib := libfake.Lib{
-		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
+		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			updated := *book
 			if e.Title != nil {
 				updated.Title = *e.Title
@@ -89,7 +88,7 @@ func TestRegistryEditAuthorsRehomesInByAuthor(t *testing.T) {
 	f := newTestFS(t)
 	book := makeBook(1, "Test", "Alice")
 	lib := libfake.Lib{
-		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
+		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			updated := *book
 			if e.Authors != nil {
 				updated.Authors = *e.Authors
@@ -133,7 +132,7 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 	book.EpubPath = "Test.epub"
 	book.Meta.Status = "unread"
 	lib := libfake.Lib{
-		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
+		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			updated := *book
 			if e.Status != nil {
 				updated.Meta.Status = *e.Status

@@ -16,6 +16,7 @@ import (
 	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -75,7 +76,7 @@ func TestWriteBibSimpleFields(t *testing.T) {
 	}{{"epub3", opf3}, {"epub2", opf2}} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEpub(t, baseEntries(tc.opf))
-			book, err := writeBib(path, model.Edits{
+			book, err := writeBib(path, edits.Edits{
 				Title:       new("New Title"),
 				Description: new("New description."),
 				Language:    new("fr"),
@@ -106,7 +107,7 @@ func TestWriteBibSimpleFields(t *testing.T) {
 
 func TestWriteBibPreservesContainerLayout(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
-	if _, err := writeBib(path, model.Edits{Title: new("Another Title")}); err != nil {
+	if _, err := writeBib(path, edits.Edits{Title: new("Another Title")}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -131,7 +132,7 @@ func TestWriteBibDeduplicatesMimetype(t *testing.T) {
 	entries = append(entries, mt)
 
 	path := writeEpub(t, entries)
-	if _, err := writeBib(path, model.Edits{Title: new("Another Title")}); err != nil {
+	if _, err := writeBib(path, edits.Edits{Title: new("Another Title")}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -190,7 +191,7 @@ func TestWriteBibHoistsMimetypeToTheFront(t *testing.T) {
 				assertOCFHeader(t, path, "before the write")
 			}
 
-			if _, err := writeBib(path, model.Edits{Title: new("Another Title")}); err != nil {
+			if _, err := writeBib(path, edits.Edits{Title: new("Another Title")}); err != nil {
 				t.Fatal(err)
 			}
 			assertOCFHeader(t, path, "after the write")
@@ -229,7 +230,7 @@ func TestWriteBibAuthorsRoundTrip(t *testing.T) {
 				{Name: "Alice Smith", SortName: "Smith, Alice"},
 				{Name: "Bob Jones", SortName: "Jones, Bob"},
 			}
-			book, err := writeBib(path, model.Edits{Authors: &authors})
+			book, err := writeBib(path, edits.Edits{Authors: &authors})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -254,7 +255,7 @@ func TestWriteBibSeriesRoundTrip(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEpub(t, baseEntries(tc.opf))
 			// A fractional index (e.g. a 1.5 novella) must round-trip, not truncate.
-			book, err := writeBib(path, model.Edits{Series: new("The Saga"), SeriesIndex: new("1.5")})
+			book, err := writeBib(path, edits.Edits{Series: new("The Saga"), SeriesIndex: new("1.5")})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -266,7 +267,7 @@ func TestWriteBibSeriesRoundTrip(t *testing.T) {
 			}
 
 			// Clearing it removes the series.
-			book, err = writeBib(path, model.Edits{Series: new(string)})
+			book, err = writeBib(path, edits.Edits{Series: new(string)})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -279,7 +280,7 @@ func TestWriteBibSeriesRoundTrip(t *testing.T) {
 
 func TestWriteBibSetsSortTitle(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
-	book, err := writeBib(path, model.Edits{
+	book, err := writeBib(path, edits.Edits{
 		Title:     new("New Title"),
 		SortTitle: new("New Title, A"),
 	})
@@ -309,7 +310,7 @@ func TestWriteBibSetsSortTitle(t *testing.T) {
 func TestWriteBibSortTitleAloneLeavesTitle(t *testing.T) {
 	// Setting only the sort title must not disturb the title.
 	path := writeEpub(t, baseEntries(opf3))
-	book, err := writeBib(path, model.Edits{SortTitle: new("Sorted, Just")})
+	book, err := writeBib(path, edits.Edits{SortTitle: new("Sorted, Just")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -334,7 +335,7 @@ func TestWriteBibTitleChangeClearsStaleSortTitle(t *testing.T) {
 		t.Fatalf("precondition: sort title = %q, want Title, Original", before.SortTitle)
 	}
 
-	book, err := writeBib(path, model.Edits{Title: new("Wuthering Heights")})
+	book, err := writeBib(path, edits.Edits{Title: new("Wuthering Heights")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -348,7 +349,7 @@ func TestWriteBibSortTitleForEpub2UsesCalibreMeta(t *testing.T) {
 	// writes is used instead — the same fallback this package already uses for the
 	// series. A refinement is an EPUB 3 construct and must not appear.
 	path := writeEpub(t, baseEntries(opf2))
-	book, err := writeBib(path, model.Edits{SortTitle: new("Sorted, This")})
+	book, err := writeBib(path, edits.Edits{SortTitle: new("Sorted, This")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -368,7 +369,7 @@ func TestWriteBibSortTitleForEpub2UsesCalibreMeta(t *testing.T) {
 	}
 
 	// Clearing it takes the meta with it rather than leaving a stale value.
-	if _, err := writeBib(path, model.Edits{Title: new("Retitled")}); err != nil {
+	if _, err := writeBib(path, edits.Edits{Title: new("Retitled")}); err != nil {
 		t.Fatal(err)
 	}
 	opf, _ = readEntryFromFile(t, path, "OEBPS/content.opf")
@@ -381,7 +382,7 @@ func TestWriteBibAcceptsValidLanguageVerbatim(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
 	// A recognised tag is accepted and written through verbatim — validated, not
 	// canonicalised (calibre would rewrite "pt-BR" to a 3-letter code).
-	book, err := writeBib(path, model.Edits{Language: new("pt-BR")})
+	book, err := writeBib(path, edits.Edits{Language: new("pt-BR")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -392,7 +393,7 @@ func TestWriteBibAcceptsValidLanguageVerbatim(t *testing.T) {
 
 func TestWriteBibBlankTitleRejected(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
-	if _, err := writeBib(path, model.Edits{Title: new("   ")}); err == nil {
+	if _, err := writeBib(path, edits.Edits{Title: new("   ")}); err == nil {
 		t.Fatal("expected error blanking title, got nil")
 	}
 	// Original must be untouched and still valid.
@@ -413,7 +414,7 @@ func TestWriteBibRefusesEncryptedOPF(t *testing.T) {
   </enc:EncryptedData>
 </encryption>`
 	path := writeEpub(t, baseEntries(opf3, entry{name: "META-INF/encryption.xml", data: []byte(enc)}))
-	if _, err := writeBib(path, model.Edits{Title: new("Hack")}); err == nil {
+	if _, err := writeBib(path, edits.Edits{Title: new("Hack")}); err == nil {
 		t.Fatal("expected refusal on encrypted OPF, got nil")
 	}
 }
@@ -447,7 +448,7 @@ func TestWriteBibRefusesEncryptedOPFDeclaredAsAURL(t *testing.T) {
 		{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
 	})
 
-	if _, err := writeBib(path, model.Edits{Title: new("Hack")}); err == nil {
+	if _, err := writeBib(path, edits.Edits{Title: new("Hack")}); err == nil {
 		t.Fatal("edited an encrypted package document declared with a percent-encoded URI")
 	}
 }
@@ -470,7 +471,7 @@ func TestEncryptionAttributesAreCollapsed(t *testing.T) {
 			entry{name: "META-INF/encryption.xml", data: []byte(enc)},
 			entry{name: "OEBPS/fonts/x.otf", data: []byte("obfuscated")},
 		))
-		if _, err := writeBib(path, model.Edits{Title: new("Fine")}); err != nil {
+		if _, err := writeBib(path, edits.Edits{Title: new("Fine")}); err != nil {
 			t.Errorf("font obfuscation with a wrapped algorithm blocked the edit: %v", err)
 		}
 	})
@@ -485,7 +486,7 @@ func TestEncryptionAttributesAreCollapsed(t *testing.T) {
   </enc:EncryptedData>
 </encryption>`
 		path := writeEpub(t, baseEntries(opf3, entry{name: "META-INF/encryption.xml", data: []byte(enc)}))
-		if _, err := epub.Rewrite(path, book(t, path), model.Edits{Title: new("Hack")}); err == nil {
+		if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Title: new("Hack")}); err == nil {
 			t.Error("edited an encrypted OPF whose URI was wrapped")
 		}
 	})
@@ -525,7 +526,7 @@ func TestWriteBibRefusesEncryptedEntryNamedLiterally(t *testing.T) {
 		{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
 	})
 
-	if _, err := writeBib(path, model.Edits{Title: new("Hack")}); err == nil {
+	if _, err := writeBib(path, edits.Edits{Title: new("Hack")}); err == nil {
 		t.Fatal("edited an encrypted package document whose URI was written literally")
 	}
 }
@@ -543,7 +544,7 @@ func TestWriteBibAllowsFontObfuscation(t *testing.T) {
 		entry{name: "OEBPS/fonts/x.otf", data: []byte("obfuscated-font")},
 	)
 	path := writeEpub(t, entries)
-	book, err := writeBib(path, model.Edits{Title: new("Obfuscated OK")})
+	book, err := writeBib(path, edits.Edits{Title: new("Obfuscated OK")})
 	if err != nil {
 		t.Fatalf("font obfuscation should not block edits: %v", err)
 	}
@@ -560,7 +561,7 @@ func TestWriteBibWithDirectoryEntries(t *testing.T) {
 		entry{name: "text/", data: nil},
 	)
 	path := writeEpub(t, entries)
-	book, err := writeBib(path, model.Edits{Title: new("New Title")})
+	book, err := writeBib(path, edits.Edits{Title: new("New Title")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -699,7 +700,7 @@ func reindexSeries(t *testing.T, path, series, index string) bookmodel.Bib {
 		Location: bookmodel.Location{EpubPath: path},
 		Bib:      bookmodel.Bib{Series: &model.SeriesRef{Name: series, Index: "1"}},
 	}
-	bib, err := epub.Rewrite(path, b, model.Edits{SeriesIndex: new(index)})
+	bib, err := epub.Rewrite(path, b, edits.Edits{SeriesIndex: new(index)})
 	if err != nil {
 		t.Fatalf("Rewrite: %v", err)
 	}
@@ -718,7 +719,7 @@ func TestWriteBibSeriesIndexOnlyKeepsName(t *testing.T) {
 	}{{"epub3", opf3}, {"epub2", opf2}} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEpub(t, baseEntries(tc.opf))
-			if _, err := writeBib(path, model.Edits{Series: new("The Saga"), SeriesIndex: new("1")}); err != nil {
+			if _, err := writeBib(path, edits.Edits{Series: new("The Saga"), SeriesIndex: new("1")}); err != nil {
 				t.Fatal(err)
 			}
 
@@ -756,12 +757,12 @@ func TestWriteBibSeriesIndexOnlyWithoutSeriesInOPF(t *testing.T) {
 func TestSetSeriesPreservesExistingIndex(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
 	// First, set up a series with index 3
-	if _, err := writeBib(path, model.Edits{Series: new("The Trilogy"), SeriesIndex: new("3")}); err != nil {
+	if _, err := writeBib(path, edits.Edits{Series: new("The Trilogy"), SeriesIndex: new("3")}); err != nil {
 		t.Fatal(err)
 	}
 
 	// Now rename the series without setting index
-	book, err := writeBib(path, model.Edits{Series: new("The Quartet")})
+	book, err := writeBib(path, edits.Edits{Series: new("The Quartet")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -790,7 +791,7 @@ var opfSeriesWithIdentifier = opf3With(`    <meta property="belongs-to-collectio
 func TestSetSeriesReusesCollection(t *testing.T) {
 	path := writeEpub(t, baseEntries(opfSeriesWithIdentifier))
 
-	book, err := writeBib(path, model.Edits{Series: new("The Quartet")})
+	book, err := writeBib(path, edits.Edits{Series: new("The Quartet")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -818,7 +819,7 @@ func TestSetSeriesReusesCollection(t *testing.T) {
 	}
 
 	// Clearing the series takes the element with it, identifier and all.
-	if _, err := writeBib(path, model.Edits{Series: new(string)}); err != nil {
+	if _, err := writeBib(path, edits.Edits{Series: new(string)}); err != nil {
 		t.Fatal(err)
 	}
 	opfBytes, ok = readEntryFromFile(t, path, "OEBPS/content.opf")
@@ -843,7 +844,7 @@ func TestSetSeriesPreservesSets(t *testing.T) {
 	path := writeEpub(t, baseEntries(opfWithSet))
 
 	// Edit the series
-	book, err := writeBib(path, model.Edits{Series: new("The Quartet"), SeriesIndex: new("1")})
+	book, err := writeBib(path, edits.Edits{Series: new("The Quartet"), SeriesIndex: new("1")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -890,7 +891,7 @@ func TestSetAuthorsReuseBookkeeping(t *testing.T) {
 	t.Run("rewrite", func(t *testing.T) {
 		// The author list is unchanged, so the creator is reused as-is.
 		authors := []model.Author{{Name: "Jane Doe", SortName: "Doe, Jane"}}
-		book, err := writeBib(path, model.Edits{Authors: &authors})
+		book, err := writeBib(path, edits.Edits{Authors: &authors})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -904,7 +905,7 @@ func TestSetAuthorsReuseBookkeeping(t *testing.T) {
 
 	t.Run("reorder and clear sort name", func(t *testing.T) {
 		authors := []model.Author{{Name: "Bob Jones", SortName: "Jones, Bob"}, {Name: "Jane Doe"}}
-		book, err := writeBib(path, model.Edits{Authors: &authors})
+		book, err := writeBib(path, edits.Edits{Authors: &authors})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -932,7 +933,7 @@ func TestSetAuthorsReuseBookkeeping(t *testing.T) {
 	t.Run("drop", func(t *testing.T) {
 		// Jane's element goes, and so must everything refining it.
 		authors := []model.Author{{Name: "Bob Jones", SortName: "Jones, Bob"}}
-		if _, err := writeBib(path, model.Edits{Authors: &authors}); err != nil {
+		if _, err := writeBib(path, edits.Edits{Authors: &authors}); err != nil {
 			t.Fatal(err)
 		}
 		if bytes.Contains(opf(t), []byte("creator1")) {
@@ -956,7 +957,7 @@ func TestModifiedStampIsWrittenOnlyForARealChange(t *testing.T) {
 		}
 
 		title := "A New Title"
-		if _, err := writeBib(path, model.Edits{Title: &title}); err != nil {
+		if _, err := writeBib(path, edits.Edits{Title: &title}); err != nil {
 			t.Fatal(err)
 		}
 		want := []byte(`<meta property="dcterms:modified">2000-01-01T00:00:00Z</meta>`)
@@ -966,7 +967,7 @@ func TestModifiedStampIsWrittenOnlyForARealChange(t *testing.T) {
 
 		// Same title an hour later: nothing changes, so nothing is restamped.
 		time.Sleep(time.Hour)
-		if _, err := writeBib(path, model.Edits{Title: &title}); err != nil {
+		if _, err := writeBib(path, edits.Edits{Title: &title}); err != nil {
 			t.Fatal(err)
 		}
 		if !bytes.Contains(opfOf(), want) {
@@ -1004,11 +1005,11 @@ func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 	// carries one.
 	for _, tc := range []struct {
 		name string
-		e    model.Edits
+		e    edits.Edits
 	}{
-		{"title with its existing sort title", model.Edits{Title: &current.Title, SortTitle: &current.SortTitle}},
-		{"description already equal", model.Edits{Description: &current.Description}},
-		{"language already equal", model.Edits{Language: &current.Language}},
+		{"title with its existing sort title", edits.Edits{Title: &current.Title, SortTitle: &current.SortTitle}},
+		{"description already equal", edits.Edits{Description: &current.Description}},
+		{"language already equal", edits.Edits{Language: &current.Language}},
 	} {
 		bib, err := writeBib(path, tc.e)
 		if err != nil {
@@ -1024,7 +1025,7 @@ func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 
 	// Control: a real change must still land, or the check above proves nothing.
 	changed := current.Title + " (Revised)"
-	if _, err := writeBib(path, model.Edits{Title: &changed}); err != nil {
+	if _, err := writeBib(path, edits.Edits{Title: &changed}); err != nil {
 		t.Fatal(err)
 	}
 	if os.SameFile(before, statOf()) {
@@ -1053,7 +1054,7 @@ func TestParseReadsCalibreTitleSortFromEpub2(t *testing.T) {
 // never injected into a file without one (TestWriteBibSetsSortTitle).
 func TestWriteBibSortTitleKeepsCalibreMetaInStepForEpub3(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3With(`    <meta name="calibre:title_sort" content="Stale, The"/>`)))
-	book, err := writeBib(path, model.Edits{SortTitle: new("Fresh, The")})
+	book, err := writeBib(path, edits.Edits{SortTitle: new("Fresh, The")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1102,7 +1103,7 @@ func TestFailedValidationLeavesTheOriginal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := writeBib(path, model.Edits{SortTitle: new("Hobbit, The")}); err == nil {
+	if _, err := writeBib(path, edits.Edits{SortTitle: new("Hobbit, The")}); err == nil {
 		t.Fatal("expected the rewrite to be rejected, got nil")
 	}
 
@@ -1290,10 +1291,10 @@ func TestRefusesToEditASignedEpub(t *testing.T) {
 	cover := tinyJPEG(t)
 	for _, tc := range []struct {
 		name string
-		e    model.Edits
+		e    edits.Edits
 	}{
-		{"bib edit", model.Edits{Title: &title}},
-		{"cover edit", model.Edits{Cover: &cover}},
+		{"bib edit", edits.Edits{Title: &title}},
+		{"cover edit", edits.Edits{Cover: &cover}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			b := &bookmodel.Book{Location: bookmodel.Location{EpubPath: path}, Bib: bookmodel.Bib{CoverPath: "OEBPS/cover.jpg"}}

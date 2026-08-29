@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/ramblingenzyme/ebookfs/library/model"
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
 // isSubPath reports whether child is the same directory as parent or lives
@@ -89,7 +89,7 @@ func defaults() *Config {
 			MaxHandles: 100,
 		},
 		Reader: ReaderConfig{
-			Statuses: []string{model.StatusUnread, model.StatusReading},
+			Statuses: []string{book.StatusUnread, book.StatusReading},
 			Convert:  false,
 			CacheDir: "/var/lib/ebookfs/kepub-cache",
 		},
@@ -120,8 +120,8 @@ func (c *Config) validateAuth() error {
 
 func (c *Config) validateReader() error {
 	for _, s := range c.Reader.Statuses {
-		if !model.IsValidStatus(s) {
-			return fmt.Errorf("reader.statuses contains invalid status %q: must be %s", s, model.StatusList())
+		if !book.IsValidStatus(s) {
+			return fmt.Errorf("reader.statuses contains invalid status %q: must be %s", s, book.StatusList())
 		}
 	}
 	if c.Reader.Convert && c.Reader.CacheDir == "" {

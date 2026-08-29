@@ -95,7 +95,7 @@ func measureBooksOnly(n int, withCover bool) float64 {
 // tree cost, uncontaminated by garbage from the other phase.
 func measureBooksWithDirs(n int, withCover bool) float64 {
 	f, _ := fs.NewFS("glenda", "glenda", 0555, fs.IgnorePermissions())
-	noEdit := func(int64, model.Edits) error { return nil }
+	noEdit := func(int64, library.Edits) error { return nil }
 
 	settleGC()
 	var before runtime.MemStats

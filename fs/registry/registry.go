@@ -16,7 +16,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/fs/book"
 	"github.com/ramblingenzyme/ebookfs/internal/syncutil"
 	"github.com/ramblingenzyme/ebookfs/library"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // BookView is an FS listing that reacts to a book entering or leaving it. Add
@@ -145,7 +144,7 @@ func (r *BookRegistry) Remove(id int64) {
 // run under r.mu — that would queue every unrelated mutation behind it. The
 // per-book editMu keeps concurrent edits of the same book (and their commits)
 // in order; r.mu is only held for the lookup and the commit bracket.
-func (r *BookRegistry) Edit(id int64, edits model.Edits) error {
+func (r *BookRegistry) Edit(id int64, edits library.Edits) error {
 	mu := r.editMu.For(id)
 	mu.Lock()
 	defer mu.Unlock()

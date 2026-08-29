@@ -17,6 +17,7 @@ import (
 	"errors"
 
 	"github.com/beevik/etree"
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -49,7 +50,7 @@ func (d *Doc) Bytes() ([]byte, error) { return d.doc.WriteToBytes() }
 
 // Apply writes the title and authors — the only fields the NCX copies — and
 // reports whether that changed anything. Nothing is serialized until Bytes.
-func (d *Doc) Apply(e model.Edits) bool {
+func (d *Doc) Apply(e edits.Edits) bool {
 	before, _ := d.Bytes()
 
 	if e.Title != nil {

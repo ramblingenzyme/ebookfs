@@ -1027,9 +1027,9 @@ func TestStatsExcludesOrphans(t *testing.T) {
 func TestSearch(t *testing.T) {
 	idx := openTestIndex(t)
 
-	b1 := makeTestBook(1, "Foundation", []string{"Isaac Asimov"}, "sci-fi", model.StatusRead)
-	b2 := makeTestBook(2, "Dune", []string{"Frank Herbert"}, "sci-fi", model.StatusUnread)
-	b3 := makeTestBook(3, "The Hobbit", []string{"J.R.R. Tolkien"}, "fantasy", model.StatusRead)
+	b1 := makeTestBook(1, "Foundation", []string{"Isaac Asimov"}, "sci-fi", book.StatusRead)
+	b2 := makeTestBook(2, "Dune", []string{"Frank Herbert"}, "sci-fi", book.StatusUnread)
+	b3 := makeTestBook(3, "The Hobbit", []string{"J.R.R. Tolkien"}, "fantasy", book.StatusRead)
 	if err := idx.Rebuild(bookPaths(b1, b2, b3), nil, 3); err != nil {
 		t.Fatalf("Rebuild: %v", err)
 	}
@@ -1474,8 +1474,8 @@ func TestOpenFailsCleanlyWhenDBPathIsDirectory(t *testing.T) {
 func TestExists(t *testing.T) {
 	idx := openTestIndex(t)
 
-	solo := makeTestBook(1, "Foundation", []string{"Isaac Asimov"}, "", model.StatusUnread)
-	duo := makeTestBook(2, "Good Omens", []string{"Neil Gaiman", "Terry Pratchett"}, "", model.StatusUnread)
+	solo := makeTestBook(1, "Foundation", []string{"Isaac Asimov"}, "", book.StatusUnread)
+	duo := makeTestBook(2, "Good Omens", []string{"Neil Gaiman", "Terry Pratchett"}, "", book.StatusUnread)
 	if err := idx.Rebuild(bookPaths(solo, duo), nil, 2); err != nil {
 		t.Fatalf("Rebuild: %v", err)
 	}

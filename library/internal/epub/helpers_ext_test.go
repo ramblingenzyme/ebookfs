@@ -14,7 +14,7 @@ import (
 
 	"github.com/beevik/etree"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
-	"github.com/ramblingenzyme/ebookfs/library/model"
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 )
 
 const (
@@ -31,14 +31,14 @@ const (
 // writeBib applies edits to the package document of the epub at epubPath,
 // rewrites the file in place, and returns the re-parsed Book. Production code
 // drives that flow through library.Edit.
-func writeBib(epubPath string, e model.Edits) (bookmodel.Bib, error) {
+func writeBib(epubPath string, e edits.Edits) (bookmodel.Bib, error) {
 	return epub.Rewrite(epubPath, &bookmodel.Book{Location: bookmodel.Location{EpubPath: epubPath}}, e)
 }
 
 // writeCover replaces the cover image entry (coverPath, as resolved by Parse)
 // with img, rewrites the file in place, and returns the re-parsed Book.
 func writeCover(epubPath, coverPath string, img []byte) (bookmodel.Bib, error) {
-	return epub.Rewrite(epubPath, &bookmodel.Book{Location: bookmodel.Location{EpubPath: epubPath}, Bib: bookmodel.Bib{CoverPath: coverPath}}, model.Edits{Cover: &img})
+	return epub.Rewrite(epubPath, &bookmodel.Book{Location: bookmodel.Location{EpubPath: epubPath}, Bib: bookmodel.Bib{CoverPath: coverPath}}, edits.Edits{Cover: &img})
 }
 
 type entry struct {

@@ -28,8 +28,8 @@ import (
 	"time"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf/pkgdoc"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 type Doc struct{ d *pkgdoc.Doc }
@@ -47,7 +47,7 @@ func (o *Doc) Bytes() ([]byte, error) { return o.d.Bytes() }
 // Apply writes the edits into the document and reports whether that changed
 // anything; nothing is serialized until Bytes. A false means the file already
 // said what the edit asked for, so the caller has nothing to write back.
-func (o *Doc) Apply(e model.Edits) bool {
+func (o *Doc) Apply(e edits.Edits) bool {
 	before, _ := o.Bytes()
 
 	o.title().set(e.Title, e.SortTitle)
@@ -102,7 +102,7 @@ func (o *Doc) Bib(base string) (*book.Bib, error) {
 
 	if s := o.series().get(); s != nil {
 		// Defaulted here, not in the field, so a rewrite cannot write it back.
-		if !model.ValidSeriesIndex(s.Index) {
+		if !edits.ValidSeriesIndex(s.Index) {
 			s.Index = "1"
 		}
 		b.Series = s

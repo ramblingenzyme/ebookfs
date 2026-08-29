@@ -198,7 +198,7 @@ func TestAddTag(t *testing.T) {
 		SearchFn: func(q model.Query) ([]*library.Book, error) {
 			return []*library.Book{testutil.WrapBook(book)}, nil
 		},
-		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
+		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			if id != 1 {
 				t.Fatalf("Edit called with id %d, want 1", id)
 			}
@@ -231,7 +231,7 @@ func TestRemoveTag(t *testing.T) {
 		SearchFn: func(q model.Query) ([]*library.Book, error) {
 			return []*library.Book{testutil.WrapBook(book)}, nil
 		},
-		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
+		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			if len(*e.Tags) != 1 || (*e.Tags)[0] != "keep" {
 				t.Fatalf("Edit called with Tags = %v, want [keep]", *e.Tags)
 			}
@@ -257,7 +257,7 @@ func TestEditUnknownID(t *testing.T) {
 		SearchFn: func(q model.Query) ([]*library.Book, error) {
 			return nil, nil // no book matches id 999
 		},
-		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
+		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			t.Fatalf("Edit should not be called for a nonexistent id, got %d", id)
 			return nil, nil
 		},
@@ -282,7 +282,7 @@ func TestAddTagFilteredQueryDoesNotReportNotFound(t *testing.T) {
 		SearchFn: func(q model.Query) ([]*library.Book, error) {
 			return nil, nil // book 1 exists but is filtered out by status:read
 		},
-		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
+		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			t.Fatalf("Edit should not be called, got %d", id)
 			return nil, nil
 		},
@@ -304,7 +304,7 @@ func TestSetStatus(t *testing.T) {
 		SearchFn: func(q model.Query) ([]*library.Book, error) {
 			return []*library.Book{book}, nil
 		},
-		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
+		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			if e.Status == nil || *e.Status != "reading" {
 				t.Fatalf("Edit called with Status = %v, want %q", e.Status, "reading")
 			}
@@ -331,7 +331,7 @@ func TestRenameTag(t *testing.T) {
 		SearchFn: func(q model.Query) ([]*library.Book, error) {
 			return []*library.Book{testutil.WrapBook(book)}, nil
 		},
-		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
+		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			if len(*e.Tags) != 1 || (*e.Tags)[0] != "sci-fi" {
 				t.Fatalf("Edit called with Tags = %v, want [sci-fi]", *e.Tags)
 			}
@@ -358,7 +358,7 @@ func TestRenameTagBothTags(t *testing.T) {
 		SearchFn: func(q model.Query) ([]*library.Book, error) {
 			return []*library.Book{testutil.WrapBook(book)}, nil
 		},
-		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
+		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			if len(*e.Tags) != 2 || !slices.Contains(*e.Tags, "new") || !slices.Contains(*e.Tags, "other") || slices.Contains(*e.Tags, "old") {
 				t.Fatalf("rename both: unexpected Tags = %v, want [new other]", *e.Tags)
 			}
@@ -387,7 +387,7 @@ func TestRenameAuthor(t *testing.T) {
 			}
 			return []*library.Book{book}, nil
 		},
-		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
+		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			if e.Authors == nil || len(*e.Authors) != 1 {
 				t.Fatalf("rename author: expected one author, got %v", e.Authors)
 			}
@@ -421,7 +421,7 @@ func TestRenameAuthorMatchSortName(t *testing.T) {
 			}
 			return []*library.Book{testutil.WrapBook(book)}, nil
 		},
-		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
+		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			if e.Authors == nil || len(*e.Authors) != 1 {
 				t.Fatalf("expected one author")
 			}
@@ -452,7 +452,7 @@ func TestRenameSeries(t *testing.T) {
 		SearchFn: func(q model.Query) ([]*library.Book, error) {
 			return []*library.Book{testutil.WrapBook(book)}, nil
 		},
-		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
+		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			if e.Series == nil || *e.Series != "New" {
 				t.Fatalf("renamed series = %v, want %q", e.Series, "New")
 			}
@@ -484,7 +484,7 @@ func TestRenameAuthorMerge(t *testing.T) {
 			}
 			return []*library.Book{testutil.WrapBook(book)}, nil
 		},
-		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
+		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			if e.Authors == nil || len(*e.Authors) != 1 {
 				t.Fatalf("merge: expected one author, got %v", e.Authors)
 			}
@@ -516,7 +516,7 @@ func TestSetRatingUnchanged(t *testing.T) {
 		SearchFn: func(q model.Query) ([]*library.Book, error) {
 			return []*library.Book{testutil.WrapBook(book)}, nil
 		},
-		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
+		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			t.Fatalf("Edit should not be called when the rating is unchanged")
 			return nil, nil
 		},
@@ -641,7 +641,7 @@ func TestCommandRejections(t *testing.T) {
 			// EditFn and DeleteFn are left unstubbed: a rejected command must
 			// not reach the library at all, and libfake errors if it does.
 			lib := libfake.Lib{
-				EditFn: func(id int64, _ model.Edits) (*library.Book, error) {
+				EditFn: func(id int64, _ library.Edits) (*library.Book, error) {
 					t.Fatalf("rejected command still edited book %d", id)
 					return nil, nil
 				},
@@ -725,7 +725,7 @@ func TestCommandSuccessStrings(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			lib := libfake.Lib{
 				SearchFn: func(model.Query) ([]*library.Book, error) { return tc.books, nil },
-				EditFn: func(id int64, e model.Edits) (*library.Book, error) {
+				EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 					for _, b := range tc.books {
 						if b.ID() == id {
 							// Create a mutable copy of the book
@@ -760,7 +760,7 @@ func TestCommandFailureStrings(t *testing.T) {
 		books := []*library.Book{testutil.MakeBook(1, "A", "Author"), testutil.MakeBook(2, "B", "Author")}
 		lib := libfake.Lib{
 			SearchFn: func(model.Query) ([]*library.Book, error) { return books, nil },
-			EditFn: func(id int64, e model.Edits) (*library.Book, error) {
+			EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 				if id == 2 {
 					return nil, errors.New("disk on fire")
 				}
