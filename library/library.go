@@ -18,6 +18,16 @@ import (
 type Edits = edits.Edits
 type ValidationError = edits.ValidationError
 type FieldError = edits.FieldError
+type Query = index.Query
+type Order = index.Order
+
+const (
+	OrderSortTitle    = index.OrderSortTitle
+	OrderDateAdded    = index.OrderDateAdded
+	OrderDateModified = index.OrderDateModified
+	OrderRating       = index.OrderRating
+	OrderPubdate      = index.OrderPubdate
+)
 
 // ErrBookNotFound is wrapped into the error returned by any operation that
 // addresses a book id the index does not hold. Callers distinguish it with
@@ -52,7 +62,7 @@ type Library interface {
 	// resources it holds are released by Library.Close — the caller has no
 	// teardown to perform, which is why Exporter has no Close method.
 	Exporter(config.ReaderConfig) (Exporter, error)
-	Search(model.Query) ([]*Book, error)
+	Search(Query) ([]*Book, error)
 	Stats() (*model.Stats, error)
 	Reindex() error
 	// Content returns an open handle to the book's epub content. The caller

@@ -25,37 +25,37 @@ import (
 
 // matchesAuthors matches any of q.Authors against either author column, as
 // Index.Search does in SQL.
-func matchesAuthors(q model.Query, b *library.Book) bool {
+func matchesAuthors(q library.Query, b *library.Book) bool {
 	return len(q.Authors) == 0 || slices.ContainsFunc(b.Authors(), func(a model.Author) bool {
 		return slices.Contains(q.Authors, a.Name) || slices.Contains(q.Authors, a.SortName)
 	})
 }
 
 // matchesTags matches any of q.Tags against the book's tags.
-func matchesTags(q model.Query, b *library.Book) bool {
+func matchesTags(q library.Query, b *library.Book) bool {
 	return len(q.Tags) == 0 || slices.ContainsFunc(q.Tags, func(t string) bool {
 		return slices.Contains(b.Tags(), t)
 	})
 }
 
 // matchesSeries matches any of q.Series against the book's series.
-func matchesSeries(q model.Query, b *library.Book) bool {
+func matchesSeries(q library.Query, b *library.Book) bool {
 	return len(q.Series) == 0 || (b.HasSeries() && slices.Contains(q.Series, b.SeriesName()))
 }
 
 // matchesStatus matches any of q.Status against the book's reading status.
-func matchesStatus(q model.Query, b *library.Book) bool {
+func matchesStatus(q library.Query, b *library.Book) bool {
 	return len(q.Status) == 0 || slices.Contains(q.Status, b.Status())
 }
 
 // matchesIDs matches any of q.IDs against the book's id.
-func matchesIDs(q model.Query, b *library.Book) bool {
+func matchesIDs(q library.Query, b *library.Book) bool {
 	return len(q.IDs) == 0 || slices.Contains(q.IDs, b.ID())
 }
 
 // matchesTitles matches any of q.Titles against the book's title: exactly when
 // q.ExactTitles, otherwise as a case-insensitive substring.
-func matchesTitles(q model.Query, b *library.Book) bool {
+func matchesTitles(q library.Query, b *library.Book) bool {
 	if len(q.Titles) == 0 {
 		return true
 	}
@@ -79,7 +79,7 @@ func matchesTitles(q model.Query, b *library.Book) bool {
 // which books are in it, but textfmt.ParseQuery has no syntax that sets it and
 // must not grow one: it is shared with ctl, where a limited selection would
 // mutate an arbitrary subset of the books the operator named.
-func makeMatchesFn(q model.Query) func(*library.Book) bool {
+func makeMatchesFn(q library.Query) func(*library.Book) bool {
 	return func(b *library.Book) bool {
 		return matchesAuthors(q, b) && matchesTags(q, b) && matchesSeries(q, b) &&
 			matchesStatus(q, b) && matchesIDs(q, b) && matchesTitles(q, b)
@@ -215,7 +215,7 @@ func (h *searchHandleDir) lastQuery() time.Time {
 // are one atomic step serialized against registry Add/Remove/commit — no
 // membership window where events are evaluated against the wrong query, and no
 // unlocked mutation of the results listing.
-func (h *searchHandleDir) executeSearch(q model.Query, queryText string) {
+func (h *searchHandleDir) executeSearch(q library.Query, queryText string) {
 	h.mu.Lock()
 	h.queryText = queryText
 	h.lastQueryTime = time.Now()

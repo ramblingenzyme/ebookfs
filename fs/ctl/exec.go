@@ -178,7 +178,7 @@ func renameTag(args []string, lib library.Library, reg *registry.BookRegistry) s
 	}
 	old, new := args[0], args[1]
 
-	books, err := lib.Search(model.Query{Tags: []string{old}})
+	books, err := lib.Search(library.Query{Tags: []string{old}})
 	if err != nil {
 		return fmt.Sprintf("error: query failed: %v", err)
 	}
@@ -223,7 +223,7 @@ func renameAuthor(args []string, lib library.Library, reg *registry.BookRegistry
 		return "error: new author name must not be empty"
 	}
 
-	books, err := lib.Search(model.Query{Authors: []string{old}})
+	books, err := lib.Search(library.Query{Authors: []string{old}})
 	if err != nil {
 		return fmt.Sprintf("error: query failed: %v", err)
 	}
@@ -266,7 +266,7 @@ func renameSeries(args []string, lib library.Library, reg *registry.BookRegistry
 	}
 	old, new := args[0], args[1]
 
-	books, err := lib.Search(model.Query{Series: []string{old}})
+	books, err := lib.Search(library.Query{Series: []string{old}})
 	if err != nil {
 		return fmt.Sprintf("error: query failed: %v", err)
 	}
@@ -289,7 +289,7 @@ func renameSeries(args []string, lib library.Library, reg *registry.BookRegistry
 
 // idsOnly reports whether q selects by id and nothing else, i.e. it came from a
 // bare id-spec ("1,2,3") rather than a query that happens to name ids.
-func idsOnly(q model.Query) bool {
+func idsOnly(q library.Query) bool {
 	return len(q.IDs) > 0 && len(q.Authors) == 0 && len(q.Tags) == 0 &&
 		len(q.Series) == 0 && len(q.Status) == 0 && len(q.Titles) == 0
 }
@@ -315,7 +315,7 @@ func dedupeAuthors(authors []model.Author) []model.Author {
 // down. When the query is a bare id list, an id naming no book is reported (so
 // a typo isn't counted as success) and a duplicated id is collapsed to a single
 // visit; otherwise every returned book is visited.
-func editSelection(query model.Query, lib library.Library, reg *registry.BookRegistry, editFn func(*library.Book) *library.Edits) string {
+func editSelection(query library.Query, lib library.Library, reg *registry.BookRegistry, editFn func(*library.Book) *library.Edits) string {
 	books, err := lib.Search(query)
 	if err != nil {
 		return fmt.Sprintf("error: query failed: %v", err)

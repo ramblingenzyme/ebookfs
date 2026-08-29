@@ -4,8 +4,6 @@ import (
 	"errors"
 	"os"
 	"testing"
-
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 func TestDeleteRemovesBook(t *testing.T) {
@@ -18,7 +16,7 @@ func TestDeleteRemovesBook(t *testing.T) {
 	}
 
 	// Book should no longer be queryable.
-	results, err := lib.Search(model.Query{IDs: []int64{id}})
+	results, err := lib.Search(Query{IDs: []int64{id}})
 	if err != nil {
 		t.Fatalf("Query after delete: %v", err)
 	}

@@ -6,10 +6,10 @@ import (
 	"strings"
 
 	"github.com/ramblingenzyme/ebookfs/fs/textfmt"
-	"github.com/ramblingenzyme/ebookfs/library/model"
+	"github.com/ramblingenzyme/ebookfs/library"
 )
 
-// parseSelection resolves a ctl id-spec to a model.Query addressing the
+// parseSelection resolves a ctl id-spec to a library.Query addressing the
 // selected books. It is the id shorthands layered over textfmt.ParseQuery:
 //
 //	"*"      — all books
@@ -22,14 +22,14 @@ import (
 // "*" resolves to an empty Query{}, which Search treats as "every book",
 // rather than enumerating every id and binding one SQL variable per book,
 // which would overflow SQLite's variable limit on a large library.
-func parseSelection(spec string) (model.Query, error) {
+func parseSelection(spec string) (library.Query, error) {
 	spec = strings.TrimSpace(spec)
 
 	switch {
 	case spec == "":
-		return model.Query{}, fmt.Errorf("empty id-spec")
+		return library.Query{}, fmt.Errorf("empty id-spec")
 	case spec == "*":
-		return model.Query{}, nil
+		return library.Query{}, nil
 	case strings.Contains(spec, ":"):
 		q, err := textfmt.ParseQuery(spec)
 		// A ctl selection feeds a mutating command, so title: must not reach
@@ -42,7 +42,7 @@ func parseSelection(spec string) (model.Query, error) {
 	}
 }
 
-func parseIdList(spec string) (model.Query, error) {
+func parseIdList(spec string) (library.Query, error) {
 	parts := strings.Split(spec, ",")
 	ids := make([]int64, 0, len(parts))
 	for _, p := range parts {
@@ -52,12 +52,12 @@ func parseIdList(spec string) (model.Query, error) {
 		}
 		id, err := strconv.ParseInt(p, 10, 64)
 		if err != nil {
-			return model.Query{}, fmt.Errorf("invalid id %q in spec %q", p, spec)
+			return library.Query{}, fmt.Errorf("invalid id %q in spec %q", p, spec)
 		}
 		ids = append(ids, id)
 	}
 	if len(ids) == 0 {
-		return model.Query{}, fmt.Errorf("no valid ids in spec %q", spec)
+		return library.Query{}, fmt.Errorf("no valid ids in spec %q", spec)
 	}
-	return model.Query{IDs: ids}, nil
+	return library.Query{IDs: ids}, nil
 }

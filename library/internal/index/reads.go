@@ -59,7 +59,7 @@ func (idx *Index) AllPathInfo() (map[string]drift.PathInfo, error) {
 
 // Get returns the book with the given id, or sql.ErrNoRows if it is absent.
 func (idx *Index) Get(bookID int64) (*book.Book, error) {
-	books, err := idx.Search(model.Query{IDs: []int64{bookID}})
+	books, err := idx.Search(Query{IDs: []int64{bookID}})
 	if err != nil {
 		return nil, err
 	}

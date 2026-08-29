@@ -63,7 +63,7 @@ func TestSearchHandleResyncRebuildsMembership(t *testing.T) {
 		t.Fatalf("expected empty results before query, got %d entries", n)
 	}
 
-	handle.executeSearch(model.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
+	handle.executeSearch(library.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
 	if _, ok := handle.results.Children()["Foundation"]; !ok {
 		t.Errorf("expected Foundation in results, got %v", dirChildNames(handle.results))
 	}
@@ -83,7 +83,7 @@ func TestSearchHandleResyncRebuildsMembership(t *testing.T) {
 	}
 
 	// Requerying rebuilds membership from scratch.
-	handle.executeSearch(model.Query{Tags: []string{"fantasy"}}, "tag:fantasy")
+	handle.executeSearch(library.Query{Tags: []string{"fantasy"}}, "tag:fantasy")
 	if _, ok := handle.results.Children()["The Hobbit"]; !ok {
 		t.Errorf("expected The Hobbit in results, got %v", dirChildNames(handle.results))
 	}
@@ -106,9 +106,9 @@ func TestSearchHandleConcurrentRequeryAndRegistryEvents(t *testing.T) {
 		defer wg.Done()
 		for i := range 2 * perTag {
 			if i%2 == 0 {
-				handle.executeSearch(model.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
+				handle.executeSearch(library.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
 			} else {
-				handle.executeSearch(model.Query{Tags: []string{"fantasy"}}, "tag:fantasy")
+				handle.executeSearch(library.Query{Tags: []string{"fantasy"}}, "tag:fantasy")
 			}
 		}
 	}()
@@ -133,7 +133,7 @@ func TestSearchHandleConcurrentRequeryAndRegistryEvents(t *testing.T) {
 	}()
 	wg.Wait()
 
-	handle.executeSearch(model.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
+	handle.executeSearch(library.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
 	if got := len(dirChildNames(handle.results)); got != perTag {
 		t.Errorf("expected %d sci-fi results after quiescent requery, got %d", perTag, got)
 	}
@@ -161,48 +161,48 @@ func TestMakeMatchesFn(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		query model.Query
+		query library.Query
 		book  func() *library.Book
 		want  bool
 	}{
-		{"empty query matches anything", model.Query{}, base, true},
+		{"empty query matches anything", library.Query{}, base, true},
 
-		{"author matches", model.Query{Authors: []string{"Isaac Asimov"}}, base, true},
+		{"author matches", library.Query{Authors: []string{"Isaac Asimov"}}, base, true},
 		// Any one author of a multi-author book is enough.
-		{"co-author matches", model.Query{Authors: []string{"Ray Bradbury"}}, base, true},
-		{"author does not match", model.Query{Authors: []string{"J.R.R. Tolkien"}}, base, false},
+		{"co-author matches", library.Query{Authors: []string{"Ray Bradbury"}}, base, true},
+		{"author does not match", library.Query{Authors: []string{"J.R.R. Tolkien"}}, base, false},
 		// Authors compare exactly — unlike titles, they are not a substring field.
-		{"author is not a substring match", model.Query{Authors: []string{"Asimov"}}, base, false},
+		{"author is not a substring match", library.Query{Authors: []string{"Asimov"}}, base, false},
 
-		{"tag matches", model.Query{Tags: []string{"sci-fi"}}, base, true},
-		{"tag matches any of several", model.Query{Tags: []string{"fantasy", "classic"}}, base, true},
-		{"tag does not match", model.Query{Tags: []string{"fantasy"}}, base, false},
+		{"tag matches", library.Query{Tags: []string{"sci-fi"}}, base, true},
+		{"tag matches any of several", library.Query{Tags: []string{"fantasy", "classic"}}, base, true},
+		{"tag does not match", library.Query{Tags: []string{"fantasy"}}, base, false},
 
-		{"series matches", model.Query{Series: []string{"Foundation"}}, base, true},
-		{"series does not match", model.Query{Series: []string{"Dune"}}, base, false},
+		{"series matches", library.Query{Series: []string{"Foundation"}}, base, true},
+		{"series does not match", library.Query{Series: []string{"Dune"}}, base, false},
 		// A book in no series can never satisfy a series filter, and must not
 		// panic on the nil.
-		{"series filter rejects a standalone book", model.Query{Series: []string{"Foundation"}}, standalone, false},
+		{"series filter rejects a standalone book", library.Query{Series: []string{"Foundation"}}, standalone, false},
 
-		{"status matches", model.Query{Status: []string{"unread"}}, base, true},
-		{"status does not match", model.Query{Status: []string{"read"}}, base, false},
+		{"status matches", library.Query{Status: []string{"unread"}}, base, true},
+		{"status does not match", library.Query{Status: []string{"read"}}, base, false},
 
-		{"id matches", model.Query{IDs: []int64{7}}, base, true},
-		{"id does not match", model.Query{IDs: []int64{8}}, base, false},
+		{"id matches", library.Query{IDs: []int64{7}}, base, true},
+		{"id does not match", library.Query{IDs: []int64{8}}, base, false},
 
 		// Titles are the one substring field, and case-insensitive on both sides.
-		{"title substring matches", model.Query{Titles: []string{"and Empire"}}, base, true},
-		{"title match ignores case", model.Query{Titles: []string{"FOUNDATION"}}, base, true},
-		{"title does not match", model.Query{Titles: []string{"Hobbit"}}, base, false},
+		{"title substring matches", library.Query{Titles: []string{"and Empire"}}, base, true},
+		{"title match ignores case", library.Query{Titles: []string{"FOUNDATION"}}, base, true},
+		{"title does not match", library.Query{Titles: []string{"Hobbit"}}, base, false},
 		// ExactTitles is ctl's setting, but the predicate honours it so this
 		// path and Index.Search stay one semantics.
-		{"exact title matches", model.Query{Titles: []string{"Foundation and Empire"}, ExactTitles: true}, base, true},
-		{"exact title rejects a substring", model.Query{Titles: []string{"and Empire"}, ExactTitles: true}, base, false},
+		{"exact title matches", library.Query{Titles: []string{"Foundation and Empire"}, ExactTitles: true}, base, true},
+		{"exact title rejects a substring", library.Query{Titles: []string{"and Empire"}, ExactTitles: true}, base, false},
 
 		// Across fields every populated one must hold...
 		{
 			"every field matching",
-			model.Query{
+			library.Query{
 				Authors: []string{"Isaac Asimov"},
 				Tags:    []string{"sci-fi"},
 				Series:  []string{"Foundation"},
@@ -213,7 +213,7 @@ func TestMakeMatchesFn(t *testing.T) {
 			base, true,
 		},
 		// ...so one failing field rejects the book even when the others match.
-		{"one field of several fails", model.Query{Tags: []string{"sci-fi"}, Status: []string{"read"}}, base, false},
+		{"one field of several fails", library.Query{Tags: []string{"sci-fi"}, Status: []string{"read"}}, base, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -248,7 +248,7 @@ func TestSearchCtlReadsCommittedQuery(t *testing.T) {
 		t.Errorf("ctl read = %q on a handle that has run no query, want empty", got)
 	}
 
-	handle.executeSearch(model.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
+	handle.executeSearch(library.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
 	if got := readCtl(2); got != "tag:sci-fi" {
 		t.Errorf("ctl read = %q, want the committed query %q", got, "tag:sci-fi")
 	}
@@ -257,7 +257,7 @@ func TestSearchCtlReadsCommittedQuery(t *testing.T) {
 	if err := ctl.Open(3, proto.Oread); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	handle.executeSearch(model.Query{Tags: []string{"fantasy"}}, "tag:fantasy")
+	handle.executeSearch(library.Query{Tags: []string{"fantasy"}}, "tag:fantasy")
 	data, err := ctl.Read(3, 0, 4096)
 	if err != nil {
 		t.Fatalf("Read: %v", err)
@@ -379,7 +379,7 @@ func TestSearchCtlRejectsUnparseableQuery(t *testing.T) {
 	b := makeBook(1, "Foundation", "Isaac Asimov")
 	b.Meta.Tags = []string{"sci-fi"}
 	reg.Add(wrapBook(b))
-	handle.executeSearch(model.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
+	handle.executeSearch(library.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
 
 	if _, err := ctl.Write(3, 0, []byte("publisher:Tor")); err != nil {
 		t.Fatalf("Write: %v", err)
@@ -406,7 +406,7 @@ func TestSearchCtlIgnoresEmptyClunk(t *testing.T) {
 	b := makeBook(1, "Foundation", "Isaac Asimov")
 	b.Meta.Tags = []string{"sci-fi"}
 	reg.Add(wrapBook(b))
-	handle.executeSearch(model.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
+	handle.executeSearch(library.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
 
 	tests := []struct {
 		name string
@@ -445,7 +445,7 @@ func TestSearchCtlCloseTearsDownHandle(t *testing.T) {
 	b := makeBook(1, "Foundation", "Isaac Asimov")
 	b.Meta.Tags = []string{"sci-fi"}
 	reg.Add(wrapBook(b))
-	handle.executeSearch(model.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
+	handle.executeSearch(library.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
 	if n := len(dirChildNames(handle.results)); n != 1 {
 		t.Fatalf("setup: results = %v, want the sci-fi book", dirChildNames(handle.results))
 	}

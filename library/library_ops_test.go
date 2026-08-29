@@ -10,7 +10,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 
 	"github.com/ramblingenzyme/ebookfs/library/config"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 func TestLibraryContentReadsEpub(t *testing.T) {
@@ -144,7 +143,7 @@ func TestLibraryImplSearchHydratesEpubPath(t *testing.T) {
 	want := ingestTestEpub(t, lib, buildTestEpub(t, "Findable", "Alice"))
 	ingestTestEpub(t, lib, buildTestEpub(t, "Unrelated", "Bob"))
 
-	got, err := lib.Search(model.Query{Titles: []string{"Findable"}})
+	got, err := lib.Search(Query{Titles: []string{"Findable"}})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -173,7 +172,7 @@ func TestLibraryImplSearchNoMatches(t *testing.T) {
 	lib := openTestLibrary(t)
 	ingestTestEpub(t, lib, buildTestEpub(t, "Findable", "Alice"))
 
-	got, err := lib.Search(model.Query{Titles: []string{"nothing matches this"}})
+	got, err := lib.Search(Query{Titles: []string{"nothing matches this"}})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}

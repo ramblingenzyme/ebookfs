@@ -54,7 +54,7 @@ func (l *libraryImpl) Close() error {
 	return l.index.Close()
 }
 
-func (l *libraryImpl) Search(q model.Query) ([]*Book, error) {
+func (l *libraryImpl) Search(q Query) ([]*Book, error) {
 	books, err := l.index.Search(q)
 	if err != nil {
 		return nil, err

@@ -18,7 +18,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/fs/views"
 	"github.com/ramblingenzyme/ebookfs/library"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // Server wraps a go9p.Server with lifecycle management.
@@ -64,7 +63,7 @@ func SetupServer(lib library.Library, exp library.Exporter, searchTTL time.Durat
 	reader := views.NewReaderDir(reg, exp)
 	stats := views.NewStatsFile(ebookfs, lib)
 
-	books, err := lib.Search(model.Query{})
+	books, err := lib.Search(library.Query{})
 	if err != nil {
 		return nil, fmt.Errorf("loading books: %w", err)
 	}

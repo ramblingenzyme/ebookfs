@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // TestEditWriteCoverConcurrentSameBook races an Edit that moves the book
@@ -147,7 +146,7 @@ func TestConcurrentDuplicateIngestRejected(t *testing.T) {
 	}
 
 	// Verify exactly one book exists in the library.
-	got, err := lib.Search(model.Query{Authors: []string{"Alice"}})
+	got, err := lib.Search(Query{Authors: []string{"Alice"}})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}

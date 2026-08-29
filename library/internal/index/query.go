@@ -1,4 +1,4 @@
-package model
+package index
 
 // Query selects a subset of books. Within each slice field values are OR'd
 // (tag:sci-fi+tag:fantasy matches books with either tag). Across fields they

@@ -5,10 +5,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ramblingenzyme/ebookfs/library/model"
+	"github.com/ramblingenzyme/ebookfs/library"
 )
 
-// ParseQuery parses a Plan 9 clone-style query string into a model.Query. It
+// ParseQuery parses a Plan 9 clone-style query string into a library.Query. It
 // backs both the search view's clone-file queries and ctl's id-spec argument,
 // so the two surfaces share one syntax. The grammar is:
 //
@@ -18,9 +18,9 @@ import (
 // status, id, title. Values sharing a prefix are OR'd within the field;
 // different prefixes are AND'd across fields. author matches an author's
 // display name or sort name, as Index.Search does.
-func ParseQuery(query string) (model.Query, error) {
+func ParseQuery(query string) (library.Query, error) {
 	parts := strings.Split(query, "+")
-	var q model.Query
+	var q library.Query
 	for _, part := range parts {
 		split := strings.SplitN(part, ":", 2)
 		if len(split) != 2 { // 1 string, i.e. no ":"
