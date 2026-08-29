@@ -19,11 +19,12 @@ package epub_test
 
 import (
 	"bytes"
-	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 	"slices"
 	"strings"
 	"testing"
 	"testing/synctest"
+
+	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 
 	"github.com/beevik/etree"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"

@@ -3,11 +3,12 @@ package ctl
 import (
 	"errors"
 	"fmt"
-	"github.com/ramblingenzyme/ebookfs/library"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/ramblingenzyme/ebookfs/library"
 
 	"github.com/ramblingenzyme/ebookfs/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"

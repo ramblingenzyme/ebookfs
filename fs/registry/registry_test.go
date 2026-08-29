@@ -2,10 +2,11 @@ package registry
 
 import (
 	"errors"
-	"github.com/ramblingenzyme/ebookfs/library"
 	"slices"
 	"sync"
 	"testing"
+
+	"github.com/ramblingenzyme/ebookfs/library"
 
 	"github.com/ramblingenzyme/ebookfs/fs/book"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"

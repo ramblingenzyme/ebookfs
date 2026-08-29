@@ -2,10 +2,11 @@ package fs
 
 import (
 	"context"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
-	"github.com/ramblingenzyme/ebookfs/library"
 	"testing"
 	"time"
+
+	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/library"
 
 	"github.com/knusbaum/go9p/fs"
 

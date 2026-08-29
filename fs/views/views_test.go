@@ -2,11 +2,12 @@ package views
 
 import (
 	"fmt"
-	"github.com/ramblingenzyme/ebookfs/library"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/ramblingenzyme/ebookfs/library"
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"

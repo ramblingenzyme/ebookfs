@@ -1,10 +1,11 @@
 package book
 
 import (
+	"testing"
+
 	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/library"
-	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )

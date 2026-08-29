@@ -4,13 +4,14 @@ import (
 	"archive/zip"
 	"bytes"
 	"errors"
-	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 	"io"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/model"

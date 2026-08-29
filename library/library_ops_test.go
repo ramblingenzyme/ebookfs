@@ -1,12 +1,13 @@
 package library
 
 import (
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 
 	"github.com/ramblingenzyme/ebookfs/library/config"
 	"github.com/ramblingenzyme/ebookfs/library/model"

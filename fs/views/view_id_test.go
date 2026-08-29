@@ -1,9 +1,10 @@
 package views
 
 import (
+	"testing"
+
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/library"
-	"testing"
 )
 
 func TestIDEntryName(t *testing.T) {

@@ -5,11 +5,12 @@ package epub_test
 
 import (
 	"archive/zip"
-	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 
 	"github.com/beevik/etree"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"

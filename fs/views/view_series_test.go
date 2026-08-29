@@ -1,8 +1,9 @@
 package views
 
 import (
-	"github.com/ramblingenzyme/ebookfs/library"
 	"testing"
+
+	"github.com/ramblingenzyme/ebookfs/library"
 
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )

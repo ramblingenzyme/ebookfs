@@ -1,8 +1,9 @@
 package book
 
 import (
-	"github.com/ramblingenzyme/ebookfs/library"
 	"testing"
+
+	"github.com/ramblingenzyme/ebookfs/library"
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"

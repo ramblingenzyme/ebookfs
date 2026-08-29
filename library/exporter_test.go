@@ -2,8 +2,9 @@ package library
 
 import (
 	"errors"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"testing"
+
+	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 
 	"github.com/ramblingenzyme/ebookfs/library/internal/kepub"
 	"github.com/ramblingenzyme/ebookfs/library/model"

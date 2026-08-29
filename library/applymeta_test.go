@@ -1,10 +1,11 @@
 package library
 
 import (
-	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )

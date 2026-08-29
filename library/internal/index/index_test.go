@@ -3,12 +3,13 @@ package index
 import (
 	"database/sql"
 	"errors"
-	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"os"
 	"path/filepath"
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 
 	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index/dbsqlc"

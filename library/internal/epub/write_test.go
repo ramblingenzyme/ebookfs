@@ -3,7 +3,6 @@ package epub_test
 import (
 	"archive/zip"
 	"bytes"
-	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 	"image"
 	"image/jpeg"
 	"image/png"
@@ -13,6 +12,8 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+
+	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/model"

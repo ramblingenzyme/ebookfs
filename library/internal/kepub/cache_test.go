@@ -3,13 +3,14 @@ package kepub
 import (
 	"context"
 	"errors"
-	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 	"io"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
+
+	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/library/model"

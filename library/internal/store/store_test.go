@@ -1,11 +1,12 @@
 package store
 
 import (
-	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )

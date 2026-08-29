@@ -3,12 +3,13 @@ package library
 import (
 	"bytes"
 	"fmt"
-	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 
 	"github.com/ramblingenzyme/ebookfs/library/config"
 	"github.com/ramblingenzyme/ebookfs/library/model"
