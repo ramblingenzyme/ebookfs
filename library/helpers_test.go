@@ -7,7 +7,6 @@ import (
 
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/library/config"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 func buildTestEpub(t *testing.T, title string, authors ...string) []byte {
@@ -49,7 +48,7 @@ func drifted(t *testing.T, lib Library) bool {
 
 // metaPathOf returns the path of book's meta.toml sidecar. The store keeps the
 // filename private, so tests that reach around the library restate it here once.
-func metaPathOf(book *model.Book, root string) string {
+func metaPathOf(book *Book, root string) string {
 	return filepath.Join(root, book.Dir(), "meta.toml")
 }
 
@@ -57,9 +56,9 @@ func metaPathOf(book *model.Book, root string) string {
 // reports the directory — findEpub only reads the directory entry — while
 // os.Stat follows the link and fails, which is the one way to reach the
 // rebuild's "could not observe this book at all" path from a test.
-func breakEpub(t *testing.T, book *model.Book, root string) {
+func breakEpub(t *testing.T, book *Book, root string) {
 	t.Helper()
-	absEpub := filepath.Join(root, book.EpubPath)
+	absEpub := filepath.Join(root, book.EpubPath())
 	if err := os.Remove(absEpub); err != nil {
 		t.Fatalf("remove epub: %v", err)
 	}
@@ -112,7 +111,7 @@ func assertSettlesClean(t *testing.T, cfg config.LibraryConfig) {
 	}
 }
 
-func ingestTestEpub(t *testing.T, lib Library, data []byte) *model.Book {
+func ingestTestEpub(t *testing.T, lib Library, data []byte) *Book {
 	t.Helper()
 	h, err := lib.CreateIngest()
 	if err != nil {

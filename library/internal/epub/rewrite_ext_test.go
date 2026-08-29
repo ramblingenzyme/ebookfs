@@ -24,6 +24,8 @@ import (
 	"testing"
 	"testing/synctest"
 
+	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
+
 	"github.com/beevik/etree"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/model"
@@ -250,9 +252,9 @@ func TestRewriteRoundTrips(t *testing.T) {
 	cases := []struct {
 		name  string
 		e     model.Edits
-		check func(*testing.T, model.Bib)
+		check func(*testing.T, bookmodel.Bib)
 	}{
-		{"title", model.Edits{Title: s("New Title")}, func(t *testing.T, b model.Bib) {
+		{"title", model.Edits{Title: s("New Title")}, func(t *testing.T, b bookmodel.Bib) {
 			if b.Title != "New Title" {
 				t.Errorf("title = %q", b.Title)
 			}
@@ -262,22 +264,22 @@ func TestRewriteRoundTrips(t *testing.T) {
 				t.Errorf("sort title = %q, want cleared by the title change", b.SortTitle)
 			}
 		}},
-		{"sort title", model.Edits{SortTitle: s("Title, New")}, func(t *testing.T, b model.Bib) {
+		{"sort title", model.Edits{SortTitle: s("Title, New")}, func(t *testing.T, b bookmodel.Bib) {
 			if b.SortTitle != "Title, New" {
 				t.Errorf("sort title = %q", b.SortTitle)
 			}
 		}},
-		{"description", model.Edits{Description: s("A new description.")}, func(t *testing.T, b model.Bib) {
+		{"description", model.Edits{Description: s("A new description.")}, func(t *testing.T, b bookmodel.Bib) {
 			if b.Description != "A new description." {
 				t.Errorf("description = %q", b.Description)
 			}
 		}},
-		{"language", model.Edits{Language: s("fr")}, func(t *testing.T, b model.Bib) {
+		{"language", model.Edits{Language: s("fr")}, func(t *testing.T, b bookmodel.Bib) {
 			if b.Language != "fr" {
 				t.Errorf("language = %q", b.Language)
 			}
 		}},
-		{"authors", model.Edits{Authors: &authors}, func(t *testing.T, b model.Bib) {
+		{"authors", model.Edits{Authors: &authors}, func(t *testing.T, b bookmodel.Bib) {
 			if len(b.Authors) != 2 || b.Authors[0].Name != "Ann Rand" || b.Authors[1].Name != "Bo Li" {
 				t.Fatalf("authors = %+v", b.Authors)
 			}
@@ -285,17 +287,17 @@ func TestRewriteRoundTrips(t *testing.T) {
 				t.Errorf("sort names = %q, %q", b.Authors[0].SortName, b.Authors[1].SortName)
 			}
 		}},
-		{"series rename keeps position", model.Edits{Series: s("The Quartet")}, func(t *testing.T, b model.Bib) {
+		{"series rename keeps position", model.Edits{Series: s("The Quartet")}, func(t *testing.T, b bookmodel.Bib) {
 			if b.Series == nil || b.Series.Name != "The Quartet" || b.Series.Index != "2" {
 				t.Errorf("series = %+v, want The Quartet at 2", b.Series)
 			}
 		}},
-		{"series index keeps name", model.Edits{SeriesIndex: s("4")}, func(t *testing.T, b model.Bib) {
+		{"series index keeps name", model.Edits{SeriesIndex: s("4")}, func(t *testing.T, b bookmodel.Bib) {
 			if b.Series == nil || b.Series.Name != "The Trilogy" || b.Series.Index != "4" {
 				t.Errorf("series = %+v, want The Trilogy at 4", b.Series)
 			}
 		}},
-		{"series cleared", model.Edits{Series: s("")}, func(t *testing.T, b model.Bib) {
+		{"series cleared", model.Edits{Series: s("")}, func(t *testing.T, b bookmodel.Bib) {
 			if b.Series != nil {
 				t.Errorf("series = %+v, want nil", b.Series)
 			}

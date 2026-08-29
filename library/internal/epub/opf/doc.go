@@ -27,6 +27,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf/pkgdoc"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
@@ -78,8 +79,8 @@ func (o *Doc) Apply(e model.Edits) bool {
 // Bib reads the book's metadata out of the document, adding what is not a
 // field's business: whole-book validation and presentation defaults. base is the
 // OPF's own directory, needed only to resolve the cover href.
-func (o *Doc) Bib(base string) (*model.Bib, error) {
-	b := &model.Bib{}
+func (o *Doc) Bib(base string) (*book.Bib, error) {
+	b := &book.Bib{}
 
 	// Reported as written. §5.5.2 licenses stripping and collapsing whitespace,
 	// which get already did, and nothing else: a value is text, not a path

@@ -4,6 +4,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/library"
+
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
@@ -15,7 +17,7 @@ import (
 // basefile_test.go. These tests cover epubFile's own surface: that it wires
 // lib.OpenEpub for reads and reports name/size from the book snapshot in Stat.
 
-func newTestEpubFile(t *testing.T, name string, lib libfake.Lib, get func() *model.Book) *epubFile {
+func newTestEpubFile(t *testing.T, name string, lib libfake.Lib, get func() *library.Book) *epubFile {
 	t.Helper()
 	return newEpubFile(newStat(testutil.NewTestFS(t), name, 0444), lib, get)
 }
@@ -45,9 +47,9 @@ func TestEpubFileOpenRead(t *testing.T) {
 }
 
 func TestEpubFileStatSize(t *testing.T) {
-	book := testutil.MakeBook(1, "Test", "Author")
+	book := testutil.MakeMutableBook(1, "Test", "Author")
 	book.EpubPath = "/nonexistent/test.epub"
-	ef := newTestEpubFile(t, "test.epub", libfake.Lib{}, testutil.Fixed(book))
+	ef := newTestEpubFile(t, "test.epub", libfake.Lib{}, testutil.Fixed(testutil.WrapBook(book)))
 
 	s := ef.Stat()
 	if s.Name != "test.epub" {
@@ -60,7 +62,7 @@ func TestEpubFileStatSize(t *testing.T) {
 }
 
 func TestEpubFileStatNilBook(t *testing.T) {
-	ef := newTestEpubFile(t, "test.epub", libfake.Lib{}, func() *model.Book { return nil })
+	ef := newTestEpubFile(t, "test.epub", libfake.Lib{}, func() *library.Book { return nil })
 
 	s := ef.Stat()
 	if s.Name != "test.epub" {
@@ -78,11 +80,11 @@ func TestEpubFileStatWithRealFile(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	book := testutil.MakeBook(1, "Test", "Author")
+	book := testutil.MakeMutableBook(1, "Test", "Author")
 	book.EpubPath = path
 	book.EpubSize = int64(len(content))
 
-	ef := newTestEpubFile(t, "book.epub", libfake.Lib{}, testutil.Fixed(book))
+	ef := newTestEpubFile(t, "book.epub", libfake.Lib{}, testutil.Fixed(testutil.WrapBook(book)))
 
 	s := ef.Stat()
 	if s.Name != "book.epub" {

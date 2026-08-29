@@ -13,7 +13,6 @@ import (
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/library"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // newStat is the package-local shorthand for vfile.NewStat, the single
@@ -23,10 +22,10 @@ var newStat = vfile.NewStat
 type InboxDir struct {
 	fs.StaticDir
 	lib      library.Library
-	onIngest func(*model.Book)
+	onIngest func(*library.Book)
 }
 
-func NewInboxDir(f *fs.FS, lib library.Library, onIngest func(*model.Book)) *InboxDir {
+func NewInboxDir(f *fs.FS, lib library.Library, onIngest func(*library.Book)) *InboxDir {
 	return &InboxDir{
 		StaticDir: *fs.NewStaticDir(newStat(f, "inbox", 0755|proto.DMDIR)),
 		lib:       lib,
@@ -54,10 +53,10 @@ type InboxFile struct {
 	fid      uint64
 	handle   library.IngestHandle
 	lib      library.Library
-	onIngest func(*model.Book)
+	onIngest func(*library.Book)
 }
 
-func NewInboxFile(f *fs.FS, lib library.Library, name string, perm uint32, onIngest func(*model.Book)) *InboxFile {
+func NewInboxFile(f *fs.FS, lib library.Library, name string, perm uint32, onIngest func(*library.Book)) *InboxFile {
 	return &InboxFile{
 		BaseFile: *fs.NewBaseFile(newStat(f, name, perm)),
 		lib:      lib,
@@ -130,6 +129,6 @@ func (i *InboxFile) Close(fid uint64) error {
 		return err
 	}
 	i.onIngest(b)
-	slog.Info("inbox: ingested", "name", i.Stat().Name, "book_id", b.Meta.ID)
+	slog.Info("inbox: ingested", "name", i.Stat().Name, "book_id", b.ID())
 	return nil
 }

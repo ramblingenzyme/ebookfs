@@ -46,16 +46,16 @@ func NewRecentDir(reg *registry.BookRegistry) *recentDir {
 
 func (d *recentDir) Add(dir *book.BookDir) {
 	i, _ := slices.BinarySearchFunc(d.all, dir, func(a, b *book.BookDir) int {
-		return b.Book().Meta.DateAdded.Compare(a.Book().Meta.DateAdded) // newest first
+		return b.Book().DateAdded().Compare(a.Book().DateAdded()) // newest first
 	})
 	d.all = slices.Insert(d.all, i, dir)
 	d.refresh()
 }
 
 func (d *recentDir) Remove(dir *book.BookDir) {
-	id := dir.Book().Meta.ID
+	id := dir.Book().ID()
 	d.all = slices.DeleteFunc(d.all, func(bd *book.BookDir) bool {
-		return bd.Book().Meta.ID == id
+		return bd.Book().ID() == id
 	})
 	d.refresh()
 }
@@ -71,7 +71,7 @@ func (d *recentDir) refresh() {
 
 	now := make(map[int64]*book.BookDir, len(top))
 	for _, dir := range top {
-		id := dir.Book().Meta.ID
+		id := dir.Book().ID()
 		now[id] = dir
 		if _, ok := d.visible[id]; !ok {
 			d.bookListDir.Add(dir)

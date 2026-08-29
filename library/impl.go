@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/internal/syncutil"
 	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
@@ -52,8 +53,16 @@ func (l *libraryImpl) Close() error {
 	return l.index.Close()
 }
 
-func (l *libraryImpl) Search(q model.Query) ([]*model.Book, error) {
-	return l.index.Search(q)
+func (l *libraryImpl) Search(q model.Query) ([]*Book, error) {
+	books, err := l.index.Search(q)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*Book, len(books))
+	for i, b := range books {
+		result[i] = book.NewImmutableBook(b)
+	}
+	return result, nil
 }
 
 // Stats returns aggregate library statistics.
@@ -64,7 +73,7 @@ func (l *libraryImpl) Stats() (*model.Stats, error) {
 // get returns the current state of book id from the index, hydrated with its
 // absolute epub path. Mutations fetch their base through it under the per-book
 // lock, so they always operate on the book's authoritative current state.
-func (l *libraryImpl) get(id int64) (*model.Book, error) {
+func (l *libraryImpl) get(id int64) (*book.Book, error) {
 	b, err := l.index.Get(id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("book %d: %w", id, ErrBookNotFound)
@@ -90,7 +99,7 @@ func (l *libraryImpl) Content(id int64) (model.EpubReader, error) {
 // under the per-book lock — an atomic read-modify-write, so concurrent callers
 // cannot revert each other's changes by editing from stale snapshots. If the
 // title or authors change, the book directory is moved.
-func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
+func (l *libraryImpl) Edit(id int64, e model.Edits) (*Book, error) {
 	mu := l.bookMu.For(id)
 	mu.Lock()
 	defer mu.Unlock()
@@ -104,7 +113,7 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 	// point — so meta-only edits (which skip the epub rewrite) can't slip
 	// through unchecked.
 	e = e.Normalized()
-	if v := e.Validate(b); v != nil {
+	if v := e.Validate(book.NewImmutableBook(b)); v != nil {
 		return nil, v
 	}
 
@@ -132,7 +141,7 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*model.Book, error) {
 	if err := op.Put(updated, mt); err != nil {
 		return nil, err
 	}
-	return updated, nil
+	return book.NewImmutableBook(updated), nil
 }
 
 // Delete removes the book with the given id from the store and the index,
@@ -174,7 +183,7 @@ func (l *libraryImpl) Delete(id int64) error {
 // when it is present. Both are live objects the caller still holds, and the
 // result travels on to the sidecar write and the index, so the copy is made
 // here once rather than left as a caveat every caller has to know about.
-func applyMeta(m model.Meta, e model.Edits) model.Meta {
+func applyMeta(m book.Meta, e model.Edits) book.Meta {
 	if e.Status != nil {
 		m.Status = *e.Status
 	}
@@ -192,8 +201,8 @@ func applyMeta(m model.Meta, e model.Edits) model.Meta {
 // bookFromBib creates a complete Book from a bib, meta, location, and observation.
 // The Book is fully populated when returned, with EpubSize set from the observation,
 // so callers don't need to set it separately.
-func bookFromBib(bib model.Bib, meta model.Meta, loc model.Location, obs drift.PathInfo) *model.Book {
-	b := model.NewBook(bib, meta, loc)
+func bookFromBib(bib book.Bib, meta book.Meta, loc book.Location, obs drift.PathInfo) *book.Book {
+	b := book.NewBook(bib, meta, loc)
 	b.EpubSize = obs.Size
 	return b
 }

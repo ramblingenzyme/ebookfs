@@ -5,11 +5,12 @@ import (
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+
 	"github.com/ramblingenzyme/ebookfs/library/internal/kepub"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-var makeBook = testutil.MakeBook
+var makeBook = testutil.MakeMutableBook
 
 // TestEpubExporter_Size_ReportsRecordedSize pins that Size answers from the size
 // recorded at index time rather than the filesystem — the book's path points at
@@ -22,7 +23,7 @@ func TestEpubExporter_Size_ReportsRecordedSize(t *testing.T) {
 	book.EpubSize = 4242
 
 	exp := epubExporter{}
-	size, ok := exp.Size(book)
+	size, ok := exp.Size(testutil.WrapBook(book))
 	if !ok {
 		t.Error("Size should be known for any indexed book")
 	}
@@ -39,7 +40,7 @@ func TestEpubExporter_Size_Unrecorded(t *testing.T) {
 	book := makeBook(1, "Test", "Author") // EpubSize left at its zero value
 
 	exp := epubExporter{}
-	size, ok := exp.Size(book)
+	size, ok := exp.Size(testutil.WrapBook(book))
 	if ok {
 		t.Errorf("Size = (%d, true) for a book with no recorded size, want it reported as unknown", size)
 	}
@@ -50,7 +51,7 @@ func TestEpubExporter_Filename(t *testing.T) {
 	book := makeBook(1, "Test", "Author")
 	book.EpubPath = "mybook.epub"
 
-	name := exp.Filename(book)
+	name := exp.Filename(testutil.WrapBook(book))
 	if name != "mybook.epub" {
 		t.Errorf("Filename = %q, want %q", name, "mybook.epub")
 	}
@@ -90,7 +91,7 @@ func TestExporterIncludes(t *testing.T) {
 				t.Run(tt.name, func(t *testing.T) {
 					book := makeBook(1, "Test", "Author")
 					book.Meta.Status = tt.status
-					if got := newExp(tt.statuses).Includes(book); got != tt.want {
+					if got := newExp(tt.statuses).Includes(testutil.WrapBook(book)); got != tt.want {
 						t.Errorf("Includes = %v, want %v", got, tt.want)
 					}
 				})
@@ -119,24 +120,24 @@ func TestKepubCacheDelegates(t *testing.T) {
 		t.Errorf("Statuses = %v, want [reading]", s)
 	}
 
-	if fn := kc.Filename(b); fn != "mybook.kepub.epub" {
+	if fn := kc.Filename(testutil.WrapBook(b)); fn != "mybook.kepub.epub" {
 		t.Errorf("Filename = %q, want %q", fn, "mybook.kepub.epub")
 	}
 
-	if dn := kc.Dirname(b); dn != "Alice" {
+	if dn := kc.Dirname(testutil.WrapBook(b)); dn != "Alice" {
 		t.Errorf("Dirname = %q, want %q", dn, "Alice")
 	}
 
-	_, ok := kc.Size(b)
+	_, ok := kc.Size(testutil.WrapBook(b))
 	if ok {
 		t.Error("Size should report cold for missing cache file")
 	}
 
 	// Warm must not panic.
-	kc.Warm(b)
+	kc.Warm(testutil.WrapBook(b))
 
 	// Open returns an error because the dummy source returns nil.
-	_, err := kc.Open(b)
+	_, err := kc.Open(testutil.WrapBook(b))
 	if err == nil {
 		t.Error("expected error from Open with dummy source")
 	}
@@ -171,7 +172,7 @@ func TestEpubExporter_Dirname(t *testing.T) {
 			}
 			b := makeBook(1, "Test", names...)
 			b.Authors = authors
-			got := exp.Dirname(b)
+			got := exp.Dirname(testutil.WrapBook(b))
 			if got != tt.want {
 				t.Errorf("Dirname = %q, want %q", got, tt.want)
 			}

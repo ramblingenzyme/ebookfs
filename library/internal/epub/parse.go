@@ -4,11 +4,11 @@ import (
 	"archive/zip"
 	"path"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-func Parse(bpath string) (*model.Bib, error) {
+func Parse(bpath string) (*book.Bib, error) {
 	r, err := zip.OpenReader(bpath)
 	if err != nil {
 		return nil, notEpub(bpath, err)

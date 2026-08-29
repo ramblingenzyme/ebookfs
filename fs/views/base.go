@@ -6,7 +6,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/fs/book"
 	"github.com/ramblingenzyme/ebookfs/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/fs/vfile"
-	"github.com/ramblingenzyme/ebookfs/library/model"
+	"github.com/ramblingenzyme/ebookfs/library"
 )
 
 // newStat is the package-local shorthand for vfile.NewStat, the single
@@ -20,7 +20,7 @@ var newStat = vfile.NewStat
 type namedBookDir struct {
 	*book.BookDir
 	baseStat proto.Stat
-	name     func(*model.Book) string
+	name     func(*library.Book) string
 }
 
 func (n *namedBookDir) Stat() proto.Stat {

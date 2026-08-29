@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index/dbsqlc"
 	"github.com/ramblingenzyme/ebookfs/library/model"
@@ -43,7 +44,7 @@ func toNullString(s string) sql.NullString {
 // insert loop, so each author/series/tag is written alongside the book that
 // references it and nothing can be orphaned. Sweeping per book would run three
 // growing anti-join scans N times for no effect.
-func (idx *Index) insertBook(q *dbsqlc.Queries, b *model.Book, mt drift.PathInfo) error {
+func (idx *Index) insertBook(q *dbsqlc.Queries, b *book.Book, mt drift.PathInfo) error {
 	sortTitle := toNullString(b.SortTitle)
 	pubdate := toNullString(b.Pubdate)
 
@@ -78,7 +79,7 @@ func (idx *Index) insertBook(q *dbsqlc.Queries, b *model.Book, mt drift.PathInfo
 
 // putBook inserts or replaces b, using ON CONFLICT to update an existing row.
 // Rebuild, which must surface id collisions, uses insertBook instead.
-func (idx *Index) putBook(q *dbsqlc.Queries, b *model.Book, mt drift.PathInfo) error {
+func (idx *Index) putBook(q *dbsqlc.Queries, b *book.Book, mt drift.PathInfo) error {
 	sortTitle := toNullString(b.SortTitle)
 	pubdate := toNullString(b.Pubdate)
 
@@ -118,7 +119,7 @@ func (idx *Index) putBook(q *dbsqlc.Queries, b *model.Book, mt drift.PathInfo) e
 // finishBook writes a book's authors, tags, series, and identifiers. It does not
 // sweep orphans — callers that can strand rows (putBook, deleteBook) call
 // cleanupOrphans themselves.
-func (idx *Index) finishBook(q *dbsqlc.Queries, b *model.Book) error {
+func (idx *Index) finishBook(q *dbsqlc.Queries, b *book.Book) error {
 	if err := idx.upsertAuthors(q, b.Meta.ID, b.Authors); err != nil {
 		return err
 	}
@@ -196,7 +197,7 @@ func (idx *Index) upsertTags(q *dbsqlc.Queries, bookID int64, tags []string) err
 
 // upsertSeries points the book at its series or clears series_id, then removes
 // orphaned series rows. It must run after the books row exists.
-func (idx *Index) upsertSeries(q *dbsqlc.Queries, b *model.Book) error {
+func (idx *Index) upsertSeries(q *dbsqlc.Queries, b *book.Book) error {
 	var seriesID sql.NullInt64
 	var seriesIndex sql.NullString
 

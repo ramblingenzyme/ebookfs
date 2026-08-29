@@ -4,9 +4,9 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index/dbsqlc"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // NeedsReindex reports whether the index must be rebuilt — true when the
@@ -33,7 +33,7 @@ func (idx *Index) NeedsReindex() (bool, error) {
 // book without its drift bookkeeping is not representable — see drift.PathInfo
 // for why a zero value there is not benign.
 type BookPath struct {
-	Book *model.Book
+	Book *book.Book
 	Info drift.PathInfo
 }
 

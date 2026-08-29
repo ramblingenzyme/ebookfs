@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
@@ -20,17 +21,17 @@ type bookRow struct {
 	seriesIndex                                                        sql.NullString
 }
 
-// toBook converts a bookRow to a model.Book.
-func (r *bookRow) toBook() *model.Book {
-	b := &model.Book{
-		Meta: model.Meta{
+// toBook converts a bookRow to a book.Book.
+func (r *bookRow) toBook() *book.Book {
+	b := &book.Book{
+		Meta: book.Meta{
 			ID:           r.id,
 			Status:       r.status,
 			Rating:       r.rating,
 			DateAdded:    parseDateField(r.dateAdded, "date_added", r.id),
 			DateModified: parseDateField(r.dateModified, "date_modified", r.id),
 		},
-		Bib: model.Bib{
+		Bib: book.Bib{
 			Title:       r.title,
 			SortTitle:   r.sortTitle.String,
 			Pubdate:     r.pubdate,
@@ -40,7 +41,7 @@ func (r *bookRow) toBook() *model.Book {
 			OpfSize:     r.opfSize,
 			CoverSize:   r.coverSize,
 		},
-		Location: model.Location{
+		Location: book.Location{
 			EpubPath: r.epubPath,
 		},
 		EpubSize: r.epubSize,
@@ -66,8 +67,8 @@ func parseDateField(s string, field string, bookID int64) time.Time {
 }
 
 // scanBookRows scans the main query rows into Book records.
-func scanBookRows(rows *sql.Rows) ([]*model.Book, error) {
-	var books []*model.Book
+func scanBookRows(rows *sql.Rows) ([]*book.Book, error) {
+	var books []*book.Book
 	for rows.Next() {
 		var r bookRow
 		if err := rows.Scan(

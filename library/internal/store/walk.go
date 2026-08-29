@@ -6,14 +6,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ramblingenzyme/ebookfs/library/model"
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
 // Walk enumerates every book directory in the library, returning each book's
 // location. A directory is treated as a book if it holds a meta.toml sidecar;
 // the walk does not descend into a book directory once found.
-func (s *Store) Walk() ([]model.Location, error) {
-	var entries []model.Location
+func (s *Store) Walk() ([]book.Location, error) {
+	var entries []book.Location
 	err := filepath.WalkDir(s.root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -33,7 +33,7 @@ func (s *Store) Walk() ([]model.Location, error) {
 		if err != nil {
 			return filepath.SkipDir // directory has meta.toml but no epub; skip it rather than aborting the walk
 		}
-		entries = append(entries, model.Location{
+		entries = append(entries, book.Location{
 			EpubPath: filepath.Join(rel, epubName),
 		})
 		return filepath.SkipDir // a book directory has no nested books

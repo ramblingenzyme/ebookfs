@@ -12,28 +12,42 @@ import (
 	"testing"
 
 	"github.com/knusbaum/go9p/fs"
-	"github.com/ramblingenzyme/ebookfs/library/model"
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
-// MakeBook builds a model.Book with the given id, title, and author names,
+// MakeBook builds an immutable book with the given id, title, and author names,
 // leaving every other field at its NewBook default. Author sort names are left
 // empty; tests that need them set fields on the returned book directly.
-func MakeBook(id int64, title string, authors ...string) *model.Book {
-	auths := make([]model.Author, len(authors))
+func MakeBook(id int64, title string, authors ...string) *book.ImmutableBook {
+	return book.NewImmutableBook(MakeMutableBook(id, title, authors...))
+}
+
+// MakeMutableBook builds a mutable book with the given id, title, and author
+// names, leaving every other field at its NewBook default. Author sort names
+// are left empty; tests that need them set fields on the returned book directly.
+// Use this when tests need to configure fields before passing to APIs.
+func MakeMutableBook(id int64, title string, authors ...string) *book.Book {
+	auths := make([]book.Author, len(authors))
 	for i, name := range authors {
-		auths[i] = model.Author{Name: name}
+		auths[i] = book.Author{Name: name}
 	}
-	return model.NewBook(
-		model.Bib{Title: title, Authors: auths},
-		model.Meta{ID: id},
-		model.Location{},
+	return book.NewBook(
+		book.Bib{Title: title, Authors: auths},
+		book.Meta{ID: id},
+		book.Location{},
 	)
+}
+
+// WrapBook wraps a mutable book as an immutable snapshot. Use this after
+// configuring fields on a book created with MakeMutableBook.
+func WrapBook(b *book.Book) *book.ImmutableBook {
+	return book.NewImmutableBook(b)
 }
 
 // Fixed returns a book getter that always yields b, standing in for a live
 // snapshot accessor (e.g. bookDir.Book) in tests that construct files directly.
-func Fixed(b *model.Book) func() *model.Book {
-	return func() *model.Book { return b }
+func Fixed(b *book.ImmutableBook) func() *book.ImmutableBook {
+	return func() *book.ImmutableBook { return b }
 }
 
 // NewTestFS builds an in-memory go9p FS owned by the conventional glenda user,

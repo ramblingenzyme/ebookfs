@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/internal/syncutil"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/model"
@@ -61,21 +62,21 @@ func (c *Cache) Close() error {
 // Warm is a non-blocking hint that b's kepub should be pro-actively cached.
 // It enqueues the book; a full queue drops the hint and the read path still
 // converts on demand.
-func (c *Cache) Warm(b *model.Book) { c.warmer.warm(b) }
+func (c *Cache) Warm(b *book.Book) { c.warmer.warm(b) }
 
-func (c *Cache) path(b *model.Book) string {
+func (c *Cache) path(b *book.Book) string {
 	return filepath.Join(c.dir, fmt.Sprintf("%d.kepub.epub", b.Meta.ID))
 }
 
 // Filename is the FAT-safe export name for b's kepub: the epub filename (already
 // sanitized by the store) with its .epub suffix replaced by .kepub.epub.
-func (c *Cache) Filename(b *model.Book) string {
+func (c *Cache) Filename(b *book.Book) string {
 	return strings.TrimSuffix(b.Filename(), ".epub") + ".kepub.epub"
 }
 
 // Size reports the cached kepub's size without converting; ok is false when the
 // cache is cold. Used for the 9P stat length, so it must stay cheap.
-func (c *Cache) Size(b *model.Book) (int64, bool) {
+func (c *Cache) Size(b *book.Book) (int64, bool) {
 	fi, err := os.Stat(c.path(b))
 	if err != nil {
 		return 0, false
@@ -86,7 +87,7 @@ func (c *Cache) Size(b *model.Book) (int64, bool) {
 // Ensure builds b's kepub if the cache is missing or stale, leaving a fresh
 // rendition on disk. It is idempotent (a fresh cache is a no-op) and serialized
 // per book, so concurrent warms and reads coalesce into a single conversion.
-func (c *Cache) Ensure(b *model.Book) error {
+func (c *Cache) Ensure(b *book.Book) error {
 	l := c.locks.For(b.Meta.ID)
 	l.Lock()
 	defer l.Unlock()
@@ -96,14 +97,14 @@ func (c *Cache) Ensure(b *model.Book) error {
 // Open ensures b's kepub is fresh, then opens it for reading. This is the
 // read-path backstop when the proactive warmer hasn't run (or its conversion is
 // still in flight).
-func (c *Cache) Open(b *model.Book) (model.EpubReader, error) {
+func (c *Cache) Open(b *book.Book) (model.EpubReader, error) {
 	if err := c.Ensure(b); err != nil {
 		return nil, err
 	}
 	return epub.OpenReader(c.path(b), b.CoverPath)
 }
 
-func (c *Cache) ensureLocked(b *model.Book) error {
+func (c *Cache) ensureLocked(b *book.Book) error {
 	// Fresh iff the cache exists and is no older than the book's last
 	// modification time. An in-place epub rewrite updates DateModified,
 	// which invalidates the cached rendition.
@@ -122,7 +123,7 @@ func (c *Cache) ensureLocked(b *model.Book) error {
 
 // write converts src into a temp file in the cache dir, then atomically renames
 // it into place so a reader never observes a partial kepub.
-func (c *Cache) write(b *model.Book, src model.EpubReader) error {
+func (c *Cache) write(b *book.Book, src model.EpubReader) error {
 	tmp, err := os.CreateTemp(c.dir, fmt.Sprintf(".%d-*.tmp", b.Meta.ID))
 	if err != nil {
 		return err
@@ -153,8 +154,8 @@ const (
 // books here so their caches are built before the next rsync. Enqueue is
 // non-blocking; a full queue drops the warm and the read path converts on demand.
 type warmer struct {
-	ensure func(*model.Book) error
-	ch     chan *model.Book
+	ensure func(*book.Book) error
+	ch     chan *book.Book
 	wg     sync.WaitGroup
 
 	// mu guards closed and, crucially, brackets the channel send in warm so it
@@ -165,8 +166,8 @@ type warmer struct {
 	closed bool
 }
 
-func newWarmer(ensure func(*model.Book) error) *warmer {
-	w := &warmer{ensure: ensure, ch: make(chan *model.Book, warmerQueueSize)}
+func newWarmer(ensure func(*book.Book) error) *warmer {
+	w := &warmer{ensure: ensure, ch: make(chan *book.Book, warmerQueueSize)}
 	w.wg.Add(warmerGoroutines)
 	for range warmerGoroutines {
 		go w.run()
@@ -174,7 +175,7 @@ func newWarmer(ensure func(*model.Book) error) *warmer {
 	return w
 }
 
-func (w *warmer) warm(b *model.Book) {
+func (w *warmer) warm(b *book.Book) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.closed {

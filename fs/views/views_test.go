@@ -7,10 +7,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/library"
+
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/fs/book"
 	"github.com/ramblingenzyme/ebookfs/fs/registry"
+	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
@@ -22,7 +25,7 @@ func TestRegistryAddAndRemove(t *testing.T) {
 	d := NewAllBooksDir(reg)
 
 	b := makeBook(1, "Test Book", "Author")
-	reg.Add(b)
+	reg.Add(wrapBook(b))
 
 	if _, ok := d.Children()["Test Book"]; !ok {
 		t.Fatal("books dir should contain 'Test Book' after Add")
@@ -41,7 +44,7 @@ func TestRegistryAddAndRemove(t *testing.T) {
 func TestRegistryRemoveUnknownID(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
-	reg.Add(makeBook(1, "Kept", "Author"))
+	reg.Add(testutil.MakeBook(1, "Kept", "Author"))
 
 	reg.Remove(999)
 
@@ -57,8 +60,8 @@ func TestRegistryAddSameIDTwiceUsesSameDir(t *testing.T) {
 	b1 := makeBook(1, "First Title", "Author")
 	b2 := makeBook(1, "Second Title", "Author")
 
-	reg.Add(b1)
-	reg.Add(b2)
+	reg.Add(wrapBook(b1))
+	reg.Add(wrapBook(b2))
 
 	// dirLocked returns the existing dir and doesn't update the book pointer,
 	// so the first title persists. The caller is expected to not reuse IDs.
@@ -77,8 +80,8 @@ func TestBooksDirMultipleBooks(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
 
-	reg.Add(makeBook(1, "Alpha", "Author"))
-	reg.Add(makeBook(2, "Beta", "Author"))
+	reg.Add(testutil.MakeBook(1, "Alpha", "Author"))
+	reg.Add(testutil.MakeBook(2, "Beta", "Author"))
 
 	children := dirChildNames(d)
 	if len(children) != 2 {
@@ -90,8 +93,8 @@ func TestBooksDirRemoveOnlyOne(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
 
-	reg.Add(makeBook(1, "Keep", "Author"))
-	reg.Add(makeBook(2, "Remove", "Author"))
+	reg.Add(testutil.MakeBook(1, "Keep", "Author"))
+	reg.Add(testutil.MakeBook(2, "Remove", "Author"))
 
 	reg.Remove(2)
 
@@ -112,7 +115,7 @@ func TestBooksDirSlashInTitleIsOneEntry(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
 
-	reg.Add(makeBook(1, "Either/Or", "Author"))
+	reg.Add(testutil.MakeBook(1, "Either/Or", "Author"))
 
 	children := dirChildNames(d)
 	if len(children) != 1 {
@@ -137,20 +140,20 @@ func TestGroupNamesAreOneComponent(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		dir  func(*registry.BookRegistry) fs.Dir
-		book func() *model.Book
+		book func() *library.Book
 	}{
 		{
 			name: "by-author",
 			dir:  func(reg *registry.BookRegistry) fs.Dir { return NewByAuthorDir(reg) },
-			book: func() *model.Book { return makeBook(1, "Title", "Doe/Jane") },
+			book: func() *library.Book { return testutil.MakeBook(1, "Title", "Doe/Jane") },
 		},
 		{
 			name: "by-series",
 			dir:  func(reg *registry.BookRegistry) fs.Dir { return NewBySeriesDir(reg) },
-			book: func() *model.Book {
+			book: func() *library.Book {
 				b := makeBook(1, "Title", "Author")
 				b.Series = &model.SeriesRef{Name: "Either/Or", Index: "1"}
-				return b
+				return wrapBook(b)
 			},
 		},
 	} {
@@ -198,10 +201,10 @@ type groupingView struct {
 	newDir func(*registry.BookRegistry) fs.Dir
 	// withKeys returns a book this view files under each of keys. A view whose
 	// property holds a single value is never handed more than one.
-	withKeys func(id int64, title string, keys ...string) *model.Book
+	withKeys func(id int64, title string, keys ...string) *library.Book
 	// keyless returns a book the view files nowhere, or nil for a property
 	// every book carries.
-	keyless func(id int64, title string) *model.Book
+	keyless func(id int64, title string) *library.Book
 	// entryName is the name a book appears under inside its group; nil means
 	// the title unchanged.
 	entryName func(id int64, title string) string
@@ -219,50 +222,52 @@ func (v groupingView) entry(id int64, title string) string {
 
 var groupingViews = []groupingView{
 	{
-		name:     "by-author",
-		newDir:   func(reg *registry.BookRegistry) fs.Dir { return NewByAuthorDir(reg) },
-		withKeys: func(id int64, title string, keys ...string) *model.Book { return makeBook(id, title, keys...) },
-		keyless: func(id int64, title string) *model.Book {
+		name:   "by-author",
+		newDir: func(reg *registry.BookRegistry) fs.Dir { return NewByAuthorDir(reg) },
+		withKeys: func(id int64, title string, keys ...string) *library.Book {
+			return testutil.MakeBook(id, title, keys...)
+		},
+		keyless: func(id int64, title string) *library.Book {
 			b := makeBook(id, title)
 			b.Authors = nil
-			return b
+			return wrapBook(b)
 		},
 		multiKey: true,
 	},
 	{
 		name:   "by-series",
 		newDir: func(reg *registry.BookRegistry) fs.Dir { return NewBySeriesDir(reg) },
-		withKeys: func(id int64, title string, keys ...string) *model.Book {
+		withKeys: func(id int64, title string, keys ...string) *library.Book {
 			b := makeBook(id, title, "Author")
 			b.Series = &model.SeriesRef{Name: keys[0], Index: strconv.FormatInt(id, 10)}
-			return b
+			return wrapBook(b)
 		},
-		keyless: func(id int64, title string) *model.Book { return makeBook(id, title, "Author") },
+		keyless: func(id int64, title string) *library.Book { return testutil.MakeBook(id, title, "Author") },
 		// Series entries lead with the index so a plain readdir reads in order.
 		entryName: func(id int64, title string) string { return fmt.Sprintf("%d - %s", id, title) },
 	},
 	{
 		name:   "by-tag",
 		newDir: func(reg *registry.BookRegistry) fs.Dir { return NewByTagDir(reg) },
-		withKeys: func(id int64, title string, keys ...string) *model.Book {
+		withKeys: func(id int64, title string, keys ...string) *library.Book {
 			b := makeBook(id, title, "Author")
 			b.Meta.Tags = keys
-			return b
+			return wrapBook(b)
 		},
-		keyless: func(id int64, title string) *model.Book {
+		keyless: func(id int64, title string) *library.Book {
 			b := makeBook(id, title, "Author")
 			b.Meta.Tags = nil
-			return b
+			return wrapBook(b)
 		},
 		multiKey: true,
 	},
 	{
 		name:   "by-status",
 		newDir: func(reg *registry.BookRegistry) fs.Dir { return NewByStatusDir(reg) },
-		withKeys: func(id int64, title string, keys ...string) *model.Book {
+		withKeys: func(id int64, title string, keys ...string) *library.Book {
 			b := makeBook(id, title, "Author")
 			b.Meta.Status = keys[0]
-			return b
+			return wrapBook(b)
 		},
 		// Every book carries a status, so there is no keyless case.
 	},
@@ -420,7 +425,7 @@ func TestByIDDirAdd(t *testing.T) {
 	d := NewByIDDir(reg)
 
 	b := makeBook(1, "Test", "Author")
-	reg.Add(b)
+	reg.Add(wrapBook(b))
 
 	if _, ok := d.Children()["1. Test"]; !ok {
 		t.Errorf("by-id should contain '1. Test', got: %v", dirChildNames(d))
@@ -432,7 +437,7 @@ func TestByIDDirRemove(t *testing.T) {
 	d := NewByIDDir(reg)
 
 	b := makeBook(1, "Test", "Author")
-	reg.Add(b)
+	reg.Add(wrapBook(b))
 	reg.Remove(1)
 
 	if _, ok := d.Children()["1. Test"]; ok {
@@ -444,8 +449,8 @@ func TestByIDDirMultipleBooks(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewByIDDir(reg)
 
-	reg.Add(makeBook(1, "Alpha", "Author"))
-	reg.Add(makeBook(2, "Beta", "Author"))
+	reg.Add(testutil.MakeBook(1, "Alpha", "Author"))
+	reg.Add(testutil.MakeBook(2, "Beta", "Author"))
 
 	children := dirChildNames(d)
 	if len(children) != 2 {
@@ -458,7 +463,7 @@ func TestByIDDirMultipleBooks(t *testing.T) {
 func TestByIDDirRemoveUnknown(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewByIDDir(reg)
-	reg.Add(makeBook(1, "Kept", "Author"))
+	reg.Add(testutil.MakeBook(1, "Kept", "Author"))
 
 	reg.Remove(999)
 
@@ -472,7 +477,7 @@ func TestByIDDirTitleChangeReflected(t *testing.T) {
 	d := NewByIDDir(reg)
 
 	b := makeBook(1, "Original", "Author")
-	reg.Add(b)
+	reg.Add(wrapBook(b))
 
 	if _, ok := d.Children()["1. Original"]; !ok {
 		t.Fatal("by-id should contain '1. Original'")
@@ -481,7 +486,7 @@ func TestByIDDirTitleChangeReflected(t *testing.T) {
 	// Remove and re-add with different title (simulating an edit)
 	reg.Remove(1)
 	b2 := makeBook(1, "Updated", "Author")
-	reg.Add(b2)
+	reg.Add(wrapBook(b2))
 
 	if _, ok := d.Children()["1. Updated"]; !ok {
 		t.Error("by-id should contain '1. Updated' after re-add")
@@ -500,7 +505,7 @@ func TestReaderDirAddIncludedStatus(t *testing.T) {
 	b := makeBook(1, "To Read", "Author1")
 	b.EpubPath = "To Read.epub"
 	b.Meta.Status = "unread"
-	reg.Add(b)
+	reg.Add(wrapBook(b))
 
 	ad, ok := d.Children()["Author1"]
 	if !ok {
@@ -518,7 +523,7 @@ func TestReaderDirSkipExcludedStatus(t *testing.T) {
 
 	b := makeBook(1, "Finished", "Author2")
 	b.Meta.Status = "read"
-	reg.Add(b)
+	reg.Add(wrapBook(b))
 
 	if n := len(d.Children()); n != 0 {
 		t.Errorf("reader should have no children for 'read' status book, got %d", n)
@@ -532,7 +537,7 @@ func TestReaderDirRemoveLastPrunesDir(t *testing.T) {
 	b := makeBook(1, "Only", "Author3")
 	b.EpubPath = "Only.epub"
 	b.Meta.Status = "unread"
-	reg.Add(b)
+	reg.Add(wrapBook(b))
 	reg.Remove(1)
 
 	if n := len(d.Children()); n != 0 {
@@ -547,7 +552,7 @@ func TestReaderDirCoAuthorSingleDir(t *testing.T) {
 	b := makeBook(1, "Joint", "Alice", "Bob")
 	b.EpubPath = "Joint.epub"
 	b.Meta.Status = "unread"
-	reg.Add(b)
+	reg.Add(wrapBook(b))
 
 	// Co-authored books go under a single "Alice & Bob" folder
 	ad, ok := d.Children()["Alice & Bob"]
@@ -567,7 +572,7 @@ func TestReaderDirCoAuthorRemove(t *testing.T) {
 	b := makeBook(1, "Joint", "Alice", "Bob")
 	b.EpubPath = "Joint.epub"
 	b.Meta.Status = "unread"
-	reg.Add(b)
+	reg.Add(wrapBook(b))
 	reg.Remove(1)
 
 	if _, ok := d.Children()["Alice & Bob"]; ok {
@@ -587,8 +592,8 @@ func TestReaderDirMultipleBooksSameAuthor(t *testing.T) {
 	b2.EpubPath = "B.epub"
 	b2.Meta.Status = "unread"
 
-	reg.Add(b1)
-	reg.Add(b2)
+	reg.Add(wrapBook(b1))
+	reg.Add(wrapBook(b2))
 
 	ad, ok := d.Children()["SameAuthor"]
 	if !ok {
@@ -608,7 +613,7 @@ func TestReaderDirWithConvertEnabled(t *testing.T) {
 	b := makeBook(1, "Convert Me", "AuthorX")
 	b.EpubPath = "Convert.epub"
 	b.Meta.Status = "unread"
-	reg.Add(b)
+	reg.Add(wrapBook(b))
 
 	ad, ok := d.Children()["AuthorX"]
 	if !ok {
@@ -646,7 +651,7 @@ func TestBySeriesDirRemoveNilSeriesNoOp(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewBySeriesDir(reg)
 
-	b := makeBook(1, "No Series", "Author")
+	b := testutil.MakeBook(1, "No Series", "Author")
 	bd := book.NewBookDir(newTestFS(t), libfake.Lib{}, func(int64, model.Edits) error { return nil }, b)
 
 	d.Remove(bd) // Should not panic — early return when Series is nil
@@ -660,7 +665,7 @@ func TestByTagDirTagWithSlash(t *testing.T) {
 
 	b := makeBook(1, "Slash Tag", "Author")
 	b.Meta.Tags = []string{"a/b"}
-	reg.Add(b)
+	reg.Add(wrapBook(b))
 
 	if _, ok := d.Children()["a_b"]; !ok {
 		t.Fatalf("by-tag should have 'a_b' subdir for tag 'a/b', got: %v", dirChildNames(d))
@@ -676,7 +681,7 @@ func TestByTagDirRemoveWithSlashTag(t *testing.T) {
 
 	b := makeBook(1, "Slash Tag", "Author")
 	b.Meta.Tags = []string{"x/y"}
-	reg.Add(b)
+	reg.Add(wrapBook(b))
 	reg.Remove(1)
 
 	if _, ok := d.Children()["x_y"]; ok {
@@ -691,12 +696,12 @@ func TestBooksDirDuplicateTitles(t *testing.T) {
 	b1 := makeBook(1, "Same Title", "Alice")
 	b2 := makeBook(2, "Same Title", "Bob")
 
-	reg.Add(b1)
+	reg.Add(wrapBook(b1))
 	if _, ok := d.Children()["Same Title"]; !ok {
 		t.Fatal("first book should appear under plain title")
 	}
 
-	reg.Add(b2)
+	reg.Add(wrapBook(b2))
 	if _, ok := d.Children()["Same Title"]; !ok {
 		t.Error("first book should remain at plain title")
 	}

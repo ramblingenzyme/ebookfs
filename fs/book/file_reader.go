@@ -16,10 +16,10 @@ import (
 type ReaderFile struct {
 	vfile.ReadAtFile
 	exp  library.Exporter
-	book func() *model.Book
+	book func() *library.Book
 }
 
-func NewReaderFile(stat *proto.Stat, exp library.Exporter, book func() *model.Book) *ReaderFile {
+func NewReaderFile(stat *proto.Stat, exp library.Exporter, book func() *library.Book) *ReaderFile {
 	return &ReaderFile{
 		ReadAtFile: vfile.NewReadAtFile(stat, func() (model.EpubReader, error) {
 			if exp == nil {

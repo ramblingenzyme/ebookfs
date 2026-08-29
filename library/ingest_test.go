@@ -48,7 +48,7 @@ func TestIngestRejectsUnindexedBookOnDisk(t *testing.T) {
 	if err := op.MarkPending(); err != nil {
 		t.Fatalf("MarkPending: %v", err)
 	}
-	if err := op.Delete(b.Meta.ID); err != nil {
+	if err := op.Delete(b.ID()); err != nil {
 		t.Fatalf("index delete: %v", err)
 	}
 

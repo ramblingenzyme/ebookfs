@@ -21,24 +21,24 @@ import (
 // BookDir is the stable directory identity for one book. The book's state is
 // held as an atomically swapped snapshot: 9P handlers run on many goroutines
 // with no shared lock against registry commits, so they read an immutable
-// *model.Book via Book() rather than fields mutated in place. Snapshots must
+// *library.Book via Book() rather than fields mutated in place. Snapshots must
 // never be modified after they are stored — an edit produces a fresh Book
 // (library.Edit already does) and the registry swaps the pointer via SetSnapshot.
 type BookDir struct {
 	fs.StaticDir
-	book atomic.Pointer[model.Book]
+	book atomic.Pointer[library.Book]
 }
 
 // Book returns the current snapshot. Callers needing a consistent view across
 // several fields should call it once and read from the returned value.
-func (d *BookDir) Book() *model.Book {
+func (d *BookDir) Book() *library.Book {
 	return d.book.Load()
 }
 
 // SetSnapshot atomically replaces the book snapshot. The registry calls this
 // under its own lock while bracketing the swap with view remove/add; handler
 // goroutines read the pointer with Book() and never observe a torn value.
-func (d *BookDir) SetSnapshot(b *model.Book) {
+func (d *BookDir) SetSnapshot(b *library.Book) {
 	d.book.Store(b)
 }
 
@@ -49,12 +49,12 @@ func (d *BookDir) Stat() proto.Stat {
 	s := d.StaticDir.Stat()
 	// PathSafe because a title is stored as the epub wrote it and a 9P entry
 	// name is a single component.
-	s.Name = model.PathSafe(d.Book().Title)
+	s.Name = model.PathSafe(d.Book().Title())
 	return s
 }
 
 type field struct {
-	get func(*model.Book) string
+	get func(*library.Book) string
 	// edits converts string input to typed Edits. Error return is for input
 	// parsing failures (e.g. strconv.Atoi); validation against the book's current
 	// state is centralized in model.Edits.Validate, so this needs no snapshot.
@@ -63,13 +63,13 @@ type field struct {
 
 var fields = map[string]field{
 	"status": {
-		get: func(b *model.Book) string { return b.Meta.Status },
+		get: func(b *library.Book) string { return b.Status() },
 		edits: func(s string) (model.Edits, error) {
 			return model.Edits{Status: &s}, nil
 		},
 	},
 	"rating": {
-		get: func(b *model.Book) string { return strconv.FormatFloat(b.Meta.Rating, 'f', -1, 64) },
+		get: func(b *library.Book) string { return strconv.FormatFloat(b.Rating(), 'f', -1, 64) },
 		edits: func(s string) (model.Edits, error) {
 			n, err := strconv.ParseFloat(s, 64)
 			if err != nil {
@@ -79,34 +79,35 @@ var fields = map[string]field{
 		},
 	},
 	"tags": {
-		get: func(b *model.Book) string { return strings.Join(b.Meta.Tags, "\n") },
+		get: func(b *library.Book) string { return strings.Join(b.Tags(), "\n") },
 		edits: func(s string) (model.Edits, error) {
 			tags := strings.FieldsFunc(s, func(r rune) bool { return r == '\n' })
 			return model.Edits{Tags: &tags}, nil
 		},
 	},
 	"title": {
-		get: func(b *model.Book) string { return b.Title },
+		get: func(b *library.Book) string { return b.Title() },
 		edits: func(s string) (model.Edits, error) {
 			return model.Edits{Title: &s}, nil
 		},
 	},
 	"language": {
-		get: func(b *model.Book) string { return b.Language },
+		get: func(b *library.Book) string { return b.Language() },
 		edits: func(s string) (model.Edits, error) {
 			return model.Edits{Language: &s}, nil
 		},
 	},
 	"description": {
-		get: func(b *model.Book) string { return b.Description },
+		get: func(b *library.Book) string { return b.Description() },
 		edits: func(s string) (model.Edits, error) {
 			return model.Edits{Description: &s}, nil
 		},
 	},
 	"authors": {
-		get: func(b *model.Book) string {
-			lines := make([]string, len(b.Authors))
-			for i, a := range b.Authors {
+		get: func(b *library.Book) string {
+			authors := b.Authors()
+			lines := make([]string, len(authors))
+			for i, a := range authors {
 				if a.SortName != "" {
 					lines[i] = fmt.Sprintf("%s | %s", a.Name, a.SortName)
 				} else {
@@ -131,17 +132,17 @@ var fields = map[string]field{
 		},
 	},
 	"series": {
-		get: func(b *model.Book) string { return b.SeriesName() },
+		get: func(b *library.Book) string { return b.SeriesName() },
 		edits: func(s string) (model.Edits, error) {
 			return model.Edits{Series: &s}, nil
 		},
 	},
 	"series_index": {
-		get: func(b *model.Book) string {
+		get: func(b *library.Book) string {
 			if !b.HasSeries() {
 				return ""
 			}
-			return b.Series.Index
+			return b.SeriesIndex()
 		},
 		// Passed through as written: the position is a string all the way from
 		// the epub (EPUB 3.3 D.3.7 allows "2.2.1"), and its grammar is checked
@@ -155,15 +156,15 @@ var fields = map[string]field{
 // NewBookDir builds the directory for a book. It takes the fs, the library
 // facade, and an edit callback (the registry passes its own edit method) rather
 // than the registry itself, so this package stays a leaf below the registry.
-func NewBookDir(f *fs.FS, lib library.Library, edit func(int64, model.Edits) error, book *model.Book) *BookDir {
+func NewBookDir(f *fs.FS, lib library.Library, edit func(int64, model.Edits) error, book *library.Book) *BookDir {
 	d := &BookDir{
-		StaticDir: *fs.NewStaticDir(newStat(f, model.PathSafe(book.Title), 0755|proto.DMDIR)),
+		StaticDir: *fs.NewStaticDir(newStat(f, model.PathSafe(book.Title()), 0755|proto.DMDIR)),
 	}
 	d.book.Store(book)
 
 	d.StaticDir.AddChild(fs.NewStaticFile(
 		newStat(f, "id", 0444),
-		fmt.Appendf(nil, "%d\n", book.Meta.ID),
+		fmt.Appendf(nil, "%d\n", book.ID()),
 	))
 
 	// Child files read through d.Book so they always see the current snapshot,
@@ -190,18 +191,18 @@ func NewBookDir(f *fs.FS, lib library.Library, edit func(int64, model.Edits) err
 			if err != nil {
 				return err
 			}
-			return edit(d.Book().Meta.ID, edits)
+			return edit(d.Book().ID(), edits)
 		}
 		d.StaticDir.AddChild(newFieldFile(newStat(f, name, 0644), get, set))
 	}
 
 	// Read-only bib fields.
-	d.StaticDir.AddChild(newFieldFile(newStat(f, "pubdate", 0444), func() string { return d.Book().Pubdate }, nil))
+	d.StaticDir.AddChild(newFieldFile(newStat(f, "pubdate", 0444), func() string { return d.Book().Pubdate() }, nil))
 
 	// Cover image — only present when the epub declares one.
-	if book.CoverPath != "" {
+	if book.CoverPath() != "" {
 		d.StaticDir.AddChild(newCoverFile(
-			newStat(f, "cover"+filepath.Ext(book.CoverPath), 0644),
+			newStat(f, "cover"+filepath.Ext(book.CoverPath()), 0644),
 			lib,
 			edit,
 			d.Book,

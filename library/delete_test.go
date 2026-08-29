@@ -11,7 +11,7 @@ import (
 func TestDeleteRemovesBook(t *testing.T) {
 	lib := openTestLibrary(t)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "To Delete"))
-	id := book.Meta.ID
+	id := book.ID()
 
 	if err := lib.Delete(id); err != nil {
 		t.Fatalf("Delete: %v", err)
@@ -30,14 +30,14 @@ func TestDeleteRemovesBook(t *testing.T) {
 func TestDeleteRemovesOnDisk(t *testing.T) {
 	lib := openTestLibrary(t)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Delete On Disk"))
-	id := book.Meta.ID
+	id := book.ID()
 
 	if err := lib.Delete(id); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 
 	// The epub file must no longer exist on disk.
-	if _, err := os.Stat(book.EpubPath); !os.IsNotExist(err) {
+	if _, err := os.Stat(book.EpubPath()); !os.IsNotExist(err) {
 		t.Errorf("epub should be removed after delete, stat err = %v", err)
 	}
 }

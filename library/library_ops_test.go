@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+
 	"github.com/ramblingenzyme/ebookfs/library/config"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
@@ -14,7 +16,7 @@ import (
 func TestLibraryContentReadsEpub(t *testing.T) {
 	lib := openTestLibrary(t)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Open Read"))
-	id := book.Meta.ID
+	id := book.ID()
 
 	r, err := lib.Content(id)
 	if err != nil {
@@ -43,7 +45,7 @@ func TestLibraryContentNotFound(t *testing.T) {
 func TestLibraryImplCover(t *testing.T) {
 	lib := openTestLibrary(t)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Cover Test"))
-	id := book.Meta.ID
+	id := book.ID()
 
 	r, err := lib.Content(id)
 	if err != nil {
@@ -62,7 +64,7 @@ func TestLibraryImplCover(t *testing.T) {
 func TestLibraryImplExtractOPF(t *testing.T) {
 	lib := openTestLibrary(t)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "OPF Title"))
-	id := book.Meta.ID
+	id := book.ID()
 
 	r, err := lib.Content(id)
 	if err != nil {
@@ -105,11 +107,11 @@ func TestLibraryImplExporter(t *testing.T) {
 	}
 	book := makeBook(1, "Test", "Author")
 	book.Meta.Status = "unread"
-	if !e.Includes(book) {
+	if !e.Includes(testutil.WrapBook(book)) {
 		t.Errorf("Includes should return true for a book with status %q", book.Meta.Status)
 	}
 	book.Meta.Status = "read"
-	if e.Includes(book) {
+	if e.Includes(testutil.WrapBook(book)) {
 		t.Errorf("Includes should return false for a book with status %q", book.Meta.Status)
 	}
 }
@@ -149,18 +151,18 @@ func TestLibraryImplSearchHydratesEpubPath(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("Search returned %d books, want just the matching one", len(got))
 	}
-	if got[0].Meta.ID != want.Meta.ID {
-		t.Errorf("id = %d, want %d", got[0].Meta.ID, want.Meta.ID)
+	if got[0].ID() != want.ID() {
+		t.Errorf("id = %d, want %d", got[0].ID(), want.ID())
 	}
-	if got[0].EpubPath == "" {
+	if got[0].EpubPath() == "" {
 		t.Fatal("EpubPath is empty — the result carries no path, so nothing can open it")
 	}
-	if filepath.IsAbs(got[0].EpubPath) {
-		t.Errorf("EpubPath = %q, want a relative path", got[0].EpubPath)
+	if filepath.IsAbs(got[0].EpubPath()) {
+		t.Errorf("EpubPath = %q, want a relative path", got[0].EpubPath())
 	}
-	absPath := lib.(*libraryImpl).store.AbsPath(got[0].EpubPath)
+	absPath := lib.(*libraryImpl).store.AbsPath(got[0].EpubPath())
 	if _, err := os.Stat(absPath); err != nil {
-		t.Errorf("EpubPath %q does not resolve: %v", got[0].EpubPath, err)
+		t.Errorf("EpubPath %q does not resolve: %v", got[0].EpubPath(), err)
 	}
 }
 

@@ -16,9 +16,9 @@ import (
 
 func newTestCoverFile(t *testing.T, lib libfake.Lib, edit func(int64, model.Edits) error) *coverFile {
 	t.Helper()
-	book := testutil.MakeBook(1, "Test", "Author")
+	book := testutil.MakeMutableBook(1, "Test", "Author")
 	book.CoverSize = 16
-	return newCoverFile(newStat(testutil.NewTestFS(t), "cover.jpg", 0644), lib, edit, testutil.Fixed(book))
+	return newCoverFile(newStat(testutil.NewTestFS(t), "cover.jpg", 0644), lib, edit, testutil.Fixed(testutil.WrapBook(book)))
 }
 
 func TestCoverFileStatLength(t *testing.T) {

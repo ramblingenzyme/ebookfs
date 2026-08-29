@@ -8,11 +8,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index"
 	"github.com/ramblingenzyme/ebookfs/library/internal/store"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // scanState accumulates one rebuild's view of the store. Entries are scanned
@@ -54,7 +54,7 @@ func (s *scanState) reserveID(id int64) {
 // carried together so a reindex triggered by a drift verdict can reuse the whole
 // traversal rather than walking and stat'ing the library a second time.
 type storeScan struct {
-	entries []model.Location
+	entries []book.Location
 	info    map[string]drift.PathInfo
 }
 
@@ -172,7 +172,7 @@ func (l *libraryImpl) scanEntries(scan *storeScan) *scanState {
 // scanEntry records one book directory in s: indexed when its sidecar and epub
 // both read, skipped with whatever file state was observed when they don't.
 // Either way it reserves the id the directory holds.
-func (l *libraryImpl) scanEntry(s *scanState, known map[string]drift.PathInfo, e model.Location) {
+func (l *libraryImpl) scanEntry(s *scanState, known map[string]drift.PathInfo, e book.Location) {
 	// One stat up front serves every branch below, indexed or not: a directory
 	// this rebuild can't index still needs its state recorded, or drift
 	// detection cannot tell it from one that appeared on disk unaccounted for.
@@ -276,7 +276,7 @@ func (l *libraryImpl) moveToCanonical(indexed []index.BookPath) {
 // record of failure rather than a usable reading, so it is re-stat'd instead of
 // being handed back as a successful one — which would index the book against
 // file state that was never actually seen.
-func (l *libraryImpl) pathInfo(known map[string]drift.PathInfo, loc model.Location) (drift.PathInfo, error) {
+func (l *libraryImpl) pathInfo(known map[string]drift.PathInfo, loc book.Location) (drift.PathInfo, error) {
 	if pi, ok := known[loc.EpubPath]; ok && !pi.IsUnobserved() {
 		return pi, nil
 	}

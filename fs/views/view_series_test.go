@@ -3,46 +3,48 @@ package views
 import (
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/library"
+
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 func TestSeriesEntryName(t *testing.T) {
 	tests := []struct {
 		name string
-		book *model.Book
+		book *library.Book
 		pad  int32
 		want string
 	}{
 		{
 			name: "simple integer index",
-			book: &model.Book{Bib: model.Bib{Title: "Test", Series: &model.SeriesRef{Index: "1"}}},
+			book: makeBookWithSeries(1, "Test", "Author", "", "1"),
 			want: "1 - Test",
 		},
 		{
 			name: "decimal index",
-			book: &model.Book{Bib: model.Bib{Title: "Longer", Series: &model.SeriesRef{Index: "2.5"}}},
+			book: makeBookWithSeries(1, "Longer", "Author", "", "2.5"),
 			want: "2.5 - Longer",
 		},
 		{
 			name: "zero-padded when maxIdx >= 10",
-			book: &model.Book{Bib: model.Bib{Title: "Padded", Series: &model.SeriesRef{Index: "10"}}},
+			book: makeBookWithSeries(1, "Padded", "Author", "", "10"),
 			pad:  2,
 			want: "10 - Padded",
 		},
 		{
 			name: "zero-padded with decimal",
-			book: &model.Book{Bib: model.Bib{Title: "DPadded", Series: &model.SeriesRef{Index: "10.5"}}},
+			book: makeBookWithSeries(1, "DPadded", "Author", "", "10.5"),
 			pad:  2,
 			want: "10.5 - DPadded",
 		},
 		{
 			name: "index 0",
-			book: &model.Book{Bib: model.Bib{Title: "Zero", Series: &model.SeriesRef{Index: "0"}}},
+			book: makeBookWithSeries(1, "Zero", "Author", "", "0"),
 			want: "0 - Zero",
 		},
 		{
 			name: "single digit is zero-padded",
-			book: &model.Book{Bib: model.Bib{Title: "Nine", Series: &model.SeriesRef{Index: "9"}}},
+			book: makeBookWithSeries(1, "Nine", "Author", "", "9"),
 			pad:  2,
 			want: "09 - Nine",
 		},
@@ -51,14 +53,14 @@ func TestSeriesEntryName(t *testing.T) {
 			// it used to be rounded to one decimal place by the float
 			// formatting this went through.
 			name: "long fractional index passes through",
-			book: &model.Book{Bib: model.Bib{Title: "Frac", Series: &model.SeriesRef{Index: "3.14159"}}},
+			book: makeBookWithSeries(1, "Frac", "Author", "", "3.14159"),
 			want: "3.14159 - Frac",
 		},
 		{
 			// EPUB 3.3 D.3.7 multi-level position: only the first level is
 			// padded, the rest is carried through untouched.
 			name: "multi-level position",
-			book: &model.Book{Bib: model.Bib{Title: "Multi", Series: &model.SeriesRef{Index: "2.2.1"}}},
+			book: makeBookWithSeries(1, "Multi", "Author", "", "2.2.1"),
 			pad:  2,
 			want: "02.2.1 - Multi",
 		},
@@ -82,8 +84,8 @@ func TestSeriesEntryName_PadTriggeredByMaxIndex(t *testing.T) {
 	b2 := makeBook(2, "Tenth", "Author")
 	b2.Series = &model.SeriesRef{Name: "S", Index: "10"}
 
-	reg.Add(b1)
-	reg.Add(b2)
+	reg.Add(wrapBook(b1))
+	reg.Add(wrapBook(b2))
 
 	sd := d.Children()["S"].(*seriesBookListDir)
 	children := dirChildNames(sd)

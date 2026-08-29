@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/library"
+
 	"github.com/ramblingenzyme/ebookfs/fs/book"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
@@ -37,20 +39,20 @@ func TestEditUnknownID(t *testing.T) {
 func TestEditConcurrentSnapshotSwap(t *testing.T) {
 	// current mimics the library's authoritative state; EditFn runs under the
 	// registry mutex, so reading and replacing it is serialized.
-	current := testutil.MakeBook(1, "Title A", "Alice")
+	current := testutil.MakeMutableBook(1, "Title A", "Alice")
 	lib := libfake.Lib{
-		EditFn: func(id int64, e model.Edits) (*model.Book, error) {
+		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
 			updated := *current
 			if e.Title != nil {
 				updated.Title = *e.Title
 			}
 			current = &updated
-			return &updated, nil
+			return testutil.WrapBook(&updated), nil
 		},
 	}
 	reg := NewBookRegistry(testutil.NewTestFS(t), lib)
 	reg.AddView(fakeView{})
-	reg.Add(current)
+	reg.Add(testutil.WrapBook(current))
 
 	// White-box: reach the stable BookDir the registry created.
 	bd := reg.books[1]
@@ -97,8 +99,8 @@ type recordingView struct {
 	removed []int64
 }
 
-func (v *recordingView) Add(d *book.BookDir)    { v.added = append(v.added, d.Book().Meta.ID) }
-func (v *recordingView) Remove(d *book.BookDir) { v.removed = append(v.removed, d.Book().Meta.ID) }
+func (v *recordingView) Add(d *book.BookDir)    { v.added = append(v.added, d.Book().ID()) }
+func (v *recordingView) Remove(d *book.BookDir) { v.removed = append(v.removed, d.Book().ID()) }
 
 func newTestRegistry(t *testing.T, lib libfake.Lib) (*BookRegistry, *recordingView) {
 	t.Helper()
@@ -218,16 +220,16 @@ func TestResyncViewReplaysEveryBook(t *testing.T) {
 
 func TestEdit(t *testing.T) {
 	t.Run("persists and rehomes the book", func(t *testing.T) {
-		current := testutil.MakeBook(1, "Old Title", "Alice")
+		current := testutil.MakeMutableBook(1, "Old Title", "Alice")
 		lib := libfake.Lib{
-			EditFn: func(_ int64, e model.Edits) (*model.Book, error) {
+			EditFn: func(_ int64, e model.Edits) (*library.Book, error) {
 				updated := *current
 				updated.Title = *e.Title
-				return &updated, nil
+				return testutil.WrapBook(&updated), nil
 			},
 		}
 		reg, v := newTestRegistry(t, lib)
-		reg.Add(current)
+		reg.Add(testutil.WrapBook(current))
 
 		if err := reg.Edit(1, model.Edits{Title: new("New Title")}); err != nil {
 			t.Fatalf("Edit: %v", err)
@@ -238,7 +240,7 @@ func TestEdit(t *testing.T) {
 		if !slices.Equal(v.removed, []int64{1}) || !slices.Equal(v.added, []int64{1, 1}) {
 			t.Errorf("view saw adds %v / removes %v, want the edit bracketed by one remove and one re-add", v.added, v.removed)
 		}
-		if got := reg.books[1].Book().Title; got != "New Title" {
+		if got := reg.books[1].Book().Title(); got != "New Title" {
 			t.Errorf("BookDir snapshot title = %q, want the edited title", got)
 		}
 	})
@@ -253,7 +255,7 @@ func TestEdit(t *testing.T) {
 
 	t.Run("library failure leaves the tree untouched", func(t *testing.T) {
 		lib := libfake.Lib{
-			EditFn: func(int64, model.Edits) (*model.Book, error) { return nil, errors.New("disk full") },
+			EditFn: func(int64, model.Edits) (*library.Book, error) { return nil, errors.New("disk full") },
 		}
 		reg, v := newTestRegistry(t, lib)
 		reg.Add(testutil.MakeBook(1, "Unchanged", "Alice"))
@@ -265,7 +267,7 @@ func TestEdit(t *testing.T) {
 		if len(v.removed) != 0 {
 			t.Errorf("view saw removes %v after a failed edit, want the tree untouched", v.removed)
 		}
-		if got := reg.books[1].Book().Title; got != "Unchanged" {
+		if got := reg.books[1].Book().Title(); got != "Unchanged" {
 			t.Errorf("snapshot title = %q, want it unchanged after a failed edit", got)
 		}
 	})

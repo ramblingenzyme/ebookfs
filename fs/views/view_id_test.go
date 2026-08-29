@@ -3,48 +3,49 @@ package views
 import (
 	"testing"
 
-	"github.com/ramblingenzyme/ebookfs/library/model"
+	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/library"
 )
 
 func TestIDEntryName(t *testing.T) {
 	tests := []struct {
 		name string
-		book *model.Book
+		book *library.Book
 		pad  int
 		want string
 	}{
 		{
 			name: "no padding for small id",
-			book: &model.Book{Bib: model.Bib{Title: "Test"}, Meta: model.Meta{ID: 1}},
+			book: testutil.MakeBook(1, "Test", "Author"),
 			want: "1. Test",
 		},
 		{
 			name: "no padding when pad is 0",
-			book: &model.Book{Bib: model.Bib{Title: "Test"}, Meta: model.Meta{ID: 42}},
+			book: testutil.MakeBook(42, "Test", "Author"),
 			pad:  0,
 			want: "42. Test",
 		},
 		{
 			name: "two-digit padding",
-			book: &model.Book{Bib: model.Bib{Title: "Padded"}, Meta: model.Meta{ID: 5}},
+			book: testutil.MakeBook(5, "Padded", "Author"),
 			pad:  2,
 			want: "05. Padded",
 		},
 		{
 			name: "two-digit padding at boundary",
-			book: &model.Book{Bib: model.Bib{Title: "Boundary"}, Meta: model.Meta{ID: 10}},
+			book: testutil.MakeBook(10, "Boundary", "Author"),
 			pad:  2,
 			want: "10. Boundary",
 		},
 		{
 			name: "three-digit padding",
-			book: &model.Book{Bib: model.Bib{Title: "Large"}, Meta: model.Meta{ID: 42}},
+			book: testutil.MakeBook(42, "Large", "Author"),
 			pad:  3,
 			want: "042. Large",
 		},
 		{
 			name: "four-digit padding",
-			book: &model.Book{Bib: model.Bib{Title: "Huge"}, Meta: model.Meta{ID: 1}},
+			book: testutil.MakeBook(1, "Huge", "Author"),
 			pad:  4,
 			want: "0001. Huge",
 		},
@@ -66,8 +67,8 @@ func TestIDEntryName_PadTriggeredByMaxID(t *testing.T) {
 	b1 := makeBook(1, "First", "Author")
 	b2 := makeBook(10, "Tenth", "Author")
 
-	reg.Add(b1)
-	reg.Add(b2)
+	reg.Add(wrapBook(b1))
+	reg.Add(wrapBook(b2))
 
 	children := dirChildNames(d)
 	if len(children) != 2 {
@@ -88,8 +89,8 @@ func TestIDEntryName_PadThreeDigits(t *testing.T) {
 	b1 := makeBook(1, "First", "Author")
 	b2 := makeBook(100, "Hundredth", "Author")
 
-	reg.Add(b1)
-	reg.Add(b2)
+	reg.Add(wrapBook(b1))
+	reg.Add(wrapBook(b2))
 
 	children := dirChildNames(d)
 	if len(children) != 2 {

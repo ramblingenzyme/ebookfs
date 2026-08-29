@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/content"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/ncx"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/ocf"
@@ -30,34 +31,34 @@ import (
 //
 // b is used only for validation and to locate the cover entry; its EpubPath is
 // not read, so this package never resolves against the store root.
-func Rewrite(epubPath string, b *model.Book, e model.Edits) (model.Bib, error) {
+func Rewrite(epubPath string, b *book.Book, e model.Edits) (book.Bib, error) {
 	if !e.HasCoverEdit() && !e.HasBibEdits() {
 		return b.Bib, nil
 	}
 
 	// Backstop: Library.Edit is the enforcement point, and an unvalidated Edits
 	// must never reach a file.
-	if v := e.Validate(b); v != nil {
-		return model.Bib{}, v
+	if v := e.Validate(book.NewImmutableBook(b)); v != nil {
+		return book.Bib{}, v
 	}
 
 	zrc, err := zip.OpenReader(epubPath)
 	if err != nil {
-		return model.Bib{}, notEpub(epubPath, err)
+		return book.Bib{}, notEpub(epubPath, err)
 	}
 	defer zrc.Close()
 
 	a, err := openArchive(&zrc.Reader)
 	if err != nil {
-		return model.Bib{}, err
+		return book.Bib{}, err
 	}
 	if err := a.validate(); err != nil {
-		return model.Bib{}, err
+		return book.Bib{}, err
 	}
 
 	replace, err := createReplace(a, b, e)
 	if err != nil {
-		return model.Bib{}, err
+		return book.Bib{}, err
 	}
 	// Nothing to write, but the file is still re-read rather than trusting the
 	// Bib the caller handed in: library.Edit builds that from the index, which
@@ -66,19 +67,19 @@ func Rewrite(epubPath string, b *model.Book, e model.Edits) (model.Bib, error) {
 	if len(replace) == 0 {
 		bib, err := Parse(epubPath)
 		if err != nil {
-			return model.Bib{}, err
+			return book.Bib{}, err
 		}
 		return *bib, nil
 	}
 
 	bib, err := rewriteEpub(epubPath, a, replace)
 	if err != nil {
-		return model.Bib{}, err
+		return book.Bib{}, err
 	}
 	return *bib, nil
 }
 
-func createReplace(a *archive, b *model.Book, e model.Edits) (map[string][]byte, error) {
+func createReplace(a *archive, b *book.Book, e model.Edits) (map[string][]byte, error) {
 	// Before any other refusal: it does not depend on which entries the edit
 	// turns out to touch. DECISIONS.md #23 says why it is not narrowed to them.
 	if a.has(ocf.SignaturesPath) {
@@ -132,7 +133,7 @@ func createReplace(a *archive, b *model.Book, e model.Edits) (map[string][]byte,
 // replaceCover swaps the cover image entry in place and in the same format, so
 // the manifest, the cover-image property and the legacy <meta name="cover">
 // keep pointing at what they already did.
-func replaceCover(a *archive, pkg *opf.Doc, enc *ocf.EncryptionInfo, b *model.Book, e model.Edits, replace map[string][]byte) error {
+func replaceCover(a *archive, pkg *opf.Doc, enc *ocf.EncryptionInfo, b *book.Book, e model.Edits, replace map[string][]byte) error {
 	want := coverFormat(b.CoverPath)
 	if want == "" {
 		return fmt.Errorf("cover format not replaceable in place: %s", b.CoverPath)
@@ -207,7 +208,7 @@ func coverFormat(coverPath string) string {
 //   - untouched entries are copied raw, preserving order, modtime and method;
 //   - every key in replace must match an entry, so a mistargeted edit fails
 //     loudly rather than silently dropping.
-func rewriteEpub(epubPath string, a *archive, replace map[string][]byte) (*model.Bib, error) {
+func rewriteEpub(epubPath string, a *archive, replace map[string][]byte) (*book.Bib, error) {
 	dir := filepath.Dir(epubPath)
 	tmp, err := os.CreateTemp(dir, ".ebookfs-*.epub.tmp")
 	if err != nil {

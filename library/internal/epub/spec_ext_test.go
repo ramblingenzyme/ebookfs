@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
+
 	"github.com/beevik/etree"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/model"
@@ -494,7 +496,7 @@ func titleByID(md *etree.Element, id string) string {
 	return ""
 }
 
-func authorNames(b *model.Bib) []string {
+func authorNames(b *bookmodel.Bib) []string {
 	var out []string
 	for _, a := range b.Authors {
 		out = append(out, a.Name)

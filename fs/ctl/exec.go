@@ -64,11 +64,11 @@ func addTag(args []string, lib library.Library, reg *registry.BookRegistry) stri
 		return fmt.Sprintf("error: %v", err)
 	}
 
-	return editSelection(query, lib, reg, func(b *model.Book) *model.Edits {
-		if slices.Contains(b.Meta.Tags, tag) {
+	return editSelection(query, lib, reg, func(b *library.Book) *model.Edits {
+		if slices.Contains(b.Tags(), tag) {
 			return nil // already has tag
 		}
-		newTags := append(slices.Clone(b.Meta.Tags), tag)
+		newTags := append(slices.Clone(b.Tags()), tag)
 		return &model.Edits{Tags: &newTags}
 	})
 }
@@ -84,11 +84,11 @@ func removeTag(args []string, lib library.Library, reg *registry.BookRegistry) s
 		return fmt.Sprintf("error: %v", err)
 	}
 
-	return editSelection(query, lib, reg, func(b *model.Book) *model.Edits {
-		if !slices.Contains(b.Meta.Tags, tag) {
+	return editSelection(query, lib, reg, func(b *library.Book) *model.Edits {
+		if !slices.Contains(b.Tags(), tag) {
 			return nil // doesn't have tag
 		}
-		newTags := slices.DeleteFunc(slices.Clone(b.Meta.Tags), func(t string) bool {
+		newTags := slices.DeleteFunc(slices.Clone(b.Tags()), func(t string) bool {
 			return t == tag
 		})
 		return &model.Edits{Tags: &newTags}
@@ -106,8 +106,8 @@ func setStatus(args []string, lib library.Library, reg *registry.BookRegistry) s
 		return fmt.Sprintf("error: %v", err)
 	}
 
-	return editSelection(query, lib, reg, func(b *model.Book) *model.Edits {
-		if b.Meta.Status == status {
+	return editSelection(query, lib, reg, func(b *library.Book) *model.Edits {
+		if b.Status() == status {
 			return nil
 		}
 		return &model.Edits{Status: &status}
@@ -130,8 +130,8 @@ func setRating(args []string, lib library.Library, reg *registry.BookRegistry) s
 		return fmt.Sprintf("error: %v", err)
 	}
 
-	return editSelection(query, lib, reg, func(b *model.Book) *model.Edits {
-		if b.Meta.Rating == rating {
+	return editSelection(query, lib, reg, func(b *library.Book) *model.Edits {
+		if b.Rating() == rating {
 			return nil
 		}
 		return &model.Edits{Rating: &rating}
@@ -188,21 +188,21 @@ func renameTag(args []string, lib library.Library, reg *registry.BookRegistry) s
 
 	for _, b := range books {
 		var updated []string
-		if slices.Contains(b.Meta.Tags, new) {
+		if slices.Contains(b.Tags(), new) {
 			// Book already has the new tag; just remove the old one.
-			updated = slices.DeleteFunc(slices.Clone(b.Meta.Tags), func(t string) bool {
+			updated = slices.DeleteFunc(slices.Clone(b.Tags()), func(t string) bool {
 				return t == old
 			})
 		} else {
-			updated = slices.Clone(b.Meta.Tags)
+			updated = slices.Clone(b.Tags())
 			for i, t := range updated {
 				if t == old {
 					updated[i] = new
 				}
 			}
 		}
-		if err := reg.Edit(b.Meta.ID, model.Edits{Tags: &updated}); err != nil {
-			errs = append(errs, fmt.Sprintf("book %d: %v", b.Meta.ID, err))
+		if err := reg.Edit(b.ID(), model.Edits{Tags: &updated}); err != nil {
+			errs = append(errs, fmt.Sprintf("book %d: %v", b.ID(), err))
 		} else {
 			affected++
 		}
@@ -233,7 +233,7 @@ func renameAuthor(args []string, lib library.Library, reg *registry.BookRegistry
 
 	for _, b := range books {
 		matched := false
-		updated := slices.Clone(b.Authors)
+		updated := slices.Clone(b.Authors())
 		for i, a := range updated {
 			if a.Name == old || a.SortName == old {
 				updated[i] = newAuthor
@@ -250,8 +250,8 @@ func renameAuthor(args []string, lib library.Library, reg *registry.BookRegistry
 		// strictly implies, but harmless: only books the rename matched are
 		// rewritten at all.
 		updated = dedupeAuthors(updated)
-		if err := reg.Edit(b.Meta.ID, model.Edits{Authors: &updated}); err != nil {
-			errs = append(errs, fmt.Sprintf("book %d: %v", b.Meta.ID, err))
+		if err := reg.Edit(b.ID(), model.Edits{Authors: &updated}); err != nil {
+			errs = append(errs, fmt.Sprintf("book %d: %v", b.ID(), err))
 		} else {
 			affected++
 		}
@@ -275,8 +275,8 @@ func renameSeries(args []string, lib library.Library, reg *registry.BookRegistry
 	var errs []string
 
 	for _, b := range books {
-		if err := reg.Edit(b.Meta.ID, model.Edits{Series: &new}); err != nil {
-			errs = append(errs, fmt.Sprintf("book %d: %v", b.Meta.ID, err))
+		if err := reg.Edit(b.ID(), model.Edits{Series: &new}); err != nil {
+			errs = append(errs, fmt.Sprintf("book %d: %v", b.ID(), err))
 		} else {
 			affected++
 		}
@@ -315,15 +315,15 @@ func dedupeAuthors(authors []model.Author) []model.Author {
 // down. When the query is a bare id list, an id naming no book is reported (so
 // a typo isn't counted as success) and a duplicated id is collapsed to a single
 // visit; otherwise every returned book is visited.
-func editSelection(query model.Query, lib library.Library, reg *registry.BookRegistry, editFn func(*model.Book) *model.Edits) string {
+func editSelection(query model.Query, lib library.Library, reg *registry.BookRegistry, editFn func(*library.Book) *model.Edits) string {
 	books, err := lib.Search(query)
 	if err != nil {
 		return fmt.Sprintf("error: query failed: %v", err)
 	}
 
-	byID := make(map[int64]*model.Book, len(books))
+	byID := make(map[int64]*library.Book, len(books))
 	for _, b := range books {
-		byID[b.Meta.ID] = b
+		byID[b.ID()] = b
 	}
 
 	// Walk the explicit id list when the query is nothing but ids, so a typo
@@ -334,7 +334,7 @@ func editSelection(query model.Query, lib library.Library, reg *registry.BookReg
 	if !idsOnly(query) {
 		visit = make([]int64, 0, len(books))
 		for _, b := range books {
-			visit = append(visit, b.Meta.ID)
+			visit = append(visit, b.ID())
 		}
 	}
 

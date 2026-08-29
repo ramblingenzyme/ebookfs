@@ -5,6 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/library"
+
 	"github.com/knusbaum/go9p/fs"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
@@ -13,12 +16,12 @@ import (
 
 func TestSetupServer(t *testing.T) {
 	lib := libfake.Lib{
-		SearchFn: func(_ model.Query) ([]*model.Book, error) {
+		SearchFn: func(_ model.Query) ([]*library.Book, error) {
 			b1 := makeBook(1, "Book One", "Alice")
 			b1.Meta.Status = "unread"
 			b2 := makeBook(2, "Book Two", "Bob")
 			b2.Meta.Status = "read"
-			return []*model.Book{b1, b2}, nil
+			return []*library.Book{testutil.WrapBook(b1), testutil.WrapBook(b2)}, nil
 		},
 	}
 	exp := libfake.Exporter{StatusList: []string{"unread"}}
@@ -42,7 +45,7 @@ func TestSetupServer(t *testing.T) {
 
 func TestSetupServer_QueryError(t *testing.T) {
 	lib := libfake.Lib{
-		SearchFn: func(_ model.Query) ([]*model.Book, error) {
+		SearchFn: func(_ model.Query) ([]*library.Book, error) {
 			return nil, errTest
 		},
 	}
@@ -54,10 +57,10 @@ func TestSetupServer_QueryError(t *testing.T) {
 
 func TestSetupServer_BooksPopulated(t *testing.T) {
 	lib := libfake.Lib{
-		SearchFn: func(_ model.Query) ([]*model.Book, error) {
+		SearchFn: func(_ model.Query) ([]*library.Book, error) {
 			b := makeBook(1, "Present", "Alice")
 			b.Meta.Status = "unread"
-			return []*model.Book{b}, nil
+			return []*library.Book{testutil.WrapBook(b)}, nil
 		},
 	}
 	srv, err := SetupServer(lib, libfake.Exporter{}, 30*time.Minute, 100)

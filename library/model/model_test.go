@@ -5,7 +5,20 @@ import (
 	"math"
 	"strings"
 	"testing"
+
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
+
+// testBook creates an ImmutableBook for validation tests with the given cover path and series.
+func testBook(coverPath string, series *SeriesRef) *book.ImmutableBook {
+	b := &book.Book{
+		Bib: book.Bib{
+			CoverPath: coverPath,
+			Series:    series,
+		},
+	}
+	return book.NewImmutableBook(b)
+}
 
 // assertSingleFieldError asserts err is a *ValidationError carrying exactly one
 // entry, on the named field.
@@ -77,7 +90,6 @@ func TestPathSafe(t *testing.T) {
 }
 
 func TestValidateStatus(t *testing.T) {
-	book := &Book{}
 	for _, tc := range []struct {
 		name    string
 		status  string
@@ -92,7 +104,7 @@ func TestValidateStatus(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e := Edits{Status: new(tc.status)}
-			err := e.Validate(book)
+			err := e.Validate(testBook("", nil))
 			if (err != nil) != tc.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
@@ -104,7 +116,6 @@ func TestValidateStatus(t *testing.T) {
 }
 
 func TestValidateRating(t *testing.T) {
-	book := &Book{}
 	for _, tc := range []struct {
 		name    string
 		rating  float64
@@ -122,7 +133,7 @@ func TestValidateRating(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e := Edits{Rating: new(tc.rating)}
-			err := e.Validate(book)
+			err := e.Validate(testBook("", nil))
 			if (err != nil) != tc.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
@@ -134,7 +145,6 @@ func TestValidateRating(t *testing.T) {
 }
 
 func TestValidateTitle(t *testing.T) {
-	book := &Book{}
 	for _, tc := range []struct {
 		name    string
 		title   string
@@ -147,7 +157,7 @@ func TestValidateTitle(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e := Edits{Title: new(tc.title)}
-			err := e.Validate(book)
+			err := e.Validate(testBook("", nil))
 			if (err != nil) != tc.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
@@ -159,7 +169,6 @@ func TestValidateTitle(t *testing.T) {
 }
 
 func TestValidateAuthors(t *testing.T) {
-	book := &Book{}
 	for _, tc := range []struct {
 		name    string
 		authors *[]Author
@@ -179,7 +188,7 @@ func TestValidateAuthors(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e := Edits{Authors: tc.authors}
-			err := e.Validate(book)
+			err := e.Validate(testBook("", nil))
 			if (err != nil) != tc.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
@@ -191,7 +200,6 @@ func TestValidateAuthors(t *testing.T) {
 }
 
 func TestValidateLanguage(t *testing.T) {
-	book := &Book{}
 	for _, tc := range []struct {
 		name    string
 		lang    string
@@ -207,7 +215,7 @@ func TestValidateLanguage(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e := Edits{Language: new(tc.lang)}
-			err := e.Validate(book)
+			err := e.Validate(testBook("", nil))
 			if (err != nil) != tc.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
@@ -219,7 +227,6 @@ func TestValidateLanguage(t *testing.T) {
 }
 
 func TestValidateTags(t *testing.T) {
-	book := &Book{}
 	for _, tc := range []struct {
 		name    string
 		tags    *[]string
@@ -235,7 +242,7 @@ func TestValidateTags(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e := Edits{Tags: tc.tags}
-			err := e.Validate(book)
+			err := e.Validate(testBook("", nil))
 			if (err != nil) != tc.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
@@ -269,8 +276,7 @@ func TestValidateSeriesIndex(t *testing.T) {
 		{"float syntax we cannot store", &SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new("1e3")}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			book := &Book{Bib: Bib{Series: tc.bookSeries}}
-			err := tc.edits.Validate(book)
+			err := tc.edits.Validate(testBook("", tc.bookSeries))
 			if (err != nil) != tc.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
@@ -282,13 +288,12 @@ func TestValidateSeriesIndex(t *testing.T) {
 }
 
 func TestValidateMultipleErrors(t *testing.T) {
-	book := &Book{}
 	e := Edits{
 		Status: new("invalid"),
 		Rating: new(-1.0),
 		Title:  new(string),
 	}
-	err := e.Validate(book)
+	err := e.Validate(testBook("", nil))
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -311,7 +316,6 @@ func TestValidateMultipleErrors(t *testing.T) {
 }
 
 func TestValidateNoErrors(t *testing.T) {
-	book := &Book{Bib: Bib{Series: &SeriesRef{Name: "Series"}}}
 	e := Edits{
 		Status:      new("reading"),
 		Rating:      new(4.0),
@@ -321,7 +325,7 @@ func TestValidateNoErrors(t *testing.T) {
 		Series:      new("New Series"),
 		SeriesIndex: new("2"),
 	}
-	err := e.Validate(book)
+	err := e.Validate(testBook("", nil))
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
@@ -370,9 +374,8 @@ func TestValidationErrorMultiple(t *testing.T) {
 }
 
 func TestValidateCoverNoCoverPath(t *testing.T) {
-	book := &Book{}
 	e := Edits{Cover: new([]byte("image-data"))}
-	err := e.Validate(book)
+	err := e.Validate(testBook("", nil))
 	if err == nil {
 		t.Fatal("expected error: book has no cover to replace")
 	}
@@ -380,9 +383,8 @@ func TestValidateCoverNoCoverPath(t *testing.T) {
 }
 
 func TestValidateCoverEmptyBytes(t *testing.T) {
-	book := &Book{Bib: Bib{CoverPath: "cover.jpg"}}
 	e := Edits{Cover: new([]byte{})}
-	err := e.Validate(book)
+	err := e.Validate(testBook("cover.jpg", nil))
 	if err == nil {
 		t.Fatal("expected error: empty cover bytes")
 	}
@@ -509,8 +511,7 @@ func TestEditsNormalizedKeepsNonFinite(t *testing.T) {
 				t.Errorf("Rating = %v, want it left non-finite for Validate to reject", r)
 			}
 			// The pairing that matters: Validate still refuses it afterwards.
-			book := &Book{Bib: Bib{Series: &SeriesRef{Name: "S"}}}
-			if err := got.Validate(book); err == nil {
+			if err := got.Validate(testBook("", &SeriesRef{Name: "S"})); err == nil {
 				t.Error("Validate accepted a non-finite value that survived rounding")
 			}
 		})

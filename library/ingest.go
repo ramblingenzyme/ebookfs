@@ -8,6 +8,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
@@ -18,18 +19,18 @@ import (
 // down in the store, and the temp file is cleaned up.
 type IngestHandle interface {
 	io.WriterAt // WriteAt(p []byte, off int64) (int, error)
-	Ingest() (*model.Book, error)
+	Ingest() (*Book, error)
 }
 
 // ingestHandle is the concrete file-backed implementation of IngestHandle.
 type ingestHandle struct {
 	file     *os.File
-	ingestFn func(string) (*model.Book, error)
+	ingestFn func(string) (*Book, error)
 }
 
 func (h *ingestHandle) WriteAt(p []byte, off int64) (int, error) { return h.file.WriteAt(p, off) }
 
-func (h *ingestHandle) Ingest() (*model.Book, error) {
+func (h *ingestHandle) Ingest() (*Book, error) {
 	path := h.file.Name()
 	if err := h.file.Close(); err != nil {
 		slog.Warn("ingest: close temp file failed", "path", path, "error", err)
@@ -52,7 +53,7 @@ func (l *libraryImpl) CreateIngest() (IngestHandle, error) {
 
 // ingestPath parses the staged epub, lays it down in the store, and records it
 // in the index.
-func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
+func (l *libraryImpl) ingestPath(epubPath string) (*Book, error) {
 	// Parse before taking ingestMu: it touches only this upload's staged temp
 	// file, so bulk uploads overlap their parsing instead of serializing on it.
 	bib, err := epub.Parse(epubPath)
@@ -81,7 +82,7 @@ func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 	}
 
 	now := time.Now()
-	meta := model.Meta{
+	meta := book.Meta{
 		ID:           id,
 		DateAdded:    now,
 		DateModified: now,
@@ -93,7 +94,7 @@ func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 		return nil, err
 	}
 
-	b, err := func() (*model.Book, error) {
+	b, err := func() (*Book, error) {
 		mt, err := l.store.Ingest(epubPath, loc, &meta)
 		if err != nil {
 			return nil, err
@@ -104,7 +105,7 @@ func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 			return nil, err
 		}
 
-		return b, nil
+		return book.NewImmutableBook(b), nil
 	}()
 
 	if err != nil {
@@ -118,7 +119,7 @@ func (l *libraryImpl) ingestPath(epubPath string) (*model.Book, error) {
 		return nil, err
 	}
 
-	slog.Info("ingest: book added", "book_id", b.Meta.ID, "title", b.Title, "authors", model.JoinAuthors(bib.Authors, ", "))
+	slog.Info("ingest: book added", "book_id", b.ID(), "title", b.Title(), "authors", model.JoinAuthors(b.Authors(), ", "))
 	return b, nil
 }
 

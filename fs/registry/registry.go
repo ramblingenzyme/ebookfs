@@ -90,12 +90,12 @@ func (r *BookRegistry) AddView(v BookView) {
 	r.mu.Unlock()
 }
 
-func (r *BookRegistry) dirLocked(bk *model.Book) *book.BookDir {
-	if d, ok := r.books[bk.Meta.ID]; ok {
+func (r *BookRegistry) dirLocked(bk *library.Book) *book.BookDir {
+	if d, ok := r.books[bk.ID()]; ok {
 		return d
 	}
 	d := book.NewBookDir(r.f, r.lib, r.Edit, bk)
-	r.books[bk.Meta.ID] = d
+	r.books[bk.ID()] = d
 	return d
 }
 
@@ -104,7 +104,7 @@ func (r *BookRegistry) dirLocked(bk *model.Book) *book.BookDir {
 // it under the new one (reading the new snapshot). Callers hold r.mu and must
 // persist before calling, so a failed write never reaches the tree. This is the
 // shared primitive for meta and bib edits.
-func (r *BookRegistry) commit(dir *book.BookDir, updated *model.Book) {
+func (r *BookRegistry) commit(dir *book.BookDir, updated *library.Book) {
 	for _, v := range r.views {
 		v.Remove(dir)
 	}
@@ -115,7 +115,7 @@ func (r *BookRegistry) commit(dir *book.BookDir, updated *model.Book) {
 }
 
 // Add registers a newly ingested book and files it into every view.
-func (r *BookRegistry) Add(book *model.Book) {
+func (r *BookRegistry) Add(book *library.Book) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	dir := r.dirLocked(book)
