@@ -11,7 +11,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/fs/book"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // fakeView is a minimal BookView; the registry only needs a registered view to
@@ -26,7 +25,7 @@ func TestEditUnknownID(t *testing.T) {
 	reg := NewBookRegistry(testutil.NewTestFS(t), libfake.Lib{})
 
 	status := "read"
-	if err := reg.Edit(999, model.Edits{Status: &status}); err == nil {
+	if err := reg.Edit(999, library.Edits{Status: &status}); err == nil {
 		t.Fatal("expected error editing unknown book")
 	}
 }
@@ -41,7 +40,7 @@ func TestEditConcurrentSnapshotSwap(t *testing.T) {
 	// registry mutex, so reading and replacing it is serialized.
 	current := testutil.MakeMutableBook(1, "Title A", "Alice")
 	lib := libfake.Lib{
-		EditFn: func(id int64, e model.Edits) (*library.Book, error) {
+		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			updated := *current
 			if e.Title != nil {
 				updated.Title = *e.Title
@@ -66,7 +65,7 @@ func TestEditConcurrentSnapshotSwap(t *testing.T) {
 		titles := [2]string{"Title B", "Title A"}
 		for i := range 200 {
 			title := titles[i%2]
-			if err := reg.Edit(1, model.Edits{Title: &title}); err != nil {
+			if err := reg.Edit(1, library.Edits{Title: &title}); err != nil {
 				t.Errorf("edit: %v", err)
 				return
 			}
@@ -222,7 +221,7 @@ func TestEdit(t *testing.T) {
 	t.Run("persists and rehomes the book", func(t *testing.T) {
 		current := testutil.MakeMutableBook(1, "Old Title", "Alice")
 		lib := libfake.Lib{
-			EditFn: func(_ int64, e model.Edits) (*library.Book, error) {
+			EditFn: func(_ int64, e library.Edits) (*library.Book, error) {
 				updated := *current
 				updated.Title = *e.Title
 				return testutil.WrapBook(&updated), nil
@@ -231,7 +230,7 @@ func TestEdit(t *testing.T) {
 		reg, v := newTestRegistry(t, lib)
 		reg.Add(testutil.WrapBook(current))
 
-		if err := reg.Edit(1, model.Edits{Title: new("New Title")}); err != nil {
+		if err := reg.Edit(1, library.Edits{Title: new("New Title")}); err != nil {
 			t.Fatalf("Edit: %v", err)
 		}
 
@@ -248,19 +247,19 @@ func TestEdit(t *testing.T) {
 	t.Run("unknown id", func(t *testing.T) {
 		reg, _ := newTestRegistry(t, libfake.Lib{})
 
-		if err := reg.Edit(999, model.Edits{Status: new("read")}); err == nil {
+		if err := reg.Edit(999, library.Edits{Status: new("read")}); err == nil {
 			t.Error("Edit on an unknown id returned nil, want an error")
 		}
 	})
 
 	t.Run("library failure leaves the tree untouched", func(t *testing.T) {
 		lib := libfake.Lib{
-			EditFn: func(int64, model.Edits) (*library.Book, error) { return nil, errors.New("disk full") },
+			EditFn: func(int64, library.Edits) (*library.Book, error) { return nil, errors.New("disk full") },
 		}
 		reg, v := newTestRegistry(t, lib)
 		reg.Add(testutil.MakeBook(1, "Unchanged", "Alice"))
 
-		if err := reg.Edit(1, model.Edits{Title: new("Never Written")}); err == nil {
+		if err := reg.Edit(1, library.Edits{Title: new("Never Written")}); err == nil {
 			t.Fatal("Edit returned nil despite the library failing")
 		}
 

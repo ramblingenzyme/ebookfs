@@ -14,7 +14,7 @@ import (
 	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
-	"github.com/ramblingenzyme/ebookfs/library/model"
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 )
 
 // --- parser-only fixtures & helpers ----------------------------------------
@@ -240,7 +240,7 @@ func TestParseResolvesEncodedRootfilePath(t *testing.T) {
 	if _, err := epub.Parse(path); err != nil {
 		t.Fatalf("Parse failed for a percent-encoded full-path: %v", err)
 	}
-	if _, err := writeBib(path, model.Edits{Title: new("Another Title")}); err != nil {
+	if _, err := writeBib(path, edits.Edits{Title: new("Another Title")}); err != nil {
 		t.Fatalf("edit failed for a percent-encoded full-path: %v", err)
 	}
 	bib, err := epub.Parse(path)
@@ -309,7 +309,7 @@ func TestParseAndWriteAgreeOnADuplicateEntry(t *testing.T) {
 
 	// The edit is computed from whichever copy the writer reads; the re-parse
 	// has to see the result, which it only can if both picked the same one.
-	if _, err := writeBib(path, model.Edits{Title: new("Edited Title")}); err != nil {
+	if _, err := writeBib(path, edits.Edits{Title: new("Edited Title")}); err != nil {
 		t.Fatal(err)
 	}
 	bib, err = epub.Parse(path)
@@ -402,7 +402,7 @@ func TestEntryPointsAgreeOnABadEpub(t *testing.T) {
 			_, readerErr := epub.OpenReader(tc.path, "")
 			_, rewriteErr := epub.Rewrite(tc.path,
 				&bookmodel.Book{Location: bookmodel.Location{EpubPath: tc.path}},
-				model.Edits{Title: new("X")})
+				edits.Edits{Title: new("X")})
 
 			for _, e := range []struct {
 				from string
@@ -483,7 +483,7 @@ func TestRewriteReplacesOnlyTheResolvedDuplicate(t *testing.T) {
 		{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
 	})
 
-	if _, err := writeBib(path, model.Edits{Title: new("Edited Title")}); err != nil {
+	if _, err := writeBib(path, edits.Edits{Title: new("Edited Title")}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -585,7 +585,7 @@ func TestMultipleRootfilesKobo(t *testing.T) {
 		t.Errorf("title = %q, want Original Title", book.Title)
 	}
 
-	edited, err := writeBib(path, model.Edits{Title: new("Edited Title")})
+	edited, err := writeBib(path, edits.Edits{Title: new("Edited Title")})
 	if err != nil {
 		t.Fatalf("writeBib failed on Kobo multi-rootfile epub: %v", err)
 	}

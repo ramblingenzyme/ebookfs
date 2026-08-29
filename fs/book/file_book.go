@@ -55,12 +55,12 @@ func (o *opfFile) Stat() proto.Stat {
 // committed when the fid is closed.
 type coverFile struct {
 	vfile.SnapshotFile
-	edit   func(int64, model.Edits) error
+	edit   func(int64, library.Edits) error
 	book   func() *library.Book
 	writes vfile.WriteBuffer
 }
 
-func newCoverFile(stat *proto.Stat, lib library.Library, edit func(int64, model.Edits) error, book func() *library.Book) *coverFile {
+func newCoverFile(stat *proto.Stat, lib library.Library, edit func(int64, library.Edits) error, book func() *library.Book) *coverFile {
 	return &coverFile{
 		SnapshotFile: vfile.NewSnapshotFile(stat, func() ([]byte, error) {
 			if lib == nil {
@@ -103,7 +103,7 @@ func (c *coverFile) Close(fid uint64) error {
 	if len(data) == 0 {
 		return nil
 	}
-	return c.edit(c.book().ID(), model.Edits{Cover: &data})
+	return c.edit(c.book().ID(), library.Edits{Cover: &data})
 }
 
 // epubFile serves a book's epub through the library, holding one reader per fid.

@@ -14,6 +14,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/syncutil"
 	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index"
 	"github.com/ramblingenzyme/ebookfs/library/internal/store"
 	"github.com/ramblingenzyme/ebookfs/library/model"
@@ -99,7 +100,7 @@ func (l *libraryImpl) Content(id int64) (model.EpubReader, error) {
 // under the per-book lock — an atomic read-modify-write, so concurrent callers
 // cannot revert each other's changes by editing from stale snapshots. If the
 // title or authors change, the book directory is moved.
-func (l *libraryImpl) Edit(id int64, e model.Edits) (*Book, error) {
+func (l *libraryImpl) Edit(id int64, e Edits) (*Book, error) {
 	mu := l.bookMu.For(id)
 	mu.Lock()
 	defer mu.Unlock()
@@ -113,7 +114,7 @@ func (l *libraryImpl) Edit(id int64, e model.Edits) (*Book, error) {
 	// point — so meta-only edits (which skip the epub rewrite) can't slip
 	// through unchecked.
 	e = e.Normalized()
-	if v := e.Validate(book.NewImmutableBook(b)); v != nil {
+	if v := edits.Validate(e, b); v != nil {
 		return nil, v
 	}
 
@@ -183,7 +184,7 @@ func (l *libraryImpl) Delete(id int64) error {
 // when it is present. Both are live objects the caller still holds, and the
 // result travels on to the sidecar write and the index, so the copy is made
 // here once rather than left as a caveat every caller has to know about.
-func applyMeta(m book.Meta, e model.Edits) book.Meta {
+func applyMeta(m book.Meta, e Edits) book.Meta {
 	if e.Status != nil {
 		m.Status = *e.Status
 	}

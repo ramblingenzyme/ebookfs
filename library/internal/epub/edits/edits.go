@@ -1,4 +1,4 @@
-package model
+package edits
 
 import (
 	"fmt"
@@ -9,6 +9,7 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // Edits is a partial update to a Book's fields. A nil pointer leaves the field
@@ -30,7 +31,7 @@ type Edits struct {
 	SortTitle   *string
 	Description *string
 	Language    *string
-	Authors     *[]Author
+	Authors     *[]model.Author
 	Series      *string
 	SeriesIndex *string
 
@@ -113,7 +114,7 @@ type fieldValidator struct {
 
 // Validate validates e against the book's current state and returns per-field errors.
 // A nil return means all fields are valid.
-func (e Edits) Validate(b *book.ImmutableBook) *ValidationError {
+func Validate(e Edits, b *book.Book) *ValidationError {
 	validators := []fieldValidator{
 		{"status", e.validateStatus},
 		{"rating", e.validateRating},
@@ -139,8 +140,8 @@ func (e Edits) Validate(b *book.ImmutableBook) *ValidationError {
 }
 
 func (e Edits) validateStatus() string {
-	if e.Status != nil && !IsValidStatus(*e.Status) {
-		return fmt.Sprintf("invalid status %q: must be %s", *e.Status, StatusList())
+	if e.Status != nil && !model.IsValidStatus(*e.Status) {
+		return fmt.Sprintf("invalid status %q: must be %s", *e.Status, model.StatusList())
 	}
 	return ""
 }
@@ -210,14 +211,14 @@ func (e Edits) validateLanguage() string {
 	return ""
 }
 
-func (e Edits) validateCover(b *book.ImmutableBook) string {
+func (e Edits) validateCover(b *book.Book) string {
 	if e.Cover == nil {
 		return ""
 	}
 	if len(*e.Cover) == 0 {
 		return "cover image must not be empty"
 	}
-	if b.CoverPath() == "" {
+	if b.CoverPath == "" {
 		return "book has no cover to replace"
 	}
 	return ""
@@ -232,14 +233,14 @@ var seriesIndexPattern = regexp.MustCompile(`^[0-9]+(\.[0-9]+)*$`)
 // against, rather than keeping a second opinion about what a position is.
 func ValidSeriesIndex(s string) bool { return seriesIndexPattern.MatchString(s) }
 
-func (e Edits) validateSeriesIndex(b *book.ImmutableBook) string {
+func (e Edits) validateSeriesIndex(b *book.Book) string {
 	if e.SeriesIndex == nil {
 		return ""
 	}
 	if !ValidSeriesIndex(*e.SeriesIndex) {
 		return fmt.Sprintf("invalid series index %q: must be a number, or decimal-separated numbers such as 2.2.1", *e.SeriesIndex)
 	}
-	if e.Series == nil && b.Series() == nil {
+	if e.Series == nil && b.Series == nil {
 		return "book has no series to set an index on"
 	}
 	return ""

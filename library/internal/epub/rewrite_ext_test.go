@@ -29,6 +29,7 @@ import (
 	"github.com/beevik/etree"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/model"
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 )
 
 // item is a piece of metadata no part of ebookfs writes, reads, or understands:
@@ -153,21 +154,21 @@ const richOPF2 = `<?xml version="1.0" encoding="utf-8"?>
 // they describe is gone). Those live in the internal tests.
 func preservingEdits() []struct {
 	name string
-	e    model.Edits
+	e    edits.Edits
 } {
 	s := func(v string) *string { return &v }
 	authors := []model.Author{{Name: "Jane Doe", SortName: "Doe, Jane"}}
 	return []struct {
 		name string
-		e    model.Edits
+		e    edits.Edits
 	}{
-		{"title", model.Edits{Title: s("New Title")}},
-		{"sort title", model.Edits{SortTitle: s("Title, New")}},
-		{"description", model.Edits{Description: s("A new description.")}},
-		{"language", model.Edits{Language: s("fr")}},
-		{"authors unchanged", model.Edits{Authors: &authors}},
-		{"series rename", model.Edits{Series: s("The Quartet")}},
-		{"series index", model.Edits{SeriesIndex: s("4")}},
+		{"title", edits.Edits{Title: s("New Title")}},
+		{"sort title", edits.Edits{SortTitle: s("Title, New")}},
+		{"description", edits.Edits{Description: s("A new description.")}},
+		{"language", edits.Edits{Language: s("fr")}},
+		{"authors unchanged", edits.Edits{Authors: &authors}},
+		{"series rename", edits.Edits{Series: s("The Quartet")}},
+		{"series index", edits.Edits{SeriesIndex: s("4")}},
 	}
 }
 
@@ -251,10 +252,10 @@ func TestRewriteRoundTrips(t *testing.T) {
 
 	cases := []struct {
 		name  string
-		e     model.Edits
+		e     edits.Edits
 		check func(*testing.T, bookmodel.Bib)
 	}{
-		{"title", model.Edits{Title: s("New Title")}, func(t *testing.T, b bookmodel.Bib) {
+		{"title", edits.Edits{Title: s("New Title")}, func(t *testing.T, b bookmodel.Bib) {
 			if b.Title != "New Title" {
 				t.Errorf("title = %q", b.Title)
 			}
@@ -264,22 +265,22 @@ func TestRewriteRoundTrips(t *testing.T) {
 				t.Errorf("sort title = %q, want cleared by the title change", b.SortTitle)
 			}
 		}},
-		{"sort title", model.Edits{SortTitle: s("Title, New")}, func(t *testing.T, b bookmodel.Bib) {
+		{"sort title", edits.Edits{SortTitle: s("Title, New")}, func(t *testing.T, b bookmodel.Bib) {
 			if b.SortTitle != "Title, New" {
 				t.Errorf("sort title = %q", b.SortTitle)
 			}
 		}},
-		{"description", model.Edits{Description: s("A new description.")}, func(t *testing.T, b bookmodel.Bib) {
+		{"description", edits.Edits{Description: s("A new description.")}, func(t *testing.T, b bookmodel.Bib) {
 			if b.Description != "A new description." {
 				t.Errorf("description = %q", b.Description)
 			}
 		}},
-		{"language", model.Edits{Language: s("fr")}, func(t *testing.T, b bookmodel.Bib) {
+		{"language", edits.Edits{Language: s("fr")}, func(t *testing.T, b bookmodel.Bib) {
 			if b.Language != "fr" {
 				t.Errorf("language = %q", b.Language)
 			}
 		}},
-		{"authors", model.Edits{Authors: &authors}, func(t *testing.T, b bookmodel.Bib) {
+		{"authors", edits.Edits{Authors: &authors}, func(t *testing.T, b bookmodel.Bib) {
 			if len(b.Authors) != 2 || b.Authors[0].Name != "Ann Rand" || b.Authors[1].Name != "Bo Li" {
 				t.Fatalf("authors = %+v", b.Authors)
 			}
@@ -287,17 +288,17 @@ func TestRewriteRoundTrips(t *testing.T) {
 				t.Errorf("sort names = %q, %q", b.Authors[0].SortName, b.Authors[1].SortName)
 			}
 		}},
-		{"series rename keeps position", model.Edits{Series: s("The Quartet")}, func(t *testing.T, b bookmodel.Bib) {
+		{"series rename keeps position", edits.Edits{Series: s("The Quartet")}, func(t *testing.T, b bookmodel.Bib) {
 			if b.Series == nil || b.Series.Name != "The Quartet" || b.Series.Index != "2" {
 				t.Errorf("series = %+v, want The Quartet at 2", b.Series)
 			}
 		}},
-		{"series index keeps name", model.Edits{SeriesIndex: s("4")}, func(t *testing.T, b bookmodel.Bib) {
+		{"series index keeps name", edits.Edits{SeriesIndex: s("4")}, func(t *testing.T, b bookmodel.Bib) {
 			if b.Series == nil || b.Series.Name != "The Trilogy" || b.Series.Index != "4" {
 				t.Errorf("series = %+v, want The Trilogy at 4", b.Series)
 			}
 		}},
-		{"series cleared", model.Edits{Series: s("")}, func(t *testing.T, b bookmodel.Bib) {
+		{"series cleared", edits.Edits{Series: s("")}, func(t *testing.T, b bookmodel.Bib) {
 			if b.Series != nil {
 				t.Errorf("series = %+v, want nil", b.Series)
 			}
@@ -386,7 +387,7 @@ func TestRewriteIsIdempotentOnARebindingDocument(t *testing.T) {
 	path := buildEpub(t, opf)
 	var first string
 	for i, title := range []string{"One", "Two", "Three"} {
-		if _, err := epub.Rewrite(path, book(t, path), model.Edits{Title: &title}); err != nil {
+		if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Title: &title}); err != nil {
 			t.Fatalf("edit %d: %v", i+1, err)
 		}
 
@@ -449,7 +450,7 @@ func TestEPUB2SeriesEditUpdatesBothEncodings(t *testing.T) {
 	}
 
 	want := "The New Series"
-	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Series: &want}); err != nil {
+	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Series: &want}); err != nil {
 		t.Fatal(err)
 	}
 	assertSeriesEncodings(t, path, want, "2")
@@ -470,7 +471,7 @@ func TestEPUB3SeriesEditUpdatesStaleCalibreMetas(t *testing.T) {
     <meta name="calibre:series_index" content="2"/>`))
 
 	want := "The New Series"
-	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Series: &want}); err != nil {
+	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Series: &want}); err != nil {
 		t.Fatal(err)
 	}
 	assertSeriesEncodings(t, path, want, "2")
@@ -488,7 +489,7 @@ func TestEPUB3SeriesEditDoesNotInjectCalibreMetas(t *testing.T) {
     <meta refines="#c01" property="collection-type">series</meta>`))
 
 	want := "The New Series"
-	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Series: &want}); err != nil {
+	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Series: &want}); err != nil {
 		t.Fatal(err)
 	}
 	if got := metadata(t, path).FindElement("//meta[@name='calibre:series']"); got != nil {
@@ -548,7 +549,7 @@ func TestMultiLevelPositionNarrowsForEPUB2(t *testing.T) {
 
 	path := buildEpub(t, opf)
 	index := "2.2.1"
-	if _, err := epub.Rewrite(path, book(t, path), model.Edits{SeriesIndex: &index}); err != nil {
+	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{SeriesIndex: &index}); err != nil {
 		t.Fatal(err)
 	}
 	bib, err := epub.Parse(path)
@@ -623,7 +624,7 @@ func TestSeriesWithNoPositionDropsTheCalibreIndex(t *testing.T) {
     <meta name="calibre:series_index" content="7"/>`))
 
 	want := "The New Series"
-	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Series: &want}); err != nil {
+	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Series: &want}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -651,7 +652,7 @@ func TestEPUB2CreatorLosesAStaleSortName(t *testing.T) {
 
 	path := buildEpub(t, opf)
 	authors := []model.Author{{Name: "Jane Doe"}}
-	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Authors: &authors}); err != nil {
+	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Authors: &authors}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -687,7 +688,7 @@ func TestEPUB3CreatorWithALegacySortNameTakesTheEdit(t *testing.T) {
 
 	path := buildEpub(t, opf)
 	authors := []model.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
-	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Authors: &authors}); err != nil {
+	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Authors: &authors}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -726,7 +727,7 @@ func TestUnprefixedFileAsIsUpdatedNotDuplicated(t *testing.T) {
 
 	path := buildEpub(t, opf)
 	authors := []model.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
-	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Authors: &authors}); err != nil {
+	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Authors: &authors}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -852,7 +853,7 @@ func TestEmptyElementIsWrittenInPlace(t *testing.T) {
 
 	path := buildEpub(t, opf)
 	desc := "A new description."
-	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Description: &desc}); err != nil {
+	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Description: &desc}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -885,7 +886,7 @@ func TestRewriteRefusesDuplicateAuthors(t *testing.T) {
 	before := readEntry(t, path, opfPath)
 
 	authors := []model.Author{{Name: "Jane Doe"}, {Name: "Jane Doe"}}
-	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Authors: &authors}); err == nil {
+	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Authors: &authors}); err == nil {
 		t.Fatal("a duplicated author was accepted")
 	}
 	if !bytes.Equal(before, readEntry(t, path, opfPath)) {
@@ -967,7 +968,7 @@ func TestDuplicateRefinementsKeepTheirDuplicates(t *testing.T) {
 
 	path := buildEpub(t, opf)
 	authors := []model.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
-	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Authors: &authors}); err != nil {
+	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Authors: &authors}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1048,7 +1049,7 @@ func TestMetadataDirectionalitySurvives(t *testing.T) {
 
 	path := buildEpub(t, opf)
 	desc := "A new description."
-	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Description: &desc}); err != nil {
+	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Description: &desc}); err != nil {
 		t.Fatal(err)
 	}
 	title := metadata(t, path).SelectElement("title")
@@ -1081,7 +1082,7 @@ func TestUnmodelledMetadataSurvives(t *testing.T) {
 
 	path := buildEpub(t, opf)
 	want := "A New Title"
-	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Title: &want}); err != nil {
+	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Title: &want}); err != nil {
 		t.Fatal(err)
 	}
 	md := metadata(t, path)
@@ -1116,7 +1117,7 @@ func TestSchemedCollectionTypeSurvivesASeriesEdit(t *testing.T) {
     <meta refines="#c01" property="group-position">2</meta>`))
 
 	want := "The Quartet"
-	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Series: &want}); err != nil {
+	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Series: &want}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1162,7 +1163,7 @@ func TestSeriesRenameDoesNotDuplicate(t *testing.T) {
 
 	path := buildEpub(t, opfSpecStyleWhitespace)
 	want := "Renamed"
-	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Series: &want}); err != nil {
+	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Series: &want}); err != nil {
 		t.Fatal(err)
 	}
 	md := metadata(t, path)
@@ -1240,7 +1241,7 @@ func TestNCXDocTitleFollowsATitleEdit(t *testing.T) {
 	path := buildNCXEpub(t, ncxWith(`  <docTitle><text>Original Title</text></docTitle>`))
 
 	title := "New Title"
-	if _, err := writeBib(path, model.Edits{Title: &title}); err != nil {
+	if _, err := writeBib(path, edits.Edits{Title: &title}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1255,7 +1256,7 @@ func TestNCXDocAuthorsAreReconciled(t *testing.T) {
   <docAuthor><text>Dropped Coauthor</text></docAuthor>`))
 
 	authors := []model.Author{{Name: "Ann Rewrite"}, {Name: "Bo Second"}, {Name: "Cy Third"}}
-	if _, err := writeBib(path, model.Edits{Authors: &authors}); err != nil {
+	if _, err := writeBib(path, edits.Edits{Authors: &authors}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1285,7 +1286,7 @@ func TestNCXWithNoDocAuthorGainsNone(t *testing.T) {
 	path := buildNCXEpub(t, ncxWith(`  <docTitle><text>Original Title</text></docTitle>`))
 
 	authors := []model.Author{{Name: "Ann Rewrite"}}
-	if _, err := writeBib(path, model.Edits{Authors: &authors}); err != nil {
+	if _, err := writeBib(path, edits.Edits{Authors: &authors}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1300,7 +1301,7 @@ func TestTitleEditWithoutAnNCX(t *testing.T) {
 	path := buildEpub(t, opf3)
 
 	title := "New Title"
-	bib, err := writeBib(path, model.Edits{Title: &title})
+	bib, err := writeBib(path, edits.Edits{Title: &title})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1316,7 +1317,7 @@ func TestNCXUntouchedByAnUnrelatedEdit(t *testing.T) {
 	path := buildNCXEpub(t, ncx)
 
 	series := "A Series"
-	if _, err := writeBib(path, model.Edits{Series: &series}); err != nil {
+	if _, err := writeBib(path, edits.Edits{Series: &series}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1338,7 +1339,7 @@ func TestUnreadableNCXDoesNotFailTheEdit(t *testing.T) {
 			path := buildNCXEpub(t, tc.ncx)
 
 			title := "New Title"
-			bib, err := writeBib(path, model.Edits{Title: &title})
+			bib, err := writeBib(path, edits.Edits{Title: &title})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1365,7 +1366,7 @@ func TestCDataDescriptionKeepsItsSpelling(t *testing.T) {
     <dc:description><![CDATA[`+value+`]]></dc:description>`))
 
 	title := "New Title"
-	bib, err := writeBib(path, model.Edits{Title: &title})
+	bib, err := writeBib(path, edits.Edits{Title: &title})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1394,7 +1395,7 @@ func TestTitleEditTakesTheOtherSegments(t *testing.T) {
 	path := buildEpub(t, opfMultipartTitle)
 
 	want := "The Hobbit"
-	bib, err := epub.Rewrite(path, book(t, path), model.Edits{Title: &want})
+	bib, err := epub.Rewrite(path, book(t, path), edits.Edits{Title: &want})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1417,7 +1418,7 @@ func TestSortTitleEditLeavesTheOtherSegments(t *testing.T) {
 	path := buildEpub(t, opfMultipartTitle)
 
 	sort := "Lord of the Rings, The"
-	if _, err := epub.Rewrite(path, book(t, path), model.Edits{SortTitle: &sort}); err != nil {
+	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{SortTitle: &sort}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1431,12 +1432,12 @@ func TestTitleEditIsIdempotentAcrossSegments(t *testing.T) {
 	path := buildEpub(t, opfMultipartTitle)
 
 	want := "The Hobbit"
-	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Title: &want}); err != nil {
+	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Title: &want}); err != nil {
 		t.Fatal(err)
 	}
 	first := readEntry(t, path, opfPath)
 
-	if _, err := epub.Rewrite(path, book(t, path), model.Edits{Title: &want}); err != nil {
+	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Title: &want}); err != nil {
 		t.Fatal(err)
 	}
 	if second := readEntry(t, path, opfPath); !bytes.Equal(first, second) {

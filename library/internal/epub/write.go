@@ -15,10 +15,10 @@ import (
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/content"
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/ncx"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/ocf"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // Rewrite applies e to the epub at epubPath atomically. Every refusal runs
@@ -31,14 +31,14 @@ import (
 //
 // b is used only for validation and to locate the cover entry; its EpubPath is
 // not read, so this package never resolves against the store root.
-func Rewrite(epubPath string, b *book.Book, e model.Edits) (book.Bib, error) {
+func Rewrite(epubPath string, b *book.Book, e edits.Edits) (book.Bib, error) {
 	if !e.HasCoverEdit() && !e.HasBibEdits() {
 		return b.Bib, nil
 	}
 
 	// Backstop: Library.Edit is the enforcement point, and an unvalidated Edits
 	// must never reach a file.
-	if v := e.Validate(book.NewImmutableBook(b)); v != nil {
+	if v := edits.Validate(e, b); v != nil {
 		return book.Bib{}, v
 	}
 
@@ -79,7 +79,7 @@ func Rewrite(epubPath string, b *book.Book, e model.Edits) (book.Bib, error) {
 	return *bib, nil
 }
 
-func createReplace(a *archive, b *book.Book, e model.Edits) (map[string][]byte, error) {
+func createReplace(a *archive, b *book.Book, e edits.Edits) (map[string][]byte, error) {
 	// Before any other refusal: it does not depend on which entries the edit
 	// turns out to touch. DECISIONS.md #23 says why it is not narrowed to them.
 	if a.has(ocf.SignaturesPath) {
@@ -133,7 +133,7 @@ func createReplace(a *archive, b *book.Book, e model.Edits) (map[string][]byte, 
 // replaceCover swaps the cover image entry in place and in the same format, so
 // the manifest, the cover-image property and the legacy <meta name="cover">
 // keep pointing at what they already did.
-func replaceCover(a *archive, pkg *opf.Doc, enc *ocf.EncryptionInfo, b *book.Book, e model.Edits, replace map[string][]byte) error {
+func replaceCover(a *archive, pkg *opf.Doc, enc *ocf.EncryptionInfo, b *book.Book, e edits.Edits, replace map[string][]byte) error {
 	want := coverFormat(b.CoverPath)
 	if want == "" {
 		return fmt.Errorf("cover format not replaceable in place: %s", b.CoverPath)
@@ -251,7 +251,7 @@ func rewriteEpub(epubPath string, a *archive, replace map[string][]byte) (*book.
 // failing the edit. The package document is the metadata of record, and
 // refusing would leave a book that arrived with an unreadable NCX permanently
 // unrenameable.
-func replaceNCX(a *archive, pkg *opf.Doc, enc *ocf.EncryptionInfo, e model.Edits, replace map[string][]byte) error {
+func replaceNCX(a *archive, pkg *opf.Doc, enc *ocf.EncryptionInfo, e edits.Edits, replace map[string][]byte) error {
 	if e.Title == nil && e.Authors == nil {
 		return nil
 	}

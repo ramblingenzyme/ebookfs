@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // TestApplyMeta covers the field-by-field application. Every case starts from
@@ -21,20 +19,20 @@ func TestApplyMeta(t *testing.T) {
 
 	tests := []struct {
 		name   string
-		edits  model.Edits
+		edits  Edits
 		status string
 		rating float64
 		tags   []string
 	}{
-		{"no edits", model.Edits{}, "unread", 2.5, []string{"keep"}},
-		{"status only", model.Edits{Status: new("read")}, "read", 2.5, []string{"keep"}},
-		{"rating only", model.Edits{Rating: new(4.5)}, "unread", 4.5, []string{"keep"}},
-		{"tags only", model.Edits{Tags: new([]string{"new", "tags"})}, "unread", 2.5, []string{"new", "tags"}},
+		{"no edits", Edits{}, "unread", 2.5, []string{"keep"}},
+		{"status only", Edits{Status: new("read")}, "read", 2.5, []string{"keep"}},
+		{"rating only", Edits{Rating: new(4.5)}, "unread", 4.5, []string{"keep"}},
+		{"tags only", Edits{Tags: new([]string{"new", "tags"})}, "unread", 2.5, []string{"new", "tags"}},
 		// Clearing tags is a set edit to an empty slice, not an absent one.
-		{"tags cleared", model.Edits{Tags: new([]string{})}, "unread", 2.5, nil},
+		{"tags cleared", Edits{Tags: new([]string{})}, "unread", 2.5, nil},
 		{
 			"all fields",
-			model.Edits{Status: new("read"), Rating: new(5.0), Tags: new([]string{"all"})},
+			Edits{Status: new("read"), Rating: new(5.0), Tags: new([]string{"all"})},
 			"read", 5.0, []string{"all"},
 		},
 	}
@@ -74,7 +72,7 @@ func TestApplyMetaClonesTags(t *testing.T) {
 	t.Run("from the meta", func(t *testing.T) {
 		meta := book.Meta{ID: 1, Tags: []string{"keep"}}
 
-		updated := applyMeta(meta, model.Edits{})
+		updated := applyMeta(meta, Edits{})
 		updated.Tags[0] = "changed"
 
 		if meta.Tags[0] != "keep" {
@@ -85,7 +83,7 @@ func TestApplyMetaClonesTags(t *testing.T) {
 	t.Run("from the edits", func(t *testing.T) {
 		tags := []string{"new"}
 
-		updated := applyMeta(book.Meta{ID: 1}, model.Edits{Tags: &tags})
+		updated := applyMeta(book.Meta{ID: 1}, Edits{Tags: &tags})
 		updated.Tags[0] = "changed"
 
 		if tags[0] != "new" {
@@ -96,7 +94,7 @@ func TestApplyMetaClonesTags(t *testing.T) {
 	t.Run("nil stays nil", func(t *testing.T) {
 		// Cloning must not turn an absent tag list into an empty one: the
 		// sidecar writer distinguishes them.
-		if got := applyMeta(book.Meta{ID: 1}, model.Edits{}).Tags; got != nil {
+		if got := applyMeta(book.Meta{ID: 1}, Edits{}).Tags; got != nil {
 			t.Errorf("Tags = %v, want nil", got)
 		}
 	})

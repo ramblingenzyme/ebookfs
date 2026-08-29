@@ -8,14 +8,12 @@ import (
 	"github.com/knusbaum/go9p/fs"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // newTestBookDir builds a BookDir over a fresh FS with a no-op edit callback —
-// the decoupled constructor needs no registry.
 func newTestBookDir(t *testing.T, b *library.Book) *BookDir {
 	t.Helper()
-	return NewBookDir(testutil.NewTestFS(t), libfake.Lib{}, func(int64, model.Edits) error { return nil }, b)
+	return NewBookDir(testutil.NewTestFS(t), libfake.Lib{}, func(int64, library.Edits) error { return nil }, b)
 }
 
 func TestNewBookDirCreatesCoverChild(t *testing.T) {

@@ -64,12 +64,12 @@ func addTag(args []string, lib library.Library, reg *registry.BookRegistry) stri
 		return fmt.Sprintf("error: %v", err)
 	}
 
-	return editSelection(query, lib, reg, func(b *library.Book) *model.Edits {
+	return editSelection(query, lib, reg, func(b *library.Book) *library.Edits {
 		if slices.Contains(b.Tags(), tag) {
 			return nil // already has tag
 		}
 		newTags := append(slices.Clone(b.Tags()), tag)
-		return &model.Edits{Tags: &newTags}
+		return &library.Edits{Tags: &newTags}
 	})
 }
 
@@ -84,14 +84,14 @@ func removeTag(args []string, lib library.Library, reg *registry.BookRegistry) s
 		return fmt.Sprintf("error: %v", err)
 	}
 
-	return editSelection(query, lib, reg, func(b *library.Book) *model.Edits {
+	return editSelection(query, lib, reg, func(b *library.Book) *library.Edits {
 		if !slices.Contains(b.Tags(), tag) {
 			return nil // doesn't have tag
 		}
 		newTags := slices.DeleteFunc(slices.Clone(b.Tags()), func(t string) bool {
 			return t == tag
 		})
-		return &model.Edits{Tags: &newTags}
+		return &library.Edits{Tags: &newTags}
 	})
 }
 
@@ -106,11 +106,11 @@ func setStatus(args []string, lib library.Library, reg *registry.BookRegistry) s
 		return fmt.Sprintf("error: %v", err)
 	}
 
-	return editSelection(query, lib, reg, func(b *library.Book) *model.Edits {
+	return editSelection(query, lib, reg, func(b *library.Book) *library.Edits {
 		if b.Status() == status {
 			return nil
 		}
-		return &model.Edits{Status: &status}
+		return &library.Edits{Status: &status}
 	})
 }
 
@@ -130,11 +130,11 @@ func setRating(args []string, lib library.Library, reg *registry.BookRegistry) s
 		return fmt.Sprintf("error: %v", err)
 	}
 
-	return editSelection(query, lib, reg, func(b *library.Book) *model.Edits {
+	return editSelection(query, lib, reg, func(b *library.Book) *library.Edits {
 		if b.Rating() == rating {
 			return nil
 		}
-		return &model.Edits{Rating: &rating}
+		return &library.Edits{Rating: &rating}
 	})
 }
 
@@ -201,7 +201,7 @@ func renameTag(args []string, lib library.Library, reg *registry.BookRegistry) s
 				}
 			}
 		}
-		if err := reg.Edit(b.ID(), model.Edits{Tags: &updated}); err != nil {
+		if err := reg.Edit(b.ID(), library.Edits{Tags: &updated}); err != nil {
 			errs = append(errs, fmt.Sprintf("book %d: %v", b.ID(), err))
 		} else {
 			affected++
@@ -250,7 +250,7 @@ func renameAuthor(args []string, lib library.Library, reg *registry.BookRegistry
 		// strictly implies, but harmless: only books the rename matched are
 		// rewritten at all.
 		updated = dedupeAuthors(updated)
-		if err := reg.Edit(b.ID(), model.Edits{Authors: &updated}); err != nil {
+		if err := reg.Edit(b.ID(), library.Edits{Authors: &updated}); err != nil {
 			errs = append(errs, fmt.Sprintf("book %d: %v", b.ID(), err))
 		} else {
 			affected++
@@ -275,7 +275,7 @@ func renameSeries(args []string, lib library.Library, reg *registry.BookRegistry
 	var errs []string
 
 	for _, b := range books {
-		if err := reg.Edit(b.ID(), model.Edits{Series: &new}); err != nil {
+		if err := reg.Edit(b.ID(), library.Edits{Series: &new}); err != nil {
 			errs = append(errs, fmt.Sprintf("book %d: %v", b.ID(), err))
 		} else {
 			affected++
@@ -315,7 +315,7 @@ func dedupeAuthors(authors []model.Author) []model.Author {
 // down. When the query is a bare id list, an id naming no book is reported (so
 // a typo isn't counted as success) and a duplicated id is collapsed to a single
 // visit; otherwise every returned book is visited.
-func editSelection(query model.Query, lib library.Library, reg *registry.BookRegistry, editFn func(*library.Book) *model.Edits) string {
+func editSelection(query model.Query, lib library.Library, reg *registry.BookRegistry, editFn func(*library.Book) *library.Edits) string {
 	books, err := lib.Search(query)
 	if err != nil {
 		return fmt.Sprintf("error: query failed: %v", err)

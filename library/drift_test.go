@@ -399,10 +399,10 @@ func TestStoreCleanAfterEdit(t *testing.T) {
 	// and moves the directory. Both must leave the index clean.
 	tests := []struct {
 		name  string
-		edits model.Edits
+		edits Edits
 	}{
-		{"meta only", model.Edits{Status: new(string(model.StatusRead))}},
-		{"title change", model.Edits{Title: new("A Thoroughly Different Title")}},
+		{"meta only", Edits{Status: new(string(model.StatusRead))}},
+		{"title change", Edits{Title: new("A Thoroughly Different Title")}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

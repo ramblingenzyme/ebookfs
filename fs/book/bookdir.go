@@ -57,50 +57,50 @@ type field struct {
 	get func(*library.Book) string
 	// edits converts string input to typed Edits. Error return is for input
 	// parsing failures (e.g. strconv.Atoi); validation against the book's current
-	// state is centralized in model.Edits.Validate, so this needs no snapshot.
-	edits func(string) (model.Edits, error)
+	// state is centralized in library.Edits.Validate, so this needs no snapshot.
+	edits func(string) (library.Edits, error)
 }
 
 var fields = map[string]field{
 	"status": {
 		get: func(b *library.Book) string { return b.Status() },
-		edits: func(s string) (model.Edits, error) {
-			return model.Edits{Status: &s}, nil
+		edits: func(s string) (library.Edits, error) {
+			return library.Edits{Status: &s}, nil
 		},
 	},
 	"rating": {
 		get: func(b *library.Book) string { return strconv.FormatFloat(b.Rating(), 'f', -1, 64) },
-		edits: func(s string) (model.Edits, error) {
+		edits: func(s string) (library.Edits, error) {
 			n, err := strconv.ParseFloat(s, 64)
 			if err != nil {
-				return model.Edits{}, fmt.Errorf("invalid rating %q", s)
+				return library.Edits{}, fmt.Errorf("invalid rating %q", s)
 			}
-			return model.Edits{Rating: &n}, nil
+			return library.Edits{Rating: &n}, nil
 		},
 	},
 	"tags": {
 		get: func(b *library.Book) string { return strings.Join(b.Tags(), "\n") },
-		edits: func(s string) (model.Edits, error) {
+		edits: func(s string) (library.Edits, error) {
 			tags := strings.FieldsFunc(s, func(r rune) bool { return r == '\n' })
-			return model.Edits{Tags: &tags}, nil
+			return library.Edits{Tags: &tags}, nil
 		},
 	},
 	"title": {
 		get: func(b *library.Book) string { return b.Title() },
-		edits: func(s string) (model.Edits, error) {
-			return model.Edits{Title: &s}, nil
+		edits: func(s string) (library.Edits, error) {
+			return library.Edits{Title: &s}, nil
 		},
 	},
 	"language": {
 		get: func(b *library.Book) string { return b.Language() },
-		edits: func(s string) (model.Edits, error) {
-			return model.Edits{Language: &s}, nil
+		edits: func(s string) (library.Edits, error) {
+			return library.Edits{Language: &s}, nil
 		},
 	},
 	"description": {
 		get: func(b *library.Book) string { return b.Description() },
-		edits: func(s string) (model.Edits, error) {
-			return model.Edits{Description: &s}, nil
+		edits: func(s string) (library.Edits, error) {
+			return library.Edits{Description: &s}, nil
 		},
 	},
 	"authors": {
@@ -116,7 +116,7 @@ var fields = map[string]field{
 			}
 			return strings.Join(lines, "\n")
 		},
-		edits: func(s string) (model.Edits, error) {
+		edits: func(s string) (library.Edits, error) {
 			var authors []model.Author
 			for line := range strings.SplitSeq(s, "\n") {
 				a := textfmt.ParseAuthor(line)
@@ -126,15 +126,15 @@ var fields = map[string]field{
 				authors = append(authors, a)
 			}
 			if len(authors) == 0 {
-				return model.Edits{}, fmt.Errorf("at least one author is required")
+				return library.Edits{}, fmt.Errorf("at least one author is required")
 			}
-			return model.Edits{Authors: &authors}, nil
+			return library.Edits{Authors: &authors}, nil
 		},
 	},
 	"series": {
 		get: func(b *library.Book) string { return b.SeriesName() },
-		edits: func(s string) (model.Edits, error) {
-			return model.Edits{Series: &s}, nil
+		edits: func(s string) (library.Edits, error) {
+			return library.Edits{Series: &s}, nil
 		},
 	},
 	"series_index": {
@@ -146,9 +146,9 @@ var fields = map[string]field{
 		},
 		// Passed through as written: the position is a string all the way from
 		// the epub (EPUB 3.3 D.3.7 allows "2.2.1"), and its grammar is checked
-		// by model.Edits.Validate along with every other field's.
-		edits: func(s string) (model.Edits, error) {
-			return model.Edits{SeriesIndex: &s}, nil
+		// by library.Edits.Validate along with every other field's.
+		edits: func(s string) (library.Edits, error) {
+			return library.Edits{SeriesIndex: &s}, nil
 		},
 	},
 }
@@ -156,7 +156,7 @@ var fields = map[string]field{
 // NewBookDir builds the directory for a book. It takes the fs, the library
 // facade, and an edit callback (the registry passes its own edit method) rather
 // than the registry itself, so this package stays a leaf below the registry.
-func NewBookDir(f *fs.FS, lib library.Library, edit func(int64, model.Edits) error, book *library.Book) *BookDir {
+func NewBookDir(f *fs.FS, lib library.Library, edit func(int64, library.Edits) error, book *library.Book) *BookDir {
 	d := &BookDir{
 		StaticDir: *fs.NewStaticDir(newStat(f, model.PathSafe(book.Title()), 0755|proto.DMDIR)),
 	}
