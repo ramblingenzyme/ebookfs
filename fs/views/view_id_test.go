@@ -1,7 +1,7 @@
 package views
 
 import (
-	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/library"
 	"testing"
 )
@@ -15,36 +15,36 @@ func TestIDEntryName(t *testing.T) {
 	}{
 		{
 			name: "no padding for small id",
-			book: bookmodel.MakeBook(1, "Test", "Author"),
+			book: testutil.MakeBook(1, "Test", "Author"),
 			want: "1. Test",
 		},
 		{
 			name: "no padding when pad is 0",
-			book: bookmodel.MakeBook(42, "Test", "Author"),
+			book: testutil.MakeBook(42, "Test", "Author"),
 			pad:  0,
 			want: "42. Test",
 		},
 		{
 			name: "two-digit padding",
-			book: bookmodel.MakeBook(5, "Padded", "Author"),
+			book: testutil.MakeBook(5, "Padded", "Author"),
 			pad:  2,
 			want: "05. Padded",
 		},
 		{
 			name: "two-digit padding at boundary",
-			book: bookmodel.MakeBook(10, "Boundary", "Author"),
+			book: testutil.MakeBook(10, "Boundary", "Author"),
 			pad:  2,
 			want: "10. Boundary",
 		},
 		{
 			name: "three-digit padding",
-			book: bookmodel.MakeBook(42, "Large", "Author"),
+			book: testutil.MakeBook(42, "Large", "Author"),
 			pad:  3,
 			want: "042. Large",
 		},
 		{
 			name: "four-digit padding",
-			book: bookmodel.MakeBook(1, "Huge", "Author"),
+			book: testutil.MakeBook(1, "Huge", "Author"),
 			pad:  4,
 			want: "0001. Huge",
 		},

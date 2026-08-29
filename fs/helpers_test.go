@@ -5,7 +5,6 @@ package fs
 //     via setupServer() instead, which covers all setup logic.
 
 import (
-	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 )
 
@@ -13,7 +12,7 @@ import (
 // simple book/FS helpers in internal/testutil. These aliases let the composition
 // tests call them unqualified.
 var (
-	makeBook  = book.MakeMutableBook
+	makeBook  = testutil.MakeMutableBook
 	newTestFS = testutil.NewTestFS
 	errTest   = testutil.ErrTest
 )

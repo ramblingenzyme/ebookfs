@@ -1,7 +1,6 @@
 package book
 
 import (
-	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library"
 	"os"
 	"testing"
@@ -28,7 +27,7 @@ func TestEpubFileOpenRead(t *testing.T) {
 			return libfake.NewEpubReader([]byte("epub content"), nil, nil), nil
 		},
 	}
-	ef := newTestEpubFile(t, "test.epub", lib, testutil.Fixed(bookmodel.NewImmutableBook(bookmodel.MakeMutableBook(1, "Test", "Author"))))
+	ef := newTestEpubFile(t, "test.epub", lib, testutil.Fixed(testutil.MakeBook(1, "Test", "Author")))
 
 	fid := uint64(1)
 	if err := ef.Open(fid, proto.Mode(0)); err != nil {
@@ -47,9 +46,9 @@ func TestEpubFileOpenRead(t *testing.T) {
 }
 
 func TestEpubFileStatSize(t *testing.T) {
-	book := bookmodel.MakeMutableBook(1, "Test", "Author")
+	book := testutil.MakeMutableBook(1, "Test", "Author")
 	book.EpubPath = "/nonexistent/test.epub"
-	ef := newTestEpubFile(t, "test.epub", libfake.Lib{}, testutil.Fixed(bookmodel.NewImmutableBook(book)))
+	ef := newTestEpubFile(t, "test.epub", libfake.Lib{}, testutil.Fixed(testutil.WrapBook(book)))
 
 	s := ef.Stat()
 	if s.Name != "test.epub" {
@@ -80,11 +79,11 @@ func TestEpubFileStatWithRealFile(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	book := bookmodel.MakeMutableBook(1, "Test", "Author")
+	book := testutil.MakeMutableBook(1, "Test", "Author")
 	book.EpubPath = path
 	book.EpubSize = int64(len(content))
 
-	ef := newTestEpubFile(t, "book.epub", libfake.Lib{}, testutil.Fixed(bookmodel.NewImmutableBook(book)))
+	ef := newTestEpubFile(t, "book.epub", libfake.Lib{}, testutil.Fixed(testutil.WrapBook(book)))
 
 	s := ef.Stat()
 	if s.Name != "book.epub" {

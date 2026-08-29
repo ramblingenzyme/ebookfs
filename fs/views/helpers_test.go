@@ -1,10 +1,11 @@
 package views
 
 import (
+	"testing"
+
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/model"
-	"testing"
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/ramblingenzyme/ebookfs/fs/registry"
@@ -12,7 +13,7 @@ import (
 )
 
 var (
-	makeBook  = book.MakeMutableBook
+	makeBook  = testutil.MakeMutableBook
 	newTestFS = testutil.NewTestFS
 )
 

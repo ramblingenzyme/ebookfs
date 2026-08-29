@@ -1,7 +1,7 @@
 package fs
 
 import (
-	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/library"
 	"testing"
 
@@ -46,7 +46,7 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 				updated.SortTitle = *e.SortTitle
 			}
 			updated.Meta.DateModified = book.Meta.DateModified
-			return bookmodel.NewImmutableBook(&updated), nil
+			return testutil.WrapBook(&updated), nil
 		},
 	}
 	reg := registry.NewBookRegistry(f, lib)
@@ -55,7 +55,7 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 	byAuthor := views.NewByAuthorDir(reg)
 	byID := views.NewByIDDir(reg)
 
-	reg.Add(bookmodel.NewImmutableBook(book))
+	reg.Add(testutil.WrapBook(book))
 
 	// Edit the title via its fieldFile.
 	bd := allBooks.Children()["Old Title"].(fs.Dir)
@@ -94,7 +94,7 @@ func TestRegistryEditAuthorsRehomesInByAuthor(t *testing.T) {
 				updated.Authors = *e.Authors
 			}
 			updated.Meta.DateModified = book.Meta.DateModified
-			return bookmodel.NewImmutableBook(&updated), nil
+			return testutil.WrapBook(&updated), nil
 		},
 	}
 	reg := registry.NewBookRegistry(f, lib)
@@ -102,7 +102,7 @@ func TestRegistryEditAuthorsRehomesInByAuthor(t *testing.T) {
 	allBooks := views.NewAllBooksDir(reg)
 	byAuthor := views.NewByAuthorDir(reg)
 
-	reg.Add(bookmodel.NewImmutableBook(book))
+	reg.Add(testutil.WrapBook(book))
 
 	// Change authors from Alice to Bob.
 	bd := allBooks.Children()["Test"].(fs.Dir)
@@ -138,14 +138,14 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 				updated.Meta.Status = *e.Status
 			}
 			updated.Meta.DateModified = book.Meta.DateModified
-			return bookmodel.NewImmutableBook(&updated), nil
+			return testutil.WrapBook(&updated), nil
 		},
 	}
 	reg := registry.NewBookRegistry(f, lib)
 	allBooks := views.NewAllBooksDir(reg)
 	readerDir := views.NewReaderDir(reg, libfake.Exporter{StatusList: []string{"reading"}})
 
-	reg.Add(bookmodel.NewImmutableBook(book))
+	reg.Add(testutil.WrapBook(book))
 
 	// Reader view should not show the book when status is "unread".
 	if n := len(readerDir.Children()); n != 0 {

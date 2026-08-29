@@ -86,25 +86,6 @@ func (b *Book) SeriesName() string {
 	return b.Series.Name
 }
 
-// MakeBook creates an ImmutableBook with the given id, title, and author names for testing.
-func MakeBook(id int64, title string, authors ...string) *ImmutableBook {
-	return NewImmutableBook(MakeMutableBook(id, title, authors...))
-}
-
-// MakeMutableBook creates a mutable Book with the given id, title, and author names for testing.
-// This is for internal test use where mutation is needed.
-func MakeMutableBook(id int64, title string, authors ...string) *Book {
-	auths := make([]Author, len(authors))
-	for i, name := range authors {
-		auths[i] = Author{Name: name}
-	}
-	return NewBook(
-		Bib{Title: title, Authors: auths},
-		Meta{ID: id},
-		Location{},
-	)
-}
-
 // ImmutableBook is an immutable snapshot of a book's state. It wraps the
 // internal Book and provides read-only access via getters. The wrapper prevents
 // external callers from mutating library state, while allowing internal

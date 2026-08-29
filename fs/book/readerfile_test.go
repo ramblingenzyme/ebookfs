@@ -1,7 +1,6 @@
 package book
 
 import (
-	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library"
 	"testing"
 
@@ -14,7 +13,7 @@ import (
 func testReaderFile(t *testing.T, exp library.Exporter) *ReaderFile {
 	t.Helper()
 	f := testutil.NewTestFS(t)
-	book := bookmodel.MakeBook(1, "Test", "Author")
+	book := testutil.MakeBook(1, "Test", "Author")
 	return NewReaderFile(newStat(f, "test.epub", 0444), exp, testutil.Fixed(book))
 }
 

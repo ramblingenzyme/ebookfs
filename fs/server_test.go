@@ -2,7 +2,7 @@ package fs
 
 import (
 	"context"
-	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/library"
 	"testing"
 	"time"
@@ -20,7 +20,7 @@ func TestSetupServer(t *testing.T) {
 			b1.Meta.Status = "unread"
 			b2 := makeBook(2, "Book Two", "Bob")
 			b2.Meta.Status = "read"
-			return []*library.Book{bookmodel.NewImmutableBook(b1), bookmodel.NewImmutableBook(b2)}, nil
+			return []*library.Book{testutil.WrapBook(b1), testutil.WrapBook(b2)}, nil
 		},
 	}
 	exp := libfake.Exporter{StatusList: []string{"unread"}}
@@ -59,7 +59,7 @@ func TestSetupServer_BooksPopulated(t *testing.T) {
 		SearchFn: func(_ model.Query) ([]*library.Book, error) {
 			b := makeBook(1, "Present", "Alice")
 			b.Meta.Status = "unread"
-			return []*library.Book{bookmodel.NewImmutableBook(b)}, nil
+			return []*library.Book{testutil.WrapBook(b)}, nil
 		},
 	}
 	srv, err := SetupServer(lib, libfake.Exporter{}, 30*time.Minute, 100)

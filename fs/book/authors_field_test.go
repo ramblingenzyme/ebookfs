@@ -2,6 +2,7 @@ package book
 
 import (
 	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/library"
 	"testing"
 
@@ -16,17 +17,17 @@ func TestAuthorsFieldGet(t *testing.T) {
 	}{
 		{
 			"no authors",
-			bookmodel.NewImmutableBook(bookmodel.NewBook(bookmodel.Bib{Title: "T"}, bookmodel.Meta{ID: 1}, bookmodel.Location{})),
+			testutil.WrapBook(bookmodel.NewBook(bookmodel.Bib{Title: "T"}, bookmodel.Meta{ID: 1}, bookmodel.Location{})),
 			"",
 		},
 		{
 			"no sort name",
-			bookmodel.NewImmutableBook(bookmodel.NewBook(bookmodel.Bib{Title: "T", Authors: []model.Author{{Name: "Alice"}}}, bookmodel.Meta{ID: 1}, bookmodel.Location{})),
+			testutil.WrapBook(bookmodel.NewBook(bookmodel.Bib{Title: "T", Authors: []model.Author{{Name: "Alice"}}}, bookmodel.Meta{ID: 1}, bookmodel.Location{})),
 			"Alice",
 		},
 		{
 			"with sort name",
-			bookmodel.NewImmutableBook(bookmodel.NewBook(
+			testutil.WrapBook(bookmodel.NewBook(
 				bookmodel.Bib{Title: "T", Authors: []model.Author{{Name: "Alice", SortName: "Smith, Alice"}}},
 				bookmodel.Meta{ID: 1},
 				bookmodel.Location{}),
@@ -35,7 +36,7 @@ func TestAuthorsFieldGet(t *testing.T) {
 		},
 		{
 			"multi-author mixed",
-			bookmodel.NewImmutableBook(bookmodel.NewBook(
+			testutil.WrapBook(bookmodel.NewBook(
 				bookmodel.Bib{Title: "T", Authors: []model.Author{
 					{Name: "Alice", SortName: "Smith, Alice"},
 					{Name: "Bob"},

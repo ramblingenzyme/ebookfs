@@ -12,7 +12,7 @@ import (
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/fs/book"
 	"github.com/ramblingenzyme/ebookfs/fs/registry"
-	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library/model"
 )
@@ -43,7 +43,7 @@ func TestRegistryAddAndRemove(t *testing.T) {
 func TestRegistryRemoveUnknownID(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
-	reg.Add(bookmodel.MakeBook(1, "Kept", "Author"))
+	reg.Add(testutil.MakeBook(1, "Kept", "Author"))
 
 	reg.Remove(999)
 
@@ -79,8 +79,8 @@ func TestBooksDirMultipleBooks(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
 
-	reg.Add(bookmodel.MakeBook(1, "Alpha", "Author"))
-	reg.Add(bookmodel.MakeBook(2, "Beta", "Author"))
+	reg.Add(testutil.MakeBook(1, "Alpha", "Author"))
+	reg.Add(testutil.MakeBook(2, "Beta", "Author"))
 
 	children := dirChildNames(d)
 	if len(children) != 2 {
@@ -92,8 +92,8 @@ func TestBooksDirRemoveOnlyOne(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
 
-	reg.Add(bookmodel.MakeBook(1, "Keep", "Author"))
-	reg.Add(bookmodel.MakeBook(2, "Remove", "Author"))
+	reg.Add(testutil.MakeBook(1, "Keep", "Author"))
+	reg.Add(testutil.MakeBook(2, "Remove", "Author"))
 
 	reg.Remove(2)
 
@@ -114,7 +114,7 @@ func TestBooksDirSlashInTitleIsOneEntry(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
 
-	reg.Add(bookmodel.MakeBook(1, "Either/Or", "Author"))
+	reg.Add(testutil.MakeBook(1, "Either/Or", "Author"))
 
 	children := dirChildNames(d)
 	if len(children) != 1 {
@@ -144,7 +144,7 @@ func TestGroupNamesAreOneComponent(t *testing.T) {
 		{
 			name: "by-author",
 			dir:  func(reg *registry.BookRegistry) fs.Dir { return NewByAuthorDir(reg) },
-			book: func() *library.Book { return bookmodel.MakeBook(1, "Title", "Doe/Jane") },
+			book: func() *library.Book { return testutil.MakeBook(1, "Title", "Doe/Jane") },
 		},
 		{
 			name: "by-series",
@@ -224,7 +224,7 @@ var groupingViews = []groupingView{
 		name:   "by-author",
 		newDir: func(reg *registry.BookRegistry) fs.Dir { return NewByAuthorDir(reg) },
 		withKeys: func(id int64, title string, keys ...string) *library.Book {
-			return bookmodel.MakeBook(id, title, keys...)
+			return testutil.MakeBook(id, title, keys...)
 		},
 		keyless: func(id int64, title string) *library.Book {
 			b := makeBook(id, title)
@@ -241,7 +241,7 @@ var groupingViews = []groupingView{
 			b.Series = &model.SeriesRef{Name: keys[0], Index: strconv.FormatInt(id, 10)}
 			return wrapBook(b)
 		},
-		keyless: func(id int64, title string) *library.Book { return bookmodel.MakeBook(id, title, "Author") },
+		keyless: func(id int64, title string) *library.Book { return testutil.MakeBook(id, title, "Author") },
 		// Series entries lead with the index so a plain readdir reads in order.
 		entryName: func(id int64, title string) string { return fmt.Sprintf("%d - %s", id, title) },
 	},
@@ -448,8 +448,8 @@ func TestByIDDirMultipleBooks(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewByIDDir(reg)
 
-	reg.Add(bookmodel.MakeBook(1, "Alpha", "Author"))
-	reg.Add(bookmodel.MakeBook(2, "Beta", "Author"))
+	reg.Add(testutil.MakeBook(1, "Alpha", "Author"))
+	reg.Add(testutil.MakeBook(2, "Beta", "Author"))
 
 	children := dirChildNames(d)
 	if len(children) != 2 {
@@ -462,7 +462,7 @@ func TestByIDDirMultipleBooks(t *testing.T) {
 func TestByIDDirRemoveUnknown(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewByIDDir(reg)
-	reg.Add(bookmodel.MakeBook(1, "Kept", "Author"))
+	reg.Add(testutil.MakeBook(1, "Kept", "Author"))
 
 	reg.Remove(999)
 
@@ -650,7 +650,7 @@ func TestBySeriesDirRemoveNilSeriesNoOp(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewBySeriesDir(reg)
 
-	b := bookmodel.MakeBook(1, "No Series", "Author")
+	b := testutil.MakeBook(1, "No Series", "Author")
 	bd := book.NewBookDir(newTestFS(t), libfake.Lib{}, func(int64, model.Edits) error { return nil }, b)
 
 	d.Remove(bd) // Should not panic — early return when Series is nil

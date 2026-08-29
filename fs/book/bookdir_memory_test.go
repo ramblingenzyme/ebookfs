@@ -3,6 +3,7 @@ package book
 import (
 	"fmt"
 	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/library"
 	"path/filepath"
 	"runtime"
@@ -46,7 +47,7 @@ func representativeBook(id int64, withCover bool) *library.Book {
 	}
 	libPath := "Le Guin, Ursula K/The Left Hand of Darkness (1042)"
 	epubName := "The Left Hand of Darkness - Ursula K. Le Guin.epub"
-	return bookmodel.NewImmutableBook(bookmodel.NewBook(bib, bookmodel.Meta{ID: id, Status: "unread", Tags: []string{"sci-fi", "classic", "feminist"}}, bookmodel.Location{
+	return testutil.WrapBook(bookmodel.NewBook(bib, bookmodel.Meta{ID: id, Status: "unread", Tags: []string{"sci-fi", "classic", "feminist"}}, bookmodel.Location{
 		EpubPath: filepath.Join(libPath, epubName),
 	}))
 }

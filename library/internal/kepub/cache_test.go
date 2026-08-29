@@ -338,4 +338,4 @@ func waitForWarm(t *testing.T, f func() bool) bool {
 	}
 }
 
-var makeBook = bookmodel.MakeMutableBook
+var makeBook = testutil.MakeMutableBook

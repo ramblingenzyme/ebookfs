@@ -1,7 +1,6 @@
 package book
 
 import (
-	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 	"testing"
 
 	"github.com/knusbaum/go9p/proto"
@@ -17,9 +16,9 @@ import (
 
 func newTestCoverFile(t *testing.T, lib libfake.Lib, edit func(int64, model.Edits) error) *coverFile {
 	t.Helper()
-	book := bookmodel.MakeMutableBook(1, "Test", "Author")
+	book := testutil.MakeMutableBook(1, "Test", "Author")
 	book.CoverSize = 16
-	return newCoverFile(newStat(testutil.NewTestFS(t), "cover.jpg", 0644), lib, edit, testutil.Fixed(bookmodel.NewImmutableBook(book)))
+	return newCoverFile(newStat(testutil.NewTestFS(t), "cover.jpg", 0644), lib, edit, testutil.Fixed(testutil.WrapBook(book)))
 }
 
 func TestCoverFileStatLength(t *testing.T) {
@@ -32,8 +31,8 @@ func TestCoverFileStatLength(t *testing.T) {
 
 func TestCoverFileStatLengthNilLib(t *testing.T) {
 	f := testutil.NewTestFS(t)
-	book := bookmodel.MakeMutableBook(1, "Test", "Author")
-	cf := newCoverFile(newStat(f, "cover.jpg", 0644), nil, func(int64, model.Edits) error { return nil }, testutil.Fixed(bookmodel.NewImmutableBook(book)))
+	book := testutil.MakeBook(1, "Test", "Author")
+	cf := newCoverFile(newStat(f, "cover.jpg", 0644), nil, func(int64, model.Edits) error { return nil }, testutil.Fixed(book))
 
 	if s := cf.Stat(); s.Length != 0 {
 		t.Errorf("Stat().Length with nil lib = %d, want 0", s.Length)

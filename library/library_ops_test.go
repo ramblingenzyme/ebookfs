@@ -1,7 +1,7 @@
 package library
 
 import (
-	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"io"
 	"os"
 	"path/filepath"
@@ -106,11 +106,11 @@ func TestLibraryImplExporter(t *testing.T) {
 	}
 	book := makeBook(1, "Test", "Author")
 	book.Meta.Status = "unread"
-	if !e.Includes(bookmodel.NewImmutableBook(book)) {
+	if !e.Includes(testutil.WrapBook(book)) {
 		t.Errorf("Includes should return true for a book with status %q", book.Meta.Status)
 	}
 	book.Meta.Status = "read"
-	if e.Includes(bookmodel.NewImmutableBook(book)) {
+	if e.Includes(testutil.WrapBook(book)) {
 		t.Errorf("Includes should return false for a book with status %q", book.Meta.Status)
 	}
 }

@@ -5,7 +5,6 @@ package inbox
 
 import (
 	"errors"
-	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 	"testing"
 	"time"
 
@@ -35,7 +34,7 @@ func TestInboxFileOpenWriteCloseIngests(t *testing.T) {
 	f := testutil.NewTestFS(t)
 	lib := libfake.Lib{
 		IngestFn: func(_ string) (*library.Book, error) {
-			return bookmodel.MakeBook(42, "Ingested", "Author"), nil
+			return testutil.MakeBook(42, "Ingested", "Author"), nil
 		},
 	}
 
@@ -148,7 +147,7 @@ func TestInboxFileReopenAfterClose(t *testing.T) {
 	lib := libfake.Lib{
 		IngestFn: func(_ string) (*library.Book, error) {
 			ingestCount++
-			return bookmodel.NewImmutableBook(bookmodel.MakeMutableBook(int64(ingestCount), "Test", "Author")), nil
+			return testutil.MakeBook(int64(ingestCount), "Test", "Author"), nil
 		},
 	}
 
@@ -185,7 +184,7 @@ func TestInboxFileCloseWithParentDeadlockRegression(t *testing.T) {
 	f := testutil.NewTestFS(t)
 	lib := libfake.Lib{
 		IngestFn: func(_ string) (*library.Book, error) {
-			return bookmodel.MakeBook(42, "Test", "Author"), nil
+			return testutil.MakeBook(42, "Test", "Author"), nil
 		},
 	}
 

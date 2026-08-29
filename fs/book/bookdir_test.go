@@ -1,7 +1,6 @@
 package book
 
 import (
-	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library"
 	"testing"
 
@@ -19,10 +18,10 @@ func newTestBookDir(t *testing.T, b *library.Book) *BookDir {
 }
 
 func TestNewBookDirCreatesCoverChild(t *testing.T) {
-	b := bookmodel.MakeMutableBook(1, "Has Cover", "Author")
+	b := testutil.MakeMutableBook(1, "Has Cover", "Author")
 	b.CoverPath = "OEBPS/cover.jpg"
 
-	d := newTestBookDir(t, bookmodel.NewImmutableBook(b))
+	d := newTestBookDir(t, testutil.WrapBook(b))
 
 	if _, ok := d.Children()["cover.jpg"]; !ok {
 		t.Error("BookDir should contain 'cover.jpg' when CoverPath is set")
@@ -30,10 +29,10 @@ func TestNewBookDirCreatesCoverChild(t *testing.T) {
 }
 
 func TestNewBookDirNoCoverWhenEmpty(t *testing.T) {
-	b := bookmodel.MakeMutableBook(1, "No Cover", "Author")
+	b := testutil.MakeMutableBook(1, "No Cover", "Author")
 	b.CoverPath = ""
 
-	d := newTestBookDir(t, bookmodel.NewImmutableBook(b))
+	d := newTestBookDir(t, testutil.WrapBook(b))
 
 	if _, ok := d.Children()["cover.jpg"]; ok {
 		t.Error("BookDir should not contain 'cover.jpg' when CoverPath is empty")
@@ -41,7 +40,7 @@ func TestNewBookDirNoCoverWhenEmpty(t *testing.T) {
 }
 
 func TestBookDirStatReportsTitle(t *testing.T) {
-	d := newTestBookDir(t, bookmodel.MakeBook(1, "My Title", "Author"))
+	d := newTestBookDir(t, testutil.MakeBook(1, "My Title", "Author"))
 
 	s := d.Stat()
 	if s.Name != "My Title" {
@@ -50,7 +49,7 @@ func TestBookDirStatReportsTitle(t *testing.T) {
 }
 
 func TestBookDirHasIDChild(t *testing.T) {
-	d := newTestBookDir(t, bookmodel.MakeBook(1, "Test", "Author"))
+	d := newTestBookDir(t, testutil.MakeBook(1, "Test", "Author"))
 
 	child := d.Children()["id"]
 	if child == nil {
