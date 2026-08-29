@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
 )
 
 // TestEditSelfHealsLegacyUnsanitizedFilename reproduces a production bug: a

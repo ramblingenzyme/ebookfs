@@ -25,8 +25,8 @@ import (
 
 	"github.com/beevik/etree"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
+	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // --- dc:title selection -------------------------------------------------------

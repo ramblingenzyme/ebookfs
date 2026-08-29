@@ -16,8 +16,8 @@ import (
 	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
+	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // --- writer-only helpers ---------------------------------------------------

@@ -28,8 +28,8 @@ import (
 
 	"github.com/beevik/etree"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
+	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // item is a piece of metadata no part of ebookfs writes, reads, or understands:
