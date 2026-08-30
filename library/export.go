@@ -8,10 +8,10 @@ import (
 	"slices"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/internal/naming"
 	"github.com/ramblingenzyme/ebookfs/library/config"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/internal/kepub"
-	"github.com/ramblingenzyme/ebookfs/internal/naming"
 )
 
 func newExporter(cfg config.ReaderConfig, lib *libraryImpl) (Exporter, error) {
