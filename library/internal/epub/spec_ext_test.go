@@ -775,7 +775,7 @@ func TestSpecNewRefineSpellsItsSchemeAndProperty(t *testing.T) {
 // substitution has destroyed the value.
 //
 // A title becomes a path component downstream, which the path layer handles:
-// model.PathSafe for directory and 9P names, naming.ForFAT for the filename.
+// naming.PathSafe for directory and 9P names, naming.ForFAT for the filename.
 
 func TestSpecSlashInAValueIsNotRewritten(t *testing.T) {
 	path := buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>

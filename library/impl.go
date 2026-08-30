@@ -17,7 +17,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index"
 	"github.com/ramblingenzyme/ebookfs/library/internal/store"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 type libraryImpl struct {
@@ -87,7 +86,7 @@ func (l *libraryImpl) get(id int64) (*book.Book, error) {
 
 // Content returns an open handle to the book's epub content. The caller must
 // close it.
-func (l *libraryImpl) Content(id int64) (model.EpubReader, error) {
+func (l *libraryImpl) Content(id int64) (EpubReader, error) {
 	b, err := l.get(id)
 	if err != nil {
 		return nil, err

@@ -4,18 +4,35 @@ import (
 	"archive/zip"
 	"errors"
 	"fmt"
+	"io"
 	"os"
-
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 var ErrClosed = errors.New("epub reader is closed")
+
+// EpubReader provides access to a book's epub content from an open handle.
+// The handle keeps the file and zip central directory open so repeated calls
+// to OPF or Cover avoid re-reading. Close when done.
+//
+// Implementations of methods that return an EpubReader (Library.Content,
+// Exporter.Open) must return a non-nil reader if err is nil; a nil reader with
+// a nil error is a contract violation.
+//
+// An EpubReader is a snapshot of the book at open time — it does not track
+// edits. After a concurrent Edit, call Library.Content again for a handle
+// that reads from the updated file.
+type EpubReader interface {
+	io.ReaderAt
+	io.Closer
+	OPF() ([]byte, error)   // OPF XML from the open epub
+	Cover() ([]byte, error) // cover image from the open epub
+}
 
 // Reader provides random access to an epub's contents through a single open
 // file handle. The underlying *os.File and zip.Reader stay open, so repeated
 // calls to OPF or Cover avoid re-reading the zip central directory.
 //
-// Reader satisfies model.EpubReader (io.ReaderAt + io.Closer + OPF + Cover).
+// Reader satisfies EpubReader (io.ReaderAt + io.Closer + OPF + Cover).
 type Reader struct {
 	f *os.File
 	// a indexes the entries and holds the resolved package document path. The
@@ -29,7 +46,7 @@ type Reader struct {
 // coverPath is the zip-relative path to the cover image (from book.Bib.CoverPath);
 // it may be empty. The returned reader keeps the file open; the caller must call
 // Close. The reader is non-nil iff err is nil.
-func OpenReader(epubPath, coverPath string) (model.EpubReader, error) {
+func OpenReader(epubPath, coverPath string) (EpubReader, error) {
 	f, err := os.Open(epubPath)
 	if err != nil {
 		return nil, err

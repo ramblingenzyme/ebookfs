@@ -9,8 +9,6 @@ import (
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
-
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // Read/open/close semantics are covered by the readAtFile base tests in
@@ -24,7 +22,7 @@ func newTestEpubFile(t *testing.T, name string, lib libfake.Lib, get func() *lib
 
 func TestEpubFileOpenRead(t *testing.T) {
 	lib := libfake.Lib{
-		ContentFn: func(_ int64) (model.EpubReader, error) {
+		ContentFn: func(_ int64) (library.EpubReader, error) {
 			return libfake.NewEpubReader([]byte("epub content"), nil, nil), nil
 		},
 	}

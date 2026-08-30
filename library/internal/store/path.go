@@ -7,8 +7,7 @@ import (
 	"strings"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-	"github.com/ramblingenzyme/ebookfs/library/internal/naming"
-	"github.com/ramblingenzyme/ebookfs/library/model"
+	"github.com/ramblingenzyme/ebookfs/internal/naming"
 )
 
 // Layout returns the canonical on-disk location for a book with the given
@@ -47,11 +46,11 @@ func epubFilename(authors []book.Author, title string) string {
 // otherwise split one directory into two. epubFilename does its own, stricter
 // pass for the file itself.
 func authorDirName(authors []book.Author) string {
-	return model.PathSafe(book.JoinAuthors(authors, " & "))
+	return naming.PathSafe(book.JoinAuthors(authors, " & "))
 }
 
 func canonicalDir(authors []book.Author, title string, id int64) string {
-	return filepath.Join(authorDirName(authors), fmt.Sprintf("%s (%d)", model.PathSafe(title), id))
+	return filepath.Join(authorDirName(authors), fmt.Sprintf("%s (%d)", naming.PathSafe(title), id))
 }
 
 // IDFromPath recovers the book id that canonicalDir encoded in a library path's

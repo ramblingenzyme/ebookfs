@@ -8,11 +8,10 @@ import (
 	"slices"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/internal/naming"
 	"github.com/ramblingenzyme/ebookfs/library/config"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/internal/kepub"
-	"github.com/ramblingenzyme/ebookfs/library/internal/naming"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 func newExporter(cfg config.ReaderConfig, lib *libraryImpl) (Exporter, error) {
@@ -54,7 +53,7 @@ type kepubCache struct {
 	*kepub.Cache
 }
 
-func (k *kepubCache) Open(b *Book) (model.EpubReader, error) {
+func (k *kepubCache) Open(b *Book) (EpubReader, error) {
 	return k.Cache.Open(book.Unwrap(b))
 }
 
@@ -75,7 +74,7 @@ type epubExporter struct {
 	lib *libraryImpl
 }
 
-func (e epubExporter) Open(b *Book) (model.EpubReader, error) {
+func (e epubExporter) Open(b *Book) (EpubReader, error) {
 	return epub.OpenReader(e.lib.store.AbsPath(b.EpubPath()), b.CoverPath())
 }
 

@@ -85,7 +85,7 @@ func (o *Doc) Bib(base string) (*book.Bib, error) {
 	// Reported as written. §5.5.2 licenses stripping and collapsing whitespace,
 	// which get already did, and nothing else: a value is text, not a path
 	// component. Making it safe to use as one is the business of whoever builds
-	// the path — model.PathSafe, called by the store and the 9P names.
+	// the path — naming.PathSafe, called by the store and the 9P names.
 	title, sortTitle := o.title().get()
 	if title == "" {
 		return nil, errors.New("no title")

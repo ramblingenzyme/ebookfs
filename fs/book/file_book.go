@@ -6,7 +6,6 @@ import (
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/library"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // newStat is the package-local shorthand for vfile.NewStat, the single
@@ -116,7 +115,7 @@ type epubFile struct {
 
 func newEpubFile(stat *proto.Stat, lib library.Library, book func() *library.Book) *epubFile {
 	return &epubFile{
-		ReadAtFile: vfile.NewReadAtFile(stat, func() (model.EpubReader, error) {
+		ReadAtFile: vfile.NewReadAtFile(stat, func() (library.EpubReader, error) {
 			if lib == nil {
 				return nil, errors.New("library not available")
 			}

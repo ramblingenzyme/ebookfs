@@ -3,7 +3,7 @@ package views
 import (
 	"github.com/ramblingenzyme/ebookfs/fs/book"
 	"github.com/ramblingenzyme/ebookfs/fs/registry"
-	"github.com/ramblingenzyme/ebookfs/library/model"
+	"github.com/ramblingenzyme/ebookfs/internal/naming"
 )
 
 type byAuthorDir struct{ groupingDir }
@@ -17,7 +17,7 @@ func NewByAuthorDir(reg *registry.BookRegistry) *byAuthorDir {
 // authorEntryName maps an author to their by-author directory name. Add and
 // Remove must mint the same name or removals miss, so the mapping lives in one
 // place — the same rule tagEntryName follows.
-func authorEntryName(name string) string { return model.PathSafe(name) }
+func authorEntryName(name string) string { return naming.PathSafe(name) }
 
 func (d *byAuthorDir) Add(dir *book.BookDir) {
 	for _, a := range dir.Book().Authors() {

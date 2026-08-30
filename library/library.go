@@ -10,10 +10,10 @@ import (
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/config"
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index"
 	"github.com/ramblingenzyme/ebookfs/library/internal/store"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 type Edits = edits.Edits
@@ -24,6 +24,7 @@ type Order = index.Order
 type Stats = index.Stats
 type Author = book.Author
 type Series = book.SeriesRef
+type EpubReader = epub.EpubReader
 
 const (
 	OrderSortTitle    = index.OrderSortTitle
@@ -73,7 +74,7 @@ type Library interface {
 	// must close it. The handle reflects the book at the time of the call;
 	// after a concurrent Edit, call Content again to read updated content.
 	// The returned reader is non-nil iff err is nil.
-	Content(id int64) (model.EpubReader, error)
+	Content(id int64) (EpubReader, error)
 	Edit(id int64, e Edits) (*Book, error)
 	Delete(id int64) error
 }
@@ -92,7 +93,7 @@ type Exporter interface {
 	// Open returns a handle to the book's export rendition. The handle is a
 	// snapshot — after the book is edited, call Open again for updated content.
 	// The returned reader is non-nil iff err is nil.
-	Open(*Book) (model.EpubReader, error)
+	Open(*Book) (EpubReader, error)
 	Size(*Book) (int64, bool) // cheap; 9P stat length, false when cold
 	Warm(*Book)               // non-blocking proactive warm hint
 	Filename(*Book) string    // FAT-safe export name

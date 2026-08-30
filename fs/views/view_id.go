@@ -8,15 +8,15 @@ import (
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/fs/book"
 	"github.com/ramblingenzyme/ebookfs/fs/registry"
+	"github.com/ramblingenzyme/ebookfs/internal/naming"
 	"github.com/ramblingenzyme/ebookfs/library"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 func idEntryName(b *library.Book, pad int) string {
 	if pad > 0 {
-		return fmt.Sprintf("%0*d. %s", pad, b.ID(), model.PathSafe(b.Title()))
+		return fmt.Sprintf("%0*d. %s", pad, b.ID(), naming.PathSafe(b.Title()))
 	}
-	return fmt.Sprintf("%d. %s", b.ID(), model.PathSafe(b.Title()))
+	return fmt.Sprintf("%d. %s", b.ID(), naming.PathSafe(b.Title()))
 }
 
 type byIDDir struct {

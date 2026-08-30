@@ -1,9 +1,5 @@
-// Package drift holds the vocabulary of startup drift detection: the on-disk
-// state of a book's files, as observed by the store and persisted by the index.
-//
-// It exists as its own package because both of those need the type and neither
-// imports the other, and because library/model is the vocabulary the frontends
-// share — this is internal bookkeeping they never see.
+// Package drift holds the on-disk state of a book's files for startup drift
+// detection. The store observes it; the index persists it.
 package drift
 
 import "time"
