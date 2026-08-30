@@ -5,7 +5,6 @@ import (
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/ramblingenzyme/ebookfs/fs/registry"
@@ -23,7 +22,7 @@ func wrapBook(b *book.Book) *library.Book {
 
 func makeBookWithSeries(id int64, title, author string, seriesName, seriesIndex string) *library.Book {
 	b := makeBook(id, title, author)
-	b.Series = &model.SeriesRef{Name: seriesName, Index: seriesIndex}
+	b.Series = &library.SeriesRef{Name: seriesName, Index: seriesIndex}
 	return wrapBook(b)
 }
 

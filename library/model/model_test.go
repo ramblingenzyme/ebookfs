@@ -2,6 +2,8 @@ package model
 
 import (
 	"testing"
+
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
 func TestPathSafe(t *testing.T) {
@@ -36,15 +38,15 @@ func TestPathSafe(t *testing.T) {
 func TestJoinAuthors(t *testing.T) {
 	tests := []struct {
 		name    string
-		authors []Author
+		authors []book.Author
 		sep     string
 		want    string
 	}{
-		{"single", []Author{{Name: "Alice"}}, ", ", "Alice"},
-		{"multiple", []Author{{Name: "Alice"}, {Name: "Bob"}}, ", ", "Alice, Bob"},
-		{"directory separator", []Author{{Name: "Alice"}, {Name: "Bob"}}, " & ", "Alice & Bob"},
-		{"empty names", []Author{{Name: ""}, {Name: ""}}, ", ", UnknownAuthor},
-		{"mixed empty and valid", []Author{{Name: ""}, {Name: "Alice"}}, ", ", "Alice"},
+		{"single", []book.Author{{Name: "Alice"}}, ", ", "Alice"},
+		{"multiple", []book.Author{{Name: "Alice"}, {Name: "Bob"}}, ", ", "Alice, Bob"},
+		{"directory separator", []book.Author{{Name: "Alice"}, {Name: "Bob"}}, " & ", "Alice & Bob"},
+		{"empty names", []book.Author{{Name: ""}, {Name: ""}}, ", ", UnknownAuthor},
+		{"mixed empty and valid", []book.Author{{Name: ""}, {Name: "Alice"}}, ", ", "Alice"},
 		{"nil", nil, ", ", UnknownAuthor},
 	}
 	for _, tt := range tests {

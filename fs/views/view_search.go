@@ -16,7 +16,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/fs/textfmt"
 	"github.com/ramblingenzyme/ebookfs/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/library"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // Each matcher answers for one query field. An empty field imposes no
@@ -26,7 +25,7 @@ import (
 // matchesAuthors matches any of q.Authors against either author column, as
 // Index.Search does in SQL.
 func matchesAuthors(q library.Query, b *library.Book) bool {
-	return len(q.Authors) == 0 || slices.ContainsFunc(b.Authors(), func(a model.Author) bool {
+	return len(q.Authors) == 0 || slices.ContainsFunc(b.Authors(), func(a library.Author) bool {
 		return slices.Contains(q.Authors, a.Name) || slices.Contains(q.Authors, a.SortName)
 	})
 }

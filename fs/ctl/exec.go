@@ -9,7 +9,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/fs/textfmt"
 	"github.com/ramblingenzyme/ebookfs/library"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // execute parses a command line, dispatches it, and returns the result string.
@@ -297,9 +296,9 @@ func idsOnly(q library.Query) bool {
 // dedupeAuthors returns authors with duplicate display names removed, keeping
 // the first occurrence of each name. rename-author uses it to fold a renamed
 // author into a matching one the book already carries instead of duplicating it.
-func dedupeAuthors(authors []model.Author) []model.Author {
+func dedupeAuthors(authors []library.Author) []library.Author {
 	seen := make(map[string]bool, len(authors))
-	out := make([]model.Author, 0, len(authors))
+	out := make([]library.Author, 0, len(authors))
 	for _, a := range authors {
 		if seen[a.Name] {
 			continue

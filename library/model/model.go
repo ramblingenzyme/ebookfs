@@ -57,7 +57,7 @@ func PathSafe(s string) string {
 // names and falling back to UnknownAuthor when none remain. Callers differ only
 // in sep (" & " for directory names, ", " for log lines), so the filter and
 // fallback live here rather than being re-derived at each site.
-func JoinAuthors(authors []Author, sep string) string {
+func JoinAuthors(authors []book.Author, sep string) string {
 	names := make([]string, 0, len(authors))
 	for _, a := range authors {
 		if a.Name != "" {
@@ -69,9 +69,3 @@ func JoinAuthors(authors []Author, sep string) string {
 	}
 	return strings.Join(names, sep)
 }
-
-// Author represents a book author with optional sort name for display.
-type Author = book.Author
-
-// SeriesRef identifies a book's series membership and position.
-type SeriesRef = book.SeriesRef

@@ -3,8 +3,8 @@ package opf
 import (
 	"slices"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf/pkgdoc"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 type authorsField struct{ d *pkgdoc.Doc }
@@ -28,8 +28,8 @@ func (f authorsField) creators() []*pkgdoc.Element {
 
 // get returns the authors in document order, which §5.5.3.2.3 makes the display
 // order.
-func (f authorsField) get() []model.Author {
-	var out []model.Author
+func (f authorsField) get() []book.Author {
+	var out []book.Author
 	for _, c := range f.creators() {
 		// Reported as written; §5.5.2 requires a non-empty value, so a creator
 		// with none is not an author. Making a name safe to use as a path
@@ -42,14 +42,14 @@ func (f authorsField) get() []model.Author {
 		if sortAs == "" {
 			sortAs = c.Refine("file-as").Get()
 		}
-		out = append(out, model.Author{Name: name, SortName: sortAs})
+		out = append(out, book.Author{Name: name, SortName: sortAs})
 	}
 	return out
 }
 
 // set writes each author's name, role and sort name. Which creator elements
 // exist is reconcileCreators' business; only the values are written here.
-func (f authorsField) set(authors []model.Author) {
+func (f authorsField) set(authors []book.Author) {
 	for i, c := range f.reconcileCreators(authors) {
 		a := authors[i]
 		c.Set(a.Name)
@@ -85,7 +85,7 @@ func (f authorsField) set(authors []model.Author) {
 // Do not detach the unclaimed creators before the loop finishes. ensureID mints
 // ids by scanning the tree, so a detached creator is invisible to it and a later
 // creator could be given the same id.
-func (f authorsField) reconcileCreators(authors []model.Author) []*pkgdoc.Element {
+func (f authorsField) reconcileCreators(authors []book.Author) []*pkgdoc.Element {
 	// Keyed by the name get reports, so a match is the creator the caller was
 	// shown. Anything unmatchable is rebuilt from scratch.
 	byName := map[string]*pkgdoc.Element{}

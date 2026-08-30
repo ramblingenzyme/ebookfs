@@ -13,7 +13,6 @@ import (
 
 	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index/dbsqlc"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // bookPaths pairs books with zero file times for Rebuild. Tests that don't
@@ -179,7 +178,7 @@ func TestRebuildRecordsSkippedPaths(t *testing.T) {
 // makeAuthoredBook builds a minimal valid book for insertion. It is the one
 // place the book literal lives; newBook and makeTestBook narrow it for the
 // tests that don't care about every field.
-func makeAuthoredBook(id int64, title string, authors ...model.Author) *book.Book {
+func makeAuthoredBook(id int64, title string, authors ...book.Author) *book.Book {
 	return book.NewBook(
 		book.Bib{Title: title, Authors: authors},
 		book.Meta{ID: id},
@@ -189,16 +188,16 @@ func makeAuthoredBook(id int64, title string, authors ...model.Author) *book.Boo
 
 // newBook is makeAuthoredBook for tests that don't care who wrote it.
 func newBook(id int64, title string) *book.Book {
-	return makeAuthoredBook(id, title, model.Author{Name: "Alice", SortName: "Alice"})
+	return makeAuthoredBook(id, title, book.Author{Name: "Alice", SortName: "Alice"})
 }
 
 // makeTestBook is makeAuthoredBook for the query and search tests, which filter
 // on author name, tag and status but never on sort name. An empty tag leaves
 // the book untagged rather than carrying one named "".
 func makeTestBook(id int64, title string, authors []string, tag string, status string) *book.Book {
-	auths := make([]model.Author, len(authors))
+	auths := make([]book.Author, len(authors))
 	for i, name := range authors {
-		auths[i] = model.Author{Name: name}
+		auths[i] = book.Author{Name: name}
 	}
 	b := makeAuthoredBook(id, title, auths...)
 	b.Meta.Status = status
@@ -471,12 +470,12 @@ func TestQueryByAuthor(t *testing.T) {
 	idx := openTestIndex(t)
 
 	bob := book.NewBook(
-		book.Bib{Title: "Bob's Book", Authors: []model.Author{{Name: "Bob", SortName: "Bob"}}},
+		book.Bib{Title: "Bob's Book", Authors: []book.Author{{Name: "Bob", SortName: "Bob"}}},
 		book.Meta{ID: 1},
 		book.Location{EpubPath: "Bob/Bob's Book (1)/book.epub"},
 	)
 	aliceBook := book.NewBook(
-		book.Bib{Title: "Alice's Book", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		book.Bib{Title: "Alice's Book", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
 		book.Meta{ID: 2},
 		book.Location{EpubPath: "Alice/Alice's Book (2)/book.epub"},
 	)
@@ -504,12 +503,12 @@ func TestQueryByAuthorSortName(t *testing.T) {
 	idx := openTestIndex(t)
 
 	asimov := book.NewBook(
-		book.Bib{Title: "Foundation", Authors: []model.Author{{Name: "Isaac Asimov", SortName: "Asimov, Isaac"}}},
+		book.Bib{Title: "Foundation", Authors: []book.Author{{Name: "Isaac Asimov", SortName: "Asimov, Isaac"}}},
 		book.Meta{ID: 1},
 		book.Location{EpubPath: "Isaac Asimov/Foundation (1)/book.epub"},
 	)
 	other := book.NewBook(
-		book.Bib{Title: "Other", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		book.Bib{Title: "Other", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
 		book.Meta{ID: 2},
 		book.Location{EpubPath: "Alice/Other (2)/book.epub"},
 	)
@@ -531,12 +530,12 @@ func TestQueryByStatus(t *testing.T) {
 	idx := openTestIndex(t)
 
 	readBook := book.NewBook(
-		book.Bib{Title: "Read Book", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		book.Bib{Title: "Read Book", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
 		book.Meta{ID: 1, Status: "read"},
 		book.Location{EpubPath: "A/Read Book (1)/book.epub"},
 	)
 	unreadBook := book.NewBook(
-		book.Bib{Title: "Unread Book", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		book.Bib{Title: "Unread Book", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
 		book.Meta{ID: 2, Status: "unread"},
 		book.Location{EpubPath: "A/Unread Book (2)/book.epub"},
 	)
@@ -560,12 +559,12 @@ func TestQueryByTag(t *testing.T) {
 	idx := openTestIndex(t)
 
 	tagged := book.NewBook(
-		book.Bib{Title: "Tagged", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		book.Bib{Title: "Tagged", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
 		book.Meta{ID: 1, Tags: []string{"sci-fi"}},
 		book.Location{EpubPath: "A/Tagged (1)/book.epub"},
 	)
 	untagged := book.NewBook(
-		book.Bib{Title: "Plain", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		book.Bib{Title: "Plain", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
 		book.Meta{ID: 2},
 		book.Location{EpubPath: "A/Plain (2)/book.epub"},
 	)
@@ -590,14 +589,14 @@ func TestQueryBySeries(t *testing.T) {
 
 	seriesBook := book.NewBook(
 		book.Bib{
-			Title: "Series Book", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}},
-			Series: &model.SeriesRef{Name: "My Series", Index: "1"},
+			Title: "Series Book", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}},
+			Series: &book.SeriesRef{Name: "My Series", Index: "1"},
 		},
 		book.Meta{ID: 1},
 		book.Location{EpubPath: "A/Series Book (1)/book.epub"},
 	)
 	standalone := book.NewBook(
-		book.Bib{Title: "Standalone", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		book.Bib{Title: "Standalone", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
 		book.Meta{ID: 2},
 		book.Location{EpubPath: "A/Standalone (2)/book.epub"},
 	)
@@ -621,17 +620,17 @@ func TestQueryMultipleFilters(t *testing.T) {
 	idx := openTestIndex(t)
 
 	bobRead := book.NewBook(
-		book.Bib{Title: "Bob Read", Authors: []model.Author{{Name: "Bob", SortName: "Bob"}}},
+		book.Bib{Title: "Bob Read", Authors: []book.Author{{Name: "Bob", SortName: "Bob"}}},
 		book.Meta{ID: 1, Status: "read"},
 		book.Location{EpubPath: "B/Bob Read (1)/book.epub"},
 	)
 	bobUnread := book.NewBook(
-		book.Bib{Title: "Bob Unread", Authors: []model.Author{{Name: "Bob", SortName: "Bob"}}},
+		book.Bib{Title: "Bob Unread", Authors: []book.Author{{Name: "Bob", SortName: "Bob"}}},
 		book.Meta{ID: 2, Status: "unread"},
 		book.Location{EpubPath: "B/Bob Unread (2)/book.epub"},
 	)
 	aliceRead := book.NewBook(
-		book.Bib{Title: "Alice Read", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		book.Bib{Title: "Alice Read", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
 		book.Meta{ID: 3, Status: "read"},
 		book.Location{EpubPath: "A/Alice Read (3)/book.epub"},
 	)
@@ -672,12 +671,12 @@ func TestQueryRecentOrder(t *testing.T) {
 	idx := openTestIndex(t)
 
 	old := book.NewBook(
-		book.Bib{Title: "Old", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		book.Bib{Title: "Old", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
 		book.Meta{ID: 1},
 		book.Location{EpubPath: "A/Old (1)/book.epub"},
 	)
 	new := book.NewBook(
-		book.Bib{Title: "New", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		book.Bib{Title: "New", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
 		book.Meta{ID: 2},
 		book.Location{EpubPath: "A/New (2)/book.epub"},
 	)
@@ -784,7 +783,7 @@ func TestQueryLoadsIdentifiers(t *testing.T) {
 	b := book.NewBook(
 		book.Bib{
 			Title:       "Identified",
-			Authors:     []model.Author{{Name: "Alice", SortName: "Alice"}},
+			Authors:     []book.Author{{Name: "Alice", SortName: "Alice"}},
 			Identifiers: map[string]string{"isbn": "978-3-16-148410-0", "uuid": "abc-def"},
 		},
 		book.Meta{ID: 1},
@@ -817,7 +816,7 @@ func TestQueryBatchLoadsMultipleBooks(t *testing.T) {
 		book.NewBook(
 			book.Bib{
 				Title:       "Alpha",
-				Authors:     []model.Author{{Name: "Alice", SortName: "Alice"}, {Name: "Ariel", SortName: "Ariel"}},
+				Authors:     []book.Author{{Name: "Alice", SortName: "Alice"}, {Name: "Ariel", SortName: "Ariel"}},
 				Identifiers: map[string]string{"isbn": "111"},
 			},
 			book.Meta{ID: 1, Tags: []string{"fiction", "sci-fi"}},
@@ -826,7 +825,7 @@ func TestQueryBatchLoadsMultipleBooks(t *testing.T) {
 		book.NewBook(
 			book.Bib{
 				Title:       "Beta",
-				Authors:     []model.Author{{Name: "Bob", SortName: "Bob"}},
+				Authors:     []book.Author{{Name: "Bob", SortName: "Bob"}},
 				Identifiers: map[string]string{"isbn": "222", "doi": "10.1234/beta"},
 			},
 			book.Meta{ID: 2, Tags: []string{"non-fiction"}},
@@ -835,7 +834,7 @@ func TestQueryBatchLoadsMultipleBooks(t *testing.T) {
 		book.NewBook(
 			book.Bib{
 				Title:       "Gamma",
-				Authors:     []model.Author{{Name: "Carol", SortName: "Carol"}, {Name: "Charlie", SortName: "Charlie"}, {Name: "Cecil", SortName: "Cecil"}},
+				Authors:     []book.Author{{Name: "Carol", SortName: "Carol"}, {Name: "Charlie", SortName: "Charlie"}, {Name: "Cecil", SortName: "Cecil"}},
 				Identifiers: map[string]string{},
 			},
 			book.Meta{ID: 3},
@@ -901,7 +900,7 @@ func TestGetReturnsIdentifiers(t *testing.T) {
 	b := book.NewBook(
 		book.Bib{
 			Title:       "Getter",
-			Authors:     []model.Author{{Name: "Alice", SortName: "Alice"}},
+			Authors:     []book.Author{{Name: "Alice", SortName: "Alice"}},
 			Identifiers: map[string]string{"isbn": "978-1-234-56789-0"},
 		},
 		book.Meta{ID: 1},
@@ -954,8 +953,8 @@ func TestStatsAggregates(t *testing.T) {
 	b1 := book.NewBook(
 		book.Bib{
 			Title:   "First",
-			Authors: []model.Author{{Name: "Alice", SortName: "Alice"}},
-			Series:  &model.SeriesRef{Name: "EPIC", Index: "1"},
+			Authors: []book.Author{{Name: "Alice", SortName: "Alice"}},
+			Series:  &book.SeriesRef{Name: "EPIC", Index: "1"},
 		},
 		book.Meta{ID: 1, Tags: []string{"sci-fi", "space"}},
 		book.Location{EpubPath: "A/First (1)/book.epub"},
@@ -963,8 +962,8 @@ func TestStatsAggregates(t *testing.T) {
 	b2 := book.NewBook(
 		book.Bib{
 			Title:   "Second",
-			Authors: []model.Author{{Name: "Alice", SortName: "Alice"}, {Name: "Bob", SortName: "Bob"}},
-			Series:  &model.SeriesRef{Name: "EPIC", Index: "2"},
+			Authors: []book.Author{{Name: "Alice", SortName: "Alice"}, {Name: "Bob", SortName: "Bob"}},
+			Series:  &book.SeriesRef{Name: "EPIC", Index: "2"},
 		},
 		book.Meta{ID: 2, Tags: []string{"sci-fi"}},
 		book.Location{EpubPath: "A/Second (2)/book.epub"},
@@ -1002,14 +1001,14 @@ func TestStatsExcludesOrphans(t *testing.T) {
 	idx := openTestIndex(t)
 
 	b := book.NewBook(
-		book.Bib{Title: "Book", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		book.Bib{Title: "Book", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
 		book.Meta{ID: 1, Tags: []string{"stale"}},
 		book.Location{EpubPath: "A/Book (1)/book.epub"},
 	)
 	storeInIndex(t, idx, b)
 
 	updated := book.NewBook(
-		book.Bib{Title: "Book", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+		book.Bib{Title: "Book", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
 		book.Meta{ID: 1, Tags: []string{"fresh"}},
 		book.Location{EpubPath: "A/Book (1)/book.epub"},
 	)
@@ -1163,7 +1162,7 @@ func TestSearchIDs(t *testing.T) {
 func TestPutAuthorsWithExistingName(t *testing.T) {
 	idx := openTestIndex(t)
 
-	authors := []model.Author{{Name: "Alice", SortName: "Smith, Alice"}}
+	authors := []book.Author{{Name: "Alice", SortName: "Smith, Alice"}}
 	b1 := book.NewBook(
 		book.Bib{Title: "First", Authors: authors},
 		book.Meta{ID: 1},
@@ -1194,8 +1193,8 @@ func TestPutBookWithSeriesAndTags(t *testing.T) {
 	b := book.NewBook(
 		book.Bib{
 			Title:   "Series Book",
-			Authors: []model.Author{{Name: "Alice", SortName: "Alice"}},
-			Series:  &model.SeriesRef{Name: "EPIC", Index: "1"},
+			Authors: []book.Author{{Name: "Alice", SortName: "Alice"}},
+			Series:  &book.SeriesRef{Name: "EPIC", Index: "1"},
 		},
 		book.Meta{ID: 1, Tags: []string{"sci-fi", "space"}},
 		book.Location{EpubPath: "A/Series Book (1)/book.epub"},
@@ -1301,14 +1300,14 @@ func TestRolledBackTxSurfacesErrors(t *testing.T) {
 			return idx.finishBook(q, newBook(1, "Test"))
 		}},
 		{"upsertAuthors", func(idx *Index, q *dbsqlc.Queries) error {
-			return idx.upsertAuthors(q, 1, []model.Author{{Name: "Alice", SortName: "Alice"}})
+			return idx.upsertAuthors(q, 1, []book.Author{{Name: "Alice", SortName: "Alice"}})
 		}},
 		{"upsertTags", func(idx *Index, q *dbsqlc.Queries) error {
 			return idx.upsertTags(q, 1, []string{"sci-fi"})
 		}},
 		{"upsertSeries", func(idx *Index, q *dbsqlc.Queries) error {
 			b := newBook(1, "Test")
-			b.Series = &model.SeriesRef{Name: "S", Index: "1"}
+			b.Series = &book.SeriesRef{Name: "S", Index: "1"}
 			return idx.upsertSeries(q, b)
 		}},
 		{"putBook", func(idx *Index, q *dbsqlc.Queries) error {
@@ -1382,15 +1381,15 @@ func TestRebuildWithMultipleBooks(t *testing.T) {
 
 	books := []*book.Book{
 		book.NewBook(
-			book.Bib{Title: "First", Authors: []model.Author{{Name: "Alice", SortName: "Alice"}}},
+			book.Bib{Title: "First", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
 			book.Meta{ID: 1},
 			book.Location{EpubPath: "A/First (1)/book.epub"},
 		),
 		book.NewBook(
 			book.Bib{
 				Title:   "Second",
-				Authors: []model.Author{{Name: "Bob", SortName: "Bob"}},
-				Series:  &model.SeriesRef{Name: "Series A", Index: "2"},
+				Authors: []book.Author{{Name: "Bob", SortName: "Bob"}},
+				Series:  &book.SeriesRef{Name: "Series A", Index: "2"},
 			},
 			book.Meta{ID: 2},
 			book.Location{EpubPath: "B/Second (2)/book.epub"},

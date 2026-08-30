@@ -151,16 +151,16 @@ func TestKepubCacheDelegates(t *testing.T) {
 func TestEpubExporter_Dirname(t *testing.T) {
 	tests := []struct {
 		name     string
-		authorFn func() []model.Author
+		authorFn func() []Author
 		want     string
 	}{
-		{"single author", func() []model.Author { return []model.Author{{Name: "Alice"}} }, "Alice"},
-		{"two authors", func() []model.Author { return []model.Author{{Name: "Alice"}, {Name: "Bob"}} }, "Alice & Bob"},
-		{"multiple authors", func() []model.Author { return []model.Author{{Name: "Alice"}, {Name: "Bob"}, {Name: "Carol"}} }, "Alice & Bob & Carol"},
-		{"empty author name", func() []model.Author { return []model.Author{{Name: ""}} }, model.UnknownAuthor},
-		{"mixed empty and valid", func() []model.Author { return []model.Author{{Name: ""}, {Name: "Alice"}} }, "Alice"},
-		{"no authors", func() []model.Author { return nil }, model.UnknownAuthor},
-		{"colon in name", func() []model.Author { return []model.Author{{Name: "Title: Sub"}} }, "Title- Sub"},
+		{"single author", func() []Author { return []Author{{Name: "Alice"}} }, "Alice"},
+		{"two authors", func() []Author { return []Author{{Name: "Alice"}, {Name: "Bob"}} }, "Alice & Bob"},
+		{"multiple authors", func() []Author { return []Author{{Name: "Alice"}, {Name: "Bob"}, {Name: "Carol"}} }, "Alice & Bob & Carol"},
+		{"empty author name", func() []Author { return []Author{{Name: ""}} }, model.UnknownAuthor},
+		{"mixed empty and valid", func() []Author { return []Author{{Name: ""}, {Name: "Alice"}} }, "Alice"},
+		{"no authors", func() []Author { return nil }, model.UnknownAuthor},
+		{"colon in name", func() []Author { return []Author{{Name: "Title: Sub"}} }, "Title- Sub"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

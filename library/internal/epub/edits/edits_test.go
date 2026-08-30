@@ -7,11 +7,10 @@ import (
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // testBook creates a Book for validation tests with the given cover path and series.
-func testBook(coverPath string, series *model.SeriesRef) *book.Book {
+func testBook(coverPath string, series *book.SeriesRef) *book.Book {
 	return &book.Book{
 		Bib: book.Bib{
 			CoverPath: coverPath,
@@ -131,20 +130,20 @@ func TestValidateTitle(t *testing.T) {
 func TestValidateAuthors(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
-		authors *[]model.Author
+		authors *[]book.Author
 		wantErr bool
 		errMsg  string
 	}{
 		{"nil untouched", nil, false, ""},
-		{"valid single", &[]model.Author{{Name: "Alice"}}, false, ""},
-		{"valid multiple", &[]model.Author{{Name: "Alice"}, {Name: "Bob"}}, false, ""},
-		{"empty slice", &[]model.Author{}, true, "at least one author"},
-		{"empty name", &[]model.Author{{Name: ""}}, true, "author 1 has an empty name"},
-		{"second empty name", &[]model.Author{{Name: "Alice"}, {Name: ""}}, true, "author 2 has an empty name"},
-		{"whitespace name", &[]model.Author{{Name: "   "}}, true, "author 1 has an empty name"},
-		{"duplicate name", &[]model.Author{{Name: "Alice"}, {Name: "Alice"}}, true, `author 2 duplicates "Alice"`},
-		{"duplicate after trimming", &[]model.Author{{Name: "Alice"}, {Name: " Alice "}}, true, `author 2 duplicates "Alice"`},
-		{"duplicate sort names are fine", &[]model.Author{{Name: "Alice", SortName: "X"}, {Name: "Bob", SortName: "X"}}, false, ""},
+		{"valid single", &[]book.Author{{Name: "Alice"}}, false, ""},
+		{"valid multiple", &[]book.Author{{Name: "Alice"}, {Name: "Bob"}}, false, ""},
+		{"empty slice", &[]book.Author{}, true, "at least one author"},
+		{"empty name", &[]book.Author{{Name: ""}}, true, "author 1 has an empty name"},
+		{"second empty name", &[]book.Author{{Name: "Alice"}, {Name: ""}}, true, "author 2 has an empty name"},
+		{"whitespace name", &[]book.Author{{Name: "   "}}, true, "author 1 has an empty name"},
+		{"duplicate name", &[]book.Author{{Name: "Alice"}, {Name: "Alice"}}, true, `author 2 duplicates "Alice"`},
+		{"duplicate after trimming", &[]book.Author{{Name: "Alice"}, {Name: " Alice "}}, true, `author 2 duplicates "Alice"`},
+		{"duplicate sort names are fine", &[]book.Author{{Name: "Alice", SortName: "X"}, {Name: "Bob", SortName: "X"}}, false, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e := Edits{Authors: tc.authors}
@@ -216,24 +215,24 @@ func TestValidateTags(t *testing.T) {
 func TestValidateSeriesIndex(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
-		bookSeries *model.SeriesRef
+		bookSeries *book.SeriesRef
 		edits      Edits
 		wantErr    bool
 	}{
 		{"nil series index", nil, Edits{}, false},
 		{"with series in edits", nil, Edits{Series: new("New Series"), SeriesIndex: new("1")}, false},
-		{"book has series, nil in edits", &model.SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new("2.5")}, false},
+		{"book has series, nil in edits", &book.SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new("2.5")}, false},
 		{"no series anywhere", nil, Edits{SeriesIndex: new("1")}, true},
-		{"book has series, empty series edit", &model.SeriesRef{Name: "Existing"}, Edits{Series: new(string), SeriesIndex: new("1")}, false},
+		{"book has series, empty series edit", &book.SeriesRef{Name: "Existing"}, Edits{Series: new(string), SeriesIndex: new("1")}, false},
 
 		// D.3.7's grammar: "A single xsd:unsignedInt or series of
 		// decimal-separated numbers (e.g., 1 or 2.2.1)."
-		{"multi-level index", &model.SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new("2.2.1")}, false},
-		{"empty index", &model.SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new("")}, true},
-		{"non-numeric index", &model.SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new("two")}, true},
-		{"negative index", &model.SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new("-1")}, true},
-		{"trailing separator", &model.SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new("1.")}, true},
-		{"float syntax we cannot store", &model.SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new("1e3")}, true},
+		{"multi-level index", &book.SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new("2.2.1")}, false},
+		{"empty index", &book.SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new("")}, true},
+		{"non-numeric index", &book.SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new("two")}, true},
+		{"negative index", &book.SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new("-1")}, true},
+		{"trailing separator", &book.SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new("1.")}, true},
+		{"float syntax we cannot store", &book.SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new("1e3")}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := Validate(tc.edits, testBook("", tc.bookSeries))
@@ -280,7 +279,7 @@ func TestValidateNoErrors(t *testing.T) {
 		Status:      new("reading"),
 		Rating:      new(4.0),
 		Title:       new("Valid Title"),
-		Authors:     &[]model.Author{{Name: "Author"}},
+		Authors:     &[]book.Author{{Name: "Author"}},
 		Language:    new("en"),
 		Series:      new("New Series"),
 		SeriesIndex: new("2"),
@@ -444,7 +443,7 @@ func TestEditsNormalizedKeepsNonFinite(t *testing.T) {
 				t.Errorf("Rating = %v, want it left non-finite for Validate to reject", r)
 			}
 			// The pairing that matters: Validate still refuses it afterwards.
-			if err := Validate(got, testBook("", &model.SeriesRef{Name: "S"})); err == nil {
+			if err := Validate(got, testBook("", &book.SeriesRef{Name: "S"})); err == nil {
 				t.Error("Validate accepted a non-finite value that survived rounding")
 			}
 		})

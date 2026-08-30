@@ -129,7 +129,7 @@ func (l *libraryImpl) ingestPath(epubPath string) (*Book, error) {
 // and Edits rejects an empty author name — so there is nothing to filter here.
 // Filtering would be wrong anyway: the set compared has to be the set written,
 // or the same book ingests twice.
-func authorNames(authors []model.Author) []string {
+func authorNames(authors []book.Author) []string {
 	names := make([]string, len(authors))
 	for i, a := range authors {
 		names[i] = a.Name

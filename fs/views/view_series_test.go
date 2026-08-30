@@ -4,8 +4,6 @@ import (
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/library"
-
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 func TestSeriesEntryName(t *testing.T) {
@@ -80,9 +78,9 @@ func TestSeriesEntryName_PadTriggeredByMaxIndex(t *testing.T) {
 	d := NewBySeriesDir(reg)
 
 	b1 := makeBook(1, "First", "Author")
-	b1.Series = &model.SeriesRef{Name: "S", Index: "1"}
+	b1.Series = &library.SeriesRef{Name: "S", Index: "1"}
 	b2 := makeBook(2, "Tenth", "Author")
-	b2.Series = &model.SeriesRef{Name: "S", Index: "10"}
+	b2.Series = &library.SeriesRef{Name: "S", Index: "10"}
 
 	reg.Add(wrapBook(b1))
 	reg.Add(wrapBook(b2))

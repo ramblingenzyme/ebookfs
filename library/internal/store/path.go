@@ -16,7 +16,7 @@ import (
 // set; the Store resolves it to an absolute path internally when touching the
 // filesystem. It is the single source of the naming convention; ingest and move
 // both lay books down through it.
-func (s *Store) Layout(authors []model.Author, title string, id int64) book.Location {
+func (s *Store) Layout(authors []book.Author, title string, id int64) book.Location {
 	libPath := canonicalDir(authors, title, id)
 	filename := epubFilename(authors, title)
 	return book.Location{
@@ -24,7 +24,7 @@ func (s *Store) Layout(authors []model.Author, title string, id int64) book.Loca
 	}
 }
 
-func epubFilename(authors []model.Author, title string) string {
+func epubFilename(authors []book.Author, title string) string {
 	// Epub files may be copied directly to FAT filesystems (e.g. Kobo), so
 	// sanitize components for FAT; fall back to the raw value if sanitization
 	// produces an empty string (pathological titles/authors).
@@ -46,11 +46,11 @@ func epubFilename(authors []model.Author, title string) string {
 // Both components are made path-safe: a '/' in a title or an author name would
 // otherwise split one directory into two. epubFilename does its own, stricter
 // pass for the file itself.
-func authorDirName(authors []model.Author) string {
+func authorDirName(authors []book.Author) string {
 	return model.PathSafe(model.JoinAuthors(authors, " & "))
 }
 
-func canonicalDir(authors []model.Author, title string, id int64) string {
+func canonicalDir(authors []book.Author, title string, id int64) string {
 	return filepath.Join(authorDirName(authors), fmt.Sprintf("%s (%d)", model.PathSafe(title), id))
 }
 

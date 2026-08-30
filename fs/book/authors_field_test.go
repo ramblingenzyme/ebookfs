@@ -3,11 +3,9 @@ package book
 import (
 	"testing"
 
-	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/library"
-
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 func TestAuthorsFieldGet(t *testing.T) {
@@ -18,32 +16,32 @@ func TestAuthorsFieldGet(t *testing.T) {
 	}{
 		{
 			"no authors",
-			testutil.WrapBook(bookmodel.NewBook(bookmodel.Bib{Title: "T"}, bookmodel.Meta{ID: 1}, bookmodel.Location{})),
+			testutil.WrapBook(book.NewBook(book.Bib{Title: "T"}, book.Meta{ID: 1}, book.Location{})),
 			"",
 		},
 		{
 			"no sort name",
-			testutil.WrapBook(bookmodel.NewBook(bookmodel.Bib{Title: "T", Authors: []model.Author{{Name: "Alice"}}}, bookmodel.Meta{ID: 1}, bookmodel.Location{})),
+			testutil.WrapBook(book.NewBook(book.Bib{Title: "T", Authors: []book.Author{{Name: "Alice"}}}, book.Meta{ID: 1}, book.Location{})),
 			"Alice",
 		},
 		{
 			"with sort name",
-			testutil.WrapBook(bookmodel.NewBook(
-				bookmodel.Bib{Title: "T", Authors: []model.Author{{Name: "Alice", SortName: "Smith, Alice"}}},
-				bookmodel.Meta{ID: 1},
-				bookmodel.Location{}),
+			testutil.WrapBook(book.NewBook(
+				book.Bib{Title: "T", Authors: []book.Author{{Name: "Alice", SortName: "Smith, Alice"}}},
+				book.Meta{ID: 1},
+				book.Location{}),
 			),
 			"Alice | Smith, Alice",
 		},
 		{
 			"multi-author mixed",
-			testutil.WrapBook(bookmodel.NewBook(
-				bookmodel.Bib{Title: "T", Authors: []model.Author{
+			testutil.WrapBook(book.NewBook(
+				book.Bib{Title: "T", Authors: []book.Author{
 					{Name: "Alice", SortName: "Smith, Alice"},
 					{Name: "Bob"},
 				}},
-				bookmodel.Meta{ID: 1},
-				bookmodel.Location{}),
+				book.Meta{ID: 1},
+				book.Location{}),
 			),
 			"Alice | Smith, Alice\nBob",
 		},
@@ -62,43 +60,43 @@ func TestAuthorsFieldEdits(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   string
-		want    []model.Author
+		want    []book.Author
 		wantErr bool
 	}{
 		{
 			"name only",
 			"Bob",
-			[]model.Author{{Name: "Bob"}},
+			[]book.Author{{Name: "Bob"}},
 			false,
 		},
 		{
 			"name and sort name",
 			"Bob | Jones, Bob",
-			[]model.Author{{Name: "Bob", SortName: "Jones, Bob"}},
+			[]book.Author{{Name: "Bob", SortName: "Jones, Bob"}},
 			false,
 		},
 		{
 			"bare pipe",
 			"Bob|Jones, Bob",
-			[]model.Author{{Name: "Bob", SortName: "Jones, Bob"}},
+			[]book.Author{{Name: "Bob", SortName: "Jones, Bob"}},
 			false,
 		},
 		{
 			"multi-line",
 			"Alice\nBob",
-			[]model.Author{{Name: "Alice"}, {Name: "Bob"}},
+			[]book.Author{{Name: "Alice"}, {Name: "Bob"}},
 			false,
 		},
 		{
 			"multi-line with sort names",
 			"Alice | Smith, Alice\nBob | Jones, Bob",
-			[]model.Author{{Name: "Alice", SortName: "Smith, Alice"}, {Name: "Bob", SortName: "Jones, Bob"}},
+			[]book.Author{{Name: "Alice", SortName: "Smith, Alice"}, {Name: "Bob", SortName: "Jones, Bob"}},
 			false,
 		},
 		{
 			"empty lines skipped",
 			"\n\nAlice\n\nBob\n",
-			[]model.Author{{Name: "Alice"}, {Name: "Bob"}},
+			[]book.Author{{Name: "Alice"}, {Name: "Bob"}},
 			false,
 		},
 		{

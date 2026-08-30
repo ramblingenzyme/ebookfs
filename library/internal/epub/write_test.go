@@ -17,7 +17,6 @@ import (
 
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // --- writer-only helpers ---------------------------------------------------
@@ -226,7 +225,7 @@ func TestWriteBibAuthorsRoundTrip(t *testing.T) {
 	}{{"epub3", opf3}, {"epub2", opf2}} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEpub(t, baseEntries(tc.opf))
-			authors := []model.Author{
+			authors := []bookmodel.Author{
 				{Name: "Alice Smith", SortName: "Smith, Alice"},
 				{Name: "Bob Jones", SortName: "Jones, Bob"},
 			}
@@ -698,7 +697,7 @@ func reindexSeries(t *testing.T, path, series, index string) bookmodel.Bib {
 	t.Helper()
 	b := &bookmodel.Book{
 		Location: bookmodel.Location{EpubPath: path},
-		Bib:      bookmodel.Bib{Series: &model.SeriesRef{Name: series, Index: "1"}},
+		Bib:      bookmodel.Bib{Series: &bookmodel.SeriesRef{Name: series, Index: "1"}},
 	}
 	bib, err := epub.Rewrite(path, b, edits.Edits{SeriesIndex: new(index)})
 	if err != nil {
@@ -890,7 +889,7 @@ func TestSetAuthorsReuseBookkeeping(t *testing.T) {
 
 	t.Run("rewrite", func(t *testing.T) {
 		// The author list is unchanged, so the creator is reused as-is.
-		authors := []model.Author{{Name: "Jane Doe", SortName: "Doe, Jane"}}
+		authors := []bookmodel.Author{{Name: "Jane Doe", SortName: "Doe, Jane"}}
 		book, err := writeBib(path, edits.Edits{Authors: &authors})
 		if err != nil {
 			t.Fatal(err)
@@ -904,7 +903,7 @@ func TestSetAuthorsReuseBookkeeping(t *testing.T) {
 	})
 
 	t.Run("reorder and clear sort name", func(t *testing.T) {
-		authors := []model.Author{{Name: "Bob Jones", SortName: "Jones, Bob"}, {Name: "Jane Doe"}}
+		authors := []bookmodel.Author{{Name: "Bob Jones", SortName: "Jones, Bob"}, {Name: "Jane Doe"}}
 		book, err := writeBib(path, edits.Edits{Authors: &authors})
 		if err != nil {
 			t.Fatal(err)
@@ -932,7 +931,7 @@ func TestSetAuthorsReuseBookkeeping(t *testing.T) {
 
 	t.Run("drop", func(t *testing.T) {
 		// Jane's element goes, and so must everything refining it.
-		authors := []model.Author{{Name: "Bob Jones", SortName: "Jones, Bob"}}
+		authors := []bookmodel.Author{{Name: "Bob Jones", SortName: "Jones, Bob"}}
 		if _, err := writeBib(path, edits.Edits{Authors: &authors}); err != nil {
 			t.Fatal(err)
 		}

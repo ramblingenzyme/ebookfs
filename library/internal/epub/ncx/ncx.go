@@ -17,8 +17,8 @@ import (
 	"errors"
 
 	"github.com/beevik/etree"
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 type Doc struct {
@@ -75,7 +75,7 @@ func (d *Doc) authors() authorsField { return authorsField{d} }
 // already carries one: naming no author contradicts nothing. Extras go after
 // the last rather than at the end of <ncx>, whose content model fixes the order
 // of its children (head, docTitle, docAuthor*, navMap, …).
-func (f authorsField) set(authors []model.Author) {
+func (f authorsField) set(authors []book.Author) {
 	existing := f.d.ncx.SelectElements("docAuthor")
 	if len(existing) == 0 {
 		return

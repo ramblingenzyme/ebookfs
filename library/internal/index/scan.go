@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // bookRow holds the raw scan targets for a book query row.
@@ -47,7 +46,7 @@ func (r *bookRow) toBook() *book.Book {
 		EpubSize: r.epubSize,
 	}
 	if r.seriesName.Valid {
-		b.Series = &model.SeriesRef{
+		b.Series = &book.SeriesRef{
 			ID:    r.seriesID.Int64,
 			Name:  r.seriesName.String,
 			Index: r.seriesIndex.String,
