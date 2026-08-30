@@ -1092,6 +1092,26 @@ func TestIdentifierKeying(t *testing.T) {
     <dc:language>en</dc:language>`),
 		want: map[string]string{"bookid": "12345"},
 	}, {
+		// Only the unique-identifier target has to carry an id, so a second
+		// dc:identifier without one is legal and common in v2 output. Nothing
+		// names this one and there is no id to borrow, but the value is an
+		// identifier all the same.
+		name: "an identifier with no id at all is still carried",
+		opf: epub2(`    <dc:identifier id="BookId" opf:scheme="ISBN">9780123456789</dc:identifier>
+    <dc:identifier>B00X57B4KG</dc:identifier>
+    <dc:title>T</dc:title>
+    <dc:creator>A</dc:creator>`),
+		want: map[string]string{"isbn": "9780123456789", "unknown": "B00X57B4KG"},
+	}, {
+		// Numbered rather than sharing one key, so first-wins does not eat the
+		// second: position is all that distinguishes them.
+		name: "two unnamed identifiers are numbered, not dropped",
+		opf: epub2(`    <dc:identifier>B00X57B4KG</dc:identifier>
+    <dc:identifier>12345</dc:identifier>
+    <dc:title>T</dc:title>
+    <dc:creator>A</dc:creator>`),
+		want: map[string]string{"unknown": "B00X57B4KG", "unknown-2": "12345"},
+	}, {
 		// ISBN-10 and ISBN-13 are one scheme to us, and only one row can exist.
 		name: "two identifiers on one scheme, first in document order wins",
 		opf: epub3(`    <dc:identifier id="isbn13">9780123456789</dc:identifier>

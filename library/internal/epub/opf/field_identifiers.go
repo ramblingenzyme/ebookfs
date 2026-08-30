@@ -1,6 +1,7 @@
 package opf
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf/pkgdoc"
@@ -14,7 +15,9 @@ import (
 // identifiers keys each dc:identifier by its scheme — isbn, uuid, doi — since
 // that is what the value is, and what the index stores it under. The element's
 // XML id is a document-local handle chosen by whoever produced the file and says
-// nothing about the kind of identifier, so it is only the last resort. Read-only.
+// nothing about the kind of identifier, so it is only the last resort — and an
+// identifier the file names in no way at all still lands under a key of its own
+// rather than being dropped. Read-only.
 //
 // Two identifiers can resolve to one scheme (ISBN-10 and ISBN-13 both being
 // isbn), and neither the map nor the index's UNIQUE (book_id, scheme) can hold
@@ -28,7 +31,7 @@ func (o *Doc) identifiers() map[string]string {
 		}
 		scheme := o.identifierScheme(el)
 		if scheme == "" {
-			continue
+			scheme = unusedUnknownScheme(out)
 		}
 		if _, taken := out[scheme]; taken {
 			continue
@@ -61,6 +64,9 @@ func (o *Doc) identifiers() map[string]string {
 //     name is still carried rather than dropped. Two of these can still collide
 //     — ids differing only in case, or a malformed file repeating one — and they
 //     collide the same way any other duplicate scheme does.
+//
+// An element carrying no id leaves even that unanswered, and identifiers gives
+// it a numbered unknown key: having no name is not a reason to lose the value.
 func (o *Doc) identifierScheme(el *pkgdoc.Element) string {
 	if s := normalizeScheme(el.OPFAttr("scheme").Get()); s != "" && s != urnScheme {
 		return s
@@ -136,6 +142,34 @@ func urnNID(value string) (nid, rest string, ok bool) {
 		return "", "", false
 	}
 	return strings.ToLower(nid), rest, true
+}
+
+// unknownScheme keys a dc:identifier the file names in no way at all: no
+// opf:scheme, no identifier-type, no URN in the value, not even an XML id to
+// borrow. The value is an identifier all the same, and dropping it would lose
+// data, so it lands here.
+const unknownScheme = "unknown"
+
+// unusedUnknownScheme returns the first unknown key the map does not already
+// hold — unknown, then unknown-2, unknown-3. Numbering rather than sharing one
+// key is what keeps first-wins from eating the second unnamed identifier in a
+// file: nothing about these values distinguishes them, so position is all there
+// is to key by, and the keys are stable for a given file because the elements
+// are read in document order.
+//
+// A file whose own scheme or id is literally "unknown" simply occupies the key
+// and the numbering steps past it; one arriving after an unnamed identifier has
+// taken it loses the way any other duplicate scheme does.
+func unusedUnknownScheme(out map[string]string) string {
+	if _, taken := out[unknownScheme]; !taken {
+		return unknownScheme
+	}
+	for n := 2; ; n++ {
+		scheme := unknownScheme + "-" + strconv.Itoa(n)
+		if _, taken := out[scheme]; !taken {
+			return scheme
+		}
+	}
 }
 
 // normalizeScheme lowercases, since ISBN and isbn are one scheme and the key has
