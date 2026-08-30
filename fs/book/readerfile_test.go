@@ -8,7 +8,6 @@ import (
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 func testReaderFile(t *testing.T, exp library.Exporter) *ReaderFile {
@@ -24,7 +23,7 @@ func testReaderFile(t *testing.T, exp library.Exporter) *ReaderFile {
 
 func TestReaderFileOpenRead(t *testing.T) {
 	rf := testReaderFile(t, libfake.Exporter{
-		OpenFn: func(b *library.Book) (model.EpubReader, error) {
+		OpenFn: func(b *library.Book) (library.EpubReader, error) {
 			return libfake.NewEpubReader([]byte("hello epub"), nil, nil), nil
 		},
 	})

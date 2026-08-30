@@ -2,8 +2,8 @@
 // state of a book's files, as observed by the store and persisted by the index.
 //
 // It exists as its own package because both of those need the type and neither
-// imports the other, and because library/model is the vocabulary the frontends
-// share — this is internal bookkeeping they never see.
+// imports the other, and because the library package is the vocabulary the
+// frontends share — this is internal bookkeeping they never see.
 package drift
 
 import "time"

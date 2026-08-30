@@ -10,7 +10,7 @@ import (
 
 // Reader documents a closed contract in three places — the closed field, Close's
 // "safe to call multiple times", and on each accessor.
-// The type satisfies model.EpubReader and is reached from the 9P read path
+// The type satisfies epub.EpubReader and is reached from the 9P read path
 // through vfile.ReadAtFile, where a client holding a fid across a re-ingest is
 // exactly how a use-after-close arises.
 func TestReaderClosedContract(t *testing.T) {

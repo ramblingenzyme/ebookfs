@@ -14,8 +14,8 @@ import (
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/fs/textfmt"
+	"github.com/ramblingenzyme/ebookfs/internal/naming"
 	"github.com/ramblingenzyme/ebookfs/library"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // BookDir is the stable directory identity for one book. The book's state is
@@ -49,7 +49,7 @@ func (d *BookDir) Stat() proto.Stat {
 	s := d.StaticDir.Stat()
 	// PathSafe because a title is stored as the epub wrote it and a 9P entry
 	// name is a single component.
-	s.Name = model.PathSafe(d.Book().Title())
+	s.Name = naming.PathSafe(d.Book().Title())
 	return s
 }
 
@@ -158,7 +158,7 @@ var fields = map[string]field{
 // than the registry itself, so this package stays a leaf below the registry.
 func NewBookDir(f *fs.FS, lib library.Library, edit func(int64, library.Edits) error, book *library.Book) *BookDir {
 	d := &BookDir{
-		StaticDir: *fs.NewStaticDir(newStat(f, model.PathSafe(book.Title()), 0755|proto.DMDIR)),
+		StaticDir: *fs.NewStaticDir(newStat(f, naming.PathSafe(book.Title()), 0755|proto.DMDIR)),
 	}
 	d.book.Store(book)
 

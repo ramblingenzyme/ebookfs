@@ -11,7 +11,7 @@ import (
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
-	"github.com/ramblingenzyme/ebookfs/library/model"
+	"github.com/ramblingenzyme/ebookfs/library"
 )
 
 // SnapshotFile is a base for files whose content is loaded once on Open via an
@@ -91,15 +91,15 @@ func (f *SnapshotFile) Close(fid uint64) error {
 // (the reader may return its final bytes and EOF in a single call).
 type ReadAtFile struct {
 	fs.BaseFile
-	open func() (model.EpubReader, error)
-	fids map[uint64]model.EpubReader
+	open func() (library.EpubReader, error)
+	fids map[uint64]library.EpubReader
 }
 
-func NewReadAtFile(stat *proto.Stat, open func() (model.EpubReader, error)) ReadAtFile {
+func NewReadAtFile(stat *proto.Stat, open func() (library.EpubReader, error)) ReadAtFile {
 	return ReadAtFile{
 		BaseFile: *fs.NewBaseFile(stat),
 		open:     open,
-		fids:     make(map[uint64]model.EpubReader),
+		fids:     make(map[uint64]library.EpubReader),
 	}
 }
 

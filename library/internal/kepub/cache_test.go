@@ -13,7 +13,7 @@ import (
 	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
-	"github.com/ramblingenzyme/ebookfs/library/model"
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 )
 
 func TestCacheClose(t *testing.T) {
@@ -26,7 +26,7 @@ func TestCacheClose(t *testing.T) {
 
 type noopSource struct{}
 
-func (noopSource) Content(int64) (model.EpubReader, error) {
+func (noopSource) Content(int64) (epub.EpubReader, error) {
 	return nil, errors.New("not used in this test")
 }
 
@@ -179,7 +179,7 @@ type fakeSource struct {
 	dir string
 }
 
-// srcContent wraps an *os.File to satisfy model.EpubReader. The kepub cache
+// srcContent wraps an *os.File to satisfy epub.EpubReader. The kepub cache
 // only reads from the reader; OPF and Cover are never called.
 type srcContent struct {
 	*os.File
@@ -188,7 +188,7 @@ type srcContent struct {
 func (c *srcContent) OPF() ([]byte, error)   { return nil, nil }
 func (c *srcContent) Cover() ([]byte, error) { return nil, nil }
 
-func (s fakeSource) Content(_ int64) (model.EpubReader, error) {
+func (s fakeSource) Content(_ int64) (epub.EpubReader, error) {
 	path := filepath.Join(s.dir, "source.epub")
 	f, err := os.Open(path)
 	if err != nil {

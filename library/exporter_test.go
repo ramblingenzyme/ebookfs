@@ -8,7 +8,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 
 	"github.com/ramblingenzyme/ebookfs/library/internal/kepub"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 var makeBook = testutil.MakeMutableBook
@@ -103,7 +102,7 @@ func TestExporterIncludes(t *testing.T) {
 
 type dummyKepubSource struct{}
 
-func (dummyKepubSource) Content(int64) (model.EpubReader, error) {
+func (dummyKepubSource) Content(int64) (EpubReader, error) {
 	return nil, errors.New("dummy source: no epub")
 }
 

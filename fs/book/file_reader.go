@@ -6,7 +6,6 @@ import (
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/library"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // ReaderFile serves a book's export rendition through the Exporter, holding one
@@ -21,7 +20,7 @@ type ReaderFile struct {
 
 func NewReaderFile(stat *proto.Stat, exp library.Exporter, book func() *library.Book) *ReaderFile {
 	return &ReaderFile{
-		ReadAtFile: vfile.NewReadAtFile(stat, func() (model.EpubReader, error) {
+		ReadAtFile: vfile.NewReadAtFile(stat, func() (library.EpubReader, error) {
 			if exp == nil {
 				return nil, errors.New("exporter not available")
 			}

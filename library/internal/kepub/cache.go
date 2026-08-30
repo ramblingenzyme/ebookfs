@@ -17,14 +17,13 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/internal/syncutil"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // EpubSource provides read access to a book's source epub content.
 // library.Library satisfies it via Content, which is the cache's only
 // inbound dependency.
 type EpubSource interface {
-	Content(int64) (model.EpubReader, error)
+	Content(int64) (epub.EpubReader, error)
 }
 
 // Cache builds kepub renditions on demand and stores them on disk, so repeat
@@ -97,7 +96,7 @@ func (c *Cache) Ensure(b *book.Book) error {
 // Open ensures b's kepub is fresh, then opens it for reading. This is the
 // read-path backstop when the proactive warmer hasn't run (or its conversion is
 // still in flight).
-func (c *Cache) Open(b *book.Book) (model.EpubReader, error) {
+func (c *Cache) Open(b *book.Book) (epub.EpubReader, error) {
 	if err := c.Ensure(b); err != nil {
 		return nil, err
 	}
@@ -123,7 +122,7 @@ func (c *Cache) ensureLocked(b *book.Book) error {
 
 // write converts src into a temp file in the cache dir, then atomically renames
 // it into place so a reader never observes a partial kepub.
-func (c *Cache) write(b *book.Book, src model.EpubReader) error {
+func (c *Cache) write(b *book.Book, src epub.EpubReader) error {
 	tmp, err := os.CreateTemp(c.dir, fmt.Sprintf(".%d-*.tmp", b.Meta.ID))
 	if err != nil {
 		return err

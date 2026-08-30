@@ -7,7 +7,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // Read/open/close semantics are covered by the snapshotFile base tests, and the
@@ -42,7 +41,7 @@ func TestCoverFileStatLengthNilLib(t *testing.T) {
 
 func TestCoverFileOpenRead(t *testing.T) {
 	lib := libfake.Lib{
-		ContentFn: func(_ int64) (model.EpubReader, error) {
+		ContentFn: func(_ int64) (library.EpubReader, error) {
 			return libfake.NewEpubReader(nil, nil, func() ([]byte, error) { return []byte("cover image data"), nil }), nil
 		},
 	}
@@ -64,7 +63,7 @@ func TestCoverFileOpenRead(t *testing.T) {
 func TestCoverFileWriteClose(t *testing.T) {
 	var written *[]byte
 	lib := libfake.Lib{
-		ContentFn: func(_ int64) (model.EpubReader, error) {
+		ContentFn: func(_ int64) (library.EpubReader, error) {
 			return libfake.NewEpubReader(nil, nil, func() ([]byte, error) { return []byte("original"), nil }), nil
 		},
 	}
@@ -92,7 +91,7 @@ func TestCoverFileWriteClose(t *testing.T) {
 func TestCoverFileWriteEmptyDoesNotCallEdit(t *testing.T) {
 	called := false
 	lib := libfake.Lib{
-		ContentFn: func(_ int64) (model.EpubReader, error) {
+		ContentFn: func(_ int64) (library.EpubReader, error) {
 			return libfake.NewEpubReader(nil, nil, func() ([]byte, error) { return []byte("original"), nil }), nil
 		},
 	}
@@ -116,7 +115,7 @@ func TestCoverFileWriteEmptyDoesNotCallEdit(t *testing.T) {
 
 func TestCoverFilePerFidBuffers(t *testing.T) {
 	lib := libfake.Lib{
-		ContentFn: func(_ int64) (model.EpubReader, error) {
+		ContentFn: func(_ int64) (library.EpubReader, error) {
 			return libfake.NewEpubReader(nil, nil, func() ([]byte, error) { return []byte("shared"), nil }), nil
 		},
 	}
@@ -138,7 +137,7 @@ func TestCoverFilePerFidBuffers(t *testing.T) {
 
 func TestCoverFileWriteErrorPassesThrough(t *testing.T) {
 	lib := libfake.Lib{
-		ContentFn: func(_ int64) (model.EpubReader, error) {
+		ContentFn: func(_ int64) (library.EpubReader, error) {
 			return libfake.NewEpubReader(nil, nil, func() ([]byte, error) { return []byte("original"), nil }), nil
 		},
 	}

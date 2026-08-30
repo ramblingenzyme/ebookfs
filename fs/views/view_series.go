@@ -11,8 +11,8 @@ import (
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/internal/naming"
 	"github.com/ramblingenzyme/ebookfs/library"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // seriesEntryName builds a book's entry name within its series. The index is
@@ -29,7 +29,7 @@ func seriesEntryName(b *library.Book, pad int32) string {
 			s += "." + rest
 		}
 	}
-	return fmt.Sprintf("%s - %s", s, model.PathSafe(b.Title()))
+	return fmt.Sprintf("%s - %s", s, naming.PathSafe(b.Title()))
 }
 
 // seriesLevel reads the first level of a series position, which is the only
@@ -116,7 +116,7 @@ func NewBySeriesDir(reg *registry.BookRegistry) *bySeriesDir {
 // metadata read verbatim from the epub, and a '/' in one would make an entry a
 // 9P client cannot walk to. Remove must mint the same name or removals miss.
 func (d *bySeriesDir) seriesDir(name string) registry.BookView {
-	return d.childDir(model.PathSafe(name), func(s *proto.Stat) fs.FSNode {
+	return d.childDir(naming.PathSafe(name), func(s *proto.Stat) fs.FSNode {
 		return newSeriesBookListDir(s, d.f)
 	}).(registry.BookView)
 }
@@ -134,5 +134,5 @@ func (d *bySeriesDir) Remove(dir *book.BookDir) {
 	if !b.HasSeries() {
 		return
 	}
-	d.removeLister(model.PathSafe(b.SeriesName()), dir)
+	d.removeLister(naming.PathSafe(b.SeriesName()), dir)
 }

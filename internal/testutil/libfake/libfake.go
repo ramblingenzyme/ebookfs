@@ -17,10 +17,9 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/config"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
-// EpubReader is a fake model.EpubReader backed by an in-memory buffer. Closed
+// EpubReader is a fake library.EpubReader backed by an in-memory buffer. Closed
 // records whether Close has been called. OPFFn and CoverFn supply the OPF and
 // cover extraction results.
 type EpubReader struct {
@@ -49,7 +48,7 @@ func (r *EpubReader) Cover() ([]byte, error) {
 	return nil, nil
 }
 
-var _ model.EpubReader = (*EpubReader)(nil)
+var _ library.EpubReader = (*EpubReader)(nil)
 
 // NewEpubReader returns a fake EpubReader serving data as its raw epub bytes
 // and opf/cover from the provided functions. When opfFn or coverFn is nil the
@@ -69,7 +68,7 @@ type Lib struct {
 	EditFn         func(int64, library.Edits) (*library.Book, error)
 	IngestFn       func(string) (*library.Book, error)
 	CreateIngestFn func() (library.IngestHandle, error)
-	ContentFn      func(int64) (model.EpubReader, error)
+	ContentFn      func(int64) (library.EpubReader, error)
 	SearchFn       func(library.Query) ([]*library.Book, error)
 	StatsFn        func() (*library.Stats, error)
 	ReindexFn      func() error
@@ -95,7 +94,7 @@ func (l Lib) CreateIngest() (library.IngestHandle, error) {
 	return IngestHandle{IngestFn: l.IngestFn}, nil
 }
 
-func (l Lib) Content(id int64) (model.EpubReader, error) {
+func (l Lib) Content(id int64) (library.EpubReader, error) {
 	if l.ContentFn != nil {
 		return l.ContentFn(id)
 	}
@@ -150,12 +149,12 @@ func (h IngestHandle) Ingest() (*library.Book, error) {
 // exporters' status policy.
 type Exporter struct {
 	StatusList []string
-	OpenFn     func(*library.Book) (model.EpubReader, error)
+	OpenFn     func(*library.Book) (library.EpubReader, error)
 	SizeFn     func(*library.Book) (int64, bool)
 	FilenameFn func(*library.Book) string
 }
 
-func (e Exporter) Open(b *library.Book) (model.EpubReader, error) {
+func (e Exporter) Open(b *library.Book) (library.EpubReader, error) {
 	if e.OpenFn != nil {
 		return e.OpenFn(b)
 	}

@@ -8,8 +8,8 @@ import (
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/internal/naming"
 	"github.com/ramblingenzyme/ebookfs/library"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // bookListDir is a flat listing of bookDirs keyed by each book's title. Embed it in
@@ -45,7 +45,7 @@ func newBookListDir(stat *proto.Stat) *bookListDir {
 // title "Foo (2)" is taken and gets disambiguated in turn. Fixing it means
 // minting until the name is free rather than assuming one pass suffices.
 func disambiguatedName(b *library.Book) string {
-	return fmt.Sprintf("%s (%d)", model.PathSafe(b.Title()), b.ID())
+	return fmt.Sprintf("%s (%d)", naming.PathSafe(b.Title()), b.ID())
 }
 
 func (d *bookListDir) Add(dir *book.BookDir) {
@@ -53,7 +53,7 @@ func (d *bookListDir) Add(dir *book.BookDir) {
 	// Keyed by the name the child actually carries: BookDir.Stat reports a
 	// PathSafe title, so looking up the raw one would miss the collision and
 	// entries would name a child that cannot be deleted.
-	name := model.PathSafe(b.Title())
+	name := naming.PathSafe(b.Title())
 	if child, ok := d.Children()[name]; ok && child != dir {
 		// Plain title is taken by a different book — disambiguate with the id.
 		d.AddChild(&namedBookDir{
