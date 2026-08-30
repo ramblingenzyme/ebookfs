@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Edits moved to library/internal/epub/edits.** The `Edits` type, `ValidationError`, `FieldError`, and validation logic moved from `library/model` to `library/internal/epub/edits` to prevent import cycles and better organize epub-related types. `Validate` is now a package function instead of a method on `Edits`, and takes `*book.Book` instead of `*book.ImmutableBook`. Type aliases in the `library` package (`library.Edits`, `library.ValidationError`, `library.FieldError`) have been added.
 - **Status vocabulary consolidated in internal/book.** Reading-status constants (`StatusUnread`, `StatusReading`, `StatusRead`, `StatusAbandoned`), `Statuses` slice, `IsValidStatus()`, and `StatusList()` now live in `internal/book` instead of being split between `library/model` and `library/internal/epub/edits`. `config` and `edits` both import `book` for validation, keeping the dependency graph clean.
 - **Query and Order moved to library/internal/index.** `Query` and `Order` types moved from `library/model` to `library/internal/index` where they are used. Type aliases in the `library` package (`library.Query`, `library.Order`, and the `Order*` constants) also added.
+- **Stats moved to library/internal/index.** `Stats` struct moved from `library/model` to `library/internal/index` alongside `Query` and `Order`. Type alias `library.Stats` added for public API access.
 
 ## [1.0.0-beta4] - 2026-08-29
 

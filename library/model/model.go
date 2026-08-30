@@ -4,7 +4,6 @@ package model
 import (
 	"io"
 	"strings"
-	"time"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
@@ -76,13 +75,3 @@ type Author = book.Author
 
 // SeriesRef identifies a book's series membership and position.
 type SeriesRef = book.SeriesRef
-
-type Stats struct {
-	Books        int
-	Authors      int
-	Series       int
-	Tags         int
-	TotalSize    int64
-	LastAdded    time.Time
-	LastModified time.Time
-}

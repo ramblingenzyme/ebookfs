@@ -70,7 +70,7 @@ type Lib struct {
 	CreateIngestFn func() (library.IngestHandle, error)
 	ContentFn      func(int64) (model.EpubReader, error)
 	SearchFn       func(library.Query) ([]*library.Book, error)
-	StatsFn        func() (*model.Stats, error)
+	StatsFn        func() (*library.Stats, error)
 	ReindexFn      func() error
 	DeleteFn       func(int64) error
 }
@@ -108,11 +108,11 @@ func (l Lib) Search(q library.Query) ([]*library.Book, error) {
 	return nil, nil
 }
 
-func (l Lib) Stats() (*model.Stats, error) {
+func (l Lib) Stats() (*library.Stats, error) {
 	if l.StatsFn != nil {
 		return l.StatsFn()
 	}
-	return &model.Stats{}, nil
+	return &library.Stats{}, nil
 }
 
 func (l Lib) Reindex() error {

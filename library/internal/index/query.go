@@ -1,5 +1,7 @@
 package index
 
+import "time"
+
 // Query selects a subset of books. Within each slice field values are OR'd
 // (tag:sci-fi+tag:fantasy matches books with either tag). Across fields they
 // are AND'd (tag:sci-fi+status:unread matches books with the tag AND the
@@ -43,3 +45,13 @@ const (
 	OrderRating                    // highest rated first
 	OrderPubdate                   // most recently published first
 )
+
+type Stats struct {
+	Books        int
+	Authors      int
+	Series       int
+	Tags         int
+	TotalSize    int64
+	LastAdded    time.Time
+	LastModified time.Time
+}

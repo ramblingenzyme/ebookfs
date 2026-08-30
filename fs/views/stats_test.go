@@ -8,13 +8,13 @@ import (
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
-	"github.com/ramblingenzyme/ebookfs/library/model"
+	"github.com/ramblingenzyme/ebookfs/library"
 )
 
 func TestFormatStats(t *testing.T) {
 	added := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	modified := time.Date(2026, 6, 7, 8, 9, 10, 0, time.UTC)
-	s := &model.Stats{
+	s := &library.Stats{
 		Books: 3, Authors: 2, Series: 1, Tags: 4,
 		TotalSize: 12345, LastAdded: added, LastModified: modified,
 	}
@@ -35,7 +35,7 @@ func TestFormatStats(t *testing.T) {
 }
 
 func TestFormatStatsZeroTimes(t *testing.T) {
-	got := formatStats(&model.Stats{})
+	got := formatStats(&library.Stats{})
 	if !strings.Contains(got, "last-added: \n") {
 		t.Errorf("formatStats() with zero LastAdded = %q, want empty last-added", got)
 	}
@@ -47,9 +47,9 @@ func TestFormatStatsZeroTimes(t *testing.T) {
 func TestStatsFileReadsLiveStats(t *testing.T) {
 	calls := 0
 	lib := libfake.Lib{
-		StatsFn: func() (*model.Stats, error) {
+		StatsFn: func() (*library.Stats, error) {
 			calls++
-			return &model.Stats{Books: calls}, nil
+			return &library.Stats{Books: calls}, nil
 		},
 	}
 	f := NewStatsFile(testutil.NewTestFS(t), lib)
@@ -80,13 +80,13 @@ func TestStatsFileReadsLiveStats(t *testing.T) {
 
 func TestStatsFileStatReportsLength(t *testing.T) {
 	lib := libfake.Lib{
-		StatsFn: func() (*model.Stats, error) {
-			return &model.Stats{Books: 7}, nil
+		StatsFn: func() (*library.Stats, error) {
+			return &library.Stats{Books: 7}, nil
 		},
 	}
 	f := NewStatsFile(testutil.NewTestFS(t), lib)
 
-	want := len(formatStats(&model.Stats{Books: 7}))
+	want := len(formatStats(&library.Stats{Books: 7}))
 	if got := f.Stat().Length; got != uint64(want) {
 		t.Errorf("Stat().Length = %d, want %d", got, want)
 	}
@@ -94,7 +94,7 @@ func TestStatsFileStatReportsLength(t *testing.T) {
 
 func TestStatsFileOpenPropagatesError(t *testing.T) {
 	lib := libfake.Lib{
-		StatsFn: func() (*model.Stats, error) {
+		StatsFn: func() (*library.Stats, error) {
 			return nil, testutil.ErrTest
 		},
 	}

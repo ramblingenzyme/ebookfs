@@ -20,6 +20,7 @@ type ValidationError = edits.ValidationError
 type FieldError = edits.FieldError
 type Query = index.Query
 type Order = index.Order
+type Stats = index.Stats
 
 const (
 	OrderSortTitle    = index.OrderSortTitle
@@ -63,7 +64,7 @@ type Library interface {
 	// teardown to perform, which is why Exporter has no Close method.
 	Exporter(config.ReaderConfig) (Exporter, error)
 	Search(Query) ([]*Book, error)
-	Stats() (*model.Stats, error)
+	Stats() (*Stats, error)
 	Reindex() error
 	// Content returns an open handle to the book's epub content. The caller
 	// must close it. The handle reflects the book at the time of the call;

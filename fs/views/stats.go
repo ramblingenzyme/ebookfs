@@ -9,7 +9,6 @@ import (
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/library"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // statsFile is a read-only root file reporting aggregate library statistics.
@@ -52,7 +51,7 @@ func (f *statsFile) Stat() proto.Stat {
 // formatStats renders s as newline-separated "key: value" lines, matching the
 // plain-text convention every other field file in the tree uses. Timestamps
 // print empty when zero (an empty library has no last-added/last-modified).
-func formatStats(s *model.Stats) string {
+func formatStats(s *library.Stats) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "books: %d\n", s.Books)
 	fmt.Fprintf(&b, "authors: %d\n", s.Authors)

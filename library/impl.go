@@ -67,7 +67,7 @@ func (l *libraryImpl) Search(q Query) ([]*Book, error) {
 }
 
 // Stats returns aggregate library statistics.
-func (l *libraryImpl) Stats() (*model.Stats, error) {
+func (l *libraryImpl) Stats() (*Stats, error) {
 	return l.index.Stats()
 }
 

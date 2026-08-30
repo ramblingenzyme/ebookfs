@@ -8,7 +8,6 @@ import (
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 func (idx *Index) queryBooks(q *bookQuery) ([]*book.Book, error) {
@@ -70,13 +69,13 @@ func (idx *Index) Get(bookID int64) (*book.Book, error) {
 }
 
 // Stats returns aggregate library statistics.
-func (idx *Index) Stats() (*model.Stats, error) {
+func (idx *Index) Stats() (*Stats, error) {
 	stats, err := idx.queries.GetStats(idx.ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	s := &model.Stats{
+	s := &Stats{
 		Books:     int(stats.Books),
 		Authors:   int(stats.Authors),
 		Series:    int(stats.Series),
