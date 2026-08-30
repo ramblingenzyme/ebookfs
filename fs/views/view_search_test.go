@@ -147,7 +147,7 @@ func TestMakeMatchesFn(t *testing.T) {
 		b := makeBook(7, "Foundation and Empire", "Isaac Asimov", "Ray Bradbury")
 		b.Meta.Tags = []string{"sci-fi", "classic"}
 		b.Meta.Status = "unread"
-		b.Series = &library.SeriesRef{Name: "Foundation", Index: "2"}
+		b.Series = &library.Series{Name: "Foundation", Index: "2"}
 		return wrapBook(b)
 	}
 	standalone := func() *library.Book {

@@ -22,7 +22,7 @@ func wrapBook(b *book.Book) *library.Book {
 
 func makeBookWithSeries(id int64, title, author string, seriesName, seriesIndex string) *library.Book {
 	b := makeBook(id, title, author)
-	b.Series = &library.SeriesRef{Name: seriesName, Index: seriesIndex}
+	b.Series = &library.Series{Name: seriesName, Index: seriesIndex}
 	return wrapBook(b)
 }
 

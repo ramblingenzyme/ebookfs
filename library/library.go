@@ -23,7 +23,7 @@ type Query = index.Query
 type Order = index.Order
 type Stats = index.Stats
 type Author = book.Author
-type SeriesRef = book.SeriesRef
+type Series = book.SeriesRef
 
 const (
 	OrderSortTitle    = index.OrderSortTitle

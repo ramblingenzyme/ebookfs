@@ -445,7 +445,7 @@ func TestRenameAuthorMatchSortName(t *testing.T) {
 
 func TestRenameSeries(t *testing.T) {
 	book := testutil.MakeMutableBook(9, "Title", "Author")
-	book.Series = &library.SeriesRef{Name: "Old", Index: "1"}
+	book.Series = &library.Series{Name: "Old", Index: "1"}
 
 	lib := libfake.Lib{
 		SearchFn: func(q library.Query) ([]*library.Book, error) {
@@ -456,7 +456,7 @@ func TestRenameSeries(t *testing.T) {
 				t.Fatalf("renamed series = %v, want %q", e.Series, "New")
 			}
 			updated := *book
-			updated.Series = &library.SeriesRef{Name: *e.Series, Index: book.Series.Index}
+			updated.Series = &library.Series{Name: *e.Series, Index: book.Series.Index}
 			return testutil.WrapBook(&updated), nil
 		},
 	}
