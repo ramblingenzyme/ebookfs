@@ -2,7 +2,6 @@ package index
 
 import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // hydrateBooks loads authors, tags, and identifiers for the given books via
@@ -29,7 +28,7 @@ func (idx *Index) hydrateBooks(books []*book.Book) error {
 	for _, b := range books {
 		b.Authors = authors[b.Meta.ID]
 		if b.Authors == nil {
-			b.Authors = []model.Author{}
+			b.Authors = []book.Author{}
 		}
 		b.Meta.Tags = tags[b.Meta.ID]
 		if b.Meta.Tags == nil {
@@ -46,14 +45,14 @@ func (idx *Index) hydrateBooks(books []*book.Book) error {
 }
 
 // loadAuthors fetches authors for the given book IDs, grouped by book.
-func (idx *Index) loadAuthors(ids []int64) (map[int64][]model.Author, error) {
+func (idx *Index) loadAuthors(ids []int64) (map[int64][]book.Author, error) {
 	rows, err := idx.queries.GetAuthorsByBookIDs(idx.ctx, ids)
 	if err != nil {
 		return nil, err
 	}
-	out := make(map[int64][]model.Author, len(ids))
+	out := make(map[int64][]book.Author, len(ids))
 	for _, row := range rows {
-		out[row.BookID] = append(out[row.BookID], model.Author{
+		out[row.BookID] = append(out[row.BookID], book.Author{
 			ID:       row.ID,
 			Name:     row.Name,
 			SortName: row.SortName,

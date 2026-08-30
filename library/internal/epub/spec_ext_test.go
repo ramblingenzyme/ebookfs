@@ -26,7 +26,6 @@ import (
 	"github.com/beevik/etree"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // --- dc:title selection -------------------------------------------------------
@@ -259,7 +258,7 @@ func TestSpecOnlyAuthorRoleCreatorsAreAuthors(t *testing.T) {
 	}
 
 	// An authors edit must not disturb the editor, who is not ours to rewrite.
-	authors := []model.Author{{Name: "Ann Rand"}}
+	authors := []bookmodel.Author{{Name: "Ann Rand"}}
 	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Authors: &authors}); err != nil {
 		t.Fatal(err)
 	}
@@ -385,7 +384,7 @@ func TestSpecMintedIDsDoNotCollide(t *testing.T) {
     <dc:title id="ebookfs-creator">The Title</dc:title>
     <dc:creator>Ann Rand</dc:creator>
     <dc:language id="ebookfs-creator-1">en</dc:language>`,
-			edits: edits.Edits{Authors: &[]model.Author{{Name: "Someone Else"}}},
+			edits: edits.Edits{Authors: &[]bookmodel.Author{{Name: "Someone Else"}}},
 		},
 		{
 			name: "new collection vs a squatted ebookfs-series",
@@ -418,9 +417,9 @@ func TestSpecRepeatedEditsDoNotCollideIDs(t *testing.T) {
 	names := []string{"Ann Rand"}
 	for _, add := range []string{"Bo Carr", "Cy Dunn", "Di Ekko"} {
 		names = append(names, add)
-		authors := make([]model.Author, len(names))
+		authors := make([]bookmodel.Author, len(names))
 		for i, n := range names {
-			authors[i] = model.Author{Name: n}
+			authors[i] = bookmodel.Author{Name: n}
 		}
 		if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Authors: &authors}); err != nil {
 			t.Fatalf("adding %s: %v", add, err)
@@ -450,7 +449,7 @@ func TestSpecReorderingAuthorsKeepsIDsUnique(t *testing.T) {
     <meta refines="#ebookfs-creator" property="file-as">Alice, A</meta>
     <dc:language>en</dc:language>`))
 
-	authors := []model.Author{{Name: "Bob", SortName: "Bob, B"}, {Name: "Alice", SortName: "Alice, A"}}
+	authors := []bookmodel.Author{{Name: "Bob", SortName: "Bob, B"}, {Name: "Alice", SortName: "Alice, A"}}
 	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Authors: &authors}); err != nil {
 		t.Fatal(err)
 	}
@@ -737,7 +736,7 @@ func TestSpecNewRefineSpellsItsSchemeAndProperty(t *testing.T) {
 		`version="3.0"`, `version="3.0" prefix="marc: http://example.com/not-marc#"`, 1)
 
 	path := buildEpub(t, opf)
-	authors := []model.Author{{Name: "Ann Rand"}, {Name: "Bo Li"}}
+	authors := []bookmodel.Author{{Name: "Ann Rand"}, {Name: "Bo Li"}}
 	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Authors: &authors}); err != nil {
 		t.Fatal(err)
 	}
@@ -885,7 +884,7 @@ func TestSpecMultipleRoleRefines(t *testing.T) {
 			}
 
 			// A no-op author edit must not strip the role that is not ours.
-			authors := []model.Author{{Name: "Maurice Sendak"}}
+			authors := []bookmodel.Author{{Name: "Maurice Sendak"}}
 			if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Authors: &authors}); err != nil {
 				t.Fatal(err)
 			}
@@ -1297,7 +1296,7 @@ func TestSpecEPUB2AttributesGetADeclaredPrefix(t *testing.T) {
     <dc:language>en</dc:language>`), ` xmlns:opf="http://www.idpf.org/2007/opf"`, "", 1)
 
 	path := buildEpub(t, opf)
-	authors := []model.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
+	authors := []bookmodel.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
 	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Authors: &authors}); err != nil {
 		t.Fatal(err)
 	}

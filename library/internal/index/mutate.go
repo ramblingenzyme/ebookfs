@@ -7,7 +7,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index/dbsqlc"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // toUnixNano encodes an mtime for storage. The zero time means "never observed"
@@ -145,7 +144,7 @@ func (idx *Index) finishBook(q *dbsqlc.Queries, b *book.Book) error {
 	return nil
 }
 
-func (idx *Index) upsertAuthors(q *dbsqlc.Queries, bookID int64, authors []model.Author) error {
+func (idx *Index) upsertAuthors(q *dbsqlc.Queries, bookID int64, authors []book.Author) error {
 	if err := q.DeleteBookAuthors(idx.ctx, bookID); err != nil {
 		return err
 	}

@@ -3,9 +3,9 @@ package opf
 import (
 	"strings"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf/pkgdoc"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/xml"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 const (
@@ -19,9 +19,9 @@ func (o *Doc) series() seriesField { return seriesField{o.d} }
 
 // get returns the series as the document records it: no index means an empty
 // Index, not a default.
-func (f seriesField) get() *model.SeriesRef {
+func (f seriesField) get() *book.SeriesRef {
 	if coll := f.collection(); coll.Exists() {
-		return &model.SeriesRef{
+		return &book.SeriesRef{
 			Name:  coll.Get(),
 			Index: coll.Refine("group-position").Get(),
 		}
@@ -34,7 +34,7 @@ func (f seriesField) get() *model.SeriesRef {
 	if name == "" {
 		return nil
 	}
-	return &model.SeriesRef{Name: name, Index: f.d.Named("calibre:series_index").Get()}
+	return &book.SeriesRef{Name: name, Index: f.d.Named("calibre:series_index").Get()}
 }
 
 // set writes the series membership, or clears it when the name is empty. EPUB 3

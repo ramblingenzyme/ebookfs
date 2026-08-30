@@ -7,8 +7,6 @@ import (
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // newStore returns a Store rooted at a fresh temp dir, plus that root.
@@ -144,17 +142,17 @@ func TestMoveSameLocationNoop(t *testing.T) {
 func TestEpubFilename(t *testing.T) {
 	tests := []struct {
 		name    string
-		authors []model.Author
+		authors []book.Author
 		title   string
 		want    string
 	}{
-		{"single author", []model.Author{{Name: "Alice"}}, "Wonderful Title", "Wonderful Title - Alice.epub"},
-		{"two authors", []model.Author{{Name: "Alice"}, {Name: "Bob"}}, "Title", "Title - Alice & Bob.epub"},
+		{"single author", []book.Author{{Name: "Alice"}}, "Wonderful Title", "Wonderful Title - Alice.epub"},
+		{"two authors", []book.Author{{Name: "Alice"}, {Name: "Bob"}}, "Title", "Title - Alice & Bob.epub"},
 		{"no authors", nil, "No Author Book", "No Author Book.epub"},
-		{"empty authors", []model.Author{}, "Empty Authors", "Empty Authors.epub"},
-		{"colon in title", []model.Author{{Name: "Alice"}}, "Title: Sub", "Title- Sub - Alice.epub"},
-		{"slash in author", []model.Author{{Name: "Alice/Author"}}, "Title", "Title - Alice-Author.epub"},
-		{"leading dot trimmed", []model.Author{{Name: "Alice"}}, ".hidden", "hidden - Alice.epub"},
+		{"empty authors", []book.Author{}, "Empty Authors", "Empty Authors.epub"},
+		{"colon in title", []book.Author{{Name: "Alice"}}, "Title: Sub", "Title- Sub - Alice.epub"},
+		{"slash in author", []book.Author{{Name: "Alice/Author"}}, "Title", "Title - Alice-Author.epub"},
+		{"leading dot trimmed", []book.Author{{Name: "Alice"}}, ".hidden", "hidden - Alice.epub"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -169,15 +167,15 @@ func TestEpubFilename(t *testing.T) {
 func TestCanonicalDir(t *testing.T) {
 	tests := []struct {
 		name    string
-		authors []model.Author
+		authors []book.Author
 		title   string
 		id      int64
 		want    string
 	}{
-		{"basic", []model.Author{{Name: "Alice"}}, "The Title", 42, "Alice/The Title (42)"},
-		{"two authors", []model.Author{{Name: "Alice"}, {Name: "Bob"}}, "The Title", 42, "Alice & Bob/The Title (42)"},
+		{"basic", []book.Author{{Name: "Alice"}}, "The Title", 42, "Alice/The Title (42)"},
+		{"two authors", []book.Author{{Name: "Alice"}, {Name: "Bob"}}, "The Title", 42, "Alice & Bob/The Title (42)"},
 		{"unknown author", nil, "No Author", 1, "Unknown/No Author (1)"},
-		{"title with id", []model.Author{{Name: "Bob"}}, "My Book", 7, "Bob/My Book (7)"},
+		{"title with id", []book.Author{{Name: "Bob"}}, "My Book", 7, "Bob/My Book (7)"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -192,7 +190,7 @@ func TestCanonicalDir(t *testing.T) {
 func TestLayout(t *testing.T) {
 	s, _ := newStore(t)
 
-	loc := s.Layout([]model.Author{{Name: "Alice"}}, "My Title", 1)
+	loc := s.Layout([]book.Author{{Name: "Alice"}}, "My Title", 1)
 	wantRel := filepath.Join("Alice/My Title (1)", "My Title - Alice.epub")
 	if loc.EpubPath != wantRel {
 		t.Errorf("EpubPath = %q, want %q", loc.EpubPath, wantRel)
@@ -207,7 +205,7 @@ func TestLayout(t *testing.T) {
 func TestLayoutSlashInTitleStaysOneDirectory(t *testing.T) {
 	s, _ := newStore(t)
 
-	loc := s.Layout([]model.Author{{Name: "AC/DC"}}, "Either/Or", 7)
+	loc := s.Layout([]book.Author{{Name: "AC/DC"}}, "Either/Or", 7)
 	dir := filepath.Dir(loc.EpubPath)
 	if got := strings.Count(dir, string(filepath.Separator)); got != 1 {
 		t.Errorf("directory = %q, want exactly two components, got %d separators", dir, got)
@@ -226,7 +224,7 @@ func TestLayoutCannotEscapeTheLibraryRoot(t *testing.T) {
 	s, _ := newStore(t)
 
 	for _, name := range []string{"..", ".", "...", " "} {
-		loc := s.Layout([]model.Author{{Name: name}}, "Title", 5)
+		loc := s.Layout([]book.Author{{Name: name}}, "Title", 5)
 		if strings.HasPrefix(loc.EpubPath, ".") || strings.Contains(loc.EpubPath, ".."+string(filepath.Separator)) {
 			t.Errorf("author %q gave EpubPath %q, which leaves the library root", name, loc.EpubPath)
 		}
@@ -256,7 +254,7 @@ func TestIngest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	loc := s.Layout([]model.Author{{Name: "Alice"}}, "Ingested", 10)
+	loc := s.Layout([]book.Author{{Name: "Alice"}}, "Ingested", 10)
 	meta := &book.Meta{ID: 10}
 
 	if _, err := s.Ingest(tmpEpub, loc, meta); err != nil {
@@ -376,13 +374,13 @@ func TestPathTaken(t *testing.T) {
 
 	writeBook(t, root, "Author A/Book Title (1)", "Book Title - Author A.epub", "fake epub", nil)
 
-	if !s.PathTaken([]model.Author{{Name: "Author A"}}, "Book Title") {
+	if !s.PathTaken([]book.Author{{Name: "Author A"}}, "Book Title") {
 		t.Error("PathTaken returned false for a file that is on disk")
 	}
-	if s.PathTaken([]model.Author{{Name: "Author A"}}, "Different Title") {
+	if s.PathTaken([]book.Author{{Name: "Author A"}}, "Different Title") {
 		t.Error("PathTaken returned true for a title that is not on disk")
 	}
-	if s.PathTaken([]model.Author{{Name: "Nobody"}}, "Anything") {
+	if s.PathTaken([]book.Author{{Name: "Nobody"}}, "Anything") {
 		t.Error("PathTaken returned true for a non-existent author dir")
 	}
 }
@@ -457,7 +455,7 @@ func TestDeleteRemovesBookDir(t *testing.T) {
 func TestEpubFilenameForFFallback(t *testing.T) {
 	// A title that is only dots triggers ForFAT to return an error (trimmed to empty),
 	// exercising the fallback to the raw title.
-	got := epubFilename([]model.Author{{Name: "Alice"}}, ".")
+	got := epubFilename([]book.Author{{Name: "Alice"}}, ".")
 	if got != ". - Alice.epub" {
 		t.Errorf("epubFilename = %q, want %q", got, ". - Alice.epub")
 	}

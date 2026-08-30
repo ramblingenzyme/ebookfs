@@ -15,7 +15,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // ---- Registry ----
@@ -152,7 +151,7 @@ func TestGroupNamesAreOneComponent(t *testing.T) {
 			dir:  func(reg *registry.BookRegistry) fs.Dir { return NewBySeriesDir(reg) },
 			book: func() *library.Book {
 				b := makeBook(1, "Title", "Author")
-				b.Series = &model.SeriesRef{Name: "Either/Or", Index: "1"}
+				b.Series = &library.Series{Name: "Either/Or", Index: "1"}
 				return wrapBook(b)
 			},
 		},
@@ -239,7 +238,7 @@ var groupingViews = []groupingView{
 		newDir: func(reg *registry.BookRegistry) fs.Dir { return NewBySeriesDir(reg) },
 		withKeys: func(id int64, title string, keys ...string) *library.Book {
 			b := makeBook(id, title, "Author")
-			b.Series = &model.SeriesRef{Name: keys[0], Index: strconv.FormatInt(id, 10)}
+			b.Series = &library.Series{Name: keys[0], Index: strconv.FormatInt(id, 10)}
 			return wrapBook(b)
 		},
 		keyless: func(id int64, title string) *library.Book { return testutil.MakeBook(id, title, "Author") },

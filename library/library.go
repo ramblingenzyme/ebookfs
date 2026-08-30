@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/config"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index"
@@ -21,6 +22,8 @@ type FieldError = edits.FieldError
 type Query = index.Query
 type Order = index.Order
 type Stats = index.Stats
+type Author = book.Author
+type Series = book.SeriesRef
 
 const (
 	OrderSortTitle    = index.OrderSortTitle

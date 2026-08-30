@@ -31,6 +31,11 @@ type SeriesRef struct {
 	Index string
 }
 
+// UnknownAuthor is the fallback author name used when a book has no author
+// metadata. It is injected by ingest and may appear defensively in store path
+// and export directory computations.
+const UnknownAuthor = "Unknown"
+
 // Reading-status vocabulary. Validate and config's reader.statuses validation
 // consult Statuses, so adding a status requires updating both the const block
 // and the Statuses slice.
@@ -56,6 +61,23 @@ func IsValidStatus(s string) bool {
 // abandoned".
 func StatusList() string {
 	return strings.Join(Statuses[:len(Statuses)-1], ", ") + ", or " + Statuses[len(Statuses)-1]
+}
+
+// JoinAuthors renders authors as a display string joined by sep, skipping empty
+// names and falling back to UnknownAuthor when none remain. Callers differ only
+// in sep (" & " for directory names, ", " for log lines), so the filter and
+// fallback live here rather than being re-derived at each site.
+func JoinAuthors(authors []Author, sep string) string {
+	names := make([]string, 0, len(authors))
+	for _, a := range authors {
+		if a.Name != "" {
+			names = append(names, a.Name)
+		}
+	}
+	if len(names) == 0 {
+		return UnknownAuthor
+	}
+	return strings.Join(names, sep)
 }
 
 // Book is the complete record for a book in the library: where it lives

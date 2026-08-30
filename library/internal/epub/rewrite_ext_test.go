@@ -29,7 +29,6 @@ import (
 	"github.com/beevik/etree"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // item is a piece of metadata no part of ebookfs writes, reads, or understands:
@@ -157,7 +156,7 @@ func preservingEdits() []struct {
 	e    edits.Edits
 } {
 	s := func(v string) *string { return &v }
-	authors := []model.Author{{Name: "Jane Doe", SortName: "Doe, Jane"}}
+	authors := []bookmodel.Author{{Name: "Jane Doe", SortName: "Doe, Jane"}}
 	return []struct {
 		name string
 		e    edits.Edits
@@ -248,7 +247,7 @@ func assertOutsideMetadataUnchanged(t *testing.T, before string, after []byte) {
 
 func TestRewriteRoundTrips(t *testing.T) {
 	s := func(v string) *string { return &v }
-	authors := []model.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}, {Name: "Bo Li"}}
+	authors := []bookmodel.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}, {Name: "Bo Li"}}
 
 	cases := []struct {
 		name  string
@@ -651,7 +650,7 @@ func TestEPUB2CreatorLosesAStaleSortName(t *testing.T) {
     <dc:language>en</dc:language>`)
 
 	path := buildEpub(t, opf)
-	authors := []model.Author{{Name: "Jane Doe"}}
+	authors := []bookmodel.Author{{Name: "Jane Doe"}}
 	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Authors: &authors}); err != nil {
 		t.Fatal(err)
 	}
@@ -687,7 +686,7 @@ func TestEPUB3CreatorWithALegacySortNameTakesTheEdit(t *testing.T) {
 		`xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf"`, 1)
 
 	path := buildEpub(t, opf)
-	authors := []model.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
+	authors := []bookmodel.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
 	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Authors: &authors}); err != nil {
 		t.Fatal(err)
 	}
@@ -726,7 +725,7 @@ func TestUnprefixedFileAsIsUpdatedNotDuplicated(t *testing.T) {
     <dc:language>en</dc:language>`)
 
 	path := buildEpub(t, opf)
-	authors := []model.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
+	authors := []bookmodel.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
 	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Authors: &authors}); err != nil {
 		t.Fatal(err)
 	}
@@ -885,7 +884,7 @@ func TestRewriteRefusesDuplicateAuthors(t *testing.T) {
 	path := buildEpub(t, richOPF3)
 	before := readEntry(t, path, opfPath)
 
-	authors := []model.Author{{Name: "Jane Doe"}, {Name: "Jane Doe"}}
+	authors := []bookmodel.Author{{Name: "Jane Doe"}, {Name: "Jane Doe"}}
 	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Authors: &authors}); err == nil {
 		t.Fatal("a duplicated author was accepted")
 	}
@@ -967,7 +966,7 @@ func TestDuplicateRefinementsKeepTheirDuplicates(t *testing.T) {
     <dc:language>en</dc:language>`)
 
 	path := buildEpub(t, opf)
-	authors := []model.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
+	authors := []bookmodel.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
 	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Authors: &authors}); err != nil {
 		t.Fatal(err)
 	}
@@ -1255,7 +1254,7 @@ func TestNCXDocAuthorsAreReconciled(t *testing.T) {
   <docAuthor><text>Jane Doe</text></docAuthor>
   <docAuthor><text>Dropped Coauthor</text></docAuthor>`))
 
-	authors := []model.Author{{Name: "Ann Rewrite"}, {Name: "Bo Second"}, {Name: "Cy Third"}}
+	authors := []bookmodel.Author{{Name: "Ann Rewrite"}, {Name: "Bo Second"}, {Name: "Cy Third"}}
 	if _, err := writeBib(path, edits.Edits{Authors: &authors}); err != nil {
 		t.Fatal(err)
 	}
@@ -1285,7 +1284,7 @@ func TestNCXDocAuthorsAreReconciled(t *testing.T) {
 func TestNCXWithNoDocAuthorGainsNone(t *testing.T) {
 	path := buildNCXEpub(t, ncxWith(`  <docTitle><text>Original Title</text></docTitle>`))
 
-	authors := []model.Author{{Name: "Ann Rewrite"}}
+	authors := []bookmodel.Author{{Name: "Ann Rewrite"}}
 	if _, err := writeBib(path, edits.Edits{Authors: &authors}); err != nil {
 		t.Fatal(err)
 	}

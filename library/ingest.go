@@ -10,7 +10,6 @@ import (
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // IngestHandle is a writable handle for staging an epub upload, returned by
@@ -119,7 +118,7 @@ func (l *libraryImpl) ingestPath(epubPath string) (*Book, error) {
 		return nil, err
 	}
 
-	slog.Info("ingest: book added", "book_id", b.ID(), "title", b.Title(), "authors", model.JoinAuthors(b.Authors(), ", "))
+	slog.Info("ingest: book added", "book_id", b.ID(), "title", b.Title(), "authors", book.JoinAuthors(b.Authors(), ", "))
 	return b, nil
 }
 
@@ -129,7 +128,7 @@ func (l *libraryImpl) ingestPath(epubPath string) (*Book, error) {
 // and Edits rejects an empty author name — so there is nothing to filter here.
 // Filtering would be wrong anyway: the set compared has to be the set written,
 // or the same book ingests twice.
-func authorNames(authors []model.Author) []string {
+func authorNames(authors []book.Author) []string {
 	names := make([]string, len(authors))
 	for i, a := range authors {
 		names[i] = a.Name

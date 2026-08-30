@@ -11,7 +11,6 @@ import (
 
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/fs/registry"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // newTestSearchDir builds a search directory over a fresh in-memory FS with no
@@ -148,7 +147,7 @@ func TestMakeMatchesFn(t *testing.T) {
 		b := makeBook(7, "Foundation and Empire", "Isaac Asimov", "Ray Bradbury")
 		b.Meta.Tags = []string{"sci-fi", "classic"}
 		b.Meta.Status = "unread"
-		b.Series = &model.SeriesRef{Name: "Foundation", Index: "2"}
+		b.Series = &library.Series{Name: "Foundation", Index: "2"}
 		return wrapBook(b)
 	}
 	standalone := func() *library.Book {

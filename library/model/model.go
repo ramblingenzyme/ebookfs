@@ -4,8 +4,6 @@ package model
 import (
 	"io"
 	"strings"
-
-	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
 // EpubReader provides access to a book's epub content from an open handle.
@@ -25,11 +23,6 @@ type EpubReader interface {
 	OPF() ([]byte, error)   // OPF XML from the open epub
 	Cover() ([]byte, error) // cover image from the open epub
 }
-
-// UnknownAuthor is the fallback author name used when a book has no author
-// metadata. It is injected by ingest and may appear defensively in store path
-// and export directory computations.
-const UnknownAuthor = "Unknown"
 
 // PathSafe makes s usable as a single path component. Metadata values are text
 // and are stored as the file wrote them (EPUB 3.3 §5.5.2), so every place that
@@ -52,26 +45,3 @@ func PathSafe(s string) string {
 	}
 	return out
 }
-
-// JoinAuthors renders authors as a display string joined by sep, skipping empty
-// names and falling back to UnknownAuthor when none remain. Callers differ only
-// in sep (" & " for directory names, ", " for log lines), so the filter and
-// fallback live here rather than being re-derived at each site.
-func JoinAuthors(authors []Author, sep string) string {
-	names := make([]string, 0, len(authors))
-	for _, a := range authors {
-		if a.Name != "" {
-			names = append(names, a.Name)
-		}
-	}
-	if len(names) == 0 {
-		return UnknownAuthor
-	}
-	return strings.Join(names, sep)
-}
-
-// Author represents a book author with optional sort name for display.
-type Author = book.Author
-
-// SeriesRef identifies a book's series membership and position.
-type SeriesRef = book.SeriesRef

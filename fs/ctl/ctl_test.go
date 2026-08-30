@@ -13,7 +13,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // --- command parsing ---
@@ -446,7 +445,7 @@ func TestRenameAuthorMatchSortName(t *testing.T) {
 
 func TestRenameSeries(t *testing.T) {
 	book := testutil.MakeMutableBook(9, "Title", "Author")
-	book.Series = &model.SeriesRef{Name: "Old", Index: "1"}
+	book.Series = &library.Series{Name: "Old", Index: "1"}
 
 	lib := libfake.Lib{
 		SearchFn: func(q library.Query) ([]*library.Book, error) {
@@ -457,7 +456,7 @@ func TestRenameSeries(t *testing.T) {
 				t.Fatalf("renamed series = %v, want %q", e.Series, "New")
 			}
 			updated := *book
-			updated.Series = &model.SeriesRef{Name: *e.Series, Index: book.Series.Index}
+			updated.Series = &library.Series{Name: *e.Series, Index: book.Series.Index}
 			return testutil.WrapBook(&updated), nil
 		},
 	}
@@ -475,7 +474,7 @@ func TestRenameSeries(t *testing.T) {
 // the result must collapse to a single author rather than duplicating it.
 func TestRenameAuthorMerge(t *testing.T) {
 	book := testutil.MakeMutableBook(11, "Title", "Isaac Asimov")
-	book.Authors = append(book.Authors, model.Author{Name: "Paul French"})
+	book.Authors = append(book.Authors, library.Author{Name: "Paul French"})
 
 	lib := libfake.Lib{
 		SearchFn: func(q library.Query) ([]*library.Book, error) {

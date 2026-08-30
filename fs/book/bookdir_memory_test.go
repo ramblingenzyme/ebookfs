@@ -7,13 +7,12 @@ import (
 	"testing"
 	"unsafe"
 
-	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/library"
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // representativeBook builds a Book whose field sizes match a realistic library
@@ -27,14 +26,14 @@ func representativeBook(id int64, withCover bool) *library.Book {
 		"whose inhabitants can change sex at will. A study of gender, loyalty, " +
 		"and otherness, and one of the foundational works of modern science " +
 		"fiction. Winner of the Hugo and Nebula awards."
-	bib := bookmodel.Bib{
+	bib := book.Bib{
 		Title:     title,
 		SortTitle: title,
-		Authors: []model.Author{{
+		Authors: []book.Author{{
 			Name:     "Ursula K. Le Guin",
 			SortName: "Le Guin, Ursula K",
 		}},
-		Series:      &model.SeriesRef{Name: "Hainish Cycle", Index: "1"},
+		Series:      &book.SeriesRef{Name: "Hainish Cycle", Index: "1"},
 		Language:    "en",
 		Pubdate:     "1969-03-01",
 		Description: desc,
@@ -48,7 +47,7 @@ func representativeBook(id int64, withCover bool) *library.Book {
 	}
 	libPath := "Le Guin, Ursula K/The Left Hand of Darkness (1042)"
 	epubName := "The Left Hand of Darkness - Ursula K. Le Guin.epub"
-	return testutil.WrapBook(bookmodel.NewBook(bib, bookmodel.Meta{ID: id, Status: "unread", Tags: []string{"sci-fi", "classic", "feminist"}}, bookmodel.Location{
+	return testutil.WrapBook(book.NewBook(bib, book.Meta{ID: id, Status: "unread", Tags: []string{"sci-fi", "classic", "feminist"}}, book.Location{
 		EpubPath: filepath.Join(libPath, epubName),
 	}))
 }

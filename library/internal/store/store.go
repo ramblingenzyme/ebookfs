@@ -11,7 +11,6 @@ import (
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
-	"github.com/ramblingenzyme/ebookfs/library/model"
 )
 
 // Store manages filesystem operations on the library directory tree.
@@ -41,7 +40,7 @@ func (s *Store) Root() string { return s.root }
 //
 // Each book lives in a subdirectory named "Title (id)" under the author
 // directory, so we walk those rather than glob — titles may contain [], ? and *.
-func (s *Store) PathTaken(authors []model.Author, title string) bool {
+func (s *Store) PathTaken(authors []book.Author, title string) bool {
 	authorDir := filepath.Join(s.root, authorDirName(authors))
 	entries, err := os.ReadDir(authorDir)
 	if err != nil {

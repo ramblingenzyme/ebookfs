@@ -117,7 +117,7 @@ var fields = map[string]field{
 			return strings.Join(lines, "\n")
 		},
 		edits: func(s string) (library.Edits, error) {
-			var authors []model.Author
+			var authors []library.Author
 			for line := range strings.SplitSeq(s, "\n") {
 				a := textfmt.ParseAuthor(line)
 				if a.Name == "" {
