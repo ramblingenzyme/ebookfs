@@ -35,7 +35,7 @@ func epubFilename(authors []book.Author, title string) string {
 	if len(authors) == 0 {
 		return fmt.Sprintf("%s.epub", fatTitle)
 	}
-	joined := model.JoinAuthors(authors, " & ")
+	joined := book.JoinAuthors(authors, " & ")
 	fatAuthor, err := naming.ForFAT(joined)
 	if err != nil {
 		fatAuthor = joined
@@ -47,7 +47,7 @@ func epubFilename(authors []book.Author, title string) string {
 // otherwise split one directory into two. epubFilename does its own, stricter
 // pass for the file itself.
 func authorDirName(authors []book.Author) string {
-	return model.PathSafe(model.JoinAuthors(authors, " & "))
+	return model.PathSafe(book.JoinAuthors(authors, " & "))
 }
 
 func canonicalDir(authors []book.Author, title string, id int64) string {

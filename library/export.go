@@ -40,7 +40,7 @@ func (p readerPolicy) Includes(b *Book) bool {
 }
 
 func (p readerPolicy) Dirname(b *Book) string {
-	name := model.JoinAuthors(b.Authors(), " & ")
+	name := book.JoinAuthors(b.Authors(), " & ")
 	if fat, err := naming.ForFAT(name); err == nil {
 		name = fat
 	}

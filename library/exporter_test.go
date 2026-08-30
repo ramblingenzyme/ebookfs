@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 
 	"github.com/ramblingenzyme/ebookfs/library/internal/kepub"
@@ -157,9 +158,9 @@ func TestEpubExporter_Dirname(t *testing.T) {
 		{"single author", func() []Author { return []Author{{Name: "Alice"}} }, "Alice"},
 		{"two authors", func() []Author { return []Author{{Name: "Alice"}, {Name: "Bob"}} }, "Alice & Bob"},
 		{"multiple authors", func() []Author { return []Author{{Name: "Alice"}, {Name: "Bob"}, {Name: "Carol"}} }, "Alice & Bob & Carol"},
-		{"empty author name", func() []Author { return []Author{{Name: ""}} }, model.UnknownAuthor},
+		{"empty author name", func() []Author { return []Author{{Name: ""}} }, book.UnknownAuthor},
 		{"mixed empty and valid", func() []Author { return []Author{{Name: ""}, {Name: "Alice"}} }, "Alice"},
-		{"no authors", func() []Author { return nil }, model.UnknownAuthor},
+		{"no authors", func() []Author { return nil }, book.UnknownAuthor},
 		{"colon in name", func() []Author { return []Author{{Name: "Title: Sub"}} }, "Title- Sub"},
 	}
 	for _, tt := range tests {

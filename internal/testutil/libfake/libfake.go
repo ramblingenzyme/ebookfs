@@ -14,6 +14,7 @@ import (
 	"errors"
 	"slices"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/config"
 	"github.com/ramblingenzyme/ebookfs/library/model"
@@ -180,7 +181,7 @@ func (e Exporter) Filename(b *library.Book) string {
 }
 
 func (e Exporter) Dirname(b *library.Book) string {
-	return model.JoinAuthors(b.Authors(), " & ")
+	return book.JoinAuthors(b.Authors(), " & ")
 }
 
 func (e Exporter) Includes(b *library.Book) bool { return slices.Contains(e.StatusList, b.Status()) }

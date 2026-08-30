@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Query and Order moved to library/internal/index.** `Query` and `Order` types moved from `library/model` to `library/internal/index` where they are used. Type aliases in the `library` package (`library.Query`, `library.Order`, and the `Order*` constants) also added.
 - **Stats moved to library/internal/index.** `Stats` struct moved from `library/model` to `library/internal/index` alongside `Query` and `Order`. Type alias `library.Stats` added for public API access.
 - **Author and SeriesRef type aliases moved to library package.** `model.Author` and `model.SeriesRef` type aliases removed from `library/model`. Type aliases `library.Author` and `library.SeriesRef` added to the `library` package for public API access, following the same pattern as `Query`, `Order`, and `Stats`.
+- **JoinAuthors moved to internal/book.** `JoinAuthors` function and `UnknownAuthor` constant moved from `library/model` to `internal/book` package. They are now internal and not exposed in the public API.
 
 ## [1.0.0-beta4] - 2026-08-29
 
