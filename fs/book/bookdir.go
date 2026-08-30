@@ -7,6 +7,7 @@ package book
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -153,6 +154,27 @@ var fields = map[string]field{
 	},
 }
 
+// formatIdentifiers renders the identifier map as "scheme=value" lines, sorted
+// by scheme because a map has no order and a file that shuffles between reads is
+// no use to a diff or a script. Read-only, so nothing parses this back.
+//
+// The schemes are sorted, not the rendered lines: "=" sorts after "-", so a line
+// sort puts isbn-a before isbn and orders the file by something no reader would
+// guess. Both schemes come out of one ONIX code list, so the pair is reachable.
+func formatIdentifiers(ids map[string]string) string {
+	schemes := make([]string, 0, len(ids))
+	for scheme := range ids {
+		schemes = append(schemes, scheme)
+	}
+	slices.Sort(schemes)
+
+	lines := make([]string, 0, len(schemes))
+	for _, scheme := range schemes {
+		lines = append(lines, scheme+"="+ids[scheme])
+	}
+	return strings.Join(lines, "\n")
+}
+
 // NewBookDir builds the directory for a book. It takes the fs, the library
 // facade, and an edit callback (the registry passes its own edit method) rather
 // than the registry itself, so this package stays a leaf below the registry.
@@ -198,6 +220,9 @@ func NewBookDir(f *fs.FS, lib library.Library, edit func(int64, library.Edits) e
 
 	// Read-only bib fields.
 	d.StaticDir.AddChild(newFieldFile(newStat(f, "pubdate", 0444), func() string { return d.Book().Pubdate() }, nil))
+	d.StaticDir.AddChild(newFieldFile(newStat(f, "identifiers", 0444), func() string {
+		return formatIdentifiers(d.Book().Identifiers())
+	}, nil))
 
 	// Cover image — only present when the epub declares one.
 	if book.CoverPath() != "" {

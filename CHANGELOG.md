@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`identifiers` file in each book directory.** Read-only, one `scheme=value` line per identifier, sorted by scheme. Identifiers were parsed and indexed before but never surfaced anywhere.
+
+### Fixed
+
+- **Identifiers are keyed by scheme, not by the XML id.** `dc:identifier` elements were keyed by the element's `id` attribute — a document-local handle chosen by whoever produced the file — so a book indexed `pub-id` and `BookId` where it should have indexed `uuid` and `isbn`. The scheme is now derived from the EPUB 2 `opf:scheme` attribute, the EPUB 3 `identifier-type` refinement (ONIX codelist 5 codes and unschemed names alike), or the URN namespace in the value, falling back to the XML id only when nothing else names it. A `urn:` prefix repeating the derived scheme is stripped, so `urn:isbn:978…` stores as `978…`. Two identifiers resolving to one scheme keep the first in document order. The index schema version is bumped, so the first startup after upgrading reindexes the library and re-derives every identifier row.
+
 ### Changed
 
 - **`library/model` package removed.** Types previously in `library/model` are now either part of the `library` package or internal:

@@ -106,6 +106,7 @@ type Refine struct {
 	owner         *Element
 	property      string
 	unschemedOnly bool
+	schemedAs     string
 }
 
 // Unschemed narrows to the refinements carrying no scheme, for a property whose
@@ -114,19 +115,36 @@ type Refine struct {
 func (r *Refine) Unschemed() *Refine {
 	narrowed := *r
 	narrowed.unschemedOnly = true
+	narrowed.schemedAs = ""
+	return &narrowed
+}
+
+// Schemed is the other half of the same narrowing: the refinements whose value
+// is a code in the named list, such as an identifier-type from onix:codelist5.
+// The scheme is matched through the vocabulary, so a document that rebound the
+// prefix is read on its own terms.
+func (r *Refine) Schemed(scheme string) *Refine {
+	narrowed := *r
+	narrowed.unschemedOnly = false
+	narrowed.schemedAs = scheme
 	return &narrowed
 }
 
 func (r *Refine) elements() []*etree.Element {
 	ms := r.d.refineElements(r.owner.ID(), r.property)
-	if !r.unschemedOnly {
+	if !r.unschemedOnly && r.schemedAs == "" {
 		return ms
 	}
 	var out []*etree.Element
 	for _, m := range ms {
-		if attr(m, "scheme") == "" {
-			out = append(out, m)
+		scheme := attr(m, "scheme")
+		if r.unschemedOnly && scheme != "" {
+			continue
 		}
+		if r.schemedAs != "" && !r.d.vocab.Same(scheme, r.schemedAs) {
+			continue
+		}
+		out = append(out, m)
 	}
 	return out
 }

@@ -8,8 +8,8 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/xml"
 )
 
-// The fields whose whole encoding fits in a few lines. The three with more to
-// say — authors, series, cover — keep a file each.
+// The fields whose whole encoding fits in a few lines. The four with more to
+// say — authors, series, cover, identifiers — keep a file each.
 
 type titleField struct{ d *pkgdoc.Doc }
 
@@ -107,17 +107,6 @@ func (f modifiedField) set(t time.Time) {
 func (o *Doc) description() string { return o.d.DC("description").Get() }
 
 func (o *Doc) language() string { return o.d.DC("language").Get() }
-
-// identifiers keys by the element's XML id, which is the wrong key and frozen
-// that way: changing it is a schema migration, and
-// TestIdentifiersKeepTheirCurrentKeying guards it. Read-only.
-func (o *Doc) identifiers() map[string]string {
-	out := map[string]string{}
-	for _, el := range o.d.DCAll("identifier") {
-		out[el.ID()] = el.Get()
-	}
-	return out
-}
 
 // pubdate returns a <dc:date> verbatim, never parsed. An EPUB 2 opf:event
 // picks it: "publication" is authoritative, and any other event means the file

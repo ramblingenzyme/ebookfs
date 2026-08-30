@@ -8,7 +8,7 @@
 - **SQLite index** with full CRUD (Query, Get, Put, Delete) and schema versioning.
 - **Views:** `books/`, `by-author/`, `by-series/`, `by-tag/`, `by-status/`, `by-id/`, `recent/`, `search/`, `reader/`, `inbox/`.
 - **`stats` file:** read-only at root, reports books/authors/series/tags/total-size/last-added/last-modified as live SQL aggregates over the index.
-- **Per-book directory files:** `book.epub`, `title`, `authors`, `series`, `series_index`, `language`, `description`, `pubdate`, `cover.jpg`, `tags`, `status`, `rating`, `id` — all backed by either the epub's internal OPF or `meta.toml`.
+- **Per-book directory files:** `book.epub`, `title`, `authors`, `series`, `series_index`, `language`, `description`, `pubdate`, `identifiers`, `cover.jpg`, `tags`, `status`, `rating`, `id` — all backed by either the epub's internal OPF or `meta.toml`.
 - **Writable metadata:** sidecar fields (status, tags, rating) update `meta.toml` atomically; bib fields (title, authors, series, language, description) rewrite the epub's internal OPF via atomic zip surgery. Cover images are replaceable.
 - **Inbox ingestion:** write a file into `inbox/` over 9P; the server parses, validates, allocates an id, and lays the book down atomically. In-flight writes are buffered; `Tclunk` is the transaction boundary.
 - **KEPUB conversion:** the `reader/` view can serve Kobo-format renditions via `kepubify/v4` with an on-disk cache and proactive warmer.
@@ -36,6 +36,7 @@
 │       ├── language             ← read/write
 │       ├── description          ← read/write
 │       ├── pubdate              ← read-only
+│       ├── identifiers          ← scheme=value per line, read-only
 │       ├── cover.jpg            ← read/write
 │       ├── tags                 ← newline-separated, read/write
 │       ├── status               ← read/write
