@@ -555,7 +555,7 @@ func TestSpecWhitespaceIsCollapsed(t *testing.T) {
 	if bib.Series == nil || bib.Series.Name != "The New French Cuisine Masters" || bib.Series.Index != "2" {
 		t.Errorf("series = %+v, want The New French Cuisine Masters at 2", bib.Series)
 	}
-	if got := bib.Identifiers["pub-id"]; got != "urn:uuid:A1B0D67E" {
+	if got := bib.Identifiers["uuid"]; got != "A1B0D67E" {
 		t.Errorf("identifier = %q, want it collapsed and trimmed", got)
 	}
 }

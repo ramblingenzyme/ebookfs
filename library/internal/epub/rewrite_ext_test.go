@@ -19,6 +19,7 @@ package epub_test
 
 import (
 	"bytes"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -993,31 +994,199 @@ func TestDuplicateRefinementsKeepTheirDuplicates(t *testing.T) {
 
 // --- identifiers -------------------------------------------------------------
 
-// TestIdentifiersKeepTheirCurrentKeying pins a known-wrong behaviour, on
-// purpose. Bib.Identifiers is keyed by the element's XML id rather than by its
-// scheme, and the index persists that as identifiers.scheme under a uniqueness
-// constraint. Changing the keying rewrites rows in every existing library, so
-// it is a migration, not a parser fix — and the rewrite of this package must
-// not do it as a side effect. This test fails if the rewrite changes it
-// accidentally; delete it when the keying is changed deliberately, together
-// with the migration that rewrites the existing rows.
-func TestIdentifiersKeepTheirCurrentKeying(t *testing.T) {
-	var opf = epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:identifier id="isbn">9780123456789</dc:identifier>
+// TestIdentifierKeying covers how a dc:identifier's scheme is derived. The key
+// is the scheme because that is what the value is; the element's XML id is a
+// document-local handle and only the last resort. An earlier version keyed by
+// the id throughout, which is what the schemaVersion bump reindexes away.
+func TestIdentifierKeying(t *testing.T) {
+	tests := []struct {
+		name string
+		opf  string
+		want map[string]string
+	}{{
+		name: "epub2 opf:scheme attribute",
+		opf: epub2(`    <dc:identifier id="BookId" opf:scheme="ISBN">9780123456789</dc:identifier>
+    <dc:title>T</dc:title>
+    <dc:creator>A</dc:creator>`),
+		want: map[string]string{"isbn": "9780123456789"},
+	}, {
+		// etree matches an attribute by local name whatever prefix it carries,
+		// which is what lets a bare spelling read the same as opf:scheme —
+		// the reading OPFAttr.Set already documents on the write side.
+		name: "unprefixed scheme attribute",
+		opf: epub2(`    <dc:identifier id="BookId" scheme="ASIN">B00X57B4KG</dc:identifier>
+    <dc:title>T</dc:title>
+    <dc:creator>A</dc:creator>`),
+		want: map[string]string{"asin": "B00X57B4KG"},
+	}, {
+		name: "onix codelist 5 identifier-type",
+		opf: epub3(`    <dc:identifier id="pub-id">9780123456789</dc:identifier>
+    <meta refines="#pub-id" property="identifier-type" scheme="onix:codelist5">15</meta>
+    <dc:title>T</dc:title>
+    <dc:creator>A</dc:creator>
+    <dc:language>en</dc:language>`),
+		want: map[string]string{"isbn": "9780123456789"},
+	}, {
+		name: "unschemed identifier-type is a name, not a code",
+		opf: epub3(`    <dc:identifier id="pub-id">10.1234/beta</dc:identifier>
+    <meta refines="#pub-id" property="identifier-type">DOI</meta>
+    <dc:title>T</dc:title>
+    <dc:creator>A</dc:creator>
+    <dc:language>en</dc:language>`),
+		want: map[string]string{"doi": "10.1234/beta"},
+	}, {
+		// A code list we do not know is not ours to read, so the value's own
+		// URN gets the next turn — here there is none, and the id is left.
+		name: "identifier-type from another code list falls through",
+		opf: epub3(`    <dc:identifier id="pub-id">12345</dc:identifier>
+    <meta refines="#pub-id" property="identifier-type" scheme="marc:relators">15</meta>
+    <dc:title>T</dc:title>
+    <dc:creator>A</dc:creator>
+    <dc:language>en</dc:language>`),
+		want: map[string]string{"pub-id": "12345"},
+	}, {
+		// 22 is ONIX's "URN", which says the type is in the value.
+		name: "unrecognised onix code falls through to the urn",
+		opf: epub3(`    <dc:identifier id="pub-id">urn:isbn:9780123456789</dc:identifier>
+    <meta refines="#pub-id" property="identifier-type" scheme="onix:codelist5">22</meta>
+    <dc:title>T</dc:title>
+    <dc:creator>A</dc:creator>
+    <dc:language>en</dc:language>`),
+		want: map[string]string{"isbn": "9780123456789"},
+	}, {
+		// The v2 spelling of the same thing: a scheme of urn says only that the
+		// kind is in the value, so the value's own namespace answers and the
+		// identifier is not keyed under "urn" with the prefix still attached.
+		name: "opf:scheme of urn falls through to the value",
+		opf: epub2(`    <dc:identifier id="BookId" opf:scheme="URN">urn:isbn:9780123456789</dc:identifier>
+    <dc:title>T</dc:title>
+    <dc:creator>A</dc:creator>`),
+		want: map[string]string{"isbn": "9780123456789"},
+	}, {
+		name: "urn in the value names the scheme",
+		opf: epub3(`    <dc:identifier id="pub-id">urn:uuid:A1B0D67E</dc:identifier>
+    <dc:title>T</dc:title>
+    <dc:creator>A</dc:creator>
+    <dc:language>en</dc:language>`),
+		want: map[string]string{"uuid": "A1B0D67E"},
+	}, {
+		name: "urn: and the NID are case-insensitive, the value is not",
+		opf: epub3(`    <dc:identifier id="pub-id">URN:UUID:A1B0D67E</dc:identifier>
+    <dc:title>T</dc:title>
+    <dc:creator>A</dc:creator>
+    <dc:language>en</dc:language>`),
+		want: map[string]string{"uuid": "A1B0D67E"},
+	}, {
+		// The prefix is only redundant when it repeats the key. Under calibre's
+		// own scheme it is part of what the value says.
+		name: "urn under an unrelated scheme is kept whole",
+		opf: epub2(`    <dc:identifier id="BookId" opf:scheme="calibre">urn:uuid:A1B0D67E</dc:identifier>
+    <dc:title>T</dc:title>
+    <dc:creator>A</dc:creator>`),
+		want: map[string]string{"calibre": "urn:uuid:A1B0D67E"},
+	}, {
+		name: "nothing names it, so the xml id does",
+		opf: epub3(`    <dc:identifier id="BookId">12345</dc:identifier>
+    <dc:title>T</dc:title>
+    <dc:creator>A</dc:creator>
+    <dc:language>en</dc:language>`),
+		want: map[string]string{"bookid": "12345"},
+	}, {
+		// Only the unique-identifier target has to carry an id, so a second
+		// dc:identifier without one is legal and common in v2 output. Nothing
+		// names this one and there is no id to borrow, but the value is an
+		// identifier all the same.
+		name: "an identifier with no id at all is still carried",
+		opf: epub2(`    <dc:identifier id="BookId" opf:scheme="ISBN">9780123456789</dc:identifier>
+    <dc:identifier>B00X57B4KG</dc:identifier>
+    <dc:title>T</dc:title>
+    <dc:creator>A</dc:creator>`),
+		want: map[string]string{"isbn": "9780123456789", "unknown": "B00X57B4KG"},
+	}, {
+		// Numbered rather than sharing one key, so first-wins does not eat the
+		// second: position is all that distinguishes them.
+		name: "two unnamed identifiers are numbered, not dropped",
+		opf: epub2(`    <dc:identifier>B00X57B4KG</dc:identifier>
+    <dc:identifier>12345</dc:identifier>
+    <dc:title>T</dc:title>
+    <dc:creator>A</dc:creator>`),
+		want: map[string]string{"unknown": "B00X57B4KG", "unknown-2": "12345"},
+	}, {
+		// ISBN-10 and ISBN-13 are one scheme to us, and only one row can exist.
+		name: "two identifiers on one scheme, first in document order wins",
+		opf: epub3(`    <dc:identifier id="isbn13">9780123456789</dc:identifier>
+    <meta refines="#isbn13" property="identifier-type" scheme="onix:codelist5">15</meta>
+    <dc:identifier id="isbn10">0123456789</dc:identifier>
+    <meta refines="#isbn10" property="identifier-type" scheme="onix:codelist5">02</meta>
+    <dc:title>T</dc:title>
+    <dc:creator>A</dc:creator>
+    <dc:language>en</dc:language>`),
+		want: map[string]string{"isbn": "9780123456789"},
+	}, {
+		name: "an empty identifier is not one",
+		opf: epub3(`    <dc:identifier id="pub-id"></dc:identifier>
+    <dc:identifier id="other">urn:uuid:1234</dc:identifier>
+    <dc:title>T</dc:title>
+    <dc:creator>A</dc:creator>
+    <dc:language>en</dc:language>`),
+		want: map[string]string{"uuid": "1234"},
+	}, {
+		name: "several identifiers, each keyed on its own terms",
+		opf: epub3(`    <dc:identifier id="pub-id">urn:uuid:A1B0D67E</dc:identifier>
+    <dc:identifier id="isbn">urn:isbn:9780123456789</dc:identifier>
     <meta refines="#isbn" property="identifier-type" scheme="onix:codelist5">15</meta>
-    <dc:title>Original Title</dc:title>
-    <dc:creator id="c1">Ann Rand</dc:creator>
-    <dc:language>en</dc:language>`)
+    <dc:identifier id="mobi-asin">B00X57B4KG</dc:identifier>
+    <dc:title>T</dc:title>
+    <dc:creator>A</dc:creator>
+    <dc:language>en</dc:language>`),
+		want: map[string]string{
+			"uuid":      "A1B0D67E",
+			"isbn":      "9780123456789",
+			"mobi-asin": "B00X57B4KG",
+		},
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bib, err := epub.Parse(buildEpub(t, tt.opf))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !maps.Equal(bib.Identifiers, tt.want) {
+				t.Errorf("identifiers = %v, want %v", bib.Identifiers, tt.want)
+			}
+		})
+	}
+}
+
+// TestIdentifierTypeInReboundVocabulary covers the reason the scheme is matched
+// through the vocabulary rather than compared literally: D.1.4 lets a document
+// bind its own prefix to ONIX's code list, and a reader that only knew the
+// literal "onix:" would read this identifier as untyped.
+func TestIdentifierTypeInReboundVocabulary(t *testing.T) {
+	const opf = `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id"
+         prefix="onx: http://www.editeur.org/ONIX/book/codelists/current.html#">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="pub-id">9780123456789</dc:identifier>
+    <meta refines="#pub-id" property="identifier-type" scheme="onx:codelist5">15</meta>
+    <dc:title>T</dc:title>
+    <dc:creator>A</dc:creator>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine><itemref idref="ch1"/></spine>
+</package>`
 
 	bib, err := epub.Parse(buildEpub(t, opf))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := bib.Identifiers["pub-id"]; got != "urn:uuid:1234" {
-		t.Errorf(`Identifiers["pub-id"] = %q; keying changed — needs a migration`, got)
-	}
-	if got := bib.Identifiers["isbn"]; got != "9780123456789" {
-		t.Errorf(`Identifiers["isbn"] = %q; keying changed — needs a migration`, got)
+	want := map[string]string{"isbn": "9780123456789"}
+	if !maps.Equal(bib.Identifiers, want) {
+		t.Errorf("identifiers = %v, want %v", bib.Identifiers, want)
 	}
 }
 
