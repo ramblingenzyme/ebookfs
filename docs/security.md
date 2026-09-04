@@ -4,7 +4,7 @@
 
 ## Current state
 
-- `server.auth` supports only `"none"` today. `"shared-secret"` exists in the config schema but is rejected at startup with an explicit error (`library/config/config.go`) rather than silently falling back to unauthenticated — the field is reserved for a future release, not a usable option yet.
+- `server.auth` supports only `"none"` today. `"shared-secret"` exists in the config schema but is rejected at startup with an explicit error (`internal/config/config.go`) rather than silently falling back to unauthenticated — the field is reserved for a future release, not a usable option yet.
 - There is no TLS support anywhere in the codebase. All 9P traffic — including file contents, metadata edits, and `ctl` commands — is sent in plain text over TCP.
 - The default listen address is `0.0.0.0:5640` (see `config.example.toml`), which binds every network interface on the host, not just loopback.
 

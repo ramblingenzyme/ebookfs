@@ -16,20 +16,19 @@ import (
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/library"
-	"github.com/ramblingenzyme/ebookfs/library/config"
 )
 
 func startTestServer(t *testing.T) (addr string) {
 	t.Helper()
 
-	cfg := testutil.TestConfig(t)
+	cfg := library.Config(testutil.TestConfig(t))
 	lib, err := library.Open(cfg, false)
 	if err != nil {
 		t.Fatalf("Open library: %v", err)
 	}
 	t.Cleanup(func() { lib.Close() })
 
-	exp, err := lib.Exporter(config.ReaderConfig{})
+	exp, err := lib.Exporter(library.ReaderConfig{})
 	if err != nil {
 		t.Fatalf("Exporter: %v", err)
 	}

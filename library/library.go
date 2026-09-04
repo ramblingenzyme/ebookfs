@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-	"github.com/ramblingenzyme/ebookfs/library/config"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index"
@@ -66,7 +65,7 @@ type Library interface {
 	// Exporter creates a view of the library for export (reader/ view). Any
 	// resources it holds are released by Library.Close — the caller has no
 	// teardown to perform, which is why Exporter has no Close method.
-	Exporter(config.ReaderConfig) (Exporter, error)
+	Exporter(ReaderConfig) (Exporter, error)
 	Search(Query) ([]*Book, error)
 	Stats() (*Stats, error)
 	Reindex() error
@@ -101,7 +100,7 @@ type Exporter interface {
 	Includes(*Book) bool      // whether the book appears in the reader view
 }
 
-func Open(cfg config.LibraryConfig, forceReindex bool) (Library, error) {
+func Open(cfg Config, forceReindex bool) (Library, error) {
 	if err := os.MkdirAll(cfg.Root, 0755); err != nil {
 		return nil, fmt.Errorf("creating library root: %w", err)
 	}
