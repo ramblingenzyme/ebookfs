@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/ramblingenzyme/ebookfs/library/config"
 )
 
 // BuildTestEpub writes a minimal valid EPUB 3 with a cover entry and returns
@@ -67,13 +65,27 @@ func BuildTestEpub(t testing.TB, title string, authors ...string) []byte {
 	return buf.Bytes()
 }
 
+// LibraryConfig mirrors library.Config field for field, so a caller converts
+// rather than copies: library.Config(testutil.TestConfig(t)).
+//
+// It is a separate type rather than the real one because this package cannot
+// import library: library's own tests are in package library and import
+// testutil, which the Go toolchain rejects as an import cycle in test. Adding
+// a field to library.Config without adding it here breaks that conversion at
+// compile time, which is the intended way to find out.
+type LibraryConfig struct {
+	Root      string
+	InboxTemp string
+	IndexPath string
+}
+
 // TestConfig returns a library config rooted in a fresh temp dir. Tests that
 // reopen a library across restarts need the config itself, not just the opened
 // library, so the layout is stated here once.
-func TestConfig(t testing.TB) config.LibraryConfig {
+func TestConfig(t testing.TB) LibraryConfig {
 	t.Helper()
 	dir := t.TempDir()
-	return config.LibraryConfig{
+	return LibraryConfig{
 		Root:      filepath.Join(dir, "root"),
 		InboxTemp: filepath.Join(dir, "inbox-tmp"),
 		IndexPath: filepath.Join(dir, "index.db"),

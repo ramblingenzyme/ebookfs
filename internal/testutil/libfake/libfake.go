@@ -16,7 +16,6 @@ import (
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library"
-	"github.com/ramblingenzyme/ebookfs/library/config"
 )
 
 // EpubReader is a fake library.EpubReader backed by an in-memory buffer. Closed
@@ -77,8 +76,8 @@ type Lib struct {
 
 var _ library.Library = (Lib{})
 
-func (l Lib) Close() error                                             { return nil }
-func (l Lib) Exporter(_ config.ReaderConfig) (library.Exporter, error) { return nil, nil }
+func (l Lib) Close() error                                              { return nil }
+func (l Lib) Exporter(_ library.ReaderConfig) (library.Exporter, error) { return nil, nil }
 
 func (l Lib) Edit(id int64, e library.Edits) (*library.Book, error) {
 	if l.EditFn != nil {

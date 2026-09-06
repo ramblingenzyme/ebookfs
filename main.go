@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/ramblingenzyme/ebookfs/fs"
+	"github.com/ramblingenzyme/ebookfs/internal/config"
 	"github.com/ramblingenzyme/ebookfs/library"
-	"github.com/ramblingenzyme/ebookfs/library/config"
 )
 
 // setupLogging installs a slog handler built from cfg as the default logger.
@@ -54,12 +54,12 @@ func main() {
 	}
 	setupLogging(cfg.Log)
 
-	lib, err := library.Open(cfg.Library, *forceReindex)
+	lib, err := library.Open(library.Config(cfg.Library), *forceReindex)
 	if err != nil {
 		fatal("opening library", err)
 	}
 
-	exp, err := lib.Exporter(cfg.Reader)
+	exp, err := lib.Exporter(library.ReaderConfig(cfg.Reader))
 	if err != nil {
 		fatal("creating exporter", err)
 	}

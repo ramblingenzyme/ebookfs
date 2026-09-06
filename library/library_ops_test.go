@@ -8,8 +8,6 @@ import (
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
-
-	"github.com/ramblingenzyme/ebookfs/library/config"
 )
 
 func TestLibraryContentReadsEpub(t *testing.T) {
@@ -95,7 +93,7 @@ func TestLibraryImplStats(t *testing.T) {
 func TestLibraryImplExporter(t *testing.T) {
 	lib := openTestLibrary(t)
 
-	e, err := lib.Exporter(config.ReaderConfig{
+	e, err := lib.Exporter(ReaderConfig{
 		Statuses: []string{"unread"},
 	})
 	if err != nil {
@@ -119,7 +117,7 @@ func TestLibraryImplExporterConvertRequiresCacheDir(t *testing.T) {
 	lib := openTestLibrary(t)
 
 	// Exporter succeeds with a cache_dir supplied alongside convert=true.
-	e, err := lib.Exporter(config.ReaderConfig{
+	e, err := lib.Exporter(ReaderConfig{
 		Statuses: []string{"unread", "reading"},
 		Convert:  true,
 		CacheDir: t.TempDir(),

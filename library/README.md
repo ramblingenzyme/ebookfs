@@ -16,6 +16,7 @@ Package `library` is the orchestrator facade between storage (store, index) and 
 | File | Contents |
 |------|----------|
 | `library.go` | Interfaces (`Library`, `Exporter`), `Open()`, helpers |
+| `config.go` | `Config` (storage layout) and `ReaderConfig` (export rendition) |
 | `impl.go` | `libraryImpl` struct + most method implementations (Query, Search, Edit, Delete, Content, ...) |
 | `ingest.go` | `IngestHandle` type + `ingestHandle` (file-backed) implementation |
 | `reindex.go` | Startup drift detection and full-rebuild scan (`scanState`, index reconciliation) |

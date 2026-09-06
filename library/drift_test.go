@@ -10,8 +10,6 @@ import (
 	"time"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-
-	"github.com/ramblingenzyme/ebookfs/library/config"
 )
 
 // writeManualBookDir lays down a book directory storeDrifted (via store.Walk)
@@ -500,7 +498,7 @@ func TestOpenReindexesOnDrift(t *testing.T) {
 // left by a naming convention it no longer uses. legacyEpub, when non-empty,
 // also renames the epub inside it. It returns the book and the canonical
 // location the next reindex has to restore.
-func stageLegacyLayout(t *testing.T, cfg config.LibraryConfig, title string, authors []string, legacyAuthorDir, legacyEpub string) (*Book, book.Location) {
+func stageLegacyLayout(t *testing.T, cfg Config, title string, authors []string, legacyAuthorDir, legacyEpub string) (*Book, book.Location) {
 	t.Helper()
 
 	lib := openLib(t, cfg, false)

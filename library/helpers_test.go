@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
-	"github.com/ramblingenzyme/ebookfs/library/config"
 )
 
 func buildTestEpub(t *testing.T, title string, authors ...string) []byte {
@@ -14,9 +13,9 @@ func buildTestEpub(t *testing.T, title string, authors ...string) []byte {
 	return testutil.BuildTestEpub(t, title, authors...)
 }
 
-func testConfig(t *testing.T) config.LibraryConfig {
+func testConfig(t *testing.T) Config {
 	t.Helper()
-	return testutil.TestConfig(t)
+	return Config(testutil.TestConfig(t))
 }
 
 func openTestLibrary(t *testing.T) Library {
@@ -28,7 +27,7 @@ func openTestLibrary(t *testing.T) Library {
 // fails mid-test cannot leave the index open. Tests that reopen across a
 // simulated restart still Close explicitly for sequencing; the second close is
 // a no-op.
-func openLib(t *testing.T, cfg config.LibraryConfig, forceReindex bool) Library {
+func openLib(t *testing.T, cfg Config, forceReindex bool) Library {
 	t.Helper()
 	lib, err := Open(cfg, forceReindex)
 	if err != nil {
@@ -74,7 +73,7 @@ func breakEpub(t *testing.T, book *Book, root string) {
 // but the store to learn which ids are already spoken for. Rebuild leaves the
 // sequence table alone otherwise, which is why merely reindexing does not
 // exercise this.
-func dropIndex(t *testing.T, cfg config.LibraryConfig) {
+func dropIndex(t *testing.T, cfg Config) {
 	t.Helper()
 	// The WAL and shared-memory sidecars would otherwise resurrect the sequence.
 	for _, suffix := range []string{"", "-wal", "-shm"} {
@@ -93,7 +92,7 @@ func dropIndex(t *testing.T, cfg config.LibraryConfig) {
 // Two restarts is the whole proof: one to record, one to confirm the record is
 // believed. Both are closed explicitly rather than through openLib, since the
 // point is what a later process sees after this one has let go.
-func assertSettlesClean(t *testing.T, cfg config.LibraryConfig) {
+func assertSettlesClean(t *testing.T, cfg Config) {
 	t.Helper()
 	for i := 1; i <= 2; i++ {
 		lib, err := Open(cfg, false)
