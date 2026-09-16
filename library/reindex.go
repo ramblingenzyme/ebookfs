@@ -108,7 +108,15 @@ func (l *libraryImpl) storeDrifted() (*storeScan, bool) {
 // Reindex unconditionally rebuilds the index from the store (the source of
 // truth). Books that can't be read are logged and skipped rather than failing
 // the whole rebuild.
-func (l *libraryImpl) Reindex() error { return l.reindex(nil) }
+//
+// Open rebuilds through reindex directly rather than through here: nothing else
+// holds a reference to the library yet, and mutateMu is there for the callers
+// that do.
+func (l *libraryImpl) Reindex() error {
+	l.mutateMu.Lock()
+	defer l.mutateMu.Unlock()
+	return l.reindex(nil)
+}
 
 // reindex rebuilds the index. scan, when non-nil, is the traversal storeDrifted
 // already performed — reusing it saves both the walk and a stat per book on the

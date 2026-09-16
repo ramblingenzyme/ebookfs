@@ -28,7 +28,6 @@ func TestParseCommand(t *testing.T) {
 		{"delete 42", "delete", []string{"42"}, false},
 		{`add-tag "science fiction" 1`, "add-tag", []string{"science fiction", "1"}, false},
 		{`rename-author "Asimov" "Isaac Asimov|Asimov, Isaac"`, "rename-author", []string{"Asimov", "Isaac Asimov|Asimov, Isaac"}, false},
-		{"reindex", "reindex", nil, false},
 		{`add-tag "foo 1`, "", nil, true},
 		{"", "", nil, true},
 	}
@@ -150,7 +149,7 @@ func TestCommandLog(t *testing.T) {
 // reads return only a usage hint (ctl does not echo command results).
 func TestCtlFileWriteExecutes(t *testing.T) {
 	called := false
-	lib := libfake.Lib{ReindexFn: func() error { called = true; return nil }}
+	lib := libfake.Lib{DeleteFn: func(int64) error { called = true; return nil }}
 	reg, cmdLog := newTestCtl(t, lib)
 	cf := NewCtlFile(reg.FS(), lib, reg, cmdLog)
 
@@ -159,19 +158,19 @@ func TestCtlFileWriteExecutes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(got), "index rebuilt") {
+	if strings.Contains(string(got), "book 7 deleted") {
 		t.Fatalf("read should not echo command results, got %q", got)
 	}
 
 	// Writing a command and closing the fid executes it...
-	if _, err := cf.Write(1, 0, []byte("reindex")); err != nil {
+	if _, err := cf.Write(1, 0, []byte("delete 7")); err != nil {
 		t.Fatal(err)
 	}
 	if err := cf.Close(1); err != nil {
 		t.Fatal(err)
 	}
 	if !called {
-		t.Fatal("reindex command was not executed on close")
+		t.Fatal("delete command was not executed on close")
 	}
 
 	// ...and the outcome is recorded in the command log.
@@ -179,11 +178,11 @@ func TestCtlFileWriteExecutes(t *testing.T) {
 	if len(entries) != 1 {
 		t.Fatalf("log entries = %d, want 1", len(entries))
 	}
-	if entries[0].Command != "reindex" {
-		t.Errorf("logged command = %q, want reindex", entries[0].Command)
+	if entries[0].Command != "delete 7" {
+		t.Errorf("logged command = %q, want delete 7", entries[0].Command)
 	}
-	if !strings.Contains(entries[0].Result, "index rebuilt") {
-		t.Errorf("logged result = %q, want reindex result", entries[0].Result)
+	if !strings.Contains(entries[0].Result, "book 7 deleted") {
+		t.Errorf("logged result = %q, want the delete result", entries[0].Result)
 	}
 }
 
@@ -530,25 +529,6 @@ func TestSetRatingUnchanged(t *testing.T) {
 	}
 }
 
-func TestReindex(t *testing.T) {
-	called := false
-	lib := libfake.Lib{
-		ReindexFn: func() error {
-			called = true
-			return nil
-		},
-	}
-
-	reg, cmdLog := newTestCtl(t, libfake.Lib{})
-	result := execute("reindex", lib, reg, cmdLog)
-	if !called {
-		t.Fatal("Reindex not called")
-	}
-	if result != "ok: index rebuilt" {
-		t.Errorf("result = %q, want %q", result, "ok: index rebuilt")
-	}
-}
-
 // TestDispatch pins that every command name routes to its handler rather than
 // falling through to the unknown-command default. Against an empty library the
 // results are determinate, so each row asserts the string its handler produces
@@ -565,7 +545,6 @@ func TestDispatch(t *testing.T) {
 		{"set-status reading 1", notFound},
 		{"set-rating 4 1", notFound},
 		{"delete 1", "ok: book 1 deleted"},
-		{"reindex", "ok: index rebuilt"},
 		{"rename-tag old new", "ok: no books renamed"},
 		{"rename-author old new", "ok: no books renamed"},
 		{"rename-series old new", "ok: no books renamed"},
@@ -619,7 +598,6 @@ func TestCommandRejections(t *testing.T) {
 		{"set-rating one arg", "set-rating 4", "usage: set-rating <rating> <id-spec>"},
 		{"delete no args", "delete", "usage: delete <id>"},
 		{"delete two args", "delete 1 2", "usage: delete <id>"},
-		{"reindex with args", "reindex now", "usage: reindex"},
 		{"rename-tag one arg", "rename-tag old", "usage: rename-tag <old> <new>"},
 		{"rename-author one arg", "rename-author old", "usage: rename-author <old> <new>"},
 		{"rename-series one arg", "rename-series old", "usage: rename-series <old> <new>"},
@@ -803,15 +781,6 @@ func TestCommandFailureStrings(t *testing.T) {
 		}
 	})
 
-	t.Run("reindex fails", func(t *testing.T) {
-		lib := libfake.Lib{ReindexFn: func() error { return errors.New("duplicate id 3") }}
-		reg, cmdLog := newTestCtl(t, lib)
-
-		if got := execute("reindex", lib, reg, cmdLog); got != "error: duplicate id 3" {
-			t.Errorf("execute = %q, want the reindex failure surfaced", got)
-		}
-	})
-
 	t.Run("rename query fails", func(t *testing.T) {
 		lib := libfake.Lib{
 			SearchFn: func(library.Query) ([]*library.Book, error) { return nil, errors.New("index closed") },
@@ -839,15 +808,6 @@ func TestSingleBookCommandSuccessStrings(t *testing.T) {
 		}
 		if deleted != 7 {
 			t.Errorf("Delete called with id %d, want 7", deleted)
-		}
-	})
-
-	t.Run("reindex", func(t *testing.T) {
-		lib := libfake.Lib{ReindexFn: func() error { return nil }}
-		reg, cmdLog := newTestCtl(t, lib)
-
-		if got := execute("reindex", lib, reg, cmdLog); got != "ok: index rebuilt" {
-			t.Errorf("execute = %q, want %q", got, "ok: index rebuilt")
 		}
 	})
 }

@@ -37,8 +37,6 @@ func dispatch(name string, args []string, lib library.Library, reg *registry.Boo
 		return setRating(args, lib, reg)
 	case "delete":
 		return deleteBook(args, lib, reg)
-	case "reindex":
-		return reindexCmd(args, lib)
 	case "rename-tag":
 		return renameTag(args, lib, reg)
 	case "rename-author":
@@ -153,16 +151,6 @@ func deleteBook(args []string, lib library.Library, reg *registry.BookRegistry) 
 	}
 	reg.Remove(id64)
 	return fmt.Sprintf("ok: book %d deleted", id64)
-}
-
-func reindexCmd(args []string, lib library.Library) string {
-	if len(args) != 0 {
-		return "usage: reindex"
-	}
-	if err := lib.Reindex(); err != nil {
-		return fmt.Sprintf("error: %v", err)
-	}
-	return "ok: index rebuilt"
 }
 
 // --- entity management ---

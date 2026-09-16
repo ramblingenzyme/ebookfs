@@ -40,6 +40,14 @@ type libraryImpl struct {
 	// Ingest → index Put) so two simultaneous uploads of the same new book
 	// cannot both pass the Exists check before either lays the book down.
 	ingestMu sync.Mutex
+
+	// mutateMu excludes a Reindex from every other mutation. Reindex moves book
+	// directories to their canonical paths and rebuilds the index wholesale,
+	// neither of which addresses a single book, so the per-book lock cannot
+	// cover it: a concurrent Edit renames the directory the move is reading.
+	// Held for reading by the per-book mutations and by ingest, for writing by
+	// Reindex. Always taken before bookMu and ingestMu.
+	mutateMu sync.RWMutex
 }
 
 func (l *libraryImpl) Close() error {
@@ -100,6 +108,9 @@ func (l *libraryImpl) Content(id int64) (EpubReader, error) {
 // cannot revert each other's changes by editing from stale snapshots. If the
 // title or authors change, the book directory is moved.
 func (l *libraryImpl) Edit(id int64, e Edits) (*Book, error) {
+	l.mutateMu.RLock()
+	defer l.mutateMu.RUnlock()
+
 	mu := l.bookMu.For(id)
 	mu.Lock()
 	defer mu.Unlock()
@@ -147,6 +158,9 @@ func (l *libraryImpl) Edit(id int64, e Edits) (*Book, error) {
 // Delete removes the book with the given id from the store and the index,
 // resolving its current location under the per-book lock.
 func (l *libraryImpl) Delete(id int64) error {
+	l.mutateMu.RLock()
+	defer l.mutateMu.RUnlock()
+
 	mu := l.bookMu.For(id)
 	mu.Lock()
 	defer mu.Unlock()

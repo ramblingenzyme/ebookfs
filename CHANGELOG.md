@@ -17,11 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`Reindex` excludes the other mutations.** It moves book directories and rebuilds the index wholesale, neither of which addresses a single book, so the per-book lock could not cover it. `Edit`, `Delete` and ingest now hold a shared lock that `Reindex` takes exclusively.
 - **`library/config` moved to `internal/config`; the library owns its own config types.** The package held the binary's whole TOML schema — `ServerConfig`, `SearchConfig` and `LogConfig` are read only by `main.go`, and the library never looked at them — while sitting inside `library/` and importing the binary's internals to validate reading statuses. The TOML schema and `Load` now live in `internal/config`, and `library` declares what it actually takes: `library.Config` (`Root`, `InboxTemp`, `IndexPath`) and `library.ReaderConfig` (`Statuses`, `Convert`, `CacheDir`), with no serialization tags — how a caller obtains those values is its own business. `library.Open` and `Library.Exporter` take the new types; `main.go` maps one to the other. Validation is unmoved, still at the TOML boundary. The library package now depends on no config package at all, which is what a standalone `library` module needs.
 - **`library/model` package removed.** Types previously in `library/model` are now either part of the `library` package or internal:
   - **Public API (now in `library`):** `Book`, `Author`, `Series`, `Edits`, `ValidationError`, `FieldError`, `Query`, `Order`, `Stats`, `EpubReader`
   - **Internal:** `PathSafe` (now in `internal/naming`), status constants, `JoinAuthors`, `UnknownAuthor`, `Validate`
   - `library.Book` is now an immutable wrapper (`book.ImmutableBook`) with getter methods instead of direct field access. The old struct fields (`book.Title`, `book.Authors`, `book.Meta.Status`, `book.Meta.Rating`, `book.Meta.Tags`, etc.) are now methods (`book.Title()`, `book.Authors()`, `book.Status()`, `book.Rating()`, `book.Tags()`, etc.). Slices and maps returned by getters are cloned to prevent external mutation. `Library.Search`, `Library.Edit`, and all `Exporter` methods return or accept `*library.Book`. Callers must use the getter methods and re-fetch after mutations (via `Library.Search` or `Library.Edit` return value) to see updated state.
+
+### Removed
+
+- **`ctl reindex`.** A rebuild is a startup operation: the binary takes `--reindex`, and startup rebuilds on its own whenever drift detection finds the index disagreeing with the store. Run live it was worse than redundant — it moved book directories to their canonical paths and rebuilt the index while the 9P tree kept serving the names it had, so the registry and the store disagreed until the next restart, and a rebuild outlasting the 10s shutdown deadline could have the index closed underneath it. `Library.Reindex` stays as the startup entry point.
 
 ## [1.0.0-beta4] - 2026-08-29
 

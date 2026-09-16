@@ -25,9 +25,6 @@ Commands:
   delete <id>
     Delete a single book by id.
 
-  reindex
-    Rebuild the index from on-disk files.
-
   rename-tag <old> <new>
     Rename a tag across every book. Renaming <old> onto a
     tag that already exists merges the two: books that had

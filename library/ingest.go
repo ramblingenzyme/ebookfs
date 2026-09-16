@@ -60,6 +60,9 @@ func (l *libraryImpl) ingestPath(epubPath string) (*Book, error) {
 		return nil, err
 	}
 
+	l.mutateMu.RLock()
+	defer l.mutateMu.RUnlock()
+
 	l.ingestMu.Lock()
 	defer l.ingestMu.Unlock()
 
