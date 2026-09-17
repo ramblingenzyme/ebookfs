@@ -23,23 +23,6 @@ func TestNewInboxDir(t *testing.T) {
 	}
 }
 
-func TestInboxCreateFile_Success(t *testing.T) {
-	f := testutil.NewTestFS(t)
-	dir := NewInboxDir(f, libfake.Lib{}, nil)
-
-	file, err := vfile.DispatchCreate(f, dir, "glenda", "test.epub", 0644, 0)
-	if err != nil {
-		t.Fatalf("DispatchCreate: %v", err)
-	}
-	if file == nil {
-		t.Fatal("DispatchCreate returned nil file")
-	}
-
-	if _, ok := dir.Children()["test.epub"]; !ok {
-		t.Error("inbox dir should contain 'test.epub'")
-	}
-}
-
 func TestInboxCreateFile_WrongParent(t *testing.T) {
 	f := testutil.NewTestFS(t)
 

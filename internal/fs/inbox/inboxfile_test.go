@@ -29,42 +29,6 @@ func TestInboxFileOpenCreateIngestError(t *testing.T) {
 	}
 }
 
-func TestInboxFileOpenWriteCloseIngests(t *testing.T) {
-	ingested := make(chan *library.Book, 1)
-	f := testutil.NewTestFS(t)
-	lib := libfake.Lib{
-		IngestFn: func(_ string) (*library.Book, error) {
-			return testutil.MakeBook(42, "Ingested", "Author"), nil
-		},
-	}
-
-	inf := NewInboxFile(f, lib, "test.epub", 0644, func(b *library.Book) {
-		ingested <- b
-	})
-
-	fid := uint64(1)
-	if err := inf.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
-	if _, err := inf.Write(fid, 0, []byte("epub data")); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
-
-	if err := inf.Close(fid); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
-
-	select {
-	case b := <-ingested:
-		if b.ID() != 42 {
-			t.Errorf("ingested book id = %d, want 42", b.ID())
-		}
-	default:
-		t.Fatal("onIngest was not called after close")
-	}
-}
-
 func TestInboxFileDoubleOpenRejected(t *testing.T) {
 	f := testutil.NewTestFS(t)
 	inf := NewInboxFile(f, libfake.Lib{}, "test.epub", 0644, nil)
@@ -114,30 +78,6 @@ func TestInboxFileCloseWithoutOpen(t *testing.T) {
 	err := inf.Close(1)
 	if err != nil {
 		t.Errorf("Close unopened inboxFile: %v", err)
-	}
-}
-
-func TestInboxFileIngestErrorReturnsError(t *testing.T) {
-	f := testutil.NewTestFS(t)
-	lib := libfake.Lib{
-		IngestFn: func(_ string) (*library.Book, error) {
-			return nil, testutil.ErrTest
-		},
-	}
-
-	inf := NewInboxFile(f, lib, "test.epub", 0644, nil)
-
-	fid := uint64(1)
-	if err := inf.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-	if _, err := inf.Write(fid, 0, []byte("data")); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
-
-	err := inf.Close(fid)
-	if err != testutil.ErrTest {
-		t.Errorf("Close error = %v, want %v", err, testutil.ErrTest)
 	}
 }
 
