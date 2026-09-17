@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 )
 
 func TestPruneEmptyNoOpForMissingChild(t *testing.T) {
@@ -21,7 +22,5 @@ func TestPruneEmptyNoOpForNonEmptyDir(t *testing.T) {
 	child.AddChild(grandchild)
 
 	g.pruneEmpty("child")
-	if _, ok := g.Children()["child"]; !ok {
-		t.Error("non-empty child should not be pruned")
-	}
+	fstest.HasChild(t, g, "child")
 }

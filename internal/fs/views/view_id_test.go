@@ -3,6 +3,7 @@ package views
 import (
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/library"
 )
@@ -70,16 +71,9 @@ func TestIDEntryName_PadTriggeredByMaxID(t *testing.T) {
 	reg.Add(wrapBook(b1))
 	reg.Add(wrapBook(b2))
 
-	children := dirChildNames(d)
-	if len(children) != 2 {
-		t.Fatalf("expected 2 books, got %d", len(children))
-	}
-	want := map[string]bool{"01. First": true, "10. Tenth": true}
-	for _, name := range children {
-		if !want[name] {
-			t.Errorf("unexpected entry %q, want one of %v", name, want)
-		}
-	}
+	fstest.ChildCount(t, d, 2)
+	fstest.HasChild(t, d, "01. First")
+	fstest.HasChild(t, d, "10. Tenth")
 }
 
 func TestIDEntryName_PadThreeDigits(t *testing.T) {
@@ -92,16 +86,9 @@ func TestIDEntryName_PadThreeDigits(t *testing.T) {
 	reg.Add(wrapBook(b1))
 	reg.Add(wrapBook(b2))
 
-	children := dirChildNames(d)
-	if len(children) != 2 {
-		t.Fatalf("expected 2 books, got %d", len(children))
-	}
-	want := map[string]bool{"001. First": true, "100. Hundredth": true}
-	for _, name := range children {
-		if !want[name] {
-			t.Errorf("unexpected entry %q, want one of %v", name, want)
-		}
-	}
+	fstest.ChildCount(t, d, 2)
+	fstest.HasChild(t, d, "001. First")
+	fstest.HasChild(t, d, "100. Hundredth")
 }
 
 func TestByIDDirAdd(t *testing.T) {
@@ -111,9 +98,7 @@ func TestByIDDirAdd(t *testing.T) {
 	b := makeBook(1, "Test", "Author")
 	reg.Add(wrapBook(b))
 
-	if _, ok := d.Children()["1. Test"]; !ok {
-		t.Errorf("by-id should contain '1. Test', got: %v", dirChildNames(d))
-	}
+	fstest.HasChild(t, d, "1. Test")
 }
 
 func TestByIDDirRemove(t *testing.T) {
@@ -124,9 +109,7 @@ func TestByIDDirRemove(t *testing.T) {
 	reg.Add(wrapBook(b))
 	reg.Remove(1)
 
-	if _, ok := d.Children()["1. Test"]; ok {
-		t.Error("by-id should not contain entry after remove")
-	}
+	fstest.NoChild(t, d, "1. Test")
 }
 
 func TestByIDDirMultipleBooks(t *testing.T) {
@@ -136,10 +119,7 @@ func TestByIDDirMultipleBooks(t *testing.T) {
 	reg.Add(testutil.MakeBook(1, "Alpha", "Author"))
 	reg.Add(testutil.MakeBook(2, "Beta", "Author"))
 
-	children := dirChildNames(d)
-	if len(children) != 2 {
-		t.Fatalf("expected 2 entries, got %d: %v", len(children), children)
-	}
+	fstest.ChildCount(t, d, 2)
 }
 
 // Removing an unknown id is a no-op. A book is registered so the no-op is
@@ -151,9 +131,7 @@ func TestByIDDirRemoveUnknown(t *testing.T) {
 
 	reg.Remove(999)
 
-	if _, ok := d.Children()["1. Kept"]; !ok {
-		t.Errorf("removing an unknown id disturbed the registered books: %v", dirChildNames(d))
-	}
+	fstest.HasChild(t, d, "1. Kept")
 }
 
 func TestByIDDirTitleChangeReflected(t *testing.T) {
@@ -163,19 +141,13 @@ func TestByIDDirTitleChangeReflected(t *testing.T) {
 	b := makeBook(1, "Original", "Author")
 	reg.Add(wrapBook(b))
 
-	if _, ok := d.Children()["1. Original"]; !ok {
-		t.Fatal("by-id should contain '1. Original'")
-	}
+	fstest.HasChild(t, d, "1. Original")
 
 	// Remove and re-add with different title (simulating an edit)
 	reg.Remove(1)
 	b2 := makeBook(1, "Updated", "Author")
 	reg.Add(wrapBook(b2))
 
-	if _, ok := d.Children()["1. Updated"]; !ok {
-		t.Error("by-id should contain '1. Updated' after re-add")
-	}
-	if _, ok := d.Children()["1. Original"]; ok {
-		t.Error("by-id should not contain '1. Original' after update")
-	}
+	fstest.HasChild(t, d, "1. Updated")
+	fstest.NoChild(t, d, "1. Original")
 }

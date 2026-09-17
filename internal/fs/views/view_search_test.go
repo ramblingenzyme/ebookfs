@@ -11,6 +11,7 @@ import (
 
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
+	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 )
 
 // newTestSearchDir builds a search directory over a fresh in-memory FS with no
@@ -35,11 +36,7 @@ func newTestSearchHandle(t *testing.T) (*registry.BookRegistry, *searchHandleDir
 // ctlOf returns a handle's ctl file, the only way in to the search protocol.
 func ctlOf(t *testing.T, handle *searchHandleDir) *searchCtlFile {
 	t.Helper()
-	ctl, ok := handle.Children()["ctl"].(*searchCtlFile)
-	if !ok {
-		t.Fatalf("handle %d has no ctl file, children: %v", handle.id, dirChildNames(handle))
-	}
-	return ctl
+	return fstest.ChildAs[*searchCtlFile](t, handle, "ctl")
 }
 
 func hasHandleDir(sd *searchDir, id int64) bool {
@@ -58,17 +55,11 @@ func TestSearchHandleResyncRebuildsMembership(t *testing.T) {
 	reg.Add(wrapBook(b2))
 
 	// Before any query the results dir lists nothing.
-	if n := len(dirChildNames(handle.results)); n != 0 {
-		t.Fatalf("expected empty results before query, got %d entries", n)
-	}
+	fstest.ChildCount(t, handle.results, 0)
 
 	handle.executeSearch(library.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
-	if _, ok := handle.results.Children()["Foundation"]; !ok {
-		t.Errorf("expected Foundation in results, got %v", dirChildNames(handle.results))
-	}
-	if len(dirChildNames(handle.results)) != 1 {
-		t.Errorf("expected 1 result, got %v", dirChildNames(handle.results))
-	}
+	fstest.HasChild(t, handle.results, "Foundation")
+	fstest.ChildCount(t, handle.results, 1)
 	if got := handle.currentQueryText(); got != "tag:sci-fi" {
 		t.Errorf("currentQueryText = %q, want %q", got, "tag:sci-fi")
 	}
@@ -77,18 +68,12 @@ func TestSearchHandleResyncRebuildsMembership(t *testing.T) {
 	b3 := makeBook(3, "Dune", "Frank Herbert")
 	b3.Meta.Tags = []string{"sci-fi"}
 	reg.Add(wrapBook(b3))
-	if _, ok := handle.results.Children()["Dune"]; !ok {
-		t.Errorf("expected live-added Dune in results, got %v", dirChildNames(handle.results))
-	}
+	fstest.HasChild(t, handle.results, "Dune")
 
 	// Requerying rebuilds membership from scratch.
 	handle.executeSearch(library.Query{Tags: []string{"fantasy"}}, "tag:fantasy")
-	if _, ok := handle.results.Children()["The Hobbit"]; !ok {
-		t.Errorf("expected The Hobbit in results, got %v", dirChildNames(handle.results))
-	}
-	if len(dirChildNames(handle.results)) != 1 {
-		t.Errorf("expected 1 result after requery, got %v", dirChildNames(handle.results))
-	}
+	fstest.HasChild(t, handle.results, "The Hobbit")
+	fstest.ChildCount(t, handle.results, 1)
 }
 
 // Regression test: executeSearch used to mutate the results listing and the
@@ -133,9 +118,7 @@ func TestSearchHandleConcurrentRequeryAndRegistryEvents(t *testing.T) {
 	wg.Wait()
 
 	handle.executeSearch(library.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
-	if got := len(dirChildNames(handle.results)); got != perTag {
-		t.Errorf("expected %d sci-fi results after quiescent requery, got %d", perTag, got)
-	}
+	fstest.ChildCount(t, handle.results, perTag)
 }
 
 // makeMatchesFn is the single authority a handle uses for both its resync and
@@ -230,16 +213,9 @@ func TestSearchCtlReadsCommittedQuery(t *testing.T) {
 	handle := sd.allocateHandle()
 	ctl := ctlOf(t, handle)
 
-	readCtl := func(fid uint64) string {
+	readCtl := func(num uint64) string {
 		t.Helper()
-		if err := ctl.Open(fid, proto.Oread); err != nil {
-			t.Fatalf("Open fid %d: %v", fid, err)
-		}
-		data, err := ctl.Read(fid, 0, 4096)
-		if err != nil {
-			t.Fatalf("Read fid %d: %v", fid, err)
-		}
-		return string(data)
+		return fstest.Fid(t, ctl, num).Get(proto.Oread, 4096)
 	}
 
 	if got := readCtl(1); got != "" {
@@ -252,15 +228,10 @@ func TestSearchCtlReadsCommittedQuery(t *testing.T) {
 	}
 
 	// A fid opened before a requery keeps reporting its snapshot.
-	if err := ctl.Open(3, proto.Oread); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
+	early := fstest.Fid(t, ctl, 3)
+	early.Open(proto.Oread)
 	handle.executeSearch(library.Query{Tags: []string{"fantasy"}}, "tag:fantasy")
-	data, err := ctl.Read(3, 0, 4096)
-	if err != nil {
-		t.Fatalf("Read: %v", err)
-	}
-	if string(data) != "tag:sci-fi" {
+	if data := early.Read(0, 4096); data != "tag:sci-fi" {
 		t.Errorf("ctl read on a fid opened before the requery = %q, want its snapshot %q", data, "tag:sci-fi")
 	}
 	if got := readCtl(4); got != "tag:fantasy" {
@@ -273,26 +244,16 @@ func TestSearchCtlReadsCommittedQuery(t *testing.T) {
 // created it, and is released only by ctl or the cleanup sweep.
 func TestSearchCloneAllocatesHandlePerFid(t *testing.T) {
 	_, sd := newTestSearchDir(t, 0, 0)
-	clone, ok := sd.Children()["clone"].(*cloneFile)
-	if !ok {
-		t.Fatalf("search dir has no clone file, children: %v", dirChildNames(sd))
-	}
+	clone := fstest.ChildAs[*cloneFile](t, sd, "clone")
 
 	// A fid that never opened has no handle to name.
 	if _, err := clone.Read(1, 0, 32); err == nil {
 		t.Error("Read on an unopened fid succeeded, want an error — no handle was ever allocated for it")
 	}
 
-	readID := func(fid uint64) string {
+	readID := func(num uint64) string {
 		t.Helper()
-		if err := clone.Open(fid, proto.Oread); err != nil {
-			t.Fatalf("Open fid %d: %v", fid, err)
-		}
-		data, err := clone.Read(fid, 0, 32)
-		if err != nil {
-			t.Fatalf("Read fid %d: %v", fid, err)
-		}
-		return string(data)
+		return fstest.Fid(t, clone, num).Get(proto.Oread, 32)
 	}
 
 	if got := readID(1); got != "1\n" {
@@ -303,19 +264,16 @@ func TestSearchCloneAllocatesHandlePerFid(t *testing.T) {
 	}
 	for _, id := range []int64{1, 2} {
 		if !hasHandleDir(sd, id) {
-			t.Errorf("no handle directory %d under search/, children: %v", id, dirChildNames(sd))
+			t.Errorf("no handle directory %d under search/, children: %v", id, fstest.ChildNames(sd))
 		}
 	}
 
-	if err := clone.Close(1); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
+	first := fstest.Fid(t, clone, 1)
+	first.Close()
 	if !hasHandleDir(sd, 1) {
 		t.Error("handle 1 disappeared when its clone fid was clunked, want it to persist until ctl or the sweep releases it")
 	}
-	if _, err := clone.Read(1, 0, 32); err == nil {
-		t.Error("Read after clunk succeeded, want an error — the fid no longer names a handle")
-	}
+	first.WantReadError()
 }
 
 // The buffered-write contract: the query is accumulated by Write and only run at
@@ -336,31 +294,21 @@ func TestSearchCtlExecutesQueryOnClunk(t *testing.T) {
 	// Split so the first chunk is a valid, matching query on its own: if the
 	// write path executed anything, results would be populated before the clunk
 	// rather than after it.
-	const fid = 7
+	fid := fstest.Fid(t, ctl, 7)
 	first, rest := "tag:sci-fi", "+title:Foundation"
-	if _, err := ctl.Write(fid, 0, []byte(first)); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
-	if _, err := ctl.Write(fid, uint64(len(first)), []byte(rest)); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
-	if n := len(dirChildNames(handle.results)); n != 0 {
-		t.Errorf("results holds %d entries before clunk, want the query deferred until the fid closes", n)
-	}
+	fid.Write(0, first)
+	fid.Write(uint64(len(first)), rest)
+
+	// The query is deferred until the fid closes.
+	fstest.ChildCount(t, handle.results, 0)
 	if got := handle.currentQueryText(); got != "" {
 		t.Errorf("currentQueryText = %q before clunk, want no query committed yet", got)
 	}
 	query := first + rest
 
-	if err := ctl.Close(fid); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
-	if _, ok := handle.results.Children()["Foundation"]; !ok {
-		t.Errorf("Foundation missing from results after clunk, got %v", dirChildNames(handle.results))
-	}
-	if n := len(dirChildNames(handle.results)); n != 1 {
-		t.Errorf("results = %v, want only the sci-fi book", dirChildNames(handle.results))
-	}
+	fid.Close()
+	fstest.HasChild(t, handle.results, "Foundation")
+	fstest.ChildCount(t, handle.results, 1)
 	if got := handle.currentQueryText(); got != query {
 		t.Errorf("currentQueryText = %q, want %q — ctl reads back the committed query", got, query)
 	}
@@ -378,15 +326,13 @@ func TestSearchCtlRejectsUnparseableQuery(t *testing.T) {
 	reg.Add(wrapBook(b))
 	handle.executeSearch(library.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
 
-	if _, err := ctl.Write(3, 0, []byte("publisher:Tor")); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
+	fstest.Fid(t, ctl, 3).Write(0, "publisher:Tor")
 	if err := ctl.Close(3); err == nil {
 		t.Error("Close on an unparseable query returned nil, want the parse error surfaced to the client")
 	}
-	if _, ok := handle.results.Children()["Foundation"]; !ok {
-		t.Errorf("a rejected query cleared the previous results, got %v", dirChildNames(handle.results))
-	}
+
+	// The rejected query must leave the previous results standing.
+	fstest.HasChild(t, handle.results, "Foundation")
 	if got := handle.currentQueryText(); got != "tag:sci-fi" {
 		t.Errorf("currentQueryText = %q, want the last accepted query %q", got, "tag:sci-fi")
 	}
@@ -415,17 +361,12 @@ func TestSearchCtlIgnoresEmptyClunk(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			fid := fstest.Fid(t, ctl, tc.fid)
 			if tc.data != "" {
-				if _, err := ctl.Write(tc.fid, 0, []byte(tc.data)); err != nil {
-					t.Fatalf("Write: %v", err)
-				}
+				fid.Write(0, tc.data)
 			}
-			if err := ctl.Close(tc.fid); err != nil {
-				t.Fatalf("Close: %v", err)
-			}
-			if _, ok := handle.results.Children()["Foundation"]; !ok {
-				t.Errorf("results cleared by a no-op clunk, got %v", dirChildNames(handle.results))
-			}
+			fid.Close()
+			fstest.HasChild(t, handle.results, "Foundation")
 		})
 	}
 }
@@ -442,36 +383,26 @@ func TestSearchCtlCloseTearsDownHandle(t *testing.T) {
 	b.Meta.Tags = []string{"sci-fi"}
 	reg.Add(wrapBook(b))
 	handle.executeSearch(library.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
-	if n := len(dirChildNames(handle.results)); n != 1 {
-		t.Fatalf("setup: results = %v, want the sci-fi book", dirChildNames(handle.results))
-	}
+	fstest.ChildCount(t, handle.results, 1)
 
-	if _, err := ctl.Write(5, 0, []byte("close\n")); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
-	if err := ctl.Close(5); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
+	closer := fstest.Fid(t, ctl, 5)
+	closer.Write(0, "close\n")
+	closer.Close()
 
 	if hasHandleDir(sd, handle.id) {
-		t.Errorf(`handle %d still under search/ after writing "close", children: %v`, handle.id, dirChildNames(sd))
+		t.Errorf(`handle %d still under search/ after writing "close", children: %v`, handle.id, fstest.ChildNames(sd))
 	}
 
 	later := makeBook(2, "Dune", "Frank Herbert")
 	later.Meta.Tags = []string{"sci-fi"}
 	reg.Add(wrapBook(later))
-	if _, ok := handle.results.Children()["Dune"]; ok {
-		t.Error("a book added after teardown reached the released handle's results — it was never unregistered from the registry")
-	}
+	fstest.NoChild(t, handle.results, "Dune")
 
 	// A client that clunks a second ctl fid carrying "close" must not take a
 	// second teardown pass over an id that is already gone.
-	if _, err := ctl.Write(6, 0, []byte("close")); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
-	if err := ctl.Close(6); err != nil {
-		t.Errorf("second close: %v", err)
-	}
+	again := fstest.Fid(t, ctl, 6)
+	again.Write(0, "close")
+	again.Close()
 }
 
 // The idle sweep. Allocation runs it first, so a fresh open is enough to

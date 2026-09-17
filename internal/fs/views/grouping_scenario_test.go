@@ -23,6 +23,7 @@ import (
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
+	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 )
 
@@ -120,9 +121,7 @@ func groupEntries(t *testing.T, d fs.Dir, key string) ([]string, bool) {
 	if !ok {
 		t.Fatalf("group %q is a %T, want a directory", key, child)
 	}
-	names := dirChildNames(group)
-	slices.Sort(names)
-	return names, true
+	return fstest.ChildNames(group), true
 }
 
 // mustGroupEntries is groupEntries where a missing group fails the test.
@@ -130,7 +129,7 @@ func mustGroupEntries(t *testing.T, d fs.Dir, key string) []string {
 	t.Helper()
 	names, ok := groupEntries(t, d, key)
 	if !ok {
-		t.Fatalf("no %q group; view holds %v", key, dirChildNames(d))
+		t.Fatalf("no %q group; view holds %v", key, fstest.ChildNames(d))
 	}
 	return names
 }
@@ -166,7 +165,7 @@ func TestGroupNamesAreOneComponent(t *testing.T) {
 			d := tc.dir(reg)
 			reg.Add(tc.book())
 
-			names := dirChildNames(d)
+			names := fstest.ChildNames(d)
 			if len(names) != 1 {
 				t.Fatalf("groups = %v, want one", names)
 			}
@@ -176,9 +175,7 @@ func TestGroupNamesAreOneComponent(t *testing.T) {
 
 			// Remove has to mint the same name or the group is orphaned.
 			reg.Remove(1)
-			if got := dirChildNames(d); len(got) != 0 {
-				t.Errorf("after remove: %v, want the group pruned", got)
-			}
+			fstest.ChildCount(t, d, 0)
 		})
 	}
 }
@@ -235,7 +232,7 @@ func TestGroupingViews(t *testing.T) {
 				reg.Remove(1)
 
 				if _, ok := groupEntries(t, d, "alpha"); ok {
-					t.Errorf("alpha group outlived its last book; view holds %v", dirChildNames(d))
+					t.Errorf("alpha group outlived its last book; view holds %v", fstest.ChildNames(d))
 				}
 			})
 
@@ -259,7 +256,7 @@ func TestGroupingViews(t *testing.T) {
 				reg.Add(v.withKeys(1, "Moved", "beta"))
 
 				if _, ok := groupEntries(t, d, "alpha"); ok {
-					t.Errorf("alpha group outlived the re-key; view holds %v", dirChildNames(d))
+					t.Errorf("alpha group outlived the re-key; view holds %v", fstest.ChildNames(d))
 				}
 				want := []string{v.entry(1, "Moved")}
 				if got := mustGroupEntries(t, d, "beta"); !slices.Equal(got, want) {
@@ -286,9 +283,7 @@ func TestGroupingViews(t *testing.T) {
 					reg, d := setup(t)
 					reg.Add(v.keyless(1, "Unfiled"))
 
-					if got := dirChildNames(d); len(got) != 0 {
-						t.Errorf("view holds %v, want nothing filed for a book with no key", got)
-					}
+					fstest.ChildCount(t, d, 0)
 				})
 
 				t.Run("removing a book with no key is a no-op", func(t *testing.T) {

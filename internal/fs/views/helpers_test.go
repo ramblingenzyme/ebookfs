@@ -6,7 +6,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library"
 
-	"github.com/knusbaum/go9p/fs"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 )
@@ -31,12 +30,4 @@ func makeBookWithSeries(id int64, title, author string, seriesName, seriesIndex 
 func newTestRegistry(t *testing.T) *registry.BookRegistry {
 	t.Helper()
 	return registry.NewBookRegistry(newTestFS(t), nil)
-}
-
-func dirChildNames(d fs.Dir) []string {
-	var names []string
-	for name := range d.Children() {
-		names = append(names, name)
-	}
-	return names
 }
