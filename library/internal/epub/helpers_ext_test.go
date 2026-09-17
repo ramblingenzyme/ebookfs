@@ -76,15 +76,73 @@ func writeEpub(t *testing.T, entries []entry) string {
 	return path
 }
 
-// opf3With returns opf3 with extra metadata spliced in before </metadata>, so a
-// fixture that needs one more <meta> does not restate the whole package.
-func opf3With(extra string) string {
+// packageDoc is an OPF package document. It stays a string, so a raw literal is
+// still one and a fixture can drop out to XML wherever it needs to. The methods
+// are the parts a test varies; everything else about the skeleton stays where
+// epub3 and epub2 put it.
+type packageDoc string
+
+// with splices metadata in before </metadata>, so a fixture needing one more
+// <meta> does not restate the whole package.
+func (d packageDoc) with(parts ...string) packageDoc {
 	const close = "  </metadata>"
-	before, after, ok := strings.Cut(opf3, close)
+	before, after, ok := strings.Cut(string(d), close)
 	if !ok {
-		panic("opf3 has no </metadata>")
+		panic("package document has no </metadata>")
 	}
-	return before + extra + "\n" + close + after
+	return packageDoc(before + strings.Join(parts, "\n") + "\n" + close + after)
+}
+
+// attr adds attributes to <package>. A vocabulary binding (prefix), a language
+// or a base direction live there rather than on any one element.
+func (d packageDoc) attr(a string) packageDoc {
+	return packageDoc(strings.Replace(string(d), `<package `, `<package `+a+` `, 1))
+}
+
+// manifest replaces the manifest body. The default carries a cover item, and
+// the cover-resolution tests are about a package without one.
+func (d packageDoc) manifest(items string) packageDoc {
+	before, rest, ok := strings.Cut(string(d), "  <manifest>\n    ")
+	if !ok {
+		panic("package document has no <manifest>")
+	}
+	_, after, _ := strings.Cut(rest, "\n  </manifest>")
+	return packageDoc(before + "  <manifest>\n    " + items + "\n  </manifest>" + after)
+}
+
+// spine names the document the spine opens on, which is how a reading system
+// reaches a cover page without a guide reference.
+func (d packageDoc) spine(first string) packageDoc {
+	return packageDoc(strings.Replace(string(d),
+		`<spine><itemref idref="ch1"/>`,
+		`<spine><itemref idref="`+first+`"/><itemref idref="ch1"/>`, 1))
+}
+
+// guide adds the OPF 2.0 <guide> cover reference, the other way a reading
+// system finds the cover page.
+func (d packageDoc) guide() packageDoc {
+	return packageDoc(strings.Replace(string(d), "</package>",
+		`  <guide><reference type="cover" href="cover.xhtml" title="Cover"/></guide>`+"\n</package>", 1))
+}
+
+// wrapped moves the metadata into the deprecated OPF 2.0 <dc-metadata> element,
+// which takes the dc namespace declaration with it (§2.2).
+func (d packageDoc) wrapped() packageDoc {
+	s := strings.Replace(string(d),
+		`  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">`,
+		"  <metadata>\n"+`    <dc-metadata xmlns:dc="http://purl.org/dc/elements/1.1/">`, 1)
+	before, after, ok := strings.Cut(s, "\n  </metadata>")
+	if !ok {
+		panic("package document has no </metadata>")
+	}
+	var indented []string
+	for _, line := range strings.Split(before, "\n") {
+		if strings.HasPrefix(line, "    <dc:") {
+			line = "  " + line
+		}
+		indented = append(indented, line)
+	}
+	return packageDoc(strings.Join(indented, "\n") + "\n    </dc-metadata>\n  </metadata>" + after)
 }
 
 var (
@@ -92,11 +150,11 @@ var (
 	coverBytes   = []byte("ORIGINAL-COVER-BYTES")
 )
 
-func baseEntries(opf string, extra ...entry) []entry {
+func baseEntries(opf packageDoc, extra ...entry) []entry {
 	es := []entry{
 		{name: "mimetype", data: []byte(mimetypeValue), store: true},
 		{name: "META-INF/container.xml", data: []byte(containerXML)},
-		{name: "OEBPS/content.opf", data: []byte(opf)},
+		{name: "OEBPS/content.opf", data: []byte(string(opf))},
 		{name: "OEBPS/cover.jpg", data: coverBytes},
 		{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
 	}
@@ -157,44 +215,34 @@ func required(meta string) string {
 // each version. The internal tests have the same helper as opf3With; it is not
 // reachable from this package. Tests needing a different manifest keep a full
 // literal.
-func epub3(meta string, manifest ...string) string {
+func epub3(meta string) packageDoc {
 	meta = required(meta) + meta
-	return `<?xml version="1.0" encoding="utf-8"?>
+	return packageDoc(`<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
 ` + meta + `
   </metadata>
   <manifest>
-    ` + manifestOr(manifest, `<item id="cover-img" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
-    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`) + `
+    <item id="cover-img" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
   </manifest>
   <spine><itemref idref="ch1"/></spine>
-</package>`
+</package>`)
 }
 
-// manifestOr lets a test state its own manifest, which the cover-resolution
-// tests need: the default carries a cover item and those tests are about what
-// happens without one.
-func manifestOr(given []string, fallback string) string {
-	if len(given) == 1 {
-		return given[0]
-	}
-	return fallback
-}
-
-func epub2(meta string, manifest ...string) string {
+func epub2(meta string) packageDoc {
 	meta = required(meta) + meta
-	return `<?xml version="1.0" encoding="utf-8"?>
+	return packageDoc(`<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" xmlns:opf="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="pub-id">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
 ` + meta + `
   </metadata>
   <manifest>
-    ` + manifestOr(manifest, `<item id="cover-img" href="cover.jpg" media-type="image/jpeg"/>
-    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`) + `
+    <item id="cover-img" href="cover.jpg" media-type="image/jpeg"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
   </manifest>
   <spine toc="ncx"><itemref idref="ch1"/></spine>
-</package>`
+</package>`)
 }
 
 // book builds the Book that Rewrite validates against, the way library.Edit
@@ -213,7 +261,7 @@ func book(t *testing.T, path string) *bookmodel.Book {
 // The layout lives in baseEntries so there is one definition of what a fixture
 // epub looks like, and writeEpub is the only thing in these tests that writes a
 // zip; tests needing a different archive call those two directly.
-func buildEpub(t *testing.T, opf string) string {
+func buildEpub(t *testing.T, opf packageDoc) string {
 	t.Helper()
 	return writeEpub(t, baseEntries(opf))
 }
@@ -289,6 +337,10 @@ func childTags(root *etree.Element) string {
 //go:embed testdata
 var fixtures embed.FS
 
+// packageFixture is fixture for the documents that are package documents, so
+// they carry the methods rather than needing a conversion at every use.
+func packageFixture(name string) packageDoc { return packageDoc(fixture(name)) }
+
 // fixture drops the trailing newline a text file ends in. These go into epub
 // entries verbatim, and one test compares a rewritten cover page against the
 // document it started from, so the extra byte is not inert. It panics rather
@@ -303,12 +355,12 @@ func fixture(name string) string {
 }
 
 var (
-	opf3        = fixture("package-epub3.opf")
-	opf2        = fixture("package-epub2.opf")
-	richOPF3    = fixture("rich-epub3.opf")
-	richOPF2    = fixture("rich-epub2.opf")
-	ncxOPF      = fixture("ncx-package.opf")
-	opfWrappers = fixture("legacy-wrappers.opf")
+	opf3        = packageFixture("package-epub3.opf")
+	opf2        = packageFixture("package-epub2.opf")
+	richOPF3    = packageFixture("rich-epub3.opf")
+	richOPF2    = packageFixture("rich-epub2.opf")
+	ncxOPF      = packageFixture("ncx-package.opf")
+	opfWrappers = packageFixture("legacy-wrappers.opf")
 
 	// The shape calibre and Sigil both produce.
 	svgCoverPage = fixture("svg-cover-page.xhtml")

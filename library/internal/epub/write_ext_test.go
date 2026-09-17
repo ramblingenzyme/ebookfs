@@ -71,7 +71,7 @@ func readEntryFromFile(t *testing.T, path, name string) ([]byte, bool) {
 func TestWriteBibSimpleFields(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		opf  string
+		opf  packageDoc
 	}{{"epub3", opf3}, {"epub2", opf2}} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEpub(t, baseEntries(tc.opf))
@@ -214,7 +214,7 @@ func assertOCFHeader(t *testing.T, path, when string) {
 func TestWriteBibAuthorsRoundTrip(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		opf  string
+		opf  packageDoc
 	}{{"epub3", opf3}, {"epub2", opf2}} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEpub(t, baseEntries(tc.opf))
@@ -242,7 +242,7 @@ func TestWriteBibAuthorsRoundTrip(t *testing.T) {
 func TestWriteBibSeriesRoundTrip(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		opf  string
+		opf  packageDoc
 	}{{"epub3", opf3}, {"epub2", opf2}} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEpub(t, baseEntries(tc.opf))
@@ -645,7 +645,7 @@ func reindexSeries(t *testing.T, path, series, index string) bookmodel.Bib {
 func TestWriteBibSeriesIndexOnlyKeepsName(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		opf  string
+		opf  packageDoc
 	}{{"epub3", opf3}, {"epub2", opf2}} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeEpub(t, baseEntries(tc.opf))
@@ -704,11 +704,11 @@ func TestSetSeriesPreservesExistingIndex(t *testing.T) {
 // opfWithAlternateScript carries a refinement ebookfs does not manage
 // (alternate-script, a publisher/Calibre convention) alongside the role and
 // file-as it does.
-var opfWithAlternateScript = opf3With(`    <meta refines="#creator1" property="alternate-script" xml:lang="ja">ドゥ・ジェーン</meta>`)
+var opfWithAlternateScript = opf3.with(`    <meta refines="#creator1" property="alternate-script" xml:lang="ja">ドゥ・ジェーン</meta>`)
 
 // opfSeriesWithIdentifier refines the collection with a dcterms:identifier.
 // EPUB 3 lets a series carry an ISSN, which is not ours to rewrite.
-var opfSeriesWithIdentifier = opf3With(metas(
+var opfSeriesWithIdentifier = opf3.with(metas(
 	collection("series1", "The Trilogy", "series", "2"),
 	`<meta refines="#series1" property="dcterms:identifier">urn:issn:1234-5678</meta>`,
 ))
@@ -759,7 +759,7 @@ func TestSetSeriesReusesCollection(t *testing.T) {
 }
 
 func TestSetSeriesPreservesSets(t *testing.T) {
-	opfWithSet := opf3With(metas(
+	opfWithSet := opf3.with(metas(
 		`<!-- Series -->`,
 		collection("series1", "The Trilogy", "series", "2"),
 		"",
@@ -869,7 +869,7 @@ func TestSetAuthorsReuseBookkeeping(t *testing.T) {
 // asking for what the file already says records nothing, even an hour later.
 func TestModifiedStampIsWrittenOnlyForARealChange(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		path := writeEpub(t, baseEntries(opf3With("")))
+		path := writeEpub(t, baseEntries(opf3))
 		opfOf := func() []byte {
 			t.Helper()
 			b, _ := readEntryFromFile(t, path, "OEBPS/content.opf")
@@ -951,8 +951,7 @@ func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 // calibre records a v2 sort title in calibre:title_sort and nowhere else, so
 // without this fallback every calibre-managed v2 book reads back with none.
 func TestParseReadsCalibreTitleSortFromEpub2(t *testing.T) {
-	opf := strings.Replace(opf2, "  </metadata>",
-		`    <meta name="calibre:title_sort" content="Hobbit, The"/>`+"\n  </metadata>", 1)
+	opf := opf2.with(`    <meta name="calibre:title_sort" content="Hobbit, The"/>`)
 	bib, err := epub.Parse(writeEpub(t, baseEntries(opf)))
 	if err != nil {
 		t.Fatal(err)
@@ -965,7 +964,7 @@ func TestParseReadsCalibreTitleSortFromEpub2(t *testing.T) {
 // The calibre meta is updated when the file already carries one, so it cannot
 // contradict the refinement, and is never injected into a file without one.
 func TestWriteBibSortTitleKeepsCalibreMetaInStepForEpub3(t *testing.T) {
-	path := writeEpub(t, baseEntries(opf3With(`    <meta name="calibre:title_sort" content="Stale, The"/>`)))
+	path := writeEpub(t, baseEntries(opf3.with(`    <meta name="calibre:title_sort" content="Stale, The"/>`)))
 	book, err := writeBib(path, edits.Edits{SortTitle: new("Fresh, The")})
 	if err != nil {
 		t.Fatal(err)
@@ -999,10 +998,10 @@ func TestFailedValidationLeavesTheOriginal(t *testing.T) {
 		`    <dc:title id="t1">Original Title</dc:title>` + "\n",
 		`    <meta refines="#t1" property="file-as">Title, Original</meta>` + "\n",
 	} {
-		if !strings.Contains(opf, drop) {
+		if !strings.Contains(string(opf), drop) {
 			t.Fatalf("opf3 changed; cannot drop %q to build a titleless package", drop)
 		}
-		opf = strings.Replace(opf, drop, "", 1)
+		opf = packageDoc(strings.Replace(string(opf), drop, "", 1))
 	}
 	path := writeEpub(t, baseEntries(opf))
 
@@ -1040,35 +1039,17 @@ func jpegSized(t *testing.T, w, h int) []byte {
 	return buf.Bytes()
 }
 
-// coverPageOPF reaches cover.xhtml by exactly one pointer, so a test says which
-// it exercises: first names the spine's opening document, guide adds the
-// legacy <guide> reference.
-func coverPageOPF(first string, guide bool) string {
-	g := ""
-	if guide {
-		g = `<guide><reference type="cover" href="cover.xhtml" title="Cover"/></guide>`
-	}
-	return `<?xml version="1.0" encoding="utf-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
-  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:identifier id="bookid">urn:uuid:1234</dc:identifier>
-    <dc:title>Original Title</dc:title>
-    <dc:creator>Jane Doe</dc:creator>
-    <dc:language>en</dc:language>
-  </metadata>
-  <manifest>
-    <item id="cover-img" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
+// coverPagePackage declares a cover page in the manifest but points at it from
+// nowhere. A test adds exactly one pointer, .spine or .guide, so it says which
+// of the two it exercises.
+var coverPagePackage = epub3(``).manifest(
+	`<item id="cover-img" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
     <item id="coverpage" href="cover.xhtml" media-type="application/xhtml+xml"/>
-    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
-  </manifest>
-  <spine><itemref idref="` + first + `"/><itemref idref="ch1"/></spine>
-  ` + g + `
-</package>`
-}
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`)
 
 // coverPageEpub builds a book whose cover page is page, and replaces the cover
 // with a w by h image. It returns the epub's path.
-func coverPageEpub(t *testing.T, opf, page string, w, h int) string {
+func coverPageEpub(t *testing.T, opf packageDoc, page string, w, h int) string {
 	t.Helper()
 	path := writeEpub(t, baseEntries(opf, entry{name: "OEBPS/cover.xhtml", data: []byte(page)}))
 	if _, err := writeCover(path, "OEBPS/cover.jpg", jpegSized(t, w, h)); err != nil {
@@ -1079,7 +1060,7 @@ func coverPageEpub(t *testing.T, opf, page string, w, h int) string {
 
 func TestCoverPageRefitByTheGuideReference(t *testing.T) {
 	// The spine opens on a chapter, so only the guide reaches the cover page.
-	path := coverPageEpub(t, coverPageOPF("ch1", true), svgCoverPage, 1200, 1600)
+	path := coverPageEpub(t, coverPagePackage.spine("ch1").guide(), svgCoverPage, 1200, 1600)
 
 	page := string(readEntry(t, path, "OEBPS/cover.xhtml"))
 	for _, want := range []string{
@@ -1103,7 +1084,7 @@ func TestCoverPageRefitByTheGuideReference(t *testing.T) {
 
 func TestCoverPageRefitByTheFirstSpineItem(t *testing.T) {
 	// No guide at all, the EPUB 3 norm.
-	path := coverPageEpub(t, coverPageOPF("coverpage", false), svgCoverPage, 1200, 1600)
+	path := coverPageEpub(t, coverPagePackage.spine("coverpage"), svgCoverPage, 1200, 1600)
 
 	if page := string(readEntry(t, path, "OEBPS/cover.xhtml")); !strings.Contains(page, `viewBox="0 0 1200 1600"`) {
 		t.Errorf("cover page was not refitted:\n%s", page)
@@ -1114,7 +1095,7 @@ func TestCoverPageRefitByTheFirstSpineItem(t *testing.T) {
 // guide says.
 func TestCoverPageNotDrawingTheCoverIsUntouched(t *testing.T) {
 	page := strings.Replace(svgCoverPage, "cover.jpg", "frontispiece.jpg", 1)
-	path := coverPageEpub(t, coverPageOPF("ch1", true), page, 1200, 1600)
+	path := coverPageEpub(t, coverPagePackage.spine("ch1").guide(), page, 1200, 1600)
 
 	if got := string(readEntry(t, path, "OEBPS/cover.xhtml")); got != page {
 		t.Errorf("cover page was rewritten:\n%s", got)
@@ -1129,7 +1110,7 @@ func TestCoverPageWithoutStatedDimensionsIsUntouched(t *testing.T) {
 <head><title>Cover</title><style>img { width: 100%; }</style></head>
 <body><img src="cover.jpg" alt="Cover"/></body>
 </html>`
-	path := coverPageEpub(t, coverPageOPF("ch1", true), page, 1200, 1600)
+	path := coverPageEpub(t, coverPagePackage.spine("ch1").guide(), page, 1200, 1600)
 
 	if got := string(readEntry(t, path, "OEBPS/cover.xhtml")); got != page {
 		t.Errorf("cover page was rewritten:\n%s", got)
@@ -1138,7 +1119,7 @@ func TestCoverPageWithoutStatedDimensionsIsUntouched(t *testing.T) {
 
 // A same-sized replacement leaves nothing to refit, so the entry is copied.
 func TestCoverPageUnchangedBySameSizedReplacement(t *testing.T) {
-	path := coverPageEpub(t, coverPageOPF("ch1", true), svgCoverPage, 600, 800)
+	path := coverPageEpub(t, coverPagePackage.spine("ch1").guide(), svgCoverPage, 600, 800)
 
 	if got := string(readEntry(t, path, "OEBPS/cover.xhtml")); got != svgCoverPage {
 		t.Errorf("cover page was rewritten:\n%s", got)
@@ -1148,7 +1129,7 @@ func TestCoverPageUnchangedBySameSizedReplacement(t *testing.T) {
 // §6.1.2 allows any HTML named entity, so &nbsp; must not read as broken.
 func TestCoverPageWithAnHTMLEntityIsRefitted(t *testing.T) {
 	page := strings.Replace(svgCoverPage, "<title>Cover</title>", "<title>Cover&nbsp;Page</title>", 1)
-	path := coverPageEpub(t, coverPageOPF("ch1", true), page, 1200, 1600)
+	path := coverPageEpub(t, coverPagePackage.spine("ch1").guide(), page, 1200, 1600)
 
 	if got := string(readEntry(t, path, "OEBPS/cover.xhtml")); !strings.Contains(got, `viewBox="0 0 1200 1600"`) {
 		t.Errorf("cover page was not refitted:\n%s", got)
@@ -1163,7 +1144,7 @@ func TestCoverPageImgAttributesAreRefitted(t *testing.T) {
 <head><title>Cover</title></head>
 <body><img src="cover.jpg" width="600" height="800" alt="Cover"/></body>
 </html>`
-	path := coverPageEpub(t, coverPageOPF("ch1", true), page, 1200, 1600)
+	path := coverPageEpub(t, coverPagePackage.spine("ch1").guide(), page, 1200, 1600)
 
 	got := string(readEntry(t, path, "OEBPS/cover.xhtml"))
 	if !strings.Contains(got, `width="1200"`) || !strings.Contains(got, `height="1600"`) {
@@ -1224,7 +1205,7 @@ div > img { width: 100%; }
 ]]></style></head>
 <body><div><img src="cover.jpg" width="600" height="800" alt="Cover"/></div></body>
 </html>`
-	path := coverPageEpub(t, coverPageOPF("ch1", true), page, 1200, 1600)
+	path := coverPageEpub(t, coverPagePackage.spine("ch1").guide(), page, 1200, 1600)
 
 	got := string(readEntry(t, path, "OEBPS/cover.xhtml"))
 	if !strings.Contains(got, `width="1200"`) {

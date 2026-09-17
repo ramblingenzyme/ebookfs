@@ -21,83 +21,61 @@ import (
 
 // opfMarkupCoverImage mislabels an XHTML cover page with
 // properties="cover-image"; the real raster cover is reached via <meta name="cover">.
-var opfMarkupCoverImage = opf3Meta(`    <dc:creator id="creator1">Jane Doe</dc:creator>
+var opfMarkupCoverImage = epub3(`    <dc:creator id="creator1">Jane Doe</dc:creator>
     <meta refines="#creator1" property="role">aut</meta>
-    <meta name="cover" content="real-cover"/>`,
+    <meta name="cover" content="real-cover"/>`).manifest(
 	`<item id="coverpage" href="coverpage.xhtml" media-type="application/xhtml+xml" properties="cover-image"/>
     <item id="real-cover" href="cover.jpg" media-type="image/jpeg"/>
-    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`,
-)
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`)
 
 // opfSeriesSetCollection carries an EPUB 3 belongs-to-collection of type "set"
 // (a publisher bundle, not a series) alongside a legacy calibre:series. The set
 // must be ignored so the real series is the one read.
-var opfSeriesSetCollection = opf3Meta(metas(
+var opfSeriesSetCollection = epub3(metas(
 	`<dc:title>Box Set Book</dc:title>`,
 	`<dc:creator id="creator1">Jane Doe</dc:creator>`,
 	`<meta refines="#creator1" property="role">aut</meta>`,
 	collection("c1", "Some Box Set", "set", ""),
 	calibreSeries("Real Series", "3"),
-), "")
+)).manifest(chapterOnlyManifest)
 
 // opfSeriesNoIndexV3 is an EPUB 3 series collection with no group-position; the
 // index should default to 1.
-var opfSeriesNoIndexV3 = opf3Meta(metas(
+var opfSeriesNoIndexV3 = epub3(metas(
 	`<dc:title>Lonely Book</dc:title>`,
 	`<dc:creator id="creator1">Jane Doe</dc:creator>`,
 	`<meta refines="#creator1" property="role">aut</meta>`,
 	collection("c1", "Lonely Series", "series", ""),
-), "")
+)).manifest(chapterOnlyManifest)
 
 // opfSeriesNoIndexV2 is an EPUB 2 calibre:series with no calibre:series_index;
 // the index should default to 1.
-var opfSeriesNoIndexV2 = opf2Meta(metas(
+var opfSeriesNoIndexV2 = epub2(metas(
 	`<dc:title>Lonely Book</dc:title>`,
 	`<dc:creator opf:role="aut">Jane Doe</dc:creator>`,
 	calibreSeries("Lonely Series", ""),
-))
+)).manifest(chapterOnlyManifest)
 
-// opf3Meta wraps a metadata block and an optional <manifest> body in an
-// EPUB 3 package skeleton. An empty manifest uses the default single-chapter
-// entry so callers need only supply their <metadata> children.
-// opf3Meta and opf2Meta are the shared builders under the names these tests
-// already use, with the manifest this file needs: no cover item, because the
-// cover-resolution tests here are about a package that declares one itself.
-func opf3Meta(metadata, manifest string) string {
-	return epub3(metadata, manifestOr(nonEmpty(manifest), chapterOnlyManifest))
-}
-
-func opf2Meta(metadata string) string {
-	return epub2(metadata, chapterOnlyManifest)
-}
-
+// chapterOnlyManifest is the manifest these tests want: no cover item, because
+// the cover-resolution tests here are about a package that declares one itself.
 const chapterOnlyManifest = `<item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`
-
-func nonEmpty(s string) []string {
-	if s == "" {
-		return nil
-	}
-	return []string{s}
-}
 
 // opfWithDates builds a minimal EPUB 2 package whose <metadata> carries the
 // given raw <dc:date ...> elements, for exercising publication-date selection.
-func opfWithDates(dateXML string) string {
-	return opf2Meta(`    <dc:title>Dated Book</dc:title>
+func opfWithDates(dateXML string) packageDoc {
+	return epub2(`    <dc:title>Dated Book</dc:title>
     <dc:creator opf:role="aut">Jane Doe</dc:creator>
-    ` + dateXML)
+    ` + dateXML).manifest(chapterOnlyManifest)
 }
 
 // opfV3WithModified is an EPUB 3 package with a publication dc:date and a
 // dcterms:modified meta; the latter is not a dc:date and must not be read as the
 // publication date.
-var opfV3WithModified = opf3Meta(`    <dc:title>V3 Book</dc:title>
+var opfV3WithModified = epub3(`    <dc:title>V3 Book</dc:title>
     <dc:creator id="creator1">Jane Doe</dc:creator>
     <meta refines="#creator1" property="role">aut</meta>
     <dc:date>2015-06-01</dc:date>
-    <meta property="dcterms:modified">2022-09-09T00:00:00Z</meta>`,
-	"",
-)
+    <meta property="dcterms:modified">2022-09-09T00:00:00Z</meta>`).manifest(chapterOnlyManifest)
 
 func withContainer(entries []entry, container string) []entry {
 	out := make([]entry, len(entries))
@@ -147,15 +125,14 @@ func TestTranslateCoverSkipsMarkupCoverImage(t *testing.T) {
 // A percent-encoded cover href must resolve to the literal zip entry so the
 // cover is found by both Parse and the WriteCover/Reader lookups.
 func TestParseResolvesEncodedCoverHref(t *testing.T) {
-	opfEncoded := opf3Meta(`    <dc:creator id="creator1">Jane Doe</dc:creator>
-    <meta refines="#creator1" property="role">aut</meta>`,
+	opfEncoded := epub3(`    <dc:creator id="creator1">Jane Doe</dc:creator>
+    <meta refines="#creator1" property="role">aut</meta>`).manifest(
 		`<item id="cover-img" href="cover%20image.jpg" media-type="image/jpeg" properties="cover-image"/>
-    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`,
-	)
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`)
 	entries := []entry{
 		{name: "mimetype", data: []byte(mimetypeValue), store: true},
 		{name: "META-INF/container.xml", data: []byte(containerXML)},
-		{name: "OEBPS/content.opf", data: []byte(opfEncoded)},
+		{name: "OEBPS/content.opf", data: []byte(string(opfEncoded))},
 		{name: "OEBPS/cover image.jpg", data: coverBytes}, // literal space in the entry name
 		{name: "OEBPS/chapter1.xhtml", data: chapterBytes},
 	}
@@ -234,8 +211,8 @@ func TestParseCollapsesRootfileMediaType(t *testing.T) {
 // edit computed from one copy and reported from the other, invisible until the
 // copies differ. Either rule would do; it has to be one rule.
 func TestParseAndWriteAgreeOnADuplicateEntry(t *testing.T) {
-	first := strings.Replace(opf3, "Original Title", "First Copy", 1)
-	second := strings.Replace(opf3, "Original Title", "Second Copy", 1)
+	first := strings.Replace(string(opf3), "Original Title", "First Copy", 1)
+	second := strings.Replace(string(opf3), "Original Title", "Second Copy", 1)
 
 	path := writeEpub(t, []entry{
 		{name: "mimetype", data: []byte(mimetypeValue), store: true},
@@ -402,8 +379,8 @@ func TestParseToleratesMimetypeWhitespace(t *testing.T) {
 // document were overwritten. The copy nobody resolved is somebody else's data,
 // and the archive is copied verbatim.
 func TestRewriteReplacesOnlyTheResolvedDuplicate(t *testing.T) {
-	first := strings.Replace(opf3, "Original Title", "First Copy", 1)
-	second := strings.Replace(opf3, "Original Title", "Second Copy", 1)
+	first := strings.Replace(string(opf3), "Original Title", "First Copy", 1)
+	second := strings.Replace(string(opf3), "Original Title", "Second Copy", 1)
 
 	path := writeEpub(t, []entry{
 		{name: "mimetype", data: []byte(mimetypeValue), store: true},
@@ -614,7 +591,7 @@ func TestTranslateDateIgnoresDctermsModified(t *testing.T) {
 func TestTranslateSeriesDefaultsIndexToOne(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		opf  string
+		opf  packageDoc
 	}{
 		{"epub3 collection without group-position", opfSeriesNoIndexV3},
 		{"epub2 calibre:series without index", opfSeriesNoIndexV2},

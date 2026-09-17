@@ -45,7 +45,7 @@ type item struct {
 
 type corpus struct {
 	name    string
-	opf     string
+	opf     packageDoc
 	foreign []item
 	// sortTitle records whether the package can carry one at all. EPUB 2 has no
 	// standard mechanism and ebookfs writes no proprietary fallback, so the edit
@@ -159,7 +159,7 @@ func TestRewritePreservesForeignMetadata(t *testing.T) {
 //
 // Only metadata edits. A cover edit is supposed to touch the manifest, and the
 // tests that own that behaviour assert it themselves.
-func assertOutsideMetadataUnchanged(t *testing.T, before string, after []byte) {
+func assertOutsideMetadataUnchanged(t *testing.T, before packageDoc, after []byte) {
 	t.Helper()
 
 	serialize := func(src []byte, tag string) string {
@@ -306,8 +306,8 @@ func TestRewriteIsIdempotent(t *testing.T) {
 // edit declares dcterms2; every later one must recognise that element as ours
 // or mint dcterms3, dcterms4, growing the package element once per save.
 func TestRewriteIsIdempotentOnARebindingDocument(t *testing.T) {
-	opf := strings.Replace(epub3(`    <meta property="dcterms:modified">not-a-date</meta>`),
-		`version="3.0"`, `version="3.0" prefix="dcterms: http://example.com/vocab#"`, 1)
+	opf := epub3(`    <meta property="dcterms:modified">not-a-date</meta>`).
+		attr(`prefix="dcterms: http://example.com/vocab#"`)
 
 	path := buildEpub(t, opf)
 	var first string
@@ -560,10 +560,10 @@ func TestEPUB2CreatorLosesAStaleSortName(t *testing.T) {
 // refinement, so the edit would land where the read never looks and the stale
 // value would be reported forever.
 func TestEPUB3CreatorWithALegacySortNameTakesTheEdit(t *testing.T) {
-	opf := strings.Replace(epub3(`    <dc:creator id="c1" opf:file-as="Stale, Name">Ann Rand</dc:creator>
-    <meta refines="#c1" property="role" scheme="marc:relators">aut</meta>`),
+	opf := packageDoc(strings.Replace(string(epub3(`    <dc:creator id="c1" opf:file-as="Stale, Name">Ann Rand</dc:creator>
+    <meta refines="#c1" property="role" scheme="marc:relators">aut</meta>`)),
 		`xmlns:dc="http://purl.org/dc/elements/1.1/"`,
-		`xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf"`, 1)
+		`xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf"`, 1))
 
 	path := buildEpub(t, opf)
 	authors := []bookmodel.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
@@ -760,7 +760,7 @@ func TestUnrefinedMetaIsNotACreatorsSortName(t *testing.T) {
 // this takes the last, pinned rather than left to be discovered by a book
 // showing the wrong cover.
 func TestCoverHeuristicTakesTheLastMatch(t *testing.T) {
-	opf := epub3(``, `<item id="cover-thumb" href="thumb.jpg" media-type="image/jpeg"/>
+	opf := epub3(``).manifest(`<item id="cover-thumb" href="thumb.jpg" media-type="image/jpeg"/>
     <item id="cover.jpg" href="cover.jpg" media-type="image/jpeg"/>
     <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`)
 
@@ -818,7 +818,7 @@ func TestDuplicateRefinementsKeepTheirDuplicates(t *testing.T) {
 func TestIdentifierKeying(t *testing.T) {
 	tests := []struct {
 		name string
-		opf  string
+		opf  packageDoc
 		want map[string]string
 	}{{
 		name: "epub2 opf:scheme attribute",
@@ -938,21 +938,9 @@ func TestIdentifierKeying(t *testing.T) {
 // is matched through the vocabulary. A reader comparing the literal "onix:"
 // would read this identifier as untyped.
 func TestIdentifierTypeInReboundVocabulary(t *testing.T) {
-	const opf = `<?xml version="1.0" encoding="utf-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id"
-         prefix="onx: http://www.editeur.org/ONIX/book/codelists/current.html#">
-  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:identifier id="pub-id">9780123456789</dc:identifier>
-    <meta refines="#pub-id" property="identifier-type" scheme="onx:codelist5">15</meta>
-    <dc:title>T</dc:title>
-    <dc:creator>A</dc:creator>
-    <dc:language>en</dc:language>
-  </metadata>
-  <manifest>
-    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
-  </manifest>
-  <spine><itemref idref="ch1"/></spine>
-</package>`
+	opf := epub3(`    <dc:identifier id="pub-id">9780123456789</dc:identifier>
+    <meta refines="#pub-id" property="identifier-type" scheme="onx:codelist5">15</meta>`).
+		attr(`prefix="onx: http://www.editeur.org/ONIX/book/codelists/current.html#"`)
 
 	bib, err := epub.Parse(buildEpub(t, opf))
 	if err != nil {
@@ -971,20 +959,8 @@ func TestIdentifierTypeInReboundVocabulary(t *testing.T) {
 // elements are reused rather than rebuilt. Nothing in §5.3.1 or §5.3.7 requires
 // preserving them.
 func TestMetadataDirectionalitySurvives(t *testing.T) {
-	const opf = `<?xml version="1.0" encoding="utf-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id" xml:lang="en" dir="ltr">
-  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title xml:lang="ar" dir="rtl">العنوان</dc:title>
-    <dc:creator id="c1">Ann Rand</dc:creator>
-    <dc:language>en</dc:language>
-  </metadata>
-  <manifest>
-    <item id="cover-img" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
-    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
-  </manifest>
-  <spine><itemref idref="ch1"/></spine>
-</package>`
+	opf := epub3(`    <dc:title xml:lang="ar" dir="rtl">العنوان</dc:title>`).
+		attr(`xml:lang="en" dir="ltr"`)
 
 	path := buildEpub(t, opf)
 	desc := "A new description."

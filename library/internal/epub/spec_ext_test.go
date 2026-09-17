@@ -498,8 +498,8 @@ func TestSpecWhitespaceInEPUB2RoleAttribute(t *testing.T) {
 // wrapped version="3.0" reports EPUB 2. §5.5.5's dcterms:modified then never
 // updates, and calibre metas are injected into a package that had none.
 func TestSpecWhitespaceInTheVersionAttribute(t *testing.T) {
-	opf := strings.Replace(epub3(`    <meta property="dcterms:modified">2020-01-02T00:00:00Z</meta>`),
-		`version="3.0"`, "version=\"\n      3.0\n    \"", 1)
+	opf := packageDoc(strings.Replace(string(epub3(`    <meta property="dcterms:modified">2020-01-02T00:00:00Z</meta>`)),
+		`version="3.0"`, "version=\"\n      3.0\n    \"", 1))
 
 	path := buildEpub(t, opf)
 	sort := "Title, The"
@@ -529,8 +529,8 @@ func TestSpecWhitespaceInTheVersionAttribute(t *testing.T) {
 // declaration and only SHOULD NOT be overridden, so a document may rebind one.
 
 func TestSpecDeclaredPrefixResolvesToTheSameProperty(t *testing.T) {
-	opf := strings.Replace(epub3(`    <meta property="dct:modified">2020-01-02T00:00:00Z</meta>`),
-		`version="3.0"`, `version="3.0" prefix="dct: http://purl.org/dc/terms/"`, 1)
+	opf := epub3(`    <meta property="dct:modified">2020-01-02T00:00:00Z</meta>`).
+		attr(`prefix="dct: http://purl.org/dc/terms/"`)
 
 	path := buildEpub(t, opf)
 	want := "A New Title"
@@ -557,8 +557,8 @@ func TestSpecDeclaredPrefixResolvesToTheSameProperty(t *testing.T) {
 // D.1.5 only SHOULD NOTs. This file's dcterms:modified belongs to someone else
 // and must not be read as the §5.5.5 date or overwritten.
 func TestSpecRedefinedReservedPrefixIsNotOurProperty(t *testing.T) {
-	opf := strings.Replace(epub3(`    <meta property="dcterms:modified">not-a-date</meta>`),
-		`version="3.0"`, `version="3.0" prefix="dcterms: http://example.com/vocab#"`, 1)
+	opf := epub3(`    <meta property="dcterms:modified">not-a-date</meta>`).
+		attr(`prefix="dcterms: http://example.com/vocab#"`)
 
 	path := buildEpub(t, opf)
 	want := "A New Title"
@@ -614,8 +614,7 @@ func TestSpecRedefinedReservedPrefixIsNotOurProperty(t *testing.T) {
 // document rebinding marc turns it into a code list nobody meant. Spell it with
 // whatever prefix resolves to MARC here.
 func TestSpecNewRefineSpellsItsSchemeAndProperty(t *testing.T) {
-	opf := strings.Replace(epub3(``),
-		`version="3.0"`, `version="3.0" prefix="marc: http://example.com/not-marc#"`, 1)
+	opf := epub3(``).attr(`prefix="marc: http://example.com/not-marc#"`)
 
 	path := buildEpub(t, opf)
 	authors := []bookmodel.Author{{Name: "Ann Rand"}, {Name: "Bo Li"}}
@@ -719,7 +718,7 @@ func TestSpecLegacyMetadataWrappers(t *testing.T) {
 
 func TestSpecMultipleRoleRefines(t *testing.T) {
 
-	opf := func(first, second string) string {
+	opf := func(first, second string) packageDoc {
 		return epub3(`    <dc:title>Where the Wild Things Are</dc:title>
     <dc:creator id="creator01">Maurice Sendak</dc:creator>
     <meta refines="#creator01" property="role" scheme="marc:relators">` + first + `</meta>
@@ -847,7 +846,7 @@ func TestSpecGroupPositionMultiLevel(t *testing.T) {
 // calibre:series_index is a float and needs trailing zeros dropped ("1.0" means
 // "1"). group-position is never calibre-written and must not get that treatment.
 func TestSpecGroupPositionLevelsAreNotDecimals(t *testing.T) {
-	epub3Index := func(pos string) string {
+	epub3Index := func(pos string) packageDoc {
 		return epub3(metas(
 			`<dc:title>An Article</dc:title>`,
 			collection("c01", "Physical Review D", "series", pos),
@@ -931,10 +930,10 @@ func TestSpecSchemedCollectionTypeIsNotOurSeries(t *testing.T) {
 // membership is a token comparison. A substring test matches "my-cover-image",
 // somebody else's property.
 func TestSpecCoverImagePropertyIsAToken(t *testing.T) {
-	opf := func(properties string) string {
-		return epub3(`    <meta name="cover" content="legacy-cover"/>`,
+	opf := func(properties string) packageDoc {
+		return epub3(`    <meta name="cover" content="legacy-cover"/>`).manifest(
 			`<item id="legacy-cover" href="old.jpg" media-type="image/jpeg"/>
-    <item id="candidate" href="candidate.jpg" media-type="image/jpeg" properties="`+properties+`"/>
+    <item id="candidate" href="candidate.jpg" media-type="image/jpeg" properties="` + properties + `"/>
     <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`)
 	}
 
@@ -961,7 +960,7 @@ func TestSpecCoverImagePropertyIsAToken(t *testing.T) {
 // Already correct, but stated only by the order of two loops in translateCover.
 // Reorder them in a rewrite and the result flips with nothing failing.
 func TestSpecCoverImagePropertyBeatsLegacyMeta(t *testing.T) {
-	opf := epub3(`    <meta name="cover" content="legacy-cover"/>`,
+	opf := epub3(`    <meta name="cover" content="legacy-cover"/>`).manifest(
 		`<item id="legacy-cover" href="old.jpg" media-type="image/jpeg"/>
     <item id="cover-img" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
     <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`)
@@ -1043,22 +1042,10 @@ func TestSpecEditsLandInTheLegacyWrappers(t *testing.T) {
 // added. elements() reads both wrappers and direct children, so this package is
 // the one reader that cannot see its own violation.
 func TestSpecEditsCreateTheMissingXMetadataWrapper(t *testing.T) {
-	const opf = `<?xml version="1.0" encoding="utf-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" xmlns:opf="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="pub-id">
-  <metadata>
-    <dc-metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-      <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-      <dc:title>Alice in Wonderland</dc:title>
-      <dc:creator opf:role="aut">Lewis Carroll</dc:creator>
-      <dc:language>en</dc:language>
-    </dc-metadata>
-  </metadata>
-  <manifest>
-    <item id="cover-img" href="cover.jpg" media-type="image/jpeg"/>
-    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
-  </manifest>
-  <spine toc="ncx"><itemref idref="ch1"/></spine>
-</package>`
+	opf := epub2(metas(
+		`<dc:title>Alice in Wonderland</dc:title>`,
+		`<dc:creator opf:role="aut">Lewis Carroll</dc:creator>`,
+	)).wrapped()
 
 	path := buildEpub(t, opf)
 	series := "Wonderland"
@@ -1085,7 +1072,7 @@ func TestSpecEditsCreateTheMissingXMetadataWrapper(t *testing.T) {
 
 func TestSpecEPUB2AttributesGetADeclaredPrefix(t *testing.T) {
 	// epub2() declares xmlns:opf; this file binds OPF as the default only.
-	opf := strings.Replace(epub2(``), ` xmlns:opf="http://www.idpf.org/2007/opf"`, "", 1)
+	opf := packageDoc(strings.Replace(string(epub2(``)), ` xmlns:opf="http://www.idpf.org/2007/opf"`, "", 1))
 
 	path := buildEpub(t, opf)
 	authors := []bookmodel.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
