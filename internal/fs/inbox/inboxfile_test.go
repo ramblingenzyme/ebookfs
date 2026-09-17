@@ -84,7 +84,7 @@ func TestInboxFileOpenWithFidZero(t *testing.T) {
 	f := testutil.NewTestFS(t)
 	inf := NewInboxFile(f, libfake.Lib{}, "test.epub", 0644, nil)
 
-	// Open with fid 0 — a legal fid that used to be rejected as "already open"
+	// Open with fid 0, a legal fid that used to be rejected as "already open"
 	// because the check was i.fid != 0 instead of i.handle != nil.
 	if err := inf.Open(0, proto.Mode(0)); err != nil {
 		t.Fatalf("Open with fid 0: %v", err)
@@ -173,10 +173,9 @@ func TestInboxFileReopenAfterClose(t *testing.T) {
 	}
 }
 
-// TestInboxFileCloseWithParentDeadlockRegression verifies that Close completes
-// when the inboxFile has a real parent directory. This is a regression test for
-// a deadlock where Close held the file's lock while calling DeleteChild, which
-// in turn called SetParent on the removed child, trying to acquire the same lock.
+// Regression test: Close deadlocked when the inboxFile had a real parent
+// directory. Close held the file's lock while calling DeleteChild, which in turn
+// called SetParent on the removed child, trying to acquire the same lock.
 func TestInboxFileCloseWithParentDeadlockRegression(t *testing.T) {
 	ingested := make(chan *library.Book, 1)
 	f := testutil.NewTestFS(t)

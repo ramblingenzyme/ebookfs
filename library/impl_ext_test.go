@@ -62,7 +62,7 @@ func TestGetMissingBookIsErrBookNotFound(t *testing.T) {
 	}
 }
 
-// The half of Search the index cannot do: the index stores a library-relative
+// The part of Search the index cannot do: the index stores a library-relative
 // path, while every consumer of a result (the exporter, the 9P epub file) needs
 // an absolute one, so Search fills it in on the way out. Query has the same loop
 // and its own coverage; Search's copy had none, so deleting it broke no test

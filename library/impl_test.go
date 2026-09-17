@@ -8,9 +8,9 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
-// TestApplyMeta covers the field-by-field application. Every case starts from
-// the same Meta so what a nil edit leaves alone is asserted alongside what a set
-// one changes — applyMeta's whole job is the boundary between those two.
+// Field-by-field application. Every case starts from the same Meta so what a nil
+// edit leaves alone is asserted alongside what a set one changes, which is
+// applyMeta's whole job: the boundary between those two.
 //
 // Independence of the result is TestApplyMetaClonesTags' job; the value receiver
 // makes it uninteresting for every field except Tags.
@@ -53,8 +53,8 @@ func TestApplyMeta(t *testing.T) {
 			if updated.ID != start.ID {
 				t.Errorf("ID = %d, want %d — applyMeta must not touch identity", updated.ID, start.ID)
 			}
-			// Bumped even when no field changed: the edit still happened, and
-			// the sidecar write that follows must not look older than the file.
+			// Bumped even when no field changed: the edit still happened, and the sidecar
+			// write that follows must not look older than the file.
 			if updated.DateModified.Before(before) {
 				t.Errorf("DateModified = %v, want it stamped at or after %v", updated.DateModified, before)
 			}
@@ -62,12 +62,12 @@ func TestApplyMeta(t *testing.T) {
 	}
 }
 
-// TestApplyMetaClonesTags is the one field a value receiver does not make
-// independent. Tags comes either from the Meta passed in or from the Edits, both
-// of which the caller still holds while the result travels on to the sidecar
-// write and the index — so writing through one must not be visible through the
-// other. Element assignment is what detects the sharing: appending would not,
-// since a len-1 slice hides a write past its own end.
+// The one field a value receiver does not make independent. Tags comes either
+// from the Meta passed in or from the Edits, both of which the caller still holds
+// while the result travels on to the sidecar write and the index, so writing
+// through one must not be visible through the other. Element assignment is what
+// detects the sharing: appending would not, since a len-1 slice hides a write
+// past its own end.
 func TestApplyMetaClonesTags(t *testing.T) {
 	t.Run("from the meta", func(t *testing.T) {
 		meta := book.Meta{ID: 1, Tags: []string{"keep"}}

@@ -2,12 +2,11 @@ package pkgdoc
 
 import "testing"
 
-// TestDCPrefix covers the fallback that has no path through Parse: a package
-// with no dc element to copy a prefix from. Reachable only while creating the
-// first one, so the whole branch rests on getting it right without a corpus to
-// catch it.
+// The fallback that has no path through Parse: a package with no dc element to
+// copy a prefix from. Reachable only while creating the first one, so the whole
+// branch rests on getting it right without a corpus to catch it.
 //
-// The bug it replaced was returning "dc" unconditionally, which puts a new
+// The bug this replaced was returning "dc" unconditionally, which puts a new
 // element in no namespace at all when the document binds Dublin Core to some
 // other prefix, or to none.
 func TestDCPrefix(t *testing.T) {

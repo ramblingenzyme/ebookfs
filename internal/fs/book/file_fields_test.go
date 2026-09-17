@@ -28,9 +28,9 @@ func TestFieldFileRead(t *testing.T) {
 	}
 }
 
-// Note: read clamping, past-end, and unopened-fid behavior come from the
-// embedded snapshotFile and are covered by TestSnapshotFile* in basefile_test.go.
-// The reads kept here exercise fieldFile's own load wrapping (the trailing "\n").
+// Read clamping, past-end, and unopened-fid behavior come from the embedded
+// snapshotFile, whose base test owns them. The reads kept here exercise
+// fieldFile's own load wrapping (the trailing "\n").
 
 func TestFieldFileReadEmpty(t *testing.T) {
 	ff := newFieldFile(testFieldFileStat(t, 0444), func() string { return "" }, nil)
@@ -316,8 +316,8 @@ func TestFieldFileShorterOverwriteWithoutOtrunc(t *testing.T) {
 		t.Fatalf("Open: %v", err)
 	}
 
-	// Write "read\n" at offset 0 — shorter than the snapshot "reading\n".
-	// Without the fix, residual bytes produce "read\ning".
+	// Write "read\n" at offset 0, shorter than the snapshot "reading\n". Without
+	// the fix, residual bytes produce "read\ning".
 	if _, err := ff.Write(fid, 0, []byte("read\n")); err != nil {
 		t.Fatalf("Write: %v", err)
 	}

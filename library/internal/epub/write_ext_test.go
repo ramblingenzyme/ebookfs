@@ -479,7 +479,7 @@ func TestEncryptionAttributesAreCollapsed(t *testing.T) {
 	})
 }
 
-// The fail-open half. A producer writing an unencoded name into both
+// The fail-open case. A producer writing an unencoded name into both
 // encryption.xml and the zip has an entry whose name really contains "%20", so
 // the decoded form matches nothing and an encrypted entry reads as readable.
 func TestWriteBibRefusesEncryptedEntryNamedLiterally(t *testing.T) {
@@ -948,7 +948,7 @@ func TestModifiedStampIsWrittenOnlyForARealChange(t *testing.T) {
 
 // os.SameFile compares device and inode, so it catches the rewrite even when the
 // rebuilt zip is byte-identical. The returned Bib still comes from the file,
-// the half the skip must not cost.
+// the part the skip must not cost.
 func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
 	statOf := func() os.FileInfo {

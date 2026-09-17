@@ -3,9 +3,9 @@
 // field it changed. Spans three packages, so it pairs with no single source
 // file, and drives only the public 9P path.
 //
-// Registry-internal behavior — edit on an unknown id, and the concurrent
-// snapshot swap — is tested white-box in fs/registry instead, since those
-// tests call the unexported edit method.
+// Registry-internal behavior (edit on an unknown id, and the concurrent
+// snapshot swap) is tested white-box in fs/registry instead, since those tests
+// call the unexported edit method.
 
 package fs
 

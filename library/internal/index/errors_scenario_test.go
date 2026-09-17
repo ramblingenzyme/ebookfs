@@ -18,9 +18,9 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/internal/index/dbsqlc"
 )
 
-// TestClosedIndexSurfacesErrors checks that every entry point reports the
-// failure rather than swallowing it, so a mutation that cannot reach the
-// database fails loudly instead of leaving the index quietly wrong.
+// Every entry point reports the failure rather than swallowing it, so a
+// mutation that cannot reach the database fails loudly instead of leaving the
+// index quietly wrong.
 //
 // It asserts only that an error comes back, not which one and not what state
 // survives. Anything stronger belongs with the test that owns that behaviour.
@@ -72,7 +72,7 @@ func TestClosedIndexSurfacesErrors(t *testing.T) {
 	}
 }
 
-// TestRolledBackTxSurfacesErrors drives the helpers that write through a
+// The helpers that write through a
 // *dbsqlc.Queries: a failed statement must propagate rather than return nil and
 // let the caller commit a half-written book. Same caveat: presence of an error
 // is all it asserts.

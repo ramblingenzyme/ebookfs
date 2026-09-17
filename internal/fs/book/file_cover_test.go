@@ -9,11 +9,9 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library"
 )
 
-// Read/open/close semantics are covered by the snapshotFile base tests in
-// vfile/basefile_test.go, and the write size-limit behavior by
-// TestWriteFileSizeLimits in writelimit_scenario_test.go.
-// These tests cover coverFile's own surface: Stat length from CoverSize, and the
-// per-fid write buffer committed to Edit on Close.
+// coverFile's own surface, on top of the snapshotFile and size-cap semantics
+// the base tests own: Stat length from CoverSize, and the per-fid write buffer
+// committed to Edit on Close.
 
 func newTestCoverFile(t *testing.T, lib libfake.Lib, edit func(int64, library.Edits) error) *coverFile {
 	t.Helper()

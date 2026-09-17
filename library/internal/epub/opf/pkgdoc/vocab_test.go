@@ -46,8 +46,8 @@ func TestExpand(t *testing.T) {
 	}
 }
 
-// TestVocabulariesParsesThePrefixAttribute covers D.1.4's grammar: a
-// whitespace-separated list of "prefix: URL" pairs, which real files wrap.
+// D.1.4's grammar: a whitespace-separated list of "prefix: URL" pairs, which
+// real files wrap.
 func TestVocabulariesParsesThePrefixAttribute(t *testing.T) {
 	for _, tc := range []struct {
 		name, prefix string

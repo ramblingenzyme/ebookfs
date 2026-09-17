@@ -26,9 +26,9 @@ func (d *creatorDir) Create(f *fs.FS, name string, perm uint32, mode uint8) (fs.
 	return fs.NewBaseFile(NewStat(f, name, perm)), nil
 }
 
-// TestDispatchCreate covers the FS-wide create hook. Create policy lives on each
-// directory rather than in one central switch, so the hook's whole job is to
-// route to the parent and refuse when the parent has no policy.
+// The FS-wide create hook. Create policy lives on each directory rather than in
+// one central switch, so the hook's whole job is to route to the parent and
+// refuse when the parent has no policy.
 func TestDispatchCreate(t *testing.T) {
 	f := testutil.NewTestFS(t)
 

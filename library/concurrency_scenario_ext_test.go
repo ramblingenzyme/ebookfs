@@ -18,13 +18,12 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 )
 
-// TestEditWriteCoverConcurrentSameBook races an Edit that moves the book
-// directory (title change) against a WriteCover on the same book. Both address
-// the book by id and re-base on its current state under the per-book lock, so
-// both must always succeed — whichever runs second resolves the post-move
-// location — and both changes must be present in the final epub. Without the
-// locked re-base the two rewriteEpub calls read the same pre-state and the
-// last rename silently drops the other's change (lost update).
+// An Edit that moves the book directory (title change) races a WriteCover on
+// the same book. Both address the book by id and re-base on its current state
+// under the per-book lock, so both must always succeed, whichever runs second
+// resolving the post-move location, and both changes must be present in the
+// final epub. Without the locked re-base the two rewriteEpub calls read the same
+// pre-state and the last rename silently drops the other's change (lost update).
 func TestEditWriteCoverConcurrentSameBook(t *testing.T) {
 	cfg := testConfig(t)
 	lib := openLib(t, cfg)

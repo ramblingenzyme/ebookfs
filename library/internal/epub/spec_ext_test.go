@@ -1010,7 +1010,7 @@ func TestSpecSchemedCollectionTypeIsNotOurSeries(t *testing.T) {
 //
 // §5.9.2: legacy features are for EPUB 2 compatibility, and "EPUB 3 reading
 // systems will not use these features when presenting publications to users".
-// Which is what makes the manifest property win over <meta name="cover">.
+// That is what makes the manifest property win over <meta name="cover">.
 // §5.9.3 describes the legacy meta itself.
 
 // §5.9.1 makes properties "a space-separated list of property values", so

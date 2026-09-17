@@ -169,7 +169,7 @@ func TestMakeMatchesFn(t *testing.T) {
 		// Any one author of a multi-author book is enough.
 		{"co-author matches", library.Query{Authors: []string{"Ray Bradbury"}}, base, true},
 		{"author does not match", library.Query{Authors: []string{"J.R.R. Tolkien"}}, base, false},
-		// Authors compare exactly — unlike titles, they are not a substring field.
+		// Authors compare exactly; unlike titles, they are not a substring field.
 		{"author is not a substring match", library.Query{Authors: []string{"Asimov"}}, base, false},
 
 		{"tag matches", library.Query{Tags: []string{"sci-fi"}}, base, true},
@@ -430,7 +430,7 @@ func TestSearchCtlIgnoresEmptyClunk(t *testing.T) {
 	}
 }
 
-// The client-driven release path. Dropping the directory is only half of it:
+// The client-driven release path. Dropping the directory is only part of it:
 // the results dir must also come off the registry, or a handle no client can
 // reach goes on receiving every book event for the life of the process.
 func TestSearchCtlCloseTearsDownHandle(t *testing.T) {

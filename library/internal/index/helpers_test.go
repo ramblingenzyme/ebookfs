@@ -28,8 +28,8 @@ func openTestIndex(t *testing.T) *Index {
 		t.Fatalf("open: %v", err)
 	}
 	t.Cleanup(func() { idx.Close() })
-	// A fresh index is intentionally "dirty" (see TestFreshOpenForcesReindex);
-	// rebuild an empty index to reach the clean baseline the mutation tests want.
+	// A fresh index is intentionally "dirty" (no version stamp), so rebuild an
+	// empty one to reach the clean baseline the mutation tests want.
 	if err := idx.Rebuild(nil, nil, 0); err != nil {
 		t.Fatalf("baseline rebuild: %v", err)
 	}
@@ -97,7 +97,7 @@ func storeInIndex(t *testing.T, idx *Index, b *book.Book) {
 
 // storeInIndexSized is storeInIndex for tests that care about the epub size the
 // index records. The size travels in the observation Put is handed, not on the
-// book — books has one epub_size column and it is the stat's.
+// book: books has one epub_size column and it is the stat's.
 func storeInIndexSized(t *testing.T, idx *Index, b *book.Book, size int64) {
 	t.Helper()
 	op := idx.BeginOp()

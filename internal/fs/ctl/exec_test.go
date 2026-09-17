@@ -109,7 +109,7 @@ func TestRemoveTag(t *testing.T) {
 }
 
 // A query that names an id alongside a filter must not report the id as
-// "not found" when the filter excludes it — the book exists, it just did not
+// "not found" when the filter excludes it: the book exists, it just did not
 // match. Only a bare id-spec ("1,2,3") gets the typo-catching walk.
 func TestAddTagFilteredQueryDoesNotReportNotFound(t *testing.T) {
 	book := testutil.MakeBook(1, "Title", "Author")
@@ -416,7 +416,7 @@ func TestCommandRejections(t *testing.T) {
 		{"invalid rating", "set-rating high *", `error: invalid rating "high"`},
 		{"invalid delete id", "delete abc", `error: invalid id "abc"`},
 		// ParseAuthor splits on "|", so a spec that supplies only a sort name
-		// leaves the display name empty. A bare "" never gets this far —
+		// leaves the display name empty. A bare "" never gets this far:
 		// parseCommand drops empty arguments, which lands on the usage line.
 		{"sort name but no display name", `rename-author "Old" "|Doe, Jane"`, "error: new author name must not be empty"},
 		{"whitespace-only new author", `rename-author "Old" " "`, "error: new author name must not be empty"},

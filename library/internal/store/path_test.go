@@ -18,11 +18,10 @@ func TestLayout(t *testing.T) {
 	}
 }
 
-// TestLayoutSlashInTitleStaysOneDirectory pins that a '/' in a title or an
-// author name cannot split a library directory in two. The epub package reports
-// metadata as the file wrote it (EPUB 3.3 §5.5.2), so a title like "Either/Or"
-// reaches Layout intact and this is the only thing standing between it and a
-// stray nested directory.
+// A '/' in a title or an author name cannot split a library directory in two.
+// The epub package reports metadata as the file wrote it (EPUB 3.3 §5.5.2), so a
+// title like "Either/Or" reaches Layout intact and this is the only thing
+// standing between it and a stray nested directory.
 func TestLayoutSlashInTitleStaysOneDirectory(t *testing.T) {
 	s, _ := newStore(t)
 
@@ -36,11 +35,11 @@ func TestLayoutSlashInTitleStaysOneDirectory(t *testing.T) {
 	}
 }
 
-// TestLayoutCannotEscapeTheLibraryRoot pins the other half of PathSafe. An
-// author name is read verbatim from the epub, so ".." is a value a file can
-// carry, and filepath.Join would walk it out of the library root — the book
-// written outside the library entirely, with ingest, move and delete all then
-// operating on the escaped path. "." collapses into the root instead.
+// PathSafe's other guarantee. An author name is read verbatim from the epub, so
+// ".." is a value a file can carry, and filepath.Join would walk it out of the
+// library root: the book written outside the library entirely, with ingest, move
+// and delete all then operating on the escaped path. "." collapses into the root
+// instead.
 func TestLayoutCannotEscapeTheLibraryRoot(t *testing.T) {
 	s, _ := newStore(t)
 
@@ -113,17 +112,17 @@ func TestEpubFilename(t *testing.T) {
 }
 
 func TestEpubFilenameForFFallback(t *testing.T) {
-	// A title that is only dots triggers ForFAT to return an error (trimmed to empty),
-	// exercising the fallback to the raw title.
+	// A title that is only dots triggers ForFAT to return an error (trimmed to
+	// empty), exercising the fallback to the raw title.
 	got := epubFilename([]book.Author{{Name: "Alice"}}, ".")
 	if got != ". - Alice.epub" {
 		t.Errorf("epubFilename = %q, want %q", got, ". - Alice.epub")
 	}
 }
 
-// TestIDFromPath pins the inverse of canonicalDir's " (id)" suffix. It is the
-// only way to recover a book's id when meta.toml can't be parsed, so it has to
-// reject anything it isn't certain about rather than guess.
+// The inverse of canonicalDir's " (id)" suffix. It is the only way to recover a
+// book's id when meta.toml cannot be parsed, so it has to reject anything it is
+// not certain about rather than guess.
 func TestIDFromPath(t *testing.T) {
 	tests := []struct {
 		path string

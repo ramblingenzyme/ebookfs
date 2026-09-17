@@ -97,7 +97,7 @@ func TestNeedsReindexClosedIndex(t *testing.T) {
 	}
 }
 
-// Which changes to the store count as drift.
+// What counts as the store drifting from the index.
 func TestStoreDrifted(t *testing.T) {
 	tests := []struct {
 		name   string

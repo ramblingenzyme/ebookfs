@@ -8,7 +8,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 )
 
-// Reader documents a closed contract in three places — the closed field, Close's
+// Reader documents a closed contract in three places: the closed field, Close's
 // "safe to call multiple times", and on each accessor.
 // The type satisfies epub.EpubReader and is reached from the 9P read path
 // through vfile.ReadAtFile, where a client holding a fid across a re-ingest is
@@ -70,7 +70,7 @@ func TestReaderWithNoCover(t *testing.T) {
 	if _, err := r.Cover(); err == nil {
 		t.Error("Cover returned no error for an epub with no cover path")
 	}
-	// The rest of the reader still works — no cover is not a broken reader.
+	// The rest of the reader still works: no cover is not a broken reader.
 	if _, err := r.OPF(); err != nil {
 		t.Errorf("OPF: %v", err)
 	}

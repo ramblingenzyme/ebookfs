@@ -152,7 +152,7 @@ func TestCacheSize(t *testing.T) {
 	c := NewCache(dir, noopSource{})
 	b := makeBook(1, "Test", "Alice")
 
-	// No cache file yet — should report cold.
+	// No cache file yet, so it reports cold.
 	_, ok := c.Size(b)
 	if ok {
 		t.Error("Size should report cold for missing cache file")

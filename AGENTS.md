@@ -40,6 +40,14 @@ not.
 Default to one sentence opening with the identifier. A field comment is one
 line, and only when name and type don't already say it.
 
+Test functions are the exception. Their names are long and describe the claim
+already, godoc never surfaces them, and the name sits on the very next line, so
+repeating it is noise. Open on the fact instead:
+
+	// TestIDFromPath pins the inverse of canonicalDir's " (id)" suffix.
+
+	// The inverse of canonicalDir's " (id)" suffix.
+
 Length follows from how many facts survive the test below, not from a cap. A
 comment carrying four consequences is four facts long, and the spec tests in
 library/internal/epub are right to run past ten lines: each names a consequence,

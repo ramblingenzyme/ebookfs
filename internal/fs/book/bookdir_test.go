@@ -11,7 +11,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 )
 
-// newTestBookDir builds a BookDir over a fresh FS with a no-op edit callback —
+// newTestBookDir builds a BookDir over a fresh FS with a no-op edit callback.
 func newTestBookDir(t *testing.T, b *library.Book) *BookDir {
 	t.Helper()
 	return NewBookDir(testutil.NewTestFS(t), libfake.Lib{}, func(int64, library.Edits) error { return nil }, b)
@@ -83,8 +83,8 @@ func readChild(t *testing.T, d *BookDir, name string) string {
 	return string(data)
 }
 
-// TestBookDirIdentifiersFile pins the rendering, including the sort: a map has
-// no order, and a file that shuffles between reads is no use to a diff.
+// The rendering, including the sort: a map has no order, and a file that
+// shuffles between reads is no use to a diff.
 func TestBookDirIdentifiersFile(t *testing.T) {
 	b := testutil.MakeMutableBook(1, "Test", "Author")
 	b.Identifiers = map[string]string{

@@ -273,8 +273,8 @@ func TestEdit(t *testing.T) {
 }
 
 // snapshotView records the title each callback observed, not just the id. The
-// order of a commit is only half the contract; which snapshot each side reads is
-// the other.
+// order of a commit is only one side of the contract; which snapshot each side
+// reads is the other.
 type snapshotView struct {
 	addedTitles   []string
 	removedTitles []string
@@ -288,14 +288,14 @@ func (v *snapshotView) Remove(d *book.BookDir) {
 	v.removedTitles = append(v.removedTitles, d.Book().Title())
 }
 
-// The rule BookView is written against: Add and Remove read the book's current
-// state, so a commit must bracket the swap as Remove, then swap, then Add.
-// Remove has to see the old title or it deletes the wrong entry and leaves a
-// ghost in the 9P tree; Add has to see the new one or it files the book under
-// its old name.
+// A commit must bracket the swap as Remove, then swap, then Add, because Add
+// and Remove read the book's current state. Remove has to see the old title or
+// it deletes the wrong entry and leaves a ghost in the 9P tree; Add has to see
+// the new one or it files the book under its old name.
 //
-// The bracketing test above records ids, which are identical either way, so
-// swapping before the Remove would leave it passing while every view broke.
+// The bracketing test that records ids cannot catch this: ids are identical
+// either way, so swapping before the Remove would leave it passing while every
+// view broke.
 func TestCommitShowsOldStateToRemoveAndNewStateToAdd(t *testing.T) {
 	current := testutil.MakeMutableBook(1, "Old Title", "Alice")
 	lib := libfake.Lib{

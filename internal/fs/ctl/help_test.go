@@ -29,14 +29,13 @@ func helpCommands(t *testing.T) []string {
 	return names
 }
 
-// TestHelpDocumentsOnlyRealCommands binds two of the three parallel lists the
-// ctl surface is spread across: the dispatch switch in exec.go, this help text,
-// and each command's own usage string. Nothing in the types keeps them in step,
+// Two of the three parallel lists the ctl surface is spread across: the dispatch
+// switch in exec.go and this help text. Nothing in the types keeps them in step,
 // so a command documented here but never wired reads as "unknown command" to
 // the operator who follows the docs.
 //
-// The reverse direction — wired but undocumented — cannot be checked from here,
-// since a Go switch is not enumerable. A command table would close that half.
+// The reverse direction (wired but undocumented) cannot be checked from here,
+// since a Go switch is not enumerable.
 func TestHelpDocumentsOnlyRealCommands(t *testing.T) {
 	for _, name := range helpCommands(t) {
 		t.Run(name, func(t *testing.T) {
@@ -50,10 +49,9 @@ func TestHelpDocumentsOnlyRealCommands(t *testing.T) {
 	}
 }
 
-// TestHelpCoversEveryDispatchedCommand is the other half, kept honest by a
-// literal list that has to be edited when a command is added. It is a fourth
-// copy of the same information, which is the point: it fails loudly rather
-// than letting an undocumented command ship quietly.
+// A literal list that has to be edited when a command is added. It is a fourth
+// copy of the same information, which is the point: it fails loudly rather than
+// letting an undocumented command ship quietly.
 func TestHelpCoversEveryDispatchedCommand(t *testing.T) {
 	wired := []string{
 		"add-tag", "remove-tag", "set-status", "set-rating",

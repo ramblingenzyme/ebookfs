@@ -148,10 +148,10 @@ func TestEpubExporter_Size_ReportsRecordedSize(t *testing.T) {
 	}
 }
 
-// The other side of that guard. A book carrying no recorded size was never
-// observed, and reporting 0 as authoritative would have 9P advertise a
-// zero-length file and export sizing believe it, so the size reads as unknown
-// and the caller falls back rather than trusting it.
+// A book carrying no recorded size was never observed, and reporting 0 as
+// authoritative would have 9P advertise a zero-length file and export sizing
+// believe it, so the size reads as unknown and the caller falls back rather
+// than trusting it.
 func TestEpubExporter_Size_Unrecorded(t *testing.T) {
 	b := makeBook(1, "Test", "Author") // EpubSize left at its zero value
 

@@ -17,9 +17,9 @@ func testReaderFile(t *testing.T, exp library.Exporter) *ReaderFile {
 	return NewReaderFile(newStat(f, "test.epub", 0444), exp, testutil.Fixed(book))
 }
 
-// Read/open/close semantics are covered by the readAtFile base tests in
-// basefile_test.go. These tests cover readerFile's own surface: that it wires
-// the Exporter for reads and reports the export size live from Stat.
+// readerFile's own surface, on top of the readAtFile semantics its base test
+// owns: it wires the Exporter for reads and reports the export size live from
+// Stat.
 
 func TestReaderFileOpenRead(t *testing.T) {
 	rf := testReaderFile(t, libfake.Exporter{
@@ -66,9 +66,8 @@ func TestReaderFileStatFallbackToZero(t *testing.T) {
 	}
 }
 
-// TestReaderFileStatNilExporter mirrors TestCoverFileStatLengthNilLib: Stat
-// must report zero rather than panic when the exporter is absent, the same case
-// the read path handles with "exporter not available".
+// Stat must report zero rather than panic when the exporter is absent, the same
+// case the read path handles with "exporter not available".
 func TestReaderFileStatNilExporter(t *testing.T) {
 	rf := testReaderFile(t, nil)
 
