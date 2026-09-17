@@ -1,3 +1,8 @@
+// Registry-internal behavior — edit on an unknown id, and the concurrent
+// snapshot swap — is tested white-box in fs/registry (those tests call the
+// unexported edit method). The tests here drive edits through the public 9P
+// field-file path and assert the resulting rehoming across the real views.
+
 package fs
 
 import (
@@ -166,8 +171,3 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 		t.Error("Author1's reader dir should contain 'Test.epub'")
 	}
 }
-
-// Registry-internal behavior — edit on an unknown id, and the concurrent
-// snapshot swap — is tested white-box in fs/registry (those tests call the
-// unexported edit method). The tests here drive edits through the public 9P
-// field-file path and assert the resulting rehoming across the real views.
