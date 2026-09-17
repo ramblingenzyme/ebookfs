@@ -169,3 +169,28 @@ func TestBooksDirDuplicateTitles(t *testing.T) {
 		t.Errorf("expected 0 children after removing both, got %d", len(d.Children()))
 	}
 }
+
+// TestBooksDirMintedNameCollidesWithLiteralTitle pins the gap documented on
+// disambiguatedName. Add checks the plain title for a collision but not the
+// name it then mints, so a book literally titled "Foo (2)" and the minted name
+// for book id 2 titled "Foo" are the same key.
+//
+// Order matters: the literal has to be registered first, then the collision
+// that mints over it.
+func TestBooksDirMintedNameCollidesWithLiteralTitle(t *testing.T) {
+	t.Skip("known defect: the minted entry replaces the literal one, so a registered " +
+		"book vanishes from the listing, and entries then maps both ids to that name, " +
+		"so removing either deletes the other's entry too. The fix is to mint until the " +
+		"name is free rather than assume one pass suffices. Drop this line to see it fail.")
+
+	reg := newTestRegistry(t)
+	d := NewAllBooksDir(reg)
+
+	reg.Add(wrapBook(makeBook(5, "Foo", "Alice")))   // takes the plain name
+	reg.Add(wrapBook(makeBook(1, "Foo (2)", "Bob"))) // literal title
+	reg.Add(wrapBook(makeBook(2, "Foo", "Carol")))   // mints "Foo (2)"
+
+	if got := len(d.Children()); got != 3 {
+		t.Errorf("listing holds %d of 3 registered books: %v", got, dirChildNames(d))
+	}
+}
