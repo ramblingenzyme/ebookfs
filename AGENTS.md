@@ -31,10 +31,25 @@ Not for: restating the name or the line below it; history, which git already
 holds; conventions that live in this file; the author's reasoning about where
 to put the code.
 
-A doc comment is one sentence opening with the identifier, plus at most two
-more lines if a caller needs something the signature doesn't give. A field
-comment is one line, and only when name and type don't already say it. Past
-that, the reasoning belongs in DECISIONS.md with a pointer from the code.
+History has one legitimate form. A regression test may name the defect it
+guards, because that is why the test exists and git will not surface it to
+someone reading the file. "It used to be a path lookup, which missed a book
+credited in either order" earns its place. "This broke in commit abc123" does
+not.
+
+Default to one sentence opening with the identifier. A field comment is one
+line, and only when name and type don't already say it.
+
+Length follows from how many facts survive the test below, not from a cap. A
+comment carrying four consequences is four facts long, and the spec tests in
+library/internal/epub are right to run past ten lines: each names a consequence,
+a spec ambiguity, or a deliberate narrowing that the code cannot state. Padding
+is wrong at any length, and a cap would cut the wrong end first. Reasoning that
+spans packages belongs in DECISIONS.md with a pointer from the code.
+
+In those spec tests the section number and the verbatim quote are the part that
+must survive. They let a reader check the assertion against the spec without
+leaving the file. Cut the prose around them, never them.
 
 The test: delete it. If a competent reader recovers the fact from the code,
 leave it deleted.
@@ -49,6 +64,30 @@ startup" beats "this matters".
 Explaining a choice means naming the alternative that was rejected and why it
 lost. No hedging, no asides, nothing addressed to one reader at one moment.
 
+Name the thing doing the acting, and keep subject and verb together. An
+abstract summary noun standing in for a subject reads worse than a plain
+sentence and is usually longer. Write "if a rebuild does not record what it
+found, the next startup rebuilds again", not "the failure these share is a
+rebuild that does not record what it saw". This matters more than length: a
+short comment in that register is still hard to follow.
+
+Mechanics that keep it plain:
+
+  - Active voice. Passive only when the actor is genuinely unknown.
+  - One idea per sentence. A sentence reaching for an em dash is usually two
+    sentences; prefer the period.
+  - No "not X, but Y", and no mirrored "one ... the other" comparisons. Both
+    read as structure where a fact belongs. "The closing half of" and "the
+    other direction from" are the same tic.
+  - A magnitude claim carries a number or gets cut. "Every startup" beats
+    "often"; "five minutes" beats "a long time".
+  - Plain connectives: also, though, but, since, so.
+  - No throat-clearing. Delete "note that", "it is worth noting", "keep in
+    mind". Start with the fact.
+  - No decayed words: robust, seamless, dynamic, innovative, leverage as a
+    verb. They carry no information.
+  - No closing recap. If the last sentence restates the comment, delete it.
+
 Turn history into a standing property:
 
 	// Nothing in CI builds that tag, which is how it sat uncompilable for
@@ -59,3 +98,17 @@ Turn history into a standing property:
 
 The first is true until someone adds the tag to CI. The second stays true and
 tells a reader what to watch for.
+
+## Paragraph breaks, and editing comments with a script
+
+A comment carrying more than one fact keeps its `//` separator lines. Four
+short paragraphs scan; one twelve-line wall does not, however good the
+sentences are. When you shorten a comment, shorten the paragraphs and keep the
+breaks.
+
+This is the thing a script gets wrong. Joining a comment block to re-wrap it
+silently drops every `//` separator inside it, and the result passes gofmt, vet
+and the tests while reading worse than what it replaced. Rewrite comments one
+block at a time with the paragraph structure in hand, or make the script treat
+each paragraph as its own unit. Check `grep -c '^\s*//$'` before and after: that
+count must not fall.
