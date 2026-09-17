@@ -76,7 +76,7 @@ split; they can land whenever there's time.
 
 ### Persist the `ctl` command log
 
-`CommandLog` (`fs/ctl/log.go`) is currently an in-memory ring buffer —
+`CommandLog` (`internal/fs/ctl/log.go`) is currently an in-memory ring buffer —
 server-lifetime only, lost on restart. Append each entry to a plain file on
 disk (outside the 9P namespace) as well, and load existing entries back into
 the ring buffer on startup. No schema, no index involvement: the log isn't
@@ -146,7 +146,7 @@ Add an `IngestHook` interface with `PreProcess` and `PostParse` methods, plus an
 
 ### 4. Book Event Subscribers
 
-Add a `BookSubscriber` interface (`HandleBookIngested`, `HandleBookEdited`, `HandleBookDeleted`) and a `Subscribable` interface embedded in `Library`. Events fire synchronously after each mutation is committed, under the operation's lock. Subscribers must not block or call back into the library. The existing `fs/registry/BookRegistry` is migrated from holding a `Library` reference to implementing `BookSubscriber` and registering via `lib.Subscribe(reg)`.
+Add a `BookSubscriber` interface (`HandleBookIngested`, `HandleBookEdited`, `HandleBookDeleted`) and a `Subscribable` interface embedded in `Library`. Events fire synchronously after each mutation is committed, under the operation's lock. Subscribers must not block or call back into the library. The existing `internal/fs/registry/BookRegistry` is migrated from holding a `Library` reference to implementing `BookSubscriber` and registering via `lib.Subscribe(reg)`.
 
 ### 5. Book Sidecar Files
 
@@ -210,7 +210,7 @@ Additive library-surface changes first, then internal frontend migrations.
 6. Add sidecar file interface.
 7. Add metadata handler mechanism.
 8. Decide module extraction approach and split `go.mod`.
-9. Migrate `fs/registry/` to subscriber pattern.
+9. Migrate `internal/fs/registry/` to subscriber pattern.
 
 Steps 2-7 are purely additive to the library surface and independently releasable. Step 9 is an internal frontend migration with no visible change to consumers.
 

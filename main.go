@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ramblingenzyme/ebookfs/fs"
 	"github.com/ramblingenzyme/ebookfs/internal/config"
+	"github.com/ramblingenzyme/ebookfs/internal/fs"
 	"github.com/ramblingenzyme/ebookfs/library"
 )
 
