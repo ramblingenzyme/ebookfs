@@ -1091,38 +1091,39 @@ func TestCoverPageRefitByTheFirstSpineItem(t *testing.T) {
 	}
 }
 
-// A candidate not drawing the cover image is not the cover page, whatever the
-// guide says.
-func TestCoverPageNotDrawingTheCoverIsUntouched(t *testing.T) {
-	page := strings.Replace(svgCoverPage, "cover.jpg", "frontispiece.jpg", 1)
-	path := coverPageEpub(t, coverPagePackage.spine("ch1").guide(), page, 1200, 1600)
-
-	if got := string(readEntry(t, path, "OEBPS/cover.xhtml")); got != page {
-		t.Errorf("cover page was rewritten:\n%s", got)
-	}
-}
-
-// A page sizing its cover in CSS is already correct at any size, and the repair
-// only updates what the document already stated.
-func TestCoverPageWithoutStatedDimensionsIsUntouched(t *testing.T) {
-	const page = `<?xml version="1.0" encoding="utf-8"?>
+// The three shapes a refit leaves alone. Each asserts the entry comes back byte
+// for byte, since a cover page is a content document and rewriting one that
+// needed nothing is a change we cannot justify.
+func TestCoverPageUntouched(t *testing.T) {
+	const noStatedDimensions = `<?xml version="1.0" encoding="utf-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head><title>Cover</title><style>img { width: 100%; }</style></head>
 <body><img src="cover.jpg" alt="Cover"/></body>
 </html>`
-	path := coverPageEpub(t, coverPagePackage.spine("ch1").guide(), page, 1200, 1600)
 
-	if got := string(readEntry(t, path, "OEBPS/cover.xhtml")); got != page {
-		t.Errorf("cover page was rewritten:\n%s", got)
-	}
-}
+	for _, tc := range []struct {
+		name string
+		page string
+		w, h int
+	}{
+		// A candidate not drawing the cover image is not the cover page, whatever
+		// the guide says.
+		{"draws something else", strings.Replace(svgCoverPage, "cover.jpg", "frontispiece.jpg", 1), 1200, 1600},
 
-// A same-sized replacement leaves nothing to refit, so the entry is copied.
-func TestCoverPageUnchangedBySameSizedReplacement(t *testing.T) {
-	path := coverPageEpub(t, coverPagePackage.spine("ch1").guide(), svgCoverPage, 600, 800)
+		// A page sizing its cover in CSS is already correct at any size, and the
+		// repair only updates what the document already stated.
+		{"states no dimensions", noStatedDimensions, 1200, 1600},
 
-	if got := string(readEntry(t, path, "OEBPS/cover.xhtml")); got != svgCoverPage {
-		t.Errorf("cover page was rewritten:\n%s", got)
+		// A same-sized replacement leaves nothing to refit, so the entry is copied.
+		{"replacement is the same size", svgCoverPage, 600, 800},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := coverPageEpub(t, coverPagePackage.spine("ch1").guide(), tc.page, tc.w, tc.h)
+
+			if got := string(readEntry(t, path, "OEBPS/cover.xhtml")); got != tc.page {
+				t.Errorf("cover page was rewritten:\n%s", got)
+			}
+		})
 	}
 }
 
