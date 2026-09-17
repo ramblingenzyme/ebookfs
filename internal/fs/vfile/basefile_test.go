@@ -7,7 +7,6 @@ import (
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library"
 )
 
@@ -73,11 +72,25 @@ func TestSnapshotFilePerFidIsolation(t *testing.T) {
 
 // ---- readAtFile (embedded by epubFile, readerFile) ----
 
+// epubReader is a library.EpubReader over a fixed buffer. Closed records the
+// clunk, which is the thing ReadAtFile has to do on the way out. OPF and Cover
+// are never called here: the base file only ever hands the reader to io.ReaderAt.
+type epubReader struct {
+	*bytes.Reader
+	Closed bool
+}
+
+func (r *epubReader) Close() error           { r.Closed = true; return nil }
+func (r *epubReader) OPF() ([]byte, error)   { return nil, nil }
+func (r *epubReader) Cover() ([]byte, error) { return nil, nil }
+
+var _ library.EpubReader = (*epubReader)(nil)
+
 func newTestReadAtFile(t *testing.T, data string) *ReadAtFile {
 	t.Helper()
 	stat := NewStat(testutil.NewTestFS(t), "reader", 0444)
 	raf := NewReadAtFile(stat, func() (library.EpubReader, error) {
-		return &libfake.EpubReader{Reader: bytes.NewReader([]byte(data))}, nil
+		return &epubReader{Reader: bytes.NewReader([]byte(data))}, nil
 	})
 	return &raf
 }
@@ -121,7 +134,7 @@ func TestReadAtFilePerFidIsolation(t *testing.T) {
 }
 
 func TestReadAtFileCloseReleasesReader(t *testing.T) {
-	r := &libfake.EpubReader{Reader: bytes.NewReader([]byte("data"))}
+	r := &epubReader{Reader: bytes.NewReader([]byte("data"))}
 	stat := NewStat(testutil.NewTestFS(t), "reader", 0444)
 	raf := NewReadAtFile(stat, func() (library.EpubReader, error) { return r, nil })
 
