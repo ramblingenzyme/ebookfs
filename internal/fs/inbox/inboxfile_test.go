@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library"
@@ -33,12 +34,9 @@ func TestInboxFileDoubleOpenRejected(t *testing.T) {
 	f := testutil.NewTestFS(t)
 	inf := NewInboxFile(f, libfake.Lib{}, "test.epub", 0644, nil)
 
-	fid1, fid2 := uint64(1), uint64(2)
-	if err := inf.Open(fid1, proto.Mode(0)); err != nil {
-		t.Fatalf("Open fid1: %v", err)
-	}
+	fstest.Fid(t, inf, 1).Open(proto.Mode(0))
 
-	err := inf.Open(fid2, proto.Mode(0))
+	err := inf.Open(2, proto.Mode(0))
 	if err == nil {
 		t.Error("expected error opening already-open inboxFile")
 	}
@@ -50,9 +48,7 @@ func TestInboxFileOpenWithFidZero(t *testing.T) {
 
 	// Open with fid 0, a legal fid that used to be rejected as "already open"
 	// because the check was i.fid != 0 instead of i.handle != nil.
-	if err := inf.Open(0, proto.Mode(0)); err != nil {
-		t.Fatalf("Open with fid 0: %v", err)
-	}
+	fstest.Fid(t, inf, 0).Open(proto.Mode(0))
 
 	// Second open with any fid must still fail.
 	err := inf.Open(1, proto.Mode(0))
@@ -75,10 +71,7 @@ func TestInboxFileCloseWithoutOpen(t *testing.T) {
 	f := testutil.NewTestFS(t)
 	inf := NewInboxFile(f, libfake.Lib{}, "test.epub", 0644, nil)
 
-	err := inf.Close(1)
-	if err != nil {
-		t.Errorf("Close unopened inboxFile: %v", err)
-	}
+	fstest.Fid(t, inf, 1).Close()
 }
 
 func TestInboxFileReopenAfterClose(t *testing.T) {
@@ -94,19 +87,13 @@ func TestInboxFileReopenAfterClose(t *testing.T) {
 	noop := func(b *library.Book) {}
 	inf := NewInboxFile(f, lib, "test.epub", 0644, noop)
 
-	fid := uint64(1)
-	inf.Open(fid, proto.Mode(0))
-	inf.Write(fid, 0, []byte("first"))
-	inf.Close(fid)
+	fstest.Fid(t, inf, 1).Set(proto.Mode(0), "first")
 
 	if ingestCount != 1 {
 		t.Fatalf("expected 1 ingest, got %d", ingestCount)
 	}
 
-	fid2 := uint64(2)
-	inf.Open(fid2, proto.Mode(0))
-	inf.Write(fid2, 0, []byte("second"))
-	inf.Close(fid2)
+	fstest.Fid(t, inf, 2).Set(proto.Mode(0), "second")
 
 	if ingestCount != 2 {
 		t.Errorf("expected 2 ingests, got %d", ingestCount)
@@ -134,19 +121,15 @@ func TestInboxFileCloseWithParentDeadlockRegression(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	fid := uint64(1)
-	if err := file.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
+	fid := fstest.Fid(t, file, 1)
+	fid.Open(proto.Mode(0))
+	fid.Write(0, "epub data")
 
-	if _, err := file.Write(fid, 0, []byte("epub data")); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
-
-	// This used to deadlock. Use a timeout to detect it.
+	// This used to deadlock. Use a timeout to detect it. CloseErr is the clunk
+	// that never fails the test, which is what a goroutine can call.
 	done := make(chan error, 1)
 	go func() {
-		done <- file.Close(fid)
+		done <- fid.CloseErr()
 	}()
 
 	select {
