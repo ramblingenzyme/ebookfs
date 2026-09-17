@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/fstest"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 )
 
 // The file through the 9P Write/Close cycle: the command runs and its outcome
@@ -13,9 +12,9 @@ import (
 // echo command results).
 func TestCtlFileWriteExecutes(t *testing.T) {
 	called := false
-	lib := libfake.Lib{DeleteFn: func(int64) error { called = true; return nil }}
-	reg, cmdLog := newTestCtl(t, lib)
-	cf := NewCtlFile(reg.FS(), lib, reg, cmdLog)
+	search := searchDeleter{DeleteFn: func(int64) error { called = true; return nil }}
+	reg, cmdLog := newTestCtl(t, editor{})
+	cf := NewCtlFile(reg.FS(), search, reg, cmdLog)
 
 	// Reading returns a usage hint, not command output.
 	fid := fstest.Fid(t, cf, 1)
