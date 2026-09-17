@@ -6,7 +6,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
 	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library"
 )
 
@@ -102,7 +101,7 @@ func TestBySeriesDirRemoveNilSeriesNoOp(t *testing.T) {
 	d := NewBySeriesDir(reg)
 
 	b := testutil.MakeBook(1, "No Series", "Author")
-	bd := book.NewBookDir(newTestFS(t), libfake.Lib{}, func(int64, library.Edits) error { return nil }, b)
+	bd := book.NewBookDir(newTestFS(t), contentReader{}, func(int64, library.Edits) error { return nil }, b)
 
 	d.Remove(bd) // Should not panic — early return when Series is nil
 }

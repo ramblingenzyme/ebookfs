@@ -8,7 +8,6 @@ import (
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library"
 )
 
@@ -47,7 +46,7 @@ func TestFormatStatsZeroTimes(t *testing.T) {
 
 func TestStatsFileReadsLiveStats(t *testing.T) {
 	calls := 0
-	lib := libfake.Lib{
+	lib := statsReader{
 		StatsFn: func() (*library.Stats, error) {
 			calls++
 			return &library.Stats{Books: calls}, nil
@@ -66,7 +65,7 @@ func TestStatsFileReadsLiveStats(t *testing.T) {
 }
 
 func TestStatsFileStatReportsLength(t *testing.T) {
-	lib := libfake.Lib{
+	lib := statsReader{
 		StatsFn: func() (*library.Stats, error) {
 			return &library.Stats{Books: 7}, nil
 		},
@@ -77,7 +76,7 @@ func TestStatsFileStatReportsLength(t *testing.T) {
 }
 
 func TestStatsFileOpenPropagatesError(t *testing.T) {
-	lib := libfake.Lib{
+	lib := statsReader{
 		StatsFn: func() (*library.Stats, error) {
 			return nil, testutil.ErrTest
 		},

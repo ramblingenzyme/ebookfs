@@ -5,12 +5,11 @@ import (
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/ramblingenzyme/ebookfs/internal/fstest"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 )
 
 func TestReaderDirAddIncludedStatus(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := NewReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
+	d := NewReaderDir(reg, readerExporter{StatusList: []string{"unread"}})
 
 	b := makeBook(1, "To Read", "Author1")
 	b.EpubPath = "To Read.epub"
@@ -22,7 +21,7 @@ func TestReaderDirAddIncludedStatus(t *testing.T) {
 
 func TestReaderDirSkipExcludedStatus(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := NewReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
+	d := NewReaderDir(reg, readerExporter{StatusList: []string{"unread"}})
 
 	b := makeBook(1, "Finished", "Author2")
 	b.Meta.Status = "read"
@@ -33,7 +32,7 @@ func TestReaderDirSkipExcludedStatus(t *testing.T) {
 
 func TestReaderDirRemoveLastPrunesDir(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := NewReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
+	d := NewReaderDir(reg, readerExporter{StatusList: []string{"unread"}})
 
 	b := makeBook(1, "Only", "Author3")
 	b.EpubPath = "Only.epub"
@@ -46,7 +45,7 @@ func TestReaderDirRemoveLastPrunesDir(t *testing.T) {
 
 func TestReaderDirCoAuthorSingleDir(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := NewReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
+	d := NewReaderDir(reg, readerExporter{StatusList: []string{"unread"}})
 
 	b := makeBook(1, "Joint", "Alice", "Bob")
 	b.EpubPath = "Joint.epub"
@@ -59,7 +58,7 @@ func TestReaderDirCoAuthorSingleDir(t *testing.T) {
 
 func TestReaderDirCoAuthorRemove(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := NewReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
+	d := NewReaderDir(reg, readerExporter{StatusList: []string{"unread"}})
 
 	b := makeBook(1, "Joint", "Alice", "Bob")
 	b.EpubPath = "Joint.epub"
@@ -72,7 +71,7 @@ func TestReaderDirCoAuthorRemove(t *testing.T) {
 
 func TestReaderDirMultipleBooksSameAuthor(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := NewReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
+	d := NewReaderDir(reg, readerExporter{StatusList: []string{"unread"}})
 
 	b1 := makeBook(1, "Book A", "SameAuthor")
 	b1.EpubPath = "A.epub"
@@ -90,7 +89,7 @@ func TestReaderDirMultipleBooksSameAuthor(t *testing.T) {
 
 func TestReaderDirWithConvertEnabled(t *testing.T) {
 	reg := newTestRegistry(t)
-	d := NewReaderDir(reg, libfake.Exporter{StatusList: []string{"unread"}})
+	d := NewReaderDir(reg, readerExporter{StatusList: []string{"unread"}})
 
 	b := makeBook(1, "Convert Me", "AuthorX")
 	b.EpubPath = "Convert.epub"
