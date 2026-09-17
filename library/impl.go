@@ -19,7 +19,17 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/internal/store"
 )
 
-type libraryImpl struct {
+// Library is the backend facade: the store, the index, and the locks that keep
+// them agreeing. Construct it with Open.
+//
+// Concurrency contract: methods are safe for concurrent use. Search returns
+// *Book values that are immutable snapshots — the library never mutates a
+// Book after returning it. Every other operation addresses a book by id and
+// resolves its current state fresh, so callers never pass stale snapshots back
+// in: Content opens the book's live on-disk file, and mutations (Edit, Delete)
+// run as an atomic read-modify-write per book under a per-book lock, so callers
+// cannot revert other callers' changes.
+type Library struct {
 	store     *store.Store
 	index     *index.Index
 	inboxTemp string
@@ -41,16 +51,16 @@ type libraryImpl struct {
 	// cannot both pass the Exists check before either lays the book down.
 	ingestMu sync.Mutex
 
-	// mutateMu excludes a Reindex from every other mutation. Reindex moves book
-	// directories to their canonical paths and rebuilds the index wholesale,
-	// neither of which addresses a single book, so the per-book lock cannot
-	// cover it: a concurrent Edit renames the directory the move is reading.
-	// Held for reading by the per-book mutations and by ingest, for writing by
-	// Reindex. Always taken before bookMu and ingestMu.
+	// mutateMu excludes a runtime Reindex from every other mutation. Reindex
+	// moves book directories to their canonical paths and rebuilds the index
+	// wholesale, neither of which addresses a single book, so the per-book lock
+	// cannot cover it: a concurrent Edit renames the directory the move is
+	// reading. Held for reading by the per-book mutations and by ingest, for
+	// writing by Reindex. Always taken before bookMu and ingestMu.
 	mutateMu sync.RWMutex
 }
 
-func (l *libraryImpl) Close() error {
+func (l *Library) Close() error {
 	l.closerMu.Lock()
 	for _, c := range l.closers {
 		if err := c.Close(); err != nil {
@@ -61,7 +71,7 @@ func (l *libraryImpl) Close() error {
 	return l.index.Close()
 }
 
-func (l *libraryImpl) Search(q Query) ([]*Book, error) {
+func (l *Library) Search(q Query) ([]*Book, error) {
 	books, err := l.index.Search(q)
 	if err != nil {
 		return nil, err
@@ -74,14 +84,14 @@ func (l *libraryImpl) Search(q Query) ([]*Book, error) {
 }
 
 // Stats returns aggregate library statistics.
-func (l *libraryImpl) Stats() (*Stats, error) {
+func (l *Library) Stats() (*Stats, error) {
 	return l.index.Stats()
 }
 
 // get returns the current state of book id from the index, hydrated with its
 // absolute epub path. Mutations fetch their base through it under the per-book
 // lock, so they always operate on the book's authoritative current state.
-func (l *libraryImpl) get(id int64) (*book.Book, error) {
+func (l *Library) get(id int64) (*book.Book, error) {
 	b, err := l.index.Get(id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("book %d: %w", id, ErrBookNotFound)
@@ -94,7 +104,7 @@ func (l *libraryImpl) get(id int64) (*book.Book, error) {
 
 // Content returns an open handle to the book's epub content. The caller must
 // close it.
-func (l *libraryImpl) Content(id int64) (EpubReader, error) {
+func (l *Library) Content(id int64) (EpubReader, error) {
 	b, err := l.get(id)
 	if err != nil {
 		return nil, err
@@ -107,7 +117,7 @@ func (l *libraryImpl) Content(id int64) (EpubReader, error) {
 // under the per-book lock — an atomic read-modify-write, so concurrent callers
 // cannot revert each other's changes by editing from stale snapshots. If the
 // title or authors change, the book directory is moved.
-func (l *libraryImpl) Edit(id int64, e Edits) (*Book, error) {
+func (l *Library) Edit(id int64, e Edits) (*Book, error) {
 	l.mutateMu.RLock()
 	defer l.mutateMu.RUnlock()
 
@@ -157,7 +167,7 @@ func (l *libraryImpl) Edit(id int64, e Edits) (*Book, error) {
 
 // Delete removes the book with the given id from the store and the index,
 // resolving its current location under the per-book lock.
-func (l *libraryImpl) Delete(id int64) error {
+func (l *Library) Delete(id int64) error {
 	l.mutateMu.RLock()
 	defer l.mutateMu.RUnlock()
 

@@ -157,7 +157,7 @@ func TestLibraryImplSearchHydratesEpubPath(t *testing.T) {
 	if filepath.IsAbs(got[0].EpubPath()) {
 		t.Errorf("EpubPath = %q, want a relative path", got[0].EpubPath())
 	}
-	absPath := lib.(*libraryImpl).store.AbsPath(got[0].EpubPath())
+	absPath := lib.store.AbsPath(got[0].EpubPath())
 	if _, err := os.Stat(absPath); err != nil {
 		t.Errorf("EpubPath %q does not resolve: %v", got[0].EpubPath(), err)
 	}

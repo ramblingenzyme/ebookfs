@@ -11,8 +11,16 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library"
 )
 
+// SearchDeleter is the half of the library this package uses. Edits are absent
+// because they go through the registry instead, so the 9P tree is re-rendered
+// with them.
+type SearchDeleter interface {
+	Search(q library.Query) ([]*library.Book, error)
+	Delete(id int64) error
+}
+
 // execute parses a command line, dispatches it, and returns the result string.
-func execute(cmd string, lib library.Library, reg *registry.BookRegistry, cmdLog *CommandLog) string {
+func execute(cmd string, lib SearchDeleter, reg *registry.BookRegistry, cmdLog *CommandLog) string {
 	name, args, err := parseCommand(cmd)
 	if err != nil {
 		r := fmt.Sprintf("error: %v", err)
@@ -25,7 +33,7 @@ func execute(cmd string, lib library.Library, reg *registry.BookRegistry, cmdLog
 	return r
 }
 
-func dispatch(name string, args []string, lib library.Library, reg *registry.BookRegistry) string {
+func dispatch(name string, args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
 	switch name {
 	case "add-tag":
 		return addTag(args, lib, reg)
@@ -50,7 +58,7 @@ func dispatch(name string, args []string, lib library.Library, reg *registry.Boo
 
 // --- id-spec commands ---
 
-func addTag(args []string, lib library.Library, reg *registry.BookRegistry) string {
+func addTag(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
 	if len(args) != 2 {
 		return "usage: add-tag <tag> <id-spec>"
 	}
@@ -70,7 +78,7 @@ func addTag(args []string, lib library.Library, reg *registry.BookRegistry) stri
 	})
 }
 
-func removeTag(args []string, lib library.Library, reg *registry.BookRegistry) string {
+func removeTag(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
 	if len(args) != 2 {
 		return "usage: remove-tag <tag> <id-spec>"
 	}
@@ -92,7 +100,7 @@ func removeTag(args []string, lib library.Library, reg *registry.BookRegistry) s
 	})
 }
 
-func setStatus(args []string, lib library.Library, reg *registry.BookRegistry) string {
+func setStatus(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
 	if len(args) != 2 {
 		return "usage: set-status <status> <id-spec>"
 	}
@@ -111,7 +119,7 @@ func setStatus(args []string, lib library.Library, reg *registry.BookRegistry) s
 	})
 }
 
-func setRating(args []string, lib library.Library, reg *registry.BookRegistry) string {
+func setRating(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
 	if len(args) != 2 {
 		return "usage: set-rating <rating> <id-spec>"
 	}
@@ -137,7 +145,7 @@ func setRating(args []string, lib library.Library, reg *registry.BookRegistry) s
 
 // --- single-book commands ---
 
-func deleteBook(args []string, lib library.Library, reg *registry.BookRegistry) string {
+func deleteBook(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
 	if len(args) != 1 {
 		return "usage: delete <id>"
 	}
@@ -159,7 +167,7 @@ func deleteBook(args []string, lib library.Library, reg *registry.BookRegistry) 
 // book already has new, old is simply dropped rather than duplicated — so
 // renaming a tag onto an existing one merges the two. There is no separate
 // merge command: this is the merge.
-func renameTag(args []string, lib library.Library, reg *registry.BookRegistry) string {
+func renameTag(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
 	if len(args) != 2 {
 		return "usage: rename-tag <old> <new>"
 	}
@@ -198,7 +206,7 @@ func renameTag(args []string, lib library.Library, reg *registry.BookRegistry) s
 	return formatResult("renamed", affected, 0, errs)
 }
 
-func renameAuthor(args []string, lib library.Library, reg *registry.BookRegistry) string {
+func renameAuthor(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
 	if len(args) != 2 {
 		return "usage: rename-author <old> <new>"
 	}
@@ -247,7 +255,7 @@ func renameAuthor(args []string, lib library.Library, reg *registry.BookRegistry
 	return formatResult("renamed", affected, 0, errs)
 }
 
-func renameSeries(args []string, lib library.Library, reg *registry.BookRegistry) string {
+func renameSeries(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
 	if len(args) != 2 {
 		return "usage: rename-series <old> <new>"
 	}
@@ -302,7 +310,7 @@ func dedupeAuthors(authors []library.Author) []library.Author {
 // down. When the query is a bare id list, an id naming no book is reported (so
 // a typo isn't counted as success) and a duplicated id is collapsed to a single
 // visit; otherwise every returned book is visited.
-func editSelection(query library.Query, lib library.Library, reg *registry.BookRegistry, editFn func(*library.Book) *library.Edits) string {
+func editSelection(query library.Query, lib SearchDeleter, reg *registry.BookRegistry, editFn func(*library.Book) *library.Edits) string {
 	books, err := lib.Search(query)
 	if err != nil {
 		return fmt.Sprintf("error: query failed: %v", err)

@@ -13,7 +13,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/internal/kepub"
 )
 
-func newExporter(cfg ReaderConfig, lib *libraryImpl) (Exporter, error) {
+func newExporter(cfg ReaderConfig, lib *Library) (Exporter, error) {
 	if cfg.Convert {
 		if err := os.MkdirAll(cfg.CacheDir, 0755); err != nil {
 			return nil, fmt.Errorf("creating kepub cache dir: %w", err)
@@ -70,7 +70,7 @@ func (k *kepubCache) Filename(b *Book) string {
 
 type epubExporter struct {
 	readerPolicy
-	lib *libraryImpl
+	lib *Library
 }
 
 func (e epubExporter) Open(b *Book) (EpubReader, error) {
@@ -84,7 +84,7 @@ func (e epubExporter) Size(b *Book) (int64, bool) {
 func (e epubExporter) Warm(*Book)              {}
 func (e epubExporter) Filename(b *Book) string { return b.Filename() }
 
-func (l *libraryImpl) Exporter(cfg ReaderConfig) (Exporter, error) {
+func (l *Library) Exporter(cfg ReaderConfig) (Exporter, error) {
 	e, err := newExporter(cfg, l)
 	if err != nil {
 		return nil, err

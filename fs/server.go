@@ -45,9 +45,19 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return err
 }
 
+// Library is what the frontend as a whole needs of the backend: the union of
+// what its parts declare, plus the one Search the root listing does. Nothing
+// here names *library.Library, so a test drives the tree with a fake.
+type Library interface {
+	registry.Editor
+	ctl.SearchDeleter
+	inbox.Ingester
+	views.StatsReader
+}
+
 // SetupServer wires the FS, registry, and views without starting the 9P
 // listener, so the wiring can be tested without blocking.
-func SetupServer(lib library.Library, exp library.Exporter, searchTTL time.Duration, searchMaxHandles int) (*Server, error) {
+func SetupServer(lib Library, exp library.Exporter, searchTTL time.Duration, searchMaxHandles int) (*Server, error) {
 	ebookfs, root := fs.NewFS("glenda", "glenda", 0555, fs.IgnorePermissions())
 	reg := registry.NewBookRegistry(ebookfs, lib)
 	ebookfs.CreateFile = vfile.DispatchCreate

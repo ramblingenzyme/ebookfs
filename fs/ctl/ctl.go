@@ -6,7 +6,6 @@ import (
 	"github.com/knusbaum/go9p/fs"
 	"github.com/ramblingenzyme/ebookfs/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/fs/vfile"
-	"github.com/ramblingenzyme/ebookfs/library"
 )
 
 // ctlReadHint is what reading the ctl file returns. ctl is a command sink; a
@@ -20,13 +19,13 @@ const ctlReadHint = "write a command line here to run it; read log for results a
 type CtlFile struct {
 	fs.BaseFile
 	writes vfile.WriteBuffer
-	lib    library.Library
+	lib    SearchDeleter
 	reg    *registry.BookRegistry
 	cmdLog *CommandLog
 }
 
 // NewCtlFile creates the root ctl file.
-func NewCtlFile(f *fs.FS, lib library.Library, reg *registry.BookRegistry, cmdLog *CommandLog) *CtlFile {
+func NewCtlFile(f *fs.FS, lib SearchDeleter, reg *registry.BookRegistry, cmdLog *CommandLog) *CtlFile {
 	return &CtlFile{
 		BaseFile: *fs.NewBaseFile(vfile.NewStat(f, "ctl", 0644)),
 		writes:   vfile.NewWriteBuffer(4096),

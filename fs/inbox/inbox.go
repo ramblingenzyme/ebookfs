@@ -15,17 +15,23 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library"
 )
 
+// Ingester is the half of the library this package uses: an upload is a staged
+// handle the client writes into.
+type Ingester interface {
+	CreateIngest() (library.IngestHandle, error)
+}
+
 // newStat is the package-local shorthand for vfile.NewStat, the single
 // definition of the glenda/glenda owner convention every node uses.
 var newStat = vfile.NewStat
 
 type InboxDir struct {
 	fs.StaticDir
-	lib      library.Library
+	lib      Ingester
 	onIngest func(*library.Book)
 }
 
-func NewInboxDir(f *fs.FS, lib library.Library, onIngest func(*library.Book)) *InboxDir {
+func NewInboxDir(f *fs.FS, lib Ingester, onIngest func(*library.Book)) *InboxDir {
 	return &InboxDir{
 		StaticDir: *fs.NewStaticDir(newStat(f, "inbox", 0755|proto.DMDIR)),
 		lib:       lib,
@@ -52,11 +58,11 @@ type InboxFile struct {
 	fs.BaseFile
 	fid      uint64
 	handle   library.IngestHandle
-	lib      library.Library
+	lib      Ingester
 	onIngest func(*library.Book)
 }
 
-func NewInboxFile(f *fs.FS, lib library.Library, name string, perm uint32, onIngest func(*library.Book)) *InboxFile {
+func NewInboxFile(f *fs.FS, lib Ingester, name string, perm uint32, onIngest func(*library.Book)) *InboxFile {
 	return &InboxFile{
 		BaseFile: *fs.NewBaseFile(newStat(f, name, perm)),
 		lib:      lib,

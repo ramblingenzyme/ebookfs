@@ -20,7 +20,7 @@ type opfFile struct {
 	book func() *library.Book
 }
 
-func newOPFFile(stat *proto.Stat, lib library.Library, book func() *library.Book) *opfFile {
+func newOPFFile(stat *proto.Stat, lib ContentReader, book func() *library.Book) *opfFile {
 	return &opfFile{
 		SnapshotFile: vfile.NewSnapshotFile(stat, func() ([]byte, error) {
 			if lib == nil {
@@ -59,7 +59,7 @@ type coverFile struct {
 	writes vfile.WriteBuffer
 }
 
-func newCoverFile(stat *proto.Stat, lib library.Library, edit func(int64, library.Edits) error, book func() *library.Book) *coverFile {
+func newCoverFile(stat *proto.Stat, lib ContentReader, edit func(int64, library.Edits) error, book func() *library.Book) *coverFile {
 	return &coverFile{
 		SnapshotFile: vfile.NewSnapshotFile(stat, func() ([]byte, error) {
 			if lib == nil {
@@ -113,7 +113,7 @@ type epubFile struct {
 	book func() *library.Book
 }
 
-func newEpubFile(stat *proto.Stat, lib library.Library, book func() *library.Book) *epubFile {
+func newEpubFile(stat *proto.Stat, lib ContentReader, book func() *library.Book) *epubFile {
 	return &epubFile{
 		ReadAtFile: vfile.NewReadAtFile(stat, func() (library.EpubReader, error) {
 			if lib == nil {

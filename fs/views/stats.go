@@ -11,16 +11,22 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library"
 )
 
+// StatsReader is the half of the library this package uses: the stats file is
+// one aggregate read.
+type StatsReader interface {
+	Stats() (*library.Stats, error)
+}
+
 // statsFile is a read-only root file reporting aggregate library statistics.
 // It has no state of its own — every Open (and Stat, for an accurate length)
 // re-derives content from lib.Stats, a live SQL aggregate over the index, so
 // the file is always current.
 type statsFile struct {
 	vfile.SnapshotFile
-	lib library.Library
+	lib StatsReader
 }
 
-func NewStatsFile(f *fs.FS, lib library.Library) *statsFile {
+func NewStatsFile(f *fs.FS, lib StatsReader) *statsFile {
 	sf := &statsFile{lib: lib}
 	sf.SnapshotFile = vfile.NewSnapshotFile(newStat(f, "stats", 0444), sf.content)
 	return sf

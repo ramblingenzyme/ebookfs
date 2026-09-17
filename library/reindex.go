@@ -68,7 +68,7 @@ type storeScan struct {
 // It also returns the scan it built, so a reindex triggered by that verdict can
 // reuse it. The scan is nil when the walk itself failed; reindex then walks and
 // stats everything, and surfaces the walk error rather than swallowing it here.
-func (l *libraryImpl) storeDrifted() (*storeScan, bool) {
+func (l *Library) storeDrifted() (*storeScan, bool) {
 	entries, err := l.store.Walk()
 	if err != nil {
 		slog.Warn("reindex: could not walk store, forcing rebuild", "error", err)
@@ -112,7 +112,7 @@ func (l *libraryImpl) storeDrifted() (*storeScan, bool) {
 // Open rebuilds through reindex directly rather than through here: nothing else
 // holds a reference to the library yet, and mutateMu is there for the callers
 // that do.
-func (l *libraryImpl) Reindex() error {
+func (l *Library) Reindex() error {
 	l.mutateMu.Lock()
 	defer l.mutateMu.Unlock()
 	return l.reindex(nil)
@@ -123,7 +123,7 @@ func (l *libraryImpl) Reindex() error {
 // startup path that most often reaches here, where the scan happened moments ago.
 // Without one, the store is walked here and the scan carries no observations, so
 // every book is stat'd during the scan below as it always was.
-func (l *libraryImpl) reindex(scan *storeScan) error {
+func (l *Library) reindex(scan *storeScan) error {
 	if scan == nil {
 		entries, err := l.store.Walk()
 		if err != nil {
@@ -155,7 +155,7 @@ func (l *libraryImpl) reindex(scan *storeScan) error {
 // scanEntries reads every entry into a scanState on a bounded worker pool: each
 // is independent disk and CPU work, and reindex blocks startup, so a large
 // library would otherwise pay for every epub sequentially.
-func (l *libraryImpl) scanEntries(scan *storeScan) *scanState {
+func (l *Library) scanEntries(scan *storeScan) *scanState {
 	s := &scanState{
 		indexed:   make([]index.BookPath, 0, len(scan.entries)),
 		unindexed: make(map[string]drift.PathInfo),
@@ -180,7 +180,7 @@ func (l *libraryImpl) scanEntries(scan *storeScan) *scanState {
 // scanEntry records one book directory in s: indexed when its sidecar and epub
 // both read, skipped with whatever file state was observed when they don't.
 // Either way it reserves the id the directory holds.
-func (l *libraryImpl) scanEntry(s *scanState, known map[string]drift.PathInfo, e book.Location) {
+func (l *Library) scanEntry(s *scanState, known map[string]drift.PathInfo, e book.Location) {
 	// One stat up front serves every branch below, indexed or not: a directory
 	// this rebuild can't index still needs its state recorded, or drift
 	// detection cannot tell it from one that appeared on disk unaccounted for.
@@ -265,7 +265,7 @@ func (s *scanState) checkDuplicateIDs() error {
 // old location — the index will still track them correctly. This mutates the
 // *model.Book values indexed holds, so Rebuild writes each book's post-move
 // location against the file state the scan captured.
-func (l *libraryImpl) moveToCanonical(indexed []index.BookPath) {
+func (l *Library) moveToCanonical(indexed []index.BookPath) {
 	for _, bp := range indexed {
 		b := bp.Book
 		canonical := l.store.Layout(b.Authors, b.Title, b.Meta.ID)
@@ -284,7 +284,7 @@ func (l *libraryImpl) moveToCanonical(indexed []index.BookPath) {
 // record of failure rather than a usable reading, so it is re-stat'd instead of
 // being handed back as a successful one — which would index the book against
 // file state that was never actually seen.
-func (l *libraryImpl) pathInfo(known map[string]drift.PathInfo, loc book.Location) (drift.PathInfo, error) {
+func (l *Library) pathInfo(known map[string]drift.PathInfo, loc book.Location) (drift.PathInfo, error) {
 	if pi, ok := known[loc.EpubPath]; ok && !pi.IsUnobserved() {
 		return pi, nil
 	}
@@ -293,7 +293,7 @@ func (l *libraryImpl) pathInfo(known map[string]drift.PathInfo, loc book.Locatio
 
 // needsReindex reports whether the index requires a rebuild — true when there
 // are pending operations or the schema version is stale.
-func (l *libraryImpl) needsReindex() bool {
+func (l *Library) needsReindex() bool {
 	needs, err := l.index.NeedsReindex()
 	if err != nil {
 		slog.Warn("reindex: could not check index state, forcing rebuild", "error", err)

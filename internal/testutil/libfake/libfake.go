@@ -1,6 +1,6 @@
 // Package libfake provides test doubles for the library facade interfaces
-// (library.Library, IngestHandle, EpubReader, Exporter), shared by the fs
-// frontend package tests.
+// (the library-facing interfaces the fs packages declare, plus IngestHandle,
+// EpubReader and Exporter), shared by the fs frontend package tests.
 //
 // It is kept apart from internal/testutil because it imports library: several
 // of library's own internal packages have white-box tests that import
@@ -60,9 +60,11 @@ func NewEpubReader(data []byte, opfFn, coverFn func() ([]byte, error)) *EpubRead
 	}
 }
 
-// Lib is a fake library.Library whose behavior is injected per method; a nil
-// hook yields a benign zero result (except Edit and Content, which error to
-// catch unstubbed edit/read paths).
+// Lib is a fake backend covering every narrow interface the fs packages
+// declare, with behavior injected per method; a nil hook yields a benign zero
+// result (except Edit and Content, which error to catch unstubbed edit/read
+// paths). The interfaces it has to satisfy are checked where it is passed, so
+// it asserts none of them here.
 type Lib struct {
 	EditFn         func(int64, library.Edits) (*library.Book, error)
 	IngestFn       func(string) (*library.Book, error)
@@ -70,14 +72,8 @@ type Lib struct {
 	ContentFn      func(int64) (library.EpubReader, error)
 	SearchFn       func(library.Query) ([]*library.Book, error)
 	StatsFn        func() (*library.Stats, error)
-	ReindexFn      func() error
 	DeleteFn       func(int64) error
 }
-
-var _ library.Library = (Lib{})
-
-func (l Lib) Close() error                                              { return nil }
-func (l Lib) Exporter(_ library.ReaderConfig) (library.Exporter, error) { return nil, nil }
 
 func (l Lib) Edit(id int64, e library.Edits) (*library.Book, error) {
 	if l.EditFn != nil {
@@ -112,13 +108,6 @@ func (l Lib) Stats() (*library.Stats, error) {
 		return l.StatsFn()
 	}
 	return &library.Stats{}, nil
-}
-
-func (l Lib) Reindex() error {
-	if l.ReindexFn != nil {
-		return l.ReindexFn()
-	}
-	return nil
 }
 
 func (l Lib) Delete(id int64) error {

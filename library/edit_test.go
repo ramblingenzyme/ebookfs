@@ -25,7 +25,7 @@ func TestEditSelfHealsLegacyUnsanitizedFilename(t *testing.T) {
 	// Simulate legacy drift: rename the on-disk epub to an unsanitized name
 	// that Layout() would no longer produce, then reindex so the index's
 	// stored EpubFilename reflects the manual rename.
-	root := lib.(*libraryImpl).store.Root()
+	root := lib.store.Root()
 	dir := filepath.Join(root, filepath.Dir(book.EpubPath()))
 	absEpub := filepath.Join(root, book.EpubPath())
 	legacyName := "Some Title: With Colon - Alice.epub"

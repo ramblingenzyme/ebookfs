@@ -16,9 +16,9 @@ import (
 // will discover, without going through the library's ingest path — simulating
 // a book added directly to the store on disk. Walk only checks for meta.toml's
 // presence and an *.epub file, so their contents don't need to be valid.
-func writeManualBookDir(t *testing.T, lib Library, libraryPath string) {
+func writeManualBookDir(t *testing.T, lib *Library, libraryPath string) {
 	t.Helper()
-	l := lib.(*libraryImpl)
+	l := lib
 	dir := filepath.Dir(l.store.AbsPath(filepath.Join(libraryPath, "meta.toml")))
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -39,25 +39,25 @@ func writeManualBookDir(t *testing.T, lib Library, libraryPath string) {
 func TestStoreDrifted(t *testing.T) {
 	tests := []struct {
 		name   string
-		change func(t *testing.T, lib Library, book *Book)
+		change func(t *testing.T, lib *Library, book *Book)
 		want   bool
 	}{
 		{
 			"nothing changed",
-			func(*testing.T, Library, *Book) {},
+			func(*testing.T, *Library, *Book) {},
 			false,
 		},
 		{
 			"book directory added by hand",
-			func(t *testing.T, lib Library, _ *Book) {
+			func(t *testing.T, lib *Library, _ *Book) {
 				writeManualBookDir(t, lib, "Manual/Added Book (999)")
 			},
 			true,
 		},
 		{
 			"book directory removed by hand",
-			func(t *testing.T, lib Library, book *Book) {
-				dir := filepath.Join(lib.(*libraryImpl).store.Root(), filepath.Dir(book.EpubPath()))
+			func(t *testing.T, lib *Library, book *Book) {
+				dir := filepath.Join(lib.store.Root(), filepath.Dir(book.EpubPath()))
 				if err := os.RemoveAll(dir); err != nil {
 					t.Fatalf("remove book dir: %v", err)
 				}
@@ -66,8 +66,8 @@ func TestStoreDrifted(t *testing.T) {
 		},
 		{
 			"epub swapped for a different one",
-			func(t *testing.T, lib Library, book *Book) {
-				absEpub := lib.(*libraryImpl).store.AbsPath(book.EpubPath())
+			func(t *testing.T, lib *Library, book *Book) {
+				absEpub := lib.store.AbsPath(book.EpubPath())
 				swapped := buildTestEpub(t, "A Completely Different And Much Longer Title")
 				if err := os.WriteFile(absEpub, swapped, 0644); err != nil {
 					t.Fatalf("swap epub: %v", err)
@@ -81,8 +81,8 @@ func TestStoreDrifted(t *testing.T) {
 			// explicitly because a fast write can land in the same clock tick
 			// as the recorded one on a coarse-clock filesystem.
 			"epub swapped for one of the same size",
-			func(t *testing.T, lib Library, book *Book) {
-				absEpub := lib.(*libraryImpl).store.AbsPath(book.EpubPath())
+			func(t *testing.T, lib *Library, book *Book) {
+				absEpub := lib.store.AbsPath(book.EpubPath())
 				orig, err := os.ReadFile(absEpub)
 				if err != nil {
 					t.Fatalf("read epub: %v", err)
@@ -103,8 +103,8 @@ func TestStoreDrifted(t *testing.T) {
 			// writes in one tick, so here the mtime is pinned back to its
 			// recorded value and only the length gives the change away.
 			"epub resized under an unchanged mtime",
-			func(t *testing.T, lib Library, book *Book) {
-				absEpub := lib.(*libraryImpl).store.AbsPath(book.EpubPath())
+			func(t *testing.T, lib *Library, book *Book) {
+				absEpub := lib.store.AbsPath(book.EpubPath())
 				fi, err := os.Stat(absEpub)
 				if err != nil {
 					t.Fatalf("stat epub: %v", err)
@@ -125,8 +125,8 @@ func TestStoreDrifted(t *testing.T) {
 			// no longer exists, failing every read with ENOENT until someone
 			// forces a reindex by hand.
 			"epub renamed in place",
-			func(t *testing.T, lib Library, book *Book) {
-				absEpub := lib.(*libraryImpl).store.AbsPath(book.EpubPath())
+			func(t *testing.T, lib *Library, book *Book) {
+				absEpub := lib.store.AbsPath(book.EpubPath())
 				renamed := filepath.Join(filepath.Dir(absEpub), "hand-renamed.epub")
 				if err := os.Rename(absEpub, renamed); err != nil {
 					t.Fatalf("rename epub: %v", err)
@@ -368,7 +368,7 @@ func TestStoreDriftedDetectsManualMetaEdit(t *testing.T) {
 	lib := openTestLibrary(t)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Book"))
 
-	metaPath := metaPathOf(book, lib.(*libraryImpl).store.Root())
+	metaPath := metaPathOf(book, lib.store.Root())
 	// Write a modified meta.toml to simulate hand-editing the sidecar.
 	edited := fmt.Sprintf("id = %d\nstatus = \"read\"\n", book.ID())
 	if err := os.WriteFile(metaPath, []byte(edited), 0644); err != nil {

@@ -49,35 +49,6 @@ var ErrDuplicate = errors.New("book already in library")
 // existing file.
 var ErrDuplicateOnDisk = errors.New("book already on disk but not indexed")
 
-// Library defines the public API for filesystem and index operations on the
-// book collection. The concrete implementation is unexported; construct via New.
-//
-// Concurrency contract: methods are safe for concurrent use. Search returns
-// *Book values that are immutable snapshots — the library never mutates a
-// Book after returning it. Every other operation addresses a book by id and
-// resolves its current state fresh, so callers never pass stale snapshots back
-// in: Content opens the book's live on-disk file, and mutations (Edit, Delete)
-// run as an atomic read-modify-write per book under a per-book lock, so callers
-// cannot revert other callers' changes.
-type Library interface {
-	Close() error
-	CreateIngest() (IngestHandle, error)
-	// Exporter creates a view of the library for export (reader/ view). Any
-	// resources it holds are released by Library.Close — the caller has no
-	// teardown to perform, which is why Exporter has no Close method.
-	Exporter(ReaderConfig) (Exporter, error)
-	Search(Query) ([]*Book, error)
-	Stats() (*Stats, error)
-	Reindex() error
-	// Content returns an open handle to the book's epub content. The caller
-	// must close it. The handle reflects the book at the time of the call;
-	// after a concurrent Edit, call Content again to read updated content.
-	// The returned reader is non-nil iff err is nil.
-	Content(id int64) (EpubReader, error)
-	Edit(id int64, e Edits) (*Book, error)
-	Delete(id int64) error
-}
-
 // Exporter produces the rsync-export rendition of a book for the reader/ view.
 // It is the single swap point between serving the original epub and a converted
 // kepub: the Library returns the appropriate implementation based on config.
@@ -100,7 +71,9 @@ type Exporter interface {
 	Includes(*Book) bool      // whether the book appears in the reader view
 }
 
-func Open(cfg Config, forceReindex bool) (Library, error) {
+// Open opens the library rooted at cfg.Root, rebuilding the index from the
+// store when it is missing, stale, or forceReindex is set.
+func Open(cfg Config, forceReindex bool) (*Library, error) {
 	if err := os.MkdirAll(cfg.Root, 0755); err != nil {
 		return nil, fmt.Errorf("creating library root: %w", err)
 	}
@@ -118,7 +91,7 @@ func Open(cfg Config, forceReindex bool) (Library, error) {
 	if err != nil {
 		return nil, err
 	}
-	lib := &libraryImpl{
+	lib := &Library{
 		store:     store.New(cfg.Root, cfg.InboxTemp),
 		index:     idx,
 		inboxTemp: cfg.InboxTemp,

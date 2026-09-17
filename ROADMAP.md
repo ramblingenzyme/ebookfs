@@ -128,9 +128,11 @@ edit, each with a `TODO` at the site in `library/internal/epub/edit.go`:
 
 Refactor `library/` into a standalone Go module with well-defined extension points so third-party code can implement custom frontends, exporters, and import pipelines without forking the project.
 
-### 1. Interface Segregation
+### 1. Interface Segregation — done, on the consumer side
 
-Split the single `Library` interface into focused sub-interfaces embedded into a `Library` composite: `BookReader`, `BookIngester`, `BookMutator`, `ExporterSource`, `BookLifecycle`, and `Subscribable`. Every consumer takes only what it needs — `fs/book/file_book.go` accepts `BookReader` (read-only), `fs/inbox/inbox.go` accepts `BookIngester` (write-only), `BookRegistry` accepts `BookMutator` (edit/delete). The composite `Library` satisfies all and is used by the composition root.
+Done before 1.0, the other way round from the plan recorded here. `library.Library` is a concrete struct, and each frontend package declares the interface it uses: `book.ContentReader` (Content), `registry.Editor` (Edit, plus the ContentReader it hands down), `inbox.Ingester` (CreateIngest), `views.StatsReader` (Stats), `ctl.SearchDeleter` (Search, Delete). `fs.Library` embeds them for the composition root, and is the only one of the five that carries that name.
+
+The library defines none of them, so adding a method stays additive and no sub-interface has to be frozen. A third-party frontend declares its own the same way.
 
 ### 2. Exporter Registry
 
@@ -200,7 +202,7 @@ Currently `library/` lives inside the `ebookfs` Go module. For third-party front
 
 Additive library-surface changes first, then internal frontend migrations.
 
-1. Split `Library` into sub-interfaces.
+1. ~~Split `Library` into sub-interfaces.~~ Done pre-1.0; see §1.
 2. Add exporter registry + replace `Convert` config field.
 3. Add ingest hooks + `OpenOption`.
 4. Add search, count, list methods + extended filter fields.
@@ -209,10 +211,8 @@ Additive library-surface changes first, then internal frontend migrations.
 7. Add metadata handler mechanism.
 8. Decide module extraction approach and split `go.mod`.
 9. Migrate `fs/registry/` to subscriber pattern.
-10. Migrate `fs/book/` constructors to `BookReader`.
-11. Migrate `fs/inbox/` to `BookIngester`.
 
-Steps 1-7 are purely additive to the library surface and independently releasable. Steps 9-11 are internal frontend migrations with no visible change to consumers.
+Steps 2-7 are purely additive to the library surface and independently releasable. Step 9 is an internal frontend migration with no visible change to consumers.
 
 ---
 

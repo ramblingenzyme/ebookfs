@@ -38,7 +38,7 @@ func TestIngestSameTitleDifferentAuthors(t *testing.T) {
 // cannot see it. Ingesting it again would leave two copies on disk with only
 // one of them indexed; the store guard is what refuses.
 func TestIngestRejectsUnindexedBookOnDisk(t *testing.T) {
-	lib := openTestLibrary(t).(*libraryImpl)
+	lib := openTestLibrary(t)
 	data := buildTestEpub(t, "Orphaned", "Alice")
 	b := ingestTestEpub(t, lib, data)
 

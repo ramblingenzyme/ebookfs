@@ -30,7 +30,7 @@ func TestEditWriteCoverConcurrentSameBook(t *testing.T) {
 	}
 
 	titles := [2]string{"Race Book Alpha", "Race Book Beta"}
-	root := lib.(*libraryImpl).store.Root()
+	root := lib.store.Root()
 	for i := range 10 {
 		title := titles[i%2]
 

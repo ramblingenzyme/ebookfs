@@ -42,7 +42,7 @@ func (h *ingestHandle) Ingest() (*Book, error) {
 }
 
 /* Library methods */
-func (l *libraryImpl) CreateIngest() (IngestHandle, error) {
+func (l *Library) CreateIngest() (IngestHandle, error) {
 	f, err := os.CreateTemp(l.inboxTemp, "*.epub")
 	if err != nil {
 		return nil, err
@@ -52,7 +52,7 @@ func (l *libraryImpl) CreateIngest() (IngestHandle, error) {
 
 // ingestPath parses the staged epub, lays it down in the store, and records it
 // in the index.
-func (l *libraryImpl) ingestPath(epubPath string) (*Book, error) {
+func (l *Library) ingestPath(epubPath string) (*Book, error) {
 	// Parse before taking ingestMu: it touches only this upload's staged temp
 	// file, so bulk uploads overlap their parsing instead of serializing on it.
 	bib, err := epub.Parse(epubPath)

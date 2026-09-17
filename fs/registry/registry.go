@@ -18,6 +18,15 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library"
 )
 
+// Editor is the half of the library this package uses: the registry mutates a
+// book and re-renders its node from the result. The node it renders reads the
+// book's epub itself, which is why ContentReader is embedded rather than
+// declared separately here.
+type Editor interface {
+	book.ContentReader
+	Edit(id int64, e library.Edits) (*library.Book, error)
+}
+
 // BookView is an FS listing that reacts to a book entering or leaving it. Add
 // and Remove read the book's CURRENT state, so the registry brackets every
 // mutation as Remove → mutate → Add: Remove sees the old grouping/name, Add
@@ -37,14 +46,14 @@ type BookRegistry struct {
 	books map[int64]*book.BookDir
 	views []BookView
 	f     *fs.FS
-	lib   library.Library
+	lib   Editor
 
 	// editMu serializes edits per book id across the whole lib.Edit + commit
 	// span, so snapshot swaps land in the same order as the library's writes.
 	editMu syncutil.KeyedMutex
 }
 
-func NewBookRegistry(f *fs.FS, lib library.Library) *BookRegistry {
+func NewBookRegistry(f *fs.FS, lib Editor) *BookRegistry {
 	return &BookRegistry{
 		books: make(map[int64]*book.BookDir),
 		f:     f,

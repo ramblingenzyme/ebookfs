@@ -18,7 +18,7 @@ func testConfig(t *testing.T) Config {
 	return Config(testutil.TestConfig(t))
 }
 
-func openTestLibrary(t *testing.T) Library {
+func openTestLibrary(t *testing.T) *Library {
 	t.Helper()
 	return openLib(t, testConfig(t), false)
 }
@@ -27,7 +27,7 @@ func openTestLibrary(t *testing.T) Library {
 // fails mid-test cannot leave the index open. Tests that reopen across a
 // simulated restart still Close explicitly for sequencing; the second close is
 // a no-op.
-func openLib(t *testing.T, cfg Config, forceReindex bool) Library {
+func openLib(t *testing.T, cfg Config, forceReindex bool) *Library {
 	t.Helper()
 	lib, err := Open(cfg, forceReindex)
 	if err != nil {
@@ -39,9 +39,9 @@ func openLib(t *testing.T, cfg Config, forceReindex bool) Library {
 
 // drifted reports storeDrifted's verdict, discarding the store scan it returns
 // for the reindex path to reuse.
-func drifted(t *testing.T, lib Library) bool {
+func drifted(t *testing.T, lib *Library) bool {
 	t.Helper()
-	_, d := lib.(*libraryImpl).storeDrifted()
+	_, d := lib.storeDrifted()
 	return d
 }
 
@@ -110,7 +110,7 @@ func assertSettlesClean(t *testing.T, cfg Config) {
 	}
 }
 
-func ingestTestEpub(t *testing.T, lib Library, data []byte) *Book {
+func ingestTestEpub(t *testing.T, lib *Library, data []byte) *Book {
 	t.Helper()
 	h, err := lib.CreateIngest()
 	if err != nil {

@@ -8,7 +8,7 @@ import (
 )
 
 func TestNeedsReindexClosedIndex(t *testing.T) {
-	lib := openTestLibrary(t).(*libraryImpl)
+	lib := openTestLibrary(t)
 	lib.index.Close()
 
 	// With a closed index, NeedsReindex returns an error, so needsReindex
@@ -29,7 +29,7 @@ func TestCheckSameFilesystemMissingTarget(t *testing.T) {
 }
 
 func TestCreateIngestReadOnlyDir(t *testing.T) {
-	lib := openTestLibrary(t).(*libraryImpl)
+	lib := openTestLibrary(t)
 
 	if err := os.Chmod(lib.inboxTemp, 0444); err != nil {
 		t.Skip("cannot chmod inbox temp:", err)
