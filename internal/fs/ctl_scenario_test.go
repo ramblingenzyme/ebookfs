@@ -10,7 +10,6 @@
 package fs
 
 import (
-	"slices"
 	"strings"
 	"testing"
 
@@ -19,6 +18,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/fs/ctl"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/views"
+	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library"
@@ -28,13 +28,9 @@ import (
 // command. It returns the line the command log recorded.
 func runCtl(t *testing.T, cf *ctl.CtlFile, log *ctl.CommandLog, cmd string) string {
 	t.Helper()
-	const fid = 1
-	if _, err := cf.Write(fid, 0, []byte(cmd)); err != nil {
-		t.Fatalf("write %q: %v", cmd, err)
-	}
-	if err := cf.Close(fid); err != nil {
-		t.Fatalf("close after %q: %v", cmd, err)
-	}
+	fid := fstest.Fid(t, cf, 1)
+	fid.Write(0, cmd)
+	fid.Close()
 	entries := log.Entries()
 	if len(entries) == 0 {
 		t.Fatalf("%q recorded nothing in the log", cmd)
@@ -81,16 +77,6 @@ func ctlTree(t *testing.T, cur *bookmodel.Book) (*ctl.CtlFile, *ctl.CommandLog, 
 	return ctl.NewCtlFile(f, lib, reg, log), log, dirs
 }
 
-// dirChildNames lists a directory's entries by name.
-func dirChildNames(d fs.Dir) []string {
-	var names []string
-	for name := range d.Children() {
-		names = append(names, name)
-	}
-	slices.Sort(names)
-	return names
-}
-
 // group reports the entries under dirs[view]/key, and whether that group exists.
 func group(t *testing.T, dirs map[string]fs.Dir, view, key string) ([]string, bool) {
 	t.Helper()
@@ -98,7 +84,7 @@ func group(t *testing.T, dirs map[string]fs.Dir, view, key string) ([]string, bo
 	if !ok {
 		return nil, false
 	}
-	return dirChildNames(child.(fs.Dir)), true
+	return fstest.ChildNames(child.(fs.Dir)), true
 }
 
 func TestCtlSetStatusMovesTheBookInByStatus(t *testing.T) {
@@ -160,13 +146,11 @@ func TestCtlRenameAuthorRehomesInByAuthor(t *testing.T) {
 // operator's only feedback is that log line.
 func TestCtlUnknownCommandLeavesTheTreeAlone(t *testing.T) {
 	cf, log, dirs := ctlTree(t, makeBook(1, "Test", "Alice"))
-	before := dirChildNames(dirs["books"])
+	before := fstest.ChildNames(dirs["books"])
 
 	got := runCtl(t, cf, log, "explode 1")
 	if !strings.Contains(got, "unknown command") {
 		t.Errorf("log recorded %q, want an unknown-command error", got)
 	}
-	if after := dirChildNames(dirs["books"]); len(after) != len(before) {
-		t.Errorf("books listing changed from %v to %v", before, after)
-	}
+	fstest.ChildCount(t, dirs["books"], len(before))
 }

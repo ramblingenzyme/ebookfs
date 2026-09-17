@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 )
 
@@ -17,21 +18,14 @@ func TestCtlFileWriteExecutes(t *testing.T) {
 	cf := NewCtlFile(reg.FS(), lib, reg, cmdLog)
 
 	// Reading returns a usage hint, not command output.
-	got, err := cf.Read(1, 0, 4096)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(got), "book 7 deleted") {
+	fid := fstest.Fid(t, cf, 1)
+	if got := fid.Read(0, 4096); strings.Contains(got, "book 7 deleted") {
 		t.Fatalf("read should not echo command results, got %q", got)
 	}
 
 	// Writing a command and closing the fid executes it...
-	if _, err := cf.Write(1, 0, []byte("delete 7")); err != nil {
-		t.Fatal(err)
-	}
-	if err := cf.Close(1); err != nil {
-		t.Fatal(err)
-	}
+	fid.Write(0, "delete 7")
+	fid.Close()
 	if !called {
 		t.Fatal("delete command was not executed on close")
 	}

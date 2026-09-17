@@ -18,6 +18,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/views"
+	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library"
@@ -54,14 +55,10 @@ func upload(t *testing.T, f *fs.FS, inboxDir fs.Dir, name string, data []byte) e
 	if err != nil {
 		t.Fatalf("create %s: %v", name, err)
 	}
-	const fid = 1
-	if err := file.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("open %s: %v", name, err)
-	}
-	if _, err := file.Write(fid, 0, data); err != nil {
-		t.Fatalf("write %s: %v", name, err)
-	}
-	return file.Close(fid)
+	fid := fstest.Fid(t, file, 1)
+	fid.Open(proto.Mode(0))
+	fid.Write(0, string(data))
+	return fid.CloseErr()
 }
 
 func TestInboxUploadReachesTheViews(t *testing.T) {
@@ -71,15 +68,10 @@ func TestInboxUploadReachesTheViews(t *testing.T) {
 		t.Fatalf("clunk: %v", err)
 	}
 
-	if names := dirChildNames(dirs["books"]); len(names) != 1 || names[0] != "Ingested" {
-		t.Errorf("books = %v, want the ingested book", names)
-	}
-	if _, ok := dirs["by-author"].Children()["Alice"]; !ok {
-		t.Error("by-author/Alice was never created")
-	}
-	if _, ok := inboxDir.Children()["book.epub"]; ok {
-		t.Error("the upload is still listed in inbox/ after the clunk")
-	}
+	fstest.ChildCount(t, dirs["books"], 1)
+	fstest.HasChild(t, dirs["books"], "Ingested")
+	fstest.HasChild(t, dirs["by-author"], "Alice")
+	fstest.NoChild(t, inboxDir, "book.epub")
 }
 
 // A failed ingest must surface on the clunk and leave the tree empty. The
@@ -91,9 +83,7 @@ func TestInboxFailedIngestLeavesNoBook(t *testing.T) {
 	if err := upload(t, f, inboxDir, "bad.epub", []byte("not an epub")); err == nil {
 		t.Fatal("clunk succeeded on an ingest that failed")
 	}
-	if names := dirChildNames(dirs["books"]); len(names) != 0 {
-		t.Errorf("books = %v, want nothing after a failed ingest", names)
-	}
+	fstest.ChildCount(t, dirs["books"], 0)
 }
 
 // Every view directory is the same case: the tree is derived from the library,

@@ -9,6 +9,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library"
 
 	"github.com/knusbaum/go9p/fs"
+	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 )
@@ -36,9 +37,7 @@ func TestSetupServer(t *testing.T) {
 
 	wantChildren := []string{"inbox", "books", "by-author", "by-id", "by-series", "reader", "recent", "stats", "search"}
 	for _, name := range wantChildren {
-		if _, ok := srv.root.Children()[name]; !ok {
-			t.Errorf("root should have child %q", name)
-		}
+		fstest.HasChild(t, srv.root, name)
 	}
 }
 
@@ -68,8 +67,5 @@ func TestSetupServer_BooksPopulated(t *testing.T) {
 	}
 	srv.Shutdown(context.Background())
 
-	allBooks := srv.root.Children()["books"].(fs.Dir)
-	if _, ok := allBooks.Children()["Present"]; !ok {
-		t.Errorf("books view should contain 'Present' after setup")
-	}
+	fstest.HasChild(t, fstest.ChildAs[fs.Dir](t, srv.root, "books"), "Present")
 }
