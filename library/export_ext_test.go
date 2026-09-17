@@ -1,6 +1,8 @@
 package library_test
 
 import (
+	"bytes"
+	"io"
 	"path/filepath"
 	"testing"
 
@@ -260,5 +262,43 @@ func TestKepubCacheDelegates(t *testing.T) {
 	// Close stops the warmer without error.
 	if err := lib.Close(); err != nil {
 		t.Errorf("close: %v", err)
+	}
+}
+
+// TestExporterOpenServesTheRealEpub covers the read path the reader/ view is
+// for. Everything else about the epub rendition — Includes, Filename, Dirname,
+// Size — answers from the book record without touching disk, so nothing
+// previously opened one. A mount that lists the right names and serves nothing
+// would have passed every other test here.
+func TestExporterOpenServesTheRealEpub(t *testing.T) {
+	lib := openTestLibrary(t)
+	b := ingestTestEpub(t, lib, buildTestEpub(t, "Readable", "Alice"))
+
+	exp, err := lib.Exporter(library.ReaderConfig{Statuses: []string{"unread"}})
+	if err != nil {
+		t.Fatalf("Exporter: %v", err)
+	}
+
+	r, err := exp.Open(b)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer r.Close()
+
+	size, ok := exp.Size(b)
+	if !ok || size == 0 {
+		t.Fatalf("Size = (%d, %v), want the recorded size", size, ok)
+	}
+
+	buf := make([]byte, size)
+	n, err := r.ReadAt(buf, 0)
+	if err != nil && err != io.EOF {
+		t.Fatalf("ReadAt: %v", err)
+	}
+	if int64(n) != size {
+		t.Errorf("read %d bytes, want %d — the handle is not serving the whole file", n, size)
+	}
+	if !bytes.HasPrefix(buf, []byte("PK")) {
+		t.Error("the bytes served are not a zip; the handle is not the book's epub")
 	}
 }

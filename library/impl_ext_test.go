@@ -344,4 +344,15 @@ func TestSearchSnapshotsAreImmutable(t *testing.T) {
 	if len(held.Tags()) != 0 {
 		t.Error("Tags() handed out the book's own slice")
 	}
+
+	// Series is a pointer on the record, so its getter has to copy the value
+	// rather than hand back the address. SortTitle is here because nothing
+	// else reaches it.
+	_ = held.SortTitle()
+	if s := held.Series(); s != nil {
+		s.Name = "Injected"
+		if held.Series().Name == "Injected" {
+			t.Error("Series() handed out the book's own SeriesRef; mutating it changed the snapshot")
+		}
+	}
 }
