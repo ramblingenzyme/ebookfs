@@ -1121,8 +1121,12 @@ func ncxTexts(t *testing.T, epubPath, tag string) []string {
 	return out
 }
 
+// ncxWithTitle is the NCX the tests below share: a document title and nothing
+// else, so an edit either reaches <docTitle> or leaves the file alone.
+var ncxWithTitle = ncxWith(`  <docTitle><text>Original Title</text></docTitle>`)
+
 func TestNCXDocTitleFollowsATitleEdit(t *testing.T) {
-	path := buildNCXEpub(t, ncxWith(`  <docTitle><text>Original Title</text></docTitle>`))
+	path := buildNCXEpub(t, ncxWithTitle)
 
 	title := "New Title"
 	if _, err := writeBib(path, edits.Edits{Title: &title}); err != nil {
@@ -1167,7 +1171,7 @@ func TestNCXDocAuthorsAreReconciled(t *testing.T) {
 
 // Where a first <docAuthor> would go is the content model's business, not ours.
 func TestNCXWithNoDocAuthorGainsNone(t *testing.T) {
-	path := buildNCXEpub(t, ncxWith(`  <docTitle><text>Original Title</text></docTitle>`))
+	path := buildNCXEpub(t, ncxWithTitle)
 
 	authors := []bookmodel.Author{{Name: "Ann Rewrite"}}
 	if _, err := writeBib(path, edits.Edits{Authors: &authors}); err != nil {
@@ -1197,7 +1201,7 @@ func TestTitleEditWithoutAnNCX(t *testing.T) {
 // The NCX is read only for a field it carries, so a series edit leaves the
 // entry byte for byte as it was.
 func TestNCXUntouchedByAnUnrelatedEdit(t *testing.T) {
-	ncx := ncxWith(`  <docTitle><text>Original Title</text></docTitle>`)
+	ncx := ncxWithTitle
 	path := buildNCXEpub(t, ncx)
 
 	series := "A Series"

@@ -823,14 +823,17 @@ func TestSpecPathQualifiedRefines(t *testing.T) {
 // A series of numbers, not one number: 2.2.1 has three levels and no numeric
 // type holds it, so SeriesRef.Index is the string as written.
 
-func TestSpecGroupPositionMultiLevel(t *testing.T) {
-
-	var opf = epub3(metas(
+// articleAt is the fixture the three group-position tests share: one article in
+// one series, at the position each of them is about.
+func articleAt(position string) packageDoc {
+	return epub3(metas(
 		`<dc:title>An Article</dc:title>`,
-		collection("c01", "Physical Review D", "series", "2.2.1"),
+		collection("c01", "Physical Review D", "series", position),
 	))
+}
 
-	bib, err := epub.Parse(buildEpub(t, opf))
+func TestSpecGroupPositionMultiLevel(t *testing.T) {
+	bib, err := epub.Parse(buildEpub(t, articleAt("2.2.1")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -846,14 +849,7 @@ func TestSpecGroupPositionMultiLevel(t *testing.T) {
 // calibre:series_index is a float and needs trailing zeros dropped ("1.0" means
 // "1"). group-position is never calibre-written and must not get that treatment.
 func TestSpecGroupPositionLevelsAreNotDecimals(t *testing.T) {
-	epub3Index := func(pos string) packageDoc {
-		return epub3(metas(
-			`<dc:title>An Article</dc:title>`,
-			collection("c01", "Physical Review D", "series", pos),
-		))
-	}
-
-	bib, err := epub.Parse(buildEpub(t, epub3Index("1.10")))
+	bib, err := epub.Parse(buildEpub(t, articleAt("1.10")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -862,7 +858,7 @@ func TestSpecGroupPositionLevelsAreNotDecimals(t *testing.T) {
 	}
 
 	// And it stays distinguishable from a genuine 1.1.
-	bib, err = epub.Parse(buildEpub(t, epub3Index("1.1")))
+	bib, err = epub.Parse(buildEpub(t, articleAt("1.1")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -874,12 +870,7 @@ func TestSpecGroupPositionLevelsAreNotDecimals(t *testing.T) {
 // A multi-level position must survive being set, not just being read. Writing
 // it through a float was what silently collapsed it.
 func TestSpecGroupPositionMultiLevelRoundTrips(t *testing.T) {
-	var opf = epub3(metas(
-		`<dc:title>An Article</dc:title>`,
-		collection("c01", "Physical Review D", "series", "1"),
-	))
-
-	path := buildEpub(t, opf)
+	path := buildEpub(t, articleAt("1"))
 	want := "2.2.1" // no float holds this, which is the point
 	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{SeriesIndex: &want}); err != nil {
 		t.Fatal(err)
