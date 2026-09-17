@@ -20,7 +20,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/fs/views"
 	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library"
 )
 
@@ -44,10 +43,12 @@ func ctlTree(t *testing.T, cur *bookmodel.Book) (*ctl.CtlFile, *ctl.CommandLog, 
 	t.Helper()
 	f := newTestFS(t)
 
-	lib := libfake.Lib{
+	search := searchDeleter{
 		SearchFn: func(library.Query) ([]*library.Book, error) {
 			return []*library.Book{testutil.WrapBook(cur)}, nil
 		},
+	}
+	edit := editor{
 		EditFn: func(_ int64, e library.Edits) (*library.Book, error) {
 			next := *cur
 			if e.Status != nil {
@@ -64,7 +65,7 @@ func ctlTree(t *testing.T, cur *bookmodel.Book) (*ctl.CtlFile, *ctl.CommandLog, 
 		},
 	}
 
-	reg := registry.NewBookRegistry(f, lib)
+	reg := registry.NewBookRegistry(f, edit)
 	dirs := map[string]fs.Dir{
 		"books":     views.NewAllBooksDir(reg),
 		"by-author": views.NewByAuthorDir(reg),
@@ -74,7 +75,7 @@ func ctlTree(t *testing.T, cur *bookmodel.Book) (*ctl.CtlFile, *ctl.CommandLog, 
 	reg.Add(testutil.WrapBook(cur))
 
 	log := ctl.NewCommandLog(16)
-	return ctl.NewCtlFile(f, lib, reg, log), log, dirs
+	return ctl.NewCtlFile(f, search, reg, log), log, dirs
 }
 
 // group reports the entries under dirs[view]/key, and whether that group exists.

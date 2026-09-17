@@ -3,8 +3,9 @@
 //
 // This package deliberately does NOT import library: library's own internal
 // packages (e.g. kepub) have white-box tests that import testutil, so a
-// library import here would create a test-time import cycle. Test doubles for
-// the library facade interfaces live in the sibling package libfake instead.
+// library import here would create a test-time import cycle. A double for a
+// library interface lives in the package whose tests use it, which keeps it as
+// narrow as that package's dependency.
 package testutil
 
 import (

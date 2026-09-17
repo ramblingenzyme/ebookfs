@@ -20,7 +20,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/fs/views"
 	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library"
 )
 
@@ -30,7 +29,7 @@ func inboxTree(t *testing.T, ingested *bookmodel.Book) (*fs.FS, fs.Dir, map[stri
 	t.Helper()
 	f := newTestFS(t)
 
-	lib := libfake.Lib{
+	ingest := ingester{
 		IngestFn: func(string) (*library.Book, error) {
 			if ingested == nil {
 				return nil, errTest
@@ -39,12 +38,12 @@ func inboxTree(t *testing.T, ingested *bookmodel.Book) (*fs.FS, fs.Dir, map[stri
 		},
 	}
 
-	reg := registry.NewBookRegistry(f, lib)
+	reg := registry.NewBookRegistry(f, editor{})
 	dirs := map[string]fs.Dir{
 		"books":     views.NewAllBooksDir(reg),
 		"by-author": views.NewByAuthorDir(reg),
 	}
-	return f, inbox.NewInboxDir(f, lib, reg.Add), dirs
+	return f, inbox.NewInboxDir(f, ingest, reg.Add), dirs
 }
 
 // upload copies data into inbox/name the way a client would: dispatch a create,
