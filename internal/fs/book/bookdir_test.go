@@ -9,13 +9,12 @@ import (
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 )
 
 // newTestBookDir builds a BookDir over a fresh FS with a no-op edit callback.
 func newTestBookDir(t *testing.T, b *library.Book) *BookDir {
 	t.Helper()
-	return NewBookDir(testutil.NewTestFS(t), libfake.Lib{}, func(int64, library.Edits) error { return nil }, b)
+	return NewBookDir(testutil.NewTestFS(t), contentReader{}, func(int64, library.Edits) error { return nil }, b)
 }
 
 func TestNewBookDirCreatesCoverChild(t *testing.T) {

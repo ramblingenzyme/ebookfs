@@ -1,6 +1,7 @@
 package book
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/library"
@@ -8,10 +9,9 @@ import (
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 )
 
-func testReaderFile(t *testing.T, exp library.Exporter) *ReaderFile {
+func testReaderFile(t *testing.T, exp Renderer) *ReaderFile {
 	t.Helper()
 	f := testutil.NewTestFS(t)
 	book := testutil.MakeBook(1, "Test", "Author")
@@ -19,13 +19,13 @@ func testReaderFile(t *testing.T, exp library.Exporter) *ReaderFile {
 }
 
 // readerFile's own surface, on top of the readAtFile semantics its base test
-// owns: it wires the Exporter for reads and reports the export size live from
+// owns: it wires the Renderer for reads and reports the export size live from
 // Stat.
 
 func TestReaderFileOpenRead(t *testing.T) {
-	rf := testReaderFile(t, libfake.Exporter{
+	rf := testReaderFile(t, renderer{
 		OpenFn: func(b *library.Book) (library.EpubReader, error) {
-			return libfake.NewEpubReader([]byte("hello epub"), nil, nil), nil
+			return &epubReader{Reader: bytes.NewReader([]byte("hello epub"))}, nil
 		},
 	})
 
@@ -37,7 +37,7 @@ func TestReaderFileOpenRead(t *testing.T) {
 }
 
 func TestReaderFileStatReportsSize(t *testing.T) {
-	rf := testReaderFile(t, libfake.Exporter{
+	rf := testReaderFile(t, renderer{
 		SizeFn: func(b *library.Book) (int64, bool) { return 42, true },
 	})
 
@@ -48,7 +48,7 @@ func TestReaderFileStatReportsSize(t *testing.T) {
 }
 
 func TestReaderFileStatFallbackToZero(t *testing.T) {
-	rf := testReaderFile(t, libfake.Exporter{
+	rf := testReaderFile(t, renderer{
 		SizeFn: func(b *library.Book) (int64, bool) { return 0, false },
 	})
 
