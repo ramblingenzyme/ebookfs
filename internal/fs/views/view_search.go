@@ -384,6 +384,12 @@ func (d *searchDir) Close() {
 	d.closeOnce.Do(func() { close(d.cleanupDone) })
 }
 
+// cleanupLoop sweeps expired handles until Close. NewSearchDir starts it with
+// nothing synchronising its startup, so a short test can exit before the
+// scheduler runs it at all: its five statements record as 0% or 62.5% depending
+// on timing, and any coverage gate over this package has to serialize (-p 1).
+// The ticker arm never runs under test either way, since five minutes outlives
+// every run; only Close is ever observed.
 func (d *searchDir) cleanupLoop() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()

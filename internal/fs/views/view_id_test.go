@@ -103,3 +103,79 @@ func TestIDEntryName_PadThreeDigits(t *testing.T) {
 		}
 	}
 }
+
+func TestByIDDirAdd(t *testing.T) {
+	reg := newTestRegistry(t)
+	d := NewByIDDir(reg)
+
+	b := makeBook(1, "Test", "Author")
+	reg.Add(wrapBook(b))
+
+	if _, ok := d.Children()["1. Test"]; !ok {
+		t.Errorf("by-id should contain '1. Test', got: %v", dirChildNames(d))
+	}
+}
+
+func TestByIDDirRemove(t *testing.T) {
+	reg := newTestRegistry(t)
+	d := NewByIDDir(reg)
+
+	b := makeBook(1, "Test", "Author")
+	reg.Add(wrapBook(b))
+	reg.Remove(1)
+
+	if _, ok := d.Children()["1. Test"]; ok {
+		t.Error("by-id should not contain entry after remove")
+	}
+}
+
+func TestByIDDirMultipleBooks(t *testing.T) {
+	reg := newTestRegistry(t)
+	d := NewByIDDir(reg)
+
+	reg.Add(testutil.MakeBook(1, "Alpha", "Author"))
+	reg.Add(testutil.MakeBook(2, "Beta", "Author"))
+
+	children := dirChildNames(d)
+	if len(children) != 2 {
+		t.Fatalf("expected 2 entries, got %d: %v", len(children), children)
+	}
+}
+
+// TestByIDDirRemoveUnknown: as above, with a book present so the no-op is
+// observable rather than inferred from the absence of a panic.
+func TestByIDDirRemoveUnknown(t *testing.T) {
+	reg := newTestRegistry(t)
+	d := NewByIDDir(reg)
+	reg.Add(testutil.MakeBook(1, "Kept", "Author"))
+
+	reg.Remove(999)
+
+	if _, ok := d.Children()["1. Kept"]; !ok {
+		t.Errorf("removing an unknown id disturbed the registered books: %v", dirChildNames(d))
+	}
+}
+
+func TestByIDDirTitleChangeReflected(t *testing.T) {
+	reg := newTestRegistry(t)
+	d := NewByIDDir(reg)
+
+	b := makeBook(1, "Original", "Author")
+	reg.Add(wrapBook(b))
+
+	if _, ok := d.Children()["1. Original"]; !ok {
+		t.Fatal("by-id should contain '1. Original'")
+	}
+
+	// Remove and re-add with different title (simulating an edit)
+	reg.Remove(1)
+	b2 := makeBook(1, "Updated", "Author")
+	reg.Add(wrapBook(b2))
+
+	if _, ok := d.Children()["1. Updated"]; !ok {
+		t.Error("by-id should contain '1. Updated' after re-add")
+	}
+	if _, ok := d.Children()["1. Original"]; ok {
+		t.Error("by-id should not contain '1. Original' after update")
+	}
+}

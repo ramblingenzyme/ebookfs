@@ -31,7 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`library/model` package removed.** Types previously in `library/model` are now either part of the `library` package or internal:
   - **Public API (now in `library`):** `Book`, `Author`, `Series`, `Edits`, `ValidationError`, `FieldError`, `Query`, `Order`, `Stats`, `EpubReader`
   - **Internal:** `PathSafe` (now in `internal/naming`), status constants, `JoinAuthors`, `UnknownAuthor`, `Validate`
-  - `library.Book` is now an immutable wrapper (`book.ImmutableBook`) with getter methods instead of direct field access. The old struct fields (`book.Title`, `book.Authors`, `book.Meta.Status`, `book.Meta.Rating`, `book.Meta.Tags`, etc.) are now methods (`book.Title()`, `book.Authors()`, `book.Status()`, `book.Rating()`, `book.Tags()`, etc.). Slices and maps returned by getters are cloned to prevent external mutation. `Library.Search`, `Library.Edit`, and all `Exporter` methods return or accept `*library.Book`. Callers must use the getter methods and re-fetch after mutations (via `Library.Search` or `Library.Edit` return value) to see updated state.
+  - **`library.Book` is now an immutable wrapper** (`book.ImmutableBook`) with getter methods instead of direct field access:
+    - The old struct fields (`book.Title`, `book.Authors`, `book.Meta.Status`, `book.Meta.Rating`, `book.Meta.Tags`, etc.) are now methods (`book.Title()`, `book.Authors()`, `book.Status()`, `book.Rating()`, `book.Tags()`, etc.).
+    - Slices and maps returned by getters are cloned to prevent external mutation.
+    - `Library.Search`, `Library.Edit`, and all `Exporter` methods return or accept `*library.Book`.
+    - Callers must use the getter methods and re-fetch after mutations (via `Library.Search` or `Library.Edit` return value) to see updated state.
 
 ### Removed
 
