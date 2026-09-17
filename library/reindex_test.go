@@ -532,7 +532,6 @@ func TestDuplicateBookIDFailsOpenNamingBothPaths(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	// Copy the whole book directory, meta.toml and all, to a second path.
 	src := filepath.Join(cfg.Root, filepath.Dir(book.EpubPath()))
 	dst := filepath.Join(cfg.Root, "Copies", filepath.Base(src))
 	if err := os.MkdirAll(dst, 0755); err != nil {

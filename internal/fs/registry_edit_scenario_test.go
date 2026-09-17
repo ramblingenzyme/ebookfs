@@ -66,11 +66,9 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 
 	reg.Add(testutil.WrapBook(book))
 
-	// Edit the title via its fieldFile.
 	bd := allBooks.Children()["Old Title"].(fs.Dir)
 	writeField(t, bd, "title", "New Title")
 
-	// All views should reflect the new title.
 	if _, ok := allBooks.Children()["New Title"]; !ok {
 		t.Error("allBooks should show 'New Title'")
 	}
@@ -113,11 +111,9 @@ func TestRegistryEditAuthorsRehomesInByAuthor(t *testing.T) {
 
 	reg.Add(testutil.WrapBook(book))
 
-	// Change authors from Alice to Bob.
 	bd := allBooks.Children()["Test"].(fs.Dir)
 	writeField(t, bd, "authors", "Bob")
 
-	// Author should now be Bob, Alice pruned.
 	if _, ok := byAuthor.Children()["Bob"]; !ok {
 		t.Error("by-author should have 'Bob'")
 	}
@@ -161,11 +157,9 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 		t.Fatalf("expected 0 reader children for unread book, got %d", n)
 	}
 
-	// Change status to "reading" via the field file.
 	bd := allBooks.Children()["Test"].(fs.Dir)
 	writeField(t, bd, "status", "reading")
 
-	// Now the reader view should reflect the change.
 	ad, ok := readerDir.Children()["Author1"]
 	if !ok {
 		t.Fatal("reader should have 'Author1' subdir for a 'reading' status book")

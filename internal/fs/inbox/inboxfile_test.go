@@ -154,7 +154,6 @@ func TestInboxFileReopenAfterClose(t *testing.T) {
 	noop := func(b *library.Book) {}
 	inf := NewInboxFile(f, lib, "test.epub", 0644, noop)
 
-	// First open/write/close
 	fid := uint64(1)
 	inf.Open(fid, proto.Mode(0))
 	inf.Write(fid, 0, []byte("first"))
@@ -164,7 +163,6 @@ func TestInboxFileReopenAfterClose(t *testing.T) {
 		t.Fatalf("expected 1 ingest, got %d", ingestCount)
 	}
 
-	// Second open/write/close with different fid
 	fid2 := uint64(2)
 	inf.Open(fid2, proto.Mode(0))
 	inf.Write(fid2, 0, []byte("second"))
@@ -221,7 +219,6 @@ func TestInboxFileCloseWithParentDeadlockRegression(t *testing.T) {
 		t.Fatal("Close deadlocked")
 	}
 
-	// Verify ingest was called
 	select {
 	case b := <-ingested:
 		if b.ID() != 42 {

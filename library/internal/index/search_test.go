@@ -455,7 +455,6 @@ func TestQueryMultipleFilters(t *testing.T) {
 	storeInIndex(t, idx, bobUnread)
 	storeInIndex(t, idx, aliceRead)
 
-	// Filter by Bob AND read.
 	got, err := idx.Search(Query{Authors: []string{"Bob"}, Status: []string{"read"}})
 	if err != nil {
 		t.Fatalf("Query: %v", err)

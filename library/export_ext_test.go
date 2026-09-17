@@ -56,7 +56,6 @@ func TestLibraryImplExporter(t *testing.T) {
 func TestLibraryImplExporterConvertRequiresCacheDir(t *testing.T) {
 	lib := openTestLibrary(t)
 
-	// Exporter succeeds with a cache_dir supplied alongside convert=true.
 	e, err := lib.Exporter(library.ReaderConfig{
 		Statuses: []string{"unread", "reading"},
 		Convert:  true,

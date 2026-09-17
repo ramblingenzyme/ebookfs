@@ -213,7 +213,6 @@ func TestRebuildClearsLeakedRowsAndInsertsBooks(t *testing.T) {
 	}
 	mustNeedReindex(t, idx, true)
 
-	// Rebuild with fresh books.
 	fresh := []*book.Book{
 		newBook(10, "Fresh A"),
 		newBook(20, "Fresh B"),
@@ -224,7 +223,6 @@ func TestRebuildClearsLeakedRowsAndInsertsBooks(t *testing.T) {
 
 	mustNeedReindex(t, idx, false)
 
-	// Only the fresh books should exist.
 	all, err := idx.Search(Query{})
 	if err != nil {
 		t.Fatalf("Query: %v", err)

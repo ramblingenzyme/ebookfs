@@ -258,7 +258,6 @@ func TestDeleteRemovesBook(t *testing.T) {
 		t.Fatalf("Delete: %v", err)
 	}
 
-	// Book should no longer be queryable.
 	results, err := lib.Search(library.Query{IDs: []int64{id}})
 	if err != nil {
 		t.Fatalf("Query after delete: %v", err)
@@ -277,7 +276,6 @@ func TestDeleteRemovesOnDisk(t *testing.T) {
 		t.Fatalf("Delete: %v", err)
 	}
 
-	// The epub file must no longer exist on disk.
 	if _, err := os.Stat(book.EpubPath()); !os.IsNotExist(err) {
 		t.Errorf("epub should be removed after delete, stat err = %v", err)
 	}

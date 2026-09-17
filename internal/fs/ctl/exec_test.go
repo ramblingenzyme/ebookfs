@@ -515,7 +515,6 @@ func TestCommandSuccessStrings(t *testing.T) {
 				EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 					for _, b := range tc.books {
 						if b.ID() == id {
-							// Create a mutable copy of the book
 							updated := testutil.MakeMutableBook(b.ID(), b.Title(), "Author")
 							updated.Meta.Tags = b.Tags()
 							if e.Tags != nil {
@@ -551,7 +550,6 @@ func TestCommandFailureStrings(t *testing.T) {
 				if id == 2 {
 					return nil, errors.New("disk on fire")
 				}
-				// Create a mutable copy of the book
 				updated := testutil.MakeMutableBook(books[0].ID(), books[0].Title(), "Author")
 				updated.Meta.Tags = books[0].Tags()
 				updated.Meta.Tags = *e.Tags
