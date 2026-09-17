@@ -354,10 +354,10 @@ func TestRewriteIsIdempotentOnARebindingDocument(t *testing.T) {
 // two encodings that disagree.
 
 func TestEPUB2SeriesEditUpdatesBothEncodings(t *testing.T) {
-	path := buildEpub(t, epub2(`    <dc:creator opf:role="aut">Ann Rand</dc:creator>
-    <meta property="belongs-to-collection" id="c01">The Old Series</meta>
-    <meta refines="#c01" property="collection-type">series</meta>
-    <meta refines="#c01" property="group-position">2</meta>`))
+	path := buildEpub(t, epub2(metas(
+		`<dc:creator opf:role="aut">Ann Rand</dc:creator>`,
+		collection("c01", "The Old Series", "series", "2"),
+	)))
 
 	// The collection outranks the calibre metas on read, v2 package or not.
 	bib, err := epub.Parse(path)
@@ -379,11 +379,10 @@ func TestEPUB2SeriesEditUpdatesBothEncodings(t *testing.T) {
 // left asserting a series the collection no longer names. A calibre reader
 // consults them first.
 func TestEPUB3SeriesEditUpdatesStaleCalibreMetas(t *testing.T) {
-	path := buildEpub(t, epub3(`    <meta property="belongs-to-collection" id="c01">The Old Series</meta>
-    <meta refines="#c01" property="collection-type">series</meta>
-    <meta refines="#c01" property="group-position">2</meta>
-    <meta name="calibre:series" content="The Old Series"/>
-    <meta name="calibre:series_index" content="2"/>`))
+	path := buildEpub(t, epub3(metas(
+		collection("c01", "The Old Series", "series", "2"),
+		calibreSeries("The Old Series", "2"),
+	)))
 
 	want := "The New Series"
 	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Series: &want}); err != nil {
@@ -395,8 +394,7 @@ func TestEPUB3SeriesEditUpdatesStaleCalibreMetas(t *testing.T) {
 // A file that never carried the proprietary encoding does not acquire it.
 // "Keep every encoding in step" is not licence to add one.
 func TestEPUB3SeriesEditDoesNotInjectCalibreMetas(t *testing.T) {
-	path := buildEpub(t, epub3(`    <meta property="belongs-to-collection" id="c01">The Old Series</meta>
-    <meta refines="#c01" property="collection-type">series</meta>`))
+	path := buildEpub(t, epub3(metas(collection("c01", "The Old Series", "series", ""))))
 
 	want := "The New Series"
 	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Series: &want}); err != nil {
@@ -446,10 +444,11 @@ func assertSeriesEncodings(t *testing.T, path, want, wantIndex string) {
 // a float by calibre's convention. Writing the first two levels is a deliberate
 // narrowing, not a silent collapse to 1.
 func TestMultiLevelPositionNarrowsForEPUB2(t *testing.T) {
-	opf := epub2(`    <dc:title>An Article</dc:title>
-    <dc:creator opf:role="aut">Ann Rand</dc:creator>
-    <meta name="calibre:series" content="Physical Review D"/>
-    <meta name="calibre:series_index" content="1"/>`)
+	opf := epub2(metas(
+		`<dc:title>An Article</dc:title>`,
+		`<dc:creator opf:role="aut">Ann Rand</dc:creator>`,
+		calibreSeries("Physical Review D", "1"),
+	))
 
 	path := buildEpub(t, opf)
 	index := "2.2.1"
@@ -509,11 +508,11 @@ func TestDanglingCoverMetaFallsThrough(t *testing.T) {
 // calibre:series_index. The carried-over position is empty, so the stale index
 // goes rather than staying to contradict the collection.
 func TestSeriesWithNoPositionDropsTheCalibreIndex(t *testing.T) {
-	path := buildEpub(t, epub2(`    <dc:creator opf:role="aut">Ann Rand</dc:creator>
-    <meta property="belongs-to-collection" id="c01">The Old Series</meta>
-    <meta refines="#c01" property="collection-type">series</meta>
-    <meta name="calibre:series" content="The Old Series"/>
-    <meta name="calibre:series_index" content="7"/>`))
+	path := buildEpub(t, epub2(metas(
+		`<dc:creator opf:role="aut">Ann Rand</dc:creator>`,
+		collection("c01", "The Old Series", "series", ""),
+		calibreSeries("The Old Series", "7"),
+	)))
 
 	want := "The New Series"
 	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Series: &want}); err != nil {

@@ -708,10 +708,10 @@ var opfWithAlternateScript = opf3With(`    <meta refines="#creator1" property="a
 
 // opfSeriesWithIdentifier refines the collection with a dcterms:identifier.
 // EPUB 3 lets a series carry an ISSN, which is not ours to rewrite.
-var opfSeriesWithIdentifier = opf3With(`    <meta property="belongs-to-collection" id="series1">The Trilogy</meta>
-    <meta refines="#series1" property="collection-type">series</meta>
-    <meta refines="#series1" property="group-position">2</meta>
-    <meta refines="#series1" property="dcterms:identifier">urn:issn:1234-5678</meta>`)
+var opfSeriesWithIdentifier = opf3With(metas(
+	collection("series1", "The Trilogy", "series", "2"),
+	`<meta refines="#series1" property="dcterms:identifier">urn:issn:1234-5678</meta>`,
+))
 
 // A series edit rewrites the collection it found, so an unmanaged refinement
 // survives. Clearing the series still takes the whole thing.
@@ -759,14 +759,13 @@ func TestSetSeriesReusesCollection(t *testing.T) {
 }
 
 func TestSetSeriesPreservesSets(t *testing.T) {
-	opfWithSet := opf3With(`    <!-- Series -->
-    <meta property="belongs-to-collection" id="series1">The Trilogy</meta>
-    <meta refines="#series1" property="collection-type">series</meta>
-    <meta refines="#series1" property="group-position">2</meta>
-
-    <!-- Set (bundle) -->
-    <meta property="belongs-to-collection" id="set1">Complete Works</meta>
-    <meta refines="#set1" property="collection-type">set</meta>`)
+	opfWithSet := opf3With(metas(
+		`<!-- Series -->`,
+		collection("series1", "The Trilogy", "series", "2"),
+		"",
+		`<!-- Set (bundle) -->`,
+		collection("set1", "Complete Works", "set", ""),
+	))
 
 	path := writeEpub(t, baseEntries(opfWithSet))
 

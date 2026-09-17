@@ -32,32 +32,30 @@ var opfMarkupCoverImage = opf3Meta(`    <dc:creator id="creator1">Jane Doe</dc:c
 // opfSeriesSetCollection carries an EPUB 3 belongs-to-collection of type "set"
 // (a publisher bundle, not a series) alongside a legacy calibre:series. The set
 // must be ignored so the real series is the one read.
-var opfSeriesSetCollection = opf3Meta(`    <dc:title>Box Set Book</dc:title>
-    <dc:creator id="creator1">Jane Doe</dc:creator>
-    <meta refines="#creator1" property="role">aut</meta>
-    <meta property="belongs-to-collection" id="c1">Some Box Set</meta>
-    <meta refines="#c1" property="collection-type">set</meta>
-    <meta name="calibre:series" content="Real Series"/>
-    <meta name="calibre:series_index" content="3"/>`,
-	"",
-)
+var opfSeriesSetCollection = opf3Meta(metas(
+	`<dc:title>Box Set Book</dc:title>`,
+	`<dc:creator id="creator1">Jane Doe</dc:creator>`,
+	`<meta refines="#creator1" property="role">aut</meta>`,
+	collection("c1", "Some Box Set", "set", ""),
+	calibreSeries("Real Series", "3"),
+), "")
 
 // opfSeriesNoIndexV3 is an EPUB 3 series collection with no group-position; the
 // index should default to 1.
-var opfSeriesNoIndexV3 = opf3Meta(`    <dc:title>Lonely Book</dc:title>
-    <dc:creator id="creator1">Jane Doe</dc:creator>
-    <meta refines="#creator1" property="role">aut</meta>
-    <meta property="belongs-to-collection" id="c1">Lonely Series</meta>
-    <meta refines="#c1" property="collection-type">series</meta>`,
-	"",
-)
+var opfSeriesNoIndexV3 = opf3Meta(metas(
+	`<dc:title>Lonely Book</dc:title>`,
+	`<dc:creator id="creator1">Jane Doe</dc:creator>`,
+	`<meta refines="#creator1" property="role">aut</meta>`,
+	collection("c1", "Lonely Series", "series", ""),
+), "")
 
 // opfSeriesNoIndexV2 is an EPUB 2 calibre:series with no calibre:series_index;
 // the index should default to 1.
-var opfSeriesNoIndexV2 = opf2Meta(`    <dc:title>Lonely Book</dc:title>
-    <dc:creator opf:role="aut">Jane Doe</dc:creator>
-    <meta name="calibre:series" content="Lonely Series"/>`,
-)
+var opfSeriesNoIndexV2 = opf2Meta(metas(
+	`<dc:title>Lonely Book</dc:title>`,
+	`<dc:creator opf:role="aut">Jane Doe</dc:creator>`,
+	calibreSeries("Lonely Series", ""),
+))
 
 // opf3Meta wraps a metadata block and an optional <manifest> body in an
 // EPUB 3 package skeleton. An empty manifest uses the default single-chapter

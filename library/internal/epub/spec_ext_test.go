@@ -141,13 +141,11 @@ func TestSpecModifiedIsUpdated(t *testing.T) {
 // series and set. "publisher-series" below is deliberately neither: the
 // unrecognised case, which must not be taken for the book's series.
 
-var opfCollections = epub3(`    <meta property="belongs-to-collection" id="ps1">Acme Classics</meta>
-    <meta refines="#ps1" property="collection-type">publisher-series</meta>
-    <meta property="belongs-to-collection" id="set1">Complete Works</meta>
-    <meta refines="#set1" property="collection-type">set</meta>
-    <meta property="belongs-to-collection" id="s1" refines="#set1">The Trilogy</meta>
-    <meta refines="#s1" property="collection-type">series</meta>
-    <meta refines="#s1" property="group-position">2</meta>`)
+var opfCollections = epub3(metas(
+	collection("ps1", "Acme Classics", "publisher-series", ""),
+	collection("set1", "Complete Works", "set", ""),
+	collection("s1", "The Trilogy", "series", "2", "set1"),
+))
 
 // D.3.4: only an unschemed series collection is the book's series, so neither a
 // publisher-series nor a set counts. D.3.3 covers the nesting. Renaming in
@@ -260,10 +258,10 @@ func TestSpecFirstLanguageWins(t *testing.T) {
 // invalid and the read falls through to the calibre metas. A writer using its
 // own rule reads "no series" and an index-only edit deletes one that was showing.
 func TestSpecSeriesCarryOverMatchesWhatTheReaderSees(t *testing.T) {
-	path := buildEpub(t, epub3(`    <meta property="belongs-to-collection" id="c01"></meta>
-    <meta refines="#c01" property="collection-type">series</meta>
-    <meta name="calibre:series" content="The Trilogy"/>
-    <meta name="calibre:series_index" content="3"/>`))
+	path := buildEpub(t, epub3(metas(
+		collection("c01", "", "series", ""),
+		calibreSeries("The Trilogy", "3"),
+	)))
 
 	bib, err := epub.Parse(path)
 	if err != nil {
@@ -828,10 +826,10 @@ func TestSpecPathQualifiedRefines(t *testing.T) {
 
 func TestSpecGroupPositionMultiLevel(t *testing.T) {
 
-	var opf = epub3(`    <dc:title>An Article</dc:title>
-    <meta property="belongs-to-collection" id="c01">Physical Review D</meta>
-    <meta refines="#c01" property="collection-type">series</meta>
-    <meta refines="#c01" property="group-position">2.2.1</meta>`)
+	var opf = epub3(metas(
+		`<dc:title>An Article</dc:title>`,
+		collection("c01", "Physical Review D", "series", "2.2.1"),
+	))
 
 	bib, err := epub.Parse(buildEpub(t, opf))
 	if err != nil {
@@ -850,10 +848,10 @@ func TestSpecGroupPositionMultiLevel(t *testing.T) {
 // "1"). group-position is never calibre-written and must not get that treatment.
 func TestSpecGroupPositionLevelsAreNotDecimals(t *testing.T) {
 	epub3Index := func(pos string) string {
-		return epub3(`    <dc:title>An Article</dc:title>
-    <meta property="belongs-to-collection" id="c01">Physical Review D</meta>
-    <meta refines="#c01" property="collection-type">series</meta>
-    <meta refines="#c01" property="group-position">` + pos + `</meta>`)
+		return epub3(metas(
+			`<dc:title>An Article</dc:title>`,
+			collection("c01", "Physical Review D", "series", pos),
+		))
 	}
 
 	bib, err := epub.Parse(buildEpub(t, epub3Index("1.10")))
@@ -877,10 +875,10 @@ func TestSpecGroupPositionLevelsAreNotDecimals(t *testing.T) {
 // A multi-level position must survive being set, not just being read. Writing
 // it through a float was what silently collapsed it.
 func TestSpecGroupPositionMultiLevelRoundTrips(t *testing.T) {
-	var opf = epub3(`    <dc:title>An Article</dc:title>
-    <meta property="belongs-to-collection" id="c01">Physical Review D</meta>
-    <meta refines="#c01" property="collection-type">series</meta>
-    <meta refines="#c01" property="group-position">1</meta>`)
+	var opf = epub3(metas(
+		`<dc:title>An Article</dc:title>`,
+		collection("c01", "Physical Review D", "series", "1"),
+	))
 
 	path := buildEpub(t, opf)
 	want := "2.2.1" // no float holds this, which is the point

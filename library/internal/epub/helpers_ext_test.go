@@ -321,6 +321,53 @@ var (
 
 var containerXML = containerFor(opfPath, packageMediaType)
 
+// metas joins metadata parts into a <metadata> body, indenting each line, so a
+// fixture composes from named pieces instead of splicing calls into a backtick
+// string. A raw XML line is a valid part, which is what lets a fixture name the
+// pieces it is about and write out the one it is not.
+func metas(parts ...string) string {
+	var out []string
+	for _, part := range parts {
+		for _, line := range strings.Split(part, "\n") {
+			if line == "" {
+				out = append(out, "")
+				continue
+			}
+			out = append(out, "    "+line)
+		}
+	}
+	return strings.Join(out, "\n")
+}
+
+// collection is the EPUB 3 series encoding: the collection, the collection-type
+// refinement saying what kind it is, and a group-position when the book has one
+// (§5.5.3.3, D.3.3). An empty position is a book in a series with no stated place
+// in it. parent nests this collection inside another, which D.3.3 allows and
+// which only a series inside a set uses.
+func collection(id, name, kind, position string, parent ...string) string {
+	refines := ""
+	if len(parent) == 1 {
+		refines = ` refines="#` + parent[0] + `"`
+	}
+	out := `<meta property="belongs-to-collection" id="` + id + `"` + refines + `>` + name + `</meta>
+<meta refines="#` + id + `" property="collection-type">` + kind + `</meta>`
+	if position != "" {
+		out += "\n" + `<meta refines="#` + id + `" property="group-position">` + position + `</meta>`
+	}
+	return out
+}
+
+// calibreSeries is the EPUB 2 encoding of the same thing, the pair of metas
+// calibre writes. An empty index omits calibre:series_index, which is what a
+// series carrying no position looks like on the way out.
+func calibreSeries(name, index string) string {
+	out := `<meta name="calibre:series" content="` + name + `"/>`
+	if index != "" {
+		out += "\n" + `<meta name="calibre:series_index" content="` + index + `"/>`
+	}
+	return out
+}
+
 // packageMediaType is how a reader decides a rootfile is the package document
 // (OCF 3.3 §4.2.1). Declared here rather than reached for in epub, since these
 // tests drive it from the outside and the spec fixes the value.
