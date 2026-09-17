@@ -1,7 +1,11 @@
+// Registry, views and the per-book directory composed together: an edit written
+// to a 9P field file must rehome the book across every view that groups on the
+// field it changed. Spans three packages, so it pairs with no single source
+// file, and drives only the public 9P path.
+//
 // Registry-internal behavior — edit on an unknown id, and the concurrent
-// snapshot swap — is tested white-box in fs/registry (those tests call the
-// unexported edit method). The tests here drive edits through the public 9P
-// field-file path and assert the resulting rehoming across the real views.
+// snapshot swap — is tested white-box in fs/registry instead, since those
+// tests call the unexported edit method.
 
 package fs
 

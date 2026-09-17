@@ -1,8 +1,7 @@
 package fs
 
-// Untested:
-//   - StartServer() — calls go9p.Serve which blocks; wiring is verified
-//     via setupServer() instead, which covers all setup logic.
+// Server.Start is untested: it calls go9p.Serve, which blocks. SetupServer
+// covers the wiring instead, and the e2e build tag covers a served tree.
 
 import (
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"

@@ -22,7 +22,7 @@ func startTestServer(t *testing.T) (addr string) {
 	t.Helper()
 
 	cfg := library.Config(testutil.TestConfig(t))
-	lib, err := library.Open(cfg, false)
+	lib, err := library.Open(cfg)
 	if err != nil {
 		t.Fatalf("Open library: %v", err)
 	}
