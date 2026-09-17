@@ -1,38 +1,17 @@
+// The white-box half of ingest's tests; the black-box half is ingest_ext_test.go.
+// Reaching the state these pin — a book on disk that the index does not hold, and
+// an inbox temp directory that cannot be written — means touching lib.index and
+// lib.inboxTemp, which no public call exposes. The assertions themselves are on
+// public behaviour: ErrDuplicateOnDisk, and CreateIngest failing rather than
+// returning an unusable handle.
+
 package library
 
 import (
 	"errors"
+	"os"
 	"testing"
 )
-
-// The duplicate rule is "same title, same set of authors" — a set, so the same
-// book credited in either order is one book. It used to be a path lookup, which
-// made "A & B" and "B & A" two different directories and two library entries.
-func TestIngestDuplicateIgnoresAuthorOrder(t *testing.T) {
-	lib := openTestLibrary(t)
-
-	ingestTestEpub(t, lib, buildTestEpub(t, "Good Omens", "Neil Gaiman", "Terry Pratchett"))
-
-	h, err := lib.CreateIngest()
-	if err != nil {
-		t.Fatalf("CreateIngest: %v", err)
-	}
-	if _, err := h.WriteAt(buildTestEpub(t, "Good Omens", "Terry Pratchett", "Neil Gaiman"), 0); err != nil {
-		t.Fatalf("WriteAt: %v", err)
-	}
-	if _, err := h.Ingest(); !errors.Is(err, ErrDuplicate) {
-		t.Fatalf("second ingest err = %v, want ErrDuplicate", err)
-	}
-}
-
-// A different author set with the same title is a different book, so it must
-// still ingest — the narrowing query matches it, only the set comparison rejects.
-func TestIngestSameTitleDifferentAuthors(t *testing.T) {
-	lib := openTestLibrary(t)
-
-	ingestTestEpub(t, lib, buildTestEpub(t, "Selected Poems", "Alice"))
-	ingestTestEpub(t, lib, buildTestEpub(t, "Selected Poems", "Bob"))
-}
 
 // A book the indexer skipped is absent from the books table, so Index.Exists
 // cannot see it. Ingesting it again would leave two copies on disk with only
@@ -61,5 +40,19 @@ func TestIngestRejectsUnindexedBookOnDisk(t *testing.T) {
 	}
 	if _, err := h.Ingest(); !errors.Is(err, ErrDuplicateOnDisk) {
 		t.Fatalf("re-ingest err = %v, want ErrDuplicateOnDisk", err)
+	}
+}
+
+func TestCreateIngestReadOnlyDir(t *testing.T) {
+	lib := openTestLibrary(t)
+
+	if err := os.Chmod(lib.inboxTemp, 0444); err != nil {
+		t.Skip("cannot chmod inbox temp:", err)
+	}
+	t.Cleanup(func() { os.Chmod(lib.inboxTemp, 0755) })
+
+	_, err := lib.CreateIngest()
+	if err == nil {
+		t.Error("expected error when inbox temp is read-only")
 	}
 }

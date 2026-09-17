@@ -1,4 +1,9 @@
-package library
+// Concurrency, which spans impl.go's Edit and ingest.go's ingest path and so
+// pairs with neither. Two races are pinned: a cover write racing a metadata
+// edit on one book, and two simultaneous ingests of the same new book, where
+// exactly one must win and the other must see ErrDuplicate.
+
+package library_test
 
 import (
 	"bytes"
@@ -9,6 +14,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/library"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 )
 
@@ -20,7 +26,8 @@ import (
 // locked re-base the two rewriteEpub calls read the same pre-state and the
 // last rename silently drops the other's change (lost update).
 func TestEditWriteCoverConcurrentSameBook(t *testing.T) {
-	lib := openTestLibrary(t)
+	cfg := testConfig(t)
+	lib := openLib(t, cfg)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Race Book"))
 	id := book.ID()
 
@@ -30,25 +37,25 @@ func TestEditWriteCoverConcurrentSameBook(t *testing.T) {
 	}
 
 	titles := [2]string{"Race Book Alpha", "Race Book Beta"}
-	root := lib.store.Root()
+	root := cfg.Root
 	for i := range 10 {
 		title := titles[i%2]
 
 		var (
 			wg       sync.WaitGroup
-			edited   *Book
+			edited   *library.Book
 			editErr  error
 			coverErr error
 		)
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			edited, editErr = lib.Edit(id, Edits{Title: &title})
+			edited, editErr = lib.Edit(id, library.Edits{Title: &title})
 		}()
 		go func() {
 			defer wg.Done()
 			coverData := newCover.Bytes()
-			_, coverErr = lib.Edit(id, Edits{Cover: &coverData})
+			_, coverErr = lib.Edit(id, library.Edits{Cover: &coverData})
 		}()
 		wg.Wait()
 
@@ -103,7 +110,7 @@ func TestConcurrentDuplicateIngestRejected(t *testing.T) {
 		wg    sync.WaitGroup
 		mu    sync.Mutex
 		count int
-		books []*Book
+		books []*library.Book
 		errs  []error
 	)
 
@@ -146,7 +153,7 @@ func TestConcurrentDuplicateIngestRejected(t *testing.T) {
 	}
 
 	// Verify exactly one book exists in the library.
-	got, err := lib.Search(Query{Authors: []string{"Alice"}})
+	got, err := lib.Search(library.Query{Authors: []string{"Alice"}})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}

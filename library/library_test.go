@@ -6,6 +6,14 @@ import (
 	"testing"
 )
 
+func entryNames(entries []os.DirEntry) []string {
+	names := make([]string, len(entries))
+	for i, e := range entries {
+		names[i] = e.Name()
+	}
+	return names
+}
+
 func TestCleanInboxTempRemovesStaleEpub(t *testing.T) {
 	dir := t.TempDir()
 
@@ -95,10 +103,12 @@ func TestCleanInboxTempRemovesMultiple(t *testing.T) {
 	}
 }
 
-func entryNames(entries []os.DirEntry) []string {
-	names := make([]string, len(entries))
-	for i, e := range entries {
-		names[i] = e.Name()
+func TestCheckSameFilesystemMissingTarget(t *testing.T) {
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "nonexistent")
+
+	err := checkSameFilesystem(dir, missing)
+	if err == nil {
+		t.Fatal("expected error when target directory doesn't exist")
 	}
-	return names
 }
