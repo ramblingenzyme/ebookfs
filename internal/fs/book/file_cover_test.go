@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library"
@@ -23,9 +24,7 @@ func newTestCoverFile(t *testing.T, lib libfake.Lib, edit func(int64, library.Ed
 func TestCoverFileStatLength(t *testing.T) {
 	cf := newTestCoverFile(t, libfake.Lib{}, func(int64, library.Edits) error { return nil })
 
-	if s := cf.Stat(); s.Length != 16 {
-		t.Errorf("Stat().Length = %d, want 16", s.Length)
-	}
+	fstest.StatLength(t, cf, 16)
 }
 
 func TestCoverFileStatLengthNilLib(t *testing.T) {
@@ -46,16 +45,8 @@ func TestCoverFileOpenRead(t *testing.T) {
 	}
 	cf := newTestCoverFile(t, lib, func(int64, library.Edits) error { return nil })
 
-	fid := uint64(1)
-	if err := cf.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-	data, err := cf.Read(fid, 0, 50)
-	if err != nil {
-		t.Fatalf("Read: %v", err)
-	}
-	if string(data) != "cover image data" {
-		t.Errorf("Read = %q, want %q", data, "cover image data")
+	if got := fstest.Fid(t, cf, 1).Get(proto.Mode(0), 50); got != "cover image data" {
+		t.Errorf("Read = %q, want %q", got, "cover image data")
 	}
 }
 
@@ -71,16 +62,7 @@ func TestCoverFileWriteClose(t *testing.T) {
 		return nil
 	})
 
-	fid := uint64(1)
-	if err := cf.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-	if _, err := cf.Write(fid, 0, []byte("new cover")); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
-	if err := cf.Close(fid); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
+	fstest.Fid(t, cf, 1).Set(proto.Mode(0), "new cover")
 
 	if string(*written) != "new cover" {
 		t.Errorf("edit called with %q, want %q", string(*written), "new cover")
@@ -99,13 +81,9 @@ func TestCoverFileWriteEmptyDoesNotCallEdit(t *testing.T) {
 		return nil
 	})
 
-	fid := uint64(1)
-	if err := cf.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-	if err := cf.Close(fid); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
+	fid := fstest.Fid(t, cf, 1)
+	fid.Open(proto.Mode(0))
+	fid.Close()
 
 	if called {
 		t.Error("edit should not be called when no data was written")
@@ -120,16 +98,15 @@ func TestCoverFilePerFidBuffers(t *testing.T) {
 	}
 	cf := newTestCoverFile(t, lib, func(int64, library.Edits) error { return nil })
 
-	fid1, fid2 := uint64(1), uint64(2)
-	cf.Open(fid1, proto.Mode(0))
-	cf.Open(fid2, proto.Mode(0))
+	fid1, fid2 := fstest.Fid(t, cf, 1), fstest.Fid(t, cf, 2)
+	fid1.Open(proto.Mode(0))
+	fid2.Open(proto.Mode(0))
 
-	cf.Write(fid1, 0, []byte("fid1 data"))
+	fid1.Write(0, "fid1 data")
 
 	// Reads return the Open snapshot regardless of writes to any fid.
-	data1, _ := cf.Read(fid1, 0, 20)
-	data2, _ := cf.Read(fid2, 0, 20)
-	if string(data1) != "shared" || string(data2) != "shared" {
+	data1, data2 := fid1.Read(0, 20), fid2.Read(0, 20)
+	if data1 != "shared" || data2 != "shared" {
 		t.Errorf("reads = %q/%q, want both %q", data1, data2, "shared")
 	}
 }
@@ -142,11 +119,11 @@ func TestCoverFileWriteErrorPassesThrough(t *testing.T) {
 	}
 	cf := newTestCoverFile(t, lib, func(int64, library.Edits) error { return testutil.ErrTest })
 
-	fid := uint64(1)
-	cf.Open(fid, proto.Mode(0))
-	cf.Write(fid, 0, []byte("data"))
+	fid := fstest.Fid(t, cf, 1)
+	fid.Open(proto.Mode(0))
+	fid.Write(0, "data")
 
-	if err := cf.Close(fid); err != testutil.ErrTest {
+	if err := fid.WantCloseError(); err != testutil.ErrTest {
 		t.Errorf("Close error = %v, want %v", err, testutil.ErrTest)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library"
@@ -25,41 +26,27 @@ func newTestSnapshotFile(t *testing.T, data []byte) *SnapshotFile {
 }
 
 func TestSnapshotFileReadClamps(t *testing.T) {
-	sf := newTestSnapshotFile(t, []byte("hello world"))
-	if err := sf.Open(1, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
+	fid := fstest.Fid(t, newTestSnapshotFile(t, []byte("hello world")), 1)
+	fid.Open(proto.Mode(0))
 
 	// Partial read returns the requested sub-slice.
-	data, err := sf.Read(1, 6, 5)
-	if err != nil {
-		t.Fatalf("Read: %v", err)
-	}
-	if string(data) != "world" {
-		t.Errorf("Read(6,5) = %q, want %q", data, "world")
+	if got := fid.Read(6, 5); got != "world" {
+		t.Errorf("Read(6,5) = %q, want %q", got, "world")
 	}
 
 	// A count past the end is clamped to what remains.
-	data, _ = sf.Read(1, 6, 100)
-	if string(data) != "world" {
-		t.Errorf("Read(6,100) = %q, want %q", data, "world")
+	if got := fid.Read(6, 100); got != "world" {
+		t.Errorf("Read(6,100) = %q, want %q", got, "world")
 	}
 
 	// An offset past the end returns no bytes rather than erroring.
-	data, err = sf.Read(1, 100, 5)
-	if err != nil {
-		t.Fatalf("Read past end: %v", err)
-	}
-	if len(data) != 0 {
-		t.Errorf("Read past end = %d bytes, want 0", len(data))
+	if got := fid.Read(100, 5); got != "" {
+		t.Errorf("Read past end = %q, want no bytes", got)
 	}
 }
 
 func TestSnapshotFileReadUnopenedErrors(t *testing.T) {
-	sf := newTestSnapshotFile(t, []byte("data"))
-	if _, err := sf.Read(42, 0, 10); err == nil {
-		t.Error("expected error reading from an unopened fid")
-	}
+	fstest.Fid(t, newTestSnapshotFile(t, []byte("data")), 42).WantReadError()
 }
 
 func TestSnapshotFileOpenPropagatesLoadError(t *testing.T) {
@@ -72,22 +59,15 @@ func TestSnapshotFileOpenPropagatesLoadError(t *testing.T) {
 
 func TestSnapshotFilePerFidIsolation(t *testing.T) {
 	sf := newTestSnapshotFile(t, []byte("shared"))
-	sf.Open(1, proto.Mode(0))
-	sf.Open(2, proto.Mode(0))
+	fid1, fid2 := fstest.Fid(t, sf, 1), fstest.Fid(t, sf, 2)
+	fid1.Open(proto.Mode(0))
+	fid2.Open(proto.Mode(0))
 
 	// Closing one fid leaves the other readable.
-	if err := sf.Close(1); err != nil {
-		t.Fatalf("Close fid1: %v", err)
-	}
-	if _, err := sf.Read(1, 0, 6); err == nil {
-		t.Error("closed fid should no longer read")
-	}
-	data, err := sf.Read(2, 0, 6)
-	if err != nil {
-		t.Fatalf("Read fid2 after fid1 closed: %v", err)
-	}
-	if string(data) != "shared" {
-		t.Errorf("fid2 read = %q, want %q", data, "shared")
+	fid1.Close()
+	fid1.WantReadError()
+	if got := fid2.Read(0, 6); got != "shared" {
+		t.Errorf("fid2 read = %q, want %q", got, "shared")
 	}
 }
 
@@ -103,34 +83,21 @@ func newTestReadAtFile(t *testing.T, data string) *ReadAtFile {
 }
 
 func TestReadAtFileReadClamps(t *testing.T) {
-	raf := newTestReadAtFile(t, "hello world")
-	if err := raf.Open(1, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
+	fid := fstest.Fid(t, newTestReadAtFile(t, "hello world"), 1)
+	fid.Open(proto.Mode(0))
 
-	data, err := raf.Read(1, 6, 5)
-	if err != nil {
-		t.Fatalf("Read: %v", err)
-	}
-	if string(data) != "world" {
-		t.Errorf("Read(6,5) = %q, want %q", data, "world")
+	if got := fid.Read(6, 5); got != "world" {
+		t.Errorf("Read(6,5) = %q, want %q", got, "world")
 	}
 
 	// Reading at EOF returns no bytes and swallows io.EOF.
-	data, err = raf.Read(1, 100, 5)
-	if err != nil {
-		t.Fatalf("Read at EOF: %v", err)
-	}
-	if len(data) != 0 {
-		t.Errorf("Read at EOF = %d bytes, want 0", len(data))
+	if got := fid.Read(100, 5); got != "" {
+		t.Errorf("Read at EOF = %q, want no bytes", got)
 	}
 }
 
 func TestReadAtFileReadUnopenedErrors(t *testing.T) {
-	raf := newTestReadAtFile(t, "data")
-	if _, err := raf.Read(42, 0, 10); err == nil {
-		t.Error("expected error reading from an unopened fid")
-	}
+	fstest.Fid(t, newTestReadAtFile(t, "data"), 42).WantReadError()
 }
 
 func TestReadAtFileOpenPropagatesError(t *testing.T) {
@@ -143,18 +110,13 @@ func TestReadAtFileOpenPropagatesError(t *testing.T) {
 
 func TestReadAtFilePerFidIsolation(t *testing.T) {
 	raf := newTestReadAtFile(t, "shared")
-	raf.Open(1, proto.Mode(0))
-	raf.Open(2, proto.Mode(0))
+	fid1, fid2 := fstest.Fid(t, raf, 1), fstest.Fid(t, raf, 2)
+	fid1.Open(proto.Mode(0))
+	fid2.Open(proto.Mode(0))
 
-	if err := raf.Close(1); err != nil {
-		t.Fatalf("Close fid1: %v", err)
-	}
-	data, err := raf.Read(2, 0, 6)
-	if err != nil {
-		t.Fatalf("Read fid2 after fid1 closed: %v", err)
-	}
-	if string(data) != "shared" {
-		t.Errorf("fid2 read = %q, want %q", data, "shared")
+	fid1.Close()
+	if got := fid2.Read(0, 6); got != "shared" {
+		t.Errorf("fid2 read = %q, want %q", got, "shared")
 	}
 }
 
@@ -163,15 +125,12 @@ func TestReadAtFileCloseReleasesReader(t *testing.T) {
 	stat := NewStat(testutil.NewTestFS(t), "reader", 0444)
 	raf := NewReadAtFile(stat, func() (library.EpubReader, error) { return r, nil })
 
-	if err := raf.Open(1, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
+	fid := fstest.Fid(t, &raf, 1)
+	fid.Open(proto.Mode(0))
 	if r.Closed {
 		t.Fatal("reader should not be closed before Close")
 	}
-	if err := raf.Close(1); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
+	fid.Close()
 	if !r.Closed {
 		t.Error("reader should be closed after Close")
 	}
@@ -189,9 +148,8 @@ func TestSnapshotFileSnapshot(t *testing.T) {
 		t.Error("Snapshot reported data for an unopened fid")
 	}
 
-	if err := sf.Open(1, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
+	fid := fstest.Fid(t, sf, 1)
+	fid.Open(proto.Mode(0))
 	data, ok := sf.Snapshot(1)
 	if !ok {
 		t.Fatal("Snapshot reported no data for an open fid")
@@ -204,9 +162,7 @@ func TestSnapshotFileSnapshot(t *testing.T) {
 	if _, ok := sf.Snapshot(2); ok {
 		t.Error("Snapshot reported data for a different, unopened fid")
 	}
-	if err := sf.Close(1); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
+	fid.Close()
 	if _, ok := sf.Snapshot(1); ok {
 		t.Error("Snapshot still reported data after the fid was clunked")
 	}

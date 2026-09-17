@@ -7,6 +7,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library"
 
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 )
@@ -28,20 +29,11 @@ func TestEpubFileOpenRead(t *testing.T) {
 	}
 	ef := newTestEpubFile(t, "test.epub", lib, testutil.Fixed(testutil.MakeBook(1, "Test", "Author")))
 
-	fid := uint64(1)
-	if err := ef.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
+	fid := fstest.Fid(t, ef, 1)
+	if got := fid.Get(proto.Mode(0), 20); got != "epub content" {
+		t.Errorf("Read = %q, want %q", got, "epub content")
 	}
-	data, err := ef.Read(fid, 0, 20)
-	if err != nil {
-		t.Fatalf("Read: %v", err)
-	}
-	if string(data) != "epub content" {
-		t.Errorf("Read = %q, want %q", data, "epub content")
-	}
-	if err := ef.Close(fid); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
+	fid.Close()
 }
 
 func TestEpubFileStatSize(t *testing.T) {

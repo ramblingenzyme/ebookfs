@@ -6,6 +6,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library"
 
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 )
@@ -28,20 +29,11 @@ func TestReaderFileOpenRead(t *testing.T) {
 		},
 	})
 
-	fid := uint64(1)
-	if err := rf.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
+	fid := fstest.Fid(t, rf, 1)
+	if got := fid.Get(proto.Mode(0), 20); got != "hello epub" {
+		t.Errorf("Read = %q, want %q", got, "hello epub")
 	}
-	data, err := rf.Read(fid, 0, 20)
-	if err != nil {
-		t.Fatalf("Read: %v", err)
-	}
-	if string(data) != "hello epub" {
-		t.Errorf("Read = %q, want %q", data, "hello epub")
-	}
-	if err := rf.Close(fid); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
+	fid.Close()
 }
 
 func TestReaderFileStatReportsSize(t *testing.T) {
@@ -71,7 +63,5 @@ func TestReaderFileStatFallbackToZero(t *testing.T) {
 func TestReaderFileStatNilExporter(t *testing.T) {
 	rf := testReaderFile(t, nil)
 
-	if s := rf.Stat(); s.Length != 0 {
-		t.Errorf("Stat().Length with nil exporter = %d, want 0", s.Length)
-	}
+	fstest.StatLength(t, rf, 0)
 }
