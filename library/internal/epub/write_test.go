@@ -1340,3 +1340,35 @@ div > img { width: 100%; }
 		t.Errorf("the stylesheet's > was escaped:\n%s", got)
 	}
 }
+
+// TestSetAuthorsRenameDropsRefinements pins that a renamed author gets a fresh
+// creator rather than the old one relabelled, so a refinement written about the
+// old name does not end up describing the new one.
+//
+// Ours, not the spec's. §5.3.6 binds a refinement to an element by id and says
+// nothing about what an editor should do when the value under that id changes.
+func TestSetAuthorsRenameDropsRefinements(t *testing.T) {
+	path := writeEpub(t, baseEntries(opfWithAlternateScript))
+
+	authors := []bookmodel.Author{{Name: "Jane Smith", SortName: "Smith, Jane"}}
+	book, err := writeBib(path, edits.Edits{Authors: &authors})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(book.Authors) != 1 || book.Authors[0].Name != "Jane Smith" {
+		t.Fatalf("authors = %+v, want Jane Smith", book.Authors)
+	}
+
+	opfBytes, ok := readEntryFromFile(t, path, "OEBPS/content.opf")
+	if !ok {
+		t.Fatal("OPF entry not found")
+	}
+	if bytes.Contains(opfBytes, []byte("ドゥ・ジェーン")) {
+		t.Error("an alternate-script written about the old name survived the rename")
+	}
+	// The sort name the edit supplied is written, so the new creator is not
+	// simply bare.
+	if !bytes.Contains(opfBytes, []byte("Smith, Jane")) {
+		t.Error("the supplied sort name was not written")
+	}
+}

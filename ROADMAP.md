@@ -101,26 +101,18 @@ pattern as `meta.toml`, or as the first real consumer of the `BookSidecar`
 interface (V2 §5) once that lands — worth deciding at build time rather than
 now, since building it twice would be wasted work.
 
-### Lossy edit bugs
+### Lossy edit bugs — resolved
 
-Three known cases where an OPF edit loses data that was present before the
-edit, each with a `TODO` at the site in `library/internal/epub/edit.go`:
+All three cases recorded here are settled. A series rename now preserves each
+book's position and a series edit leaves sets and publisher bundles alone, both
+fixed by the epub rewrite. The third, an author edit dropping third-party
+refinements, was fixed by matching creators on name: an add, a removal or a
+reorder keeps them attached.
 
-- **Editing authors drops third-party refinements** (`setAuthors`, line
-  ~169). Author IDs are regenerated on every write, so refinements a
-  third-party tool attached to the old IDs — e.g. Calibre's or a publisher's
-  alternate-script name — are dropped along with them. Fix requires tracking
-  author identity by name so an edit can preserve refinements that don't
-  belong to ebookfs, instead of clearing and rewriting from scratch.
-- **Renaming a series resets every book's position to 1** (`Edit`, line
-  ~57). `setSeries` is always called with the caller-supplied index; a
-  rename-only call (no explicit index) should preserve each book's existing
-  position instead of defaulting it away.
-- **Editing series metadata removes all collections, not just the series**
-  (`setSeries`, line ~215). `belongs-to-collection` elements are removed
-  unconditionally; the removal should be scoped to
-  `collection-type="series"` so sets/bundles survive a series edit.
-
+A rename still does not carry them, and that is the intended behaviour rather
+than the remaining half of the bug. A refinement written about one name is not
+an assertion about another, and whoever wrote it is the authority who can write
+it again. `opf.reconcileCreators` records the reasoning.
 
 ---
 
@@ -130,7 +122,7 @@ Refactor `library/` into a standalone Go module with well-defined extension poin
 
 ### 1. Interface Segregation — done, on the consumer side
 
-Done before 1.0, the other way round from the plan recorded here. `library.Library` is a concrete struct, and each frontend package declares the interface it uses: `book.ContentReader` (Content), `registry.Editor` (Edit, plus the ContentReader it hands down), `inbox.Ingester` (CreateIngest), `views.StatsReader` (Stats), `ctl.SearchDeleter` (Search, Delete). `fs.Library` embeds them for the composition root, and is the only one of the five that carries that name.
+Done before 1.0, the other way round from the plan recorded here. `library.Library` is a concrete struct, and each frontend package declares the interface it uses: `book.ContentReader` (Content), `registry.Editor` (Edit, plus the ContentReader it hands down), `inbox.Ingester` (CreateIngest), `views.StatsReader` (Stats), `ctl.SearchDeleter` (Search, Delete). `fs.Library` embeds the five for the composition root.
 
 The library defines none of them, so adding a method stays additive and no sub-interface has to be frozen. A third-party frontend declares its own the same way.
 

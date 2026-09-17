@@ -82,6 +82,12 @@ func (f authorsField) set(authors []book.Author) {
 // author creator is dropped along with its refinements; creators that are not
 // authors are left alone throughout.
 //
+// A name that does not match is a new assertion rather than the old one
+// renamed, so it gets a fresh element. Pairing leftovers by position would
+// carry refinements onto a name their author never saw: D.3.1 defines
+// alternate-script as an expression of the refined value, a custom property may
+// be one too, and whoever wrote one is the authority who can write it again.
+//
 // Do not detach the unclaimed creators before the loop finishes. ensureID mints
 // ids by scanning the tree, so a detached creator is invisible to it and a later
 // creator could be given the same id.

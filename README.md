@@ -57,10 +57,7 @@ sudo umount /mnt/ebookfs
 - No PDF, mobi, cbz support, only epub
 - No DRM removal
 - No authentication or transport encryption — see [docs/security.md](./docs/security.md) before exposing the server beyond a trusted network
-## Bugs
-- Editing authors loses third-party metadata (e.g. alternate-script from Calibre/publishers)
-- Renaming a series resets all book positions to 1 (doesn't preserve existing index)
-- Editing series metadata removes all collections, including sets/bundles (not just series)
+- Renaming an author does not carry third-party refinements (e.g. Calibre's alternate-script) over to the new name. Adding, removing and reordering authors keep them
 
 ## Project goals
 - Network transparency
