@@ -8,8 +8,12 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
+// Layout and the names under it read no Store field, so these need no root on
+// disk. newStore would create a temp directory none of them touch.
+func layoutStore() *Store { return New("", "") }
+
 func TestLayout(t *testing.T) {
-	s, _ := newStore(t)
+	s := layoutStore()
 
 	loc := s.Layout([]book.Author{{Name: "Alice"}}, "My Title", 1)
 	wantRel := filepath.Join("Alice/My Title (1)", "My Title - Alice.epub")
@@ -23,7 +27,7 @@ func TestLayout(t *testing.T) {
 // title like "Either/Or" reaches Layout intact and this is the only thing
 // standing between it and a stray nested directory.
 func TestLayoutSlashInTitleStaysOneDirectory(t *testing.T) {
-	s, _ := newStore(t)
+	s := layoutStore()
 
 	loc := s.Layout([]book.Author{{Name: "AC/DC"}}, "Either/Or", 7)
 	dir := filepath.Dir(loc.EpubPath)
@@ -41,7 +45,7 @@ func TestLayoutSlashInTitleStaysOneDirectory(t *testing.T) {
 // and delete all then operating on the escaped path. "." collapses into the root
 // instead.
 func TestLayoutCannotEscapeTheLibraryRoot(t *testing.T) {
-	s, _ := newStore(t)
+	s := layoutStore()
 
 	for _, name := range []string{"..", ".", "...", " "} {
 		loc := s.Layout([]book.Author{{Name: name}}, "Title", 5)
@@ -55,7 +59,7 @@ func TestLayoutCannotEscapeTheLibraryRoot(t *testing.T) {
 }
 
 func TestLayoutUnknownAuthor(t *testing.T) {
-	s, _ := newStore(t)
+	s := layoutStore()
 
 	loc := s.Layout(nil, "Untitled", 99)
 	if loc.EpubPath != filepath.Join("Unknown/Untitled (99)", "Untitled.epub") {
