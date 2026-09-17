@@ -2,17 +2,26 @@
 // layered on top of the library's epub access. It is the only package that
 // depends on kepubify; nothing kepub-shaped reaches the library, store, or epub
 // APIs — those treat it as an ordinary consumer.
+//
+// Nothing here calls itself: the consumer is the kepubCache wrapper in
+// library/export.go, which adapts these methods to the library.Exporter the 9P
+// reader/ view is built on. Two of its calls produce a rendition, and both
+// funnel through Ensure, which holds the freshness rule:
+//
+//	Open  → Ensure → write → kepubify   (a 9P read, converting on demand)
+//	Warm  → warmer → Ensure → …         (off the read path, see warmer.go)
+//
+// The rest — Size, Filename — answer from the cache directory without
+// converting, because 9P stats every file it lists.
 package kepub
 
 import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/internal/syncutil"
@@ -33,9 +42,15 @@ type Cache struct {
 	dir string
 	src EpubSource
 
-	closeOnce sync.Once
-	locks     syncutil.KeyedMutex // per-book conversion lock
-	warmer    *warmer
+	locks  syncutil.KeyedMutex // per-book conversion lock
+	warmer *warmer
+
+	// ctx is cancelled by Close. kepubify honours it, so an in-flight
+	// conversion aborts instead of holding shutdown open for as long as one
+	// book takes to convert — Close is called after the 9P server is already
+	// down, outside main's shutdown deadline.
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	// convertFn is the epub-to-kepub converter. Defaults to convert;
 	// overridable in tests to avoid the kepubify dependency.
@@ -43,18 +58,25 @@ type Cache struct {
 }
 
 func NewCache(dir string, src EpubSource) *Cache {
+	ctx, cancel := context.WithCancel(context.Background())
 	c := &Cache{
 		dir:       dir,
 		src:       src,
 		convertFn: convert,
+		ctx:       ctx,
+		cancel:    cancel,
 	}
-	c.warmer = newWarmer(c.Ensure)
+	c.warmer = newWarmer(ctx, c.Ensure)
 	return c
 }
 
-// Close stops the warmer goroutines and blocks until they finish.
+// Close cancels conversions and blocks until the warmer goroutines finish.
+// Queued warms are dropped rather than drained: a warm is a hint, and the read
+// path converts on demand. Repeat calls are safe, and Warm after one is a
+// no-op that reaches no converter.
 func (c *Cache) Close() error {
-	c.closeOnce.Do(c.warmer.stop)
+	c.cancel()
+	c.warmer.wait()
 	return nil
 }
 
@@ -62,10 +84,6 @@ func (c *Cache) Close() error {
 // It enqueues the book; a full queue drops the hint and the read path still
 // converts on demand.
 func (c *Cache) Warm(b *book.Book) { c.warmer.warm(b) }
-
-func (c *Cache) path(b *book.Book) string {
-	return filepath.Join(c.dir, fmt.Sprintf("%d.kepub.epub", b.Meta.ID))
-}
 
 // Filename is the FAT-safe export name for b's kepub: the epub filename (already
 // sanitized by the store) with its .epub suffix replaced by .kepub.epub.
@@ -83,16 +101,6 @@ func (c *Cache) Size(b *book.Book) (int64, bool) {
 	return fi.Size(), true
 }
 
-// Ensure builds b's kepub if the cache is missing or stale, leaving a fresh
-// rendition on disk. It is idempotent (a fresh cache is a no-op) and serialized
-// per book, so concurrent warms and reads coalesce into a single conversion.
-func (c *Cache) Ensure(b *book.Book) error {
-	l := c.locks.For(b.Meta.ID)
-	l.Lock()
-	defer l.Unlock()
-	return c.ensureLocked(b)
-}
-
 // Open ensures b's kepub is fresh, then opens it for reading. This is the
 // read-path backstop when the proactive warmer hasn't run (or its conversion is
 // still in flight).
@@ -103,7 +111,14 @@ func (c *Cache) Open(b *book.Book) (epub.EpubReader, error) {
 	return epub.OpenReader(c.path(b), b.CoverPath)
 }
 
-func (c *Cache) ensureLocked(b *book.Book) error {
+// Ensure builds b's kepub if the cache is missing or stale, leaving a fresh
+// rendition on disk. It is idempotent (a fresh cache is a no-op) and serialized
+// per book, so concurrent warms and reads coalesce into a single conversion.
+func (c *Cache) Ensure(b *book.Book) error {
+	l := c.locks.For(b.Meta.ID)
+	l.Lock()
+	defer l.Unlock()
+
 	// Fresh iff the cache exists and is no older than the book's last
 	// modification time. An in-place epub rewrite updates DateModified,
 	// which invalidates the cached rendition.
@@ -120,6 +135,10 @@ func (c *Cache) ensureLocked(b *book.Book) error {
 	return c.write(b, content)
 }
 
+func (c *Cache) path(b *book.Book) string {
+	return filepath.Join(c.dir, fmt.Sprintf("%d.kepub.epub", b.Meta.ID))
+}
+
 // write converts src into a temp file in the cache dir, then atomically renames
 // it into place so a reader never observes a partial kepub.
 func (c *Cache) write(b *book.Book, src epub.EpubReader) error {
@@ -130,7 +149,7 @@ func (c *Cache) write(b *book.Book, src epub.EpubReader) error {
 	tmpName := tmp.Name()
 	defer os.Remove(tmpName) // no-op once renamed; cleans up on any error path
 
-	if err := c.convertFn(context.Background(), tmp, src, b.EpubSize); err != nil {
+	if err := c.convertFn(c.ctx, tmp, src, b.EpubSize); err != nil {
 		tmp.Close()
 		return err
 	}
@@ -142,66 +161,4 @@ func (c *Cache) write(b *book.Book, src epub.EpubReader) error {
 		return err
 	}
 	return os.Rename(tmpName, c.path(b))
-}
-
-const (
-	warmerGoroutines = 4    // concurrent conversions
-	warmerQueueSize  = 4096 // max backlog before drops
-)
-
-// warmer converts kepubs off the read path. The exporter's Warm method enqueues
-// books here so their caches are built before the next rsync. Enqueue is
-// non-blocking; a full queue drops the warm and the read path converts on demand.
-type warmer struct {
-	ensure func(*book.Book) error
-	ch     chan *book.Book
-	wg     sync.WaitGroup
-
-	// mu guards closed and, crucially, brackets the channel send in warm so it
-	// can never race stop's close(ch) — a send on a closed channel panics even
-	// inside a select. An atomic flag would not suffice: the check and the send
-	// must be one critical section against the close.
-	mu     sync.Mutex
-	closed bool
-}
-
-func newWarmer(ensure func(*book.Book) error) *warmer {
-	w := &warmer{ensure: ensure, ch: make(chan *book.Book, warmerQueueSize)}
-	w.wg.Add(warmerGoroutines)
-	for range warmerGoroutines {
-		go w.run()
-	}
-	return w
-}
-
-func (w *warmer) warm(b *book.Book) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if w.closed {
-		return // stopped; drop the hint
-	}
-	select {
-	case w.ch <- b:
-	default: // full; drop the hint
-	}
-}
-
-// stop closes the queue and blocks until the warmer goroutines drain it and
-// exit. After stop returns (or once closed is set), warm drops hints instead of
-// sending, so it never touches the closed channel.
-func (w *warmer) stop() {
-	w.mu.Lock()
-	w.closed = true
-	close(w.ch)
-	w.mu.Unlock()
-	w.wg.Wait()
-}
-
-func (w *warmer) run() {
-	defer w.wg.Done()
-	for b := range w.ch {
-		if err := w.ensure(b); err != nil {
-			slog.Warn("kepub: warm book failed", "book_id", b.Meta.ID, "error", err)
-		}
-	}
 }
