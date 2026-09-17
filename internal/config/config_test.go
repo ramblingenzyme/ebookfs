@@ -130,18 +130,6 @@ statuses = ["invalid_status"]
 		}
 	})
 
-	t.Run("convert without cache dir", func(t *testing.T) {
-		path := writeConfig(t, reqLibSection+`
-[reader]
-convert = true
-cache_dir = ""
-`)
-		_, err := Load(path)
-		if err == nil {
-			t.Fatal("expected error: cache_dir required when convert=true")
-		}
-	})
-
 	t.Run("convert with cache dir", func(t *testing.T) {
 		path := writeConfig(t, reqLibSection+`
 [reader]

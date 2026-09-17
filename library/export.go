@@ -1,17 +1,40 @@
 package library
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/internal/naming"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/library/internal/kepub"
 )
+
+// validateReaderConfig enforces ReaderConfig's invariants here rather than at
+// whatever boundary the caller read the values from, because the struct is
+// public and a caller may build one in Go.
+func (l *Library) validateReaderConfig(cfg ReaderConfig) error {
+	if !cfg.Convert {
+		return nil
+	}
+	if cfg.CacheDir == "" {
+		return errors.New("reader config: cache dir is required when converting")
+	}
+	// A cache inside the library root is walked as if it held books, so the
+	// store would try to index converted kepubs.
+	root := filepath.Clean(l.store.Root())
+	dir := filepath.Clean(cfg.CacheDir)
+	if dir == root || strings.HasPrefix(dir, root+string(filepath.Separator)) {
+		return fmt.Errorf("reader config: cache dir %q must be outside the library root %q", dir, root)
+	}
+	return nil
+}
 
 func newExporter(cfg ReaderConfig, lib *Library) (Exporter, error) {
 	if cfg.Convert {
@@ -84,7 +107,12 @@ func (e epubExporter) Size(b *Book) (int64, bool) {
 func (e epubExporter) Warm(*Book)              {}
 func (e epubExporter) Filename(b *Book) string { return b.Filename() }
 
+// Exporter creates an export rendition for a reader view. Resources it holds
+// are released by Library.Close, so the caller has no teardown to perform.
 func (l *Library) Exporter(cfg ReaderConfig) (Exporter, error) {
+	if err := l.validateReaderConfig(cfg); err != nil {
+		return nil, err
+	}
 	e, err := newExporter(cfg, l)
 	if err != nil {
 		return nil, err

@@ -2,25 +2,11 @@ package config
 
 import (
 	"fmt"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
-
-// isSubPath reports whether child is the same directory as parent or lives
-// inside it. Both paths are cleaned before comparison so trailing slashes,
-// "./", and redundant separators cannot defeat the check.
-func isSubPath(parent, child string) bool {
-	parent = filepath.Clean(parent)
-	child = filepath.Clean(child)
-	if parent == child {
-		return true
-	}
-	return strings.HasPrefix(child, parent+string(filepath.Separator))
-}
 
 type Config struct {
 	Library LibraryConfig `toml:"library"`
@@ -123,12 +109,6 @@ func (c *Config) validateReader() error {
 		if !book.IsValidStatus(s) {
 			return fmt.Errorf("reader.statuses contains invalid status %q: must be %s", s, book.StatusList())
 		}
-	}
-	if c.Reader.Convert && c.Reader.CacheDir == "" {
-		return fmt.Errorf("reader.cache_dir is required when reader.convert = true")
-	}
-	if c.Reader.CacheDir != "" && isSubPath(c.Library.Root, c.Reader.CacheDir) {
-		return fmt.Errorf("reader.cache_dir (%q) must be outside library.root (%q): the store walk would treat cached files as books", c.Reader.CacheDir, c.Library.Root)
 	}
 	return nil
 }

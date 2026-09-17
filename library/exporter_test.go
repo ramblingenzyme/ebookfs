@@ -2,6 +2,7 @@ package library
 
 import (
 	"errors"
+	"path/filepath"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
@@ -178,4 +179,33 @@ func TestEpubExporter_Dirname(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestExporterRejectsBadReaderConfig pins that ReaderConfig's invariants are
+// enforced by the package that owns the struct, not only by whatever parsed the
+// values. A caller building one in Go gets the same checks a TOML file does.
+func TestExporterRejectsBadReaderConfig(t *testing.T) {
+	t.Run("convert without a cache dir", func(t *testing.T) {
+		lib := openTestLibrary(t)
+		if _, err := lib.Exporter(ReaderConfig{Convert: true}); err == nil {
+			t.Error("Exporter accepted convert with no cache dir")
+		}
+	})
+
+	t.Run("cache dir inside the library root", func(t *testing.T) {
+		cfg := testConfig(t)
+		lib := openLib(t, cfg)
+		inside := filepath.Join(cfg.Root, "kepub-cache")
+		if _, err := lib.Exporter(ReaderConfig{Convert: true, CacheDir: inside}); err == nil {
+			t.Error("Exporter accepted a cache dir the store walk would index")
+		}
+	})
+
+	t.Run("cache dir outside the library root", func(t *testing.T) {
+		cfg := testConfig(t)
+		lib := openLib(t, cfg)
+		if _, err := lib.Exporter(ReaderConfig{Convert: true, CacheDir: t.TempDir()}); err != nil {
+			t.Errorf("Exporter rejected a valid cache dir: %v", err)
+		}
+	})
 }
