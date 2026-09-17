@@ -1372,3 +1372,40 @@ func TestSetAuthorsRenameDropsRefinements(t *testing.T) {
 		t.Error("the supplied sort name was not written")
 	}
 }
+
+// TestRewriteWithNoEditsIsATotalNoOp pins the short circuit Rewrite's doc
+// promises: an Edits carrying nothing returns b.Bib verbatim and leaves the
+// file alone. library.Edit depends on both halves. It calls Rewrite on every
+// edit including meta-only ones, so a rewrite here would rebuild the zip and
+// restamp dcterms:modified for a change to a rating.
+//
+// The Bib handed in deliberately disagrees with the file, so a Rewrite that
+// re-parsed instead of short-circuiting would return the file's title rather
+// than this one.
+func TestRewriteWithNoEditsIsATotalNoOp(t *testing.T) {
+	path := buildEpub(t, epub3(`<dc:title>On Disk</dc:title><dc:creator>Alice</dc:creator>`))
+
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read epub: %v", err)
+	}
+
+	b := book(t, path)
+	b.Bib.Title = "Not What The File Says"
+
+	got, err := epub.Rewrite(path, b, edits.Edits{})
+	if err != nil {
+		t.Fatalf("Rewrite: %v", err)
+	}
+	if got.Title != "Not What The File Says" {
+		t.Errorf("Title = %q, want the caller's Bib returned untouched", got.Title)
+	}
+
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("re-read epub: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Error("the epub was rewritten for an edit that asked for nothing")
+	}
+}

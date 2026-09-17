@@ -207,3 +207,48 @@ func TestDeleteWithReadOnlyDirError(t *testing.T) {
 		t.Error("expected error deleting a read-only book directory")
 	}
 }
+
+// TestUpdateMovesWritesAndObserves pins what Library.Edit gets from one call:
+// the book lands at the new location, the sidecar there carries the meta handed
+// in, and the returned observation describes the file at the new path. That
+// last part is load-bearing — the observation goes straight into the index as
+// the book's drift record, so one describing the pre-move file would make the
+// next startup see drift that isn't there and rebuild the whole library.
+func TestUpdateMovesWritesAndObserves(t *testing.T) {
+	s, root := newStore(t)
+
+	const contents = "epub-bytes"
+	oldName := "Title - Alice.epub"
+	writeBook(t, root, "Alice/Title (1)", oldName, contents, &book.Meta{ID: 1, Status: "unread"})
+
+	from := book.Location{EpubPath: filepath.Join("Alice/Title (1)", oldName)}
+	newName := "New Title - Alice & Bob.epub"
+	to := book.Location{EpubPath: filepath.Join("Alice & Bob/New Title (1)", newName)}
+
+	pi, err := s.Update(from, to, &book.Meta{ID: 1, Status: "read", Rating: 4})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(root, to.EpubPath)); err != nil {
+		t.Errorf("epub not at the new location: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Alice")); !os.IsNotExist(err) {
+		t.Errorf("old author directory survived an emptying move, err=%v", err)
+	}
+
+	meta, err := s.ReadMeta(to)
+	if err != nil {
+		t.Fatalf("ReadMeta at the new location: %v", err)
+	}
+	if meta.Status != "read" || meta.Rating != 4 {
+		t.Errorf("sidecar = %+v, want the meta Update was handed", meta)
+	}
+
+	if pi.IsUnobserved() {
+		t.Error("Update returned the unobserved marker for a book it had just written")
+	}
+	if pi.Size != int64(len(contents)) {
+		t.Errorf("observed size = %d, want %d from the file at the new path", pi.Size, len(contents))
+	}
+}
