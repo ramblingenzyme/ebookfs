@@ -296,3 +296,52 @@ func TestDeleteNonexistentBookErrors(t *testing.T) {
 		t.Errorf("error = %v, want ErrBookNotFound", err)
 	}
 }
+
+// TestEditMissingBookIsErrBookNotFound completes the error-identity contract.
+// Get, Content and Delete already assert it; Edit is the remaining mutation
+// that addresses a book by id, and a frontend distinguishes "no such book"
+// from an index failure only through errors.Is.
+func TestEditMissingBookIsErrBookNotFound(t *testing.T) {
+	lib := openTestLibrary(t)
+
+	if _, err := lib.Edit(9999, library.Edits{Status: new("read")}); !errors.Is(err, library.ErrBookNotFound) {
+		t.Errorf("Edit(9999) err = %v, want ErrBookNotFound", err)
+	}
+}
+
+// TestSearchSnapshotsAreImmutable pins the concurrency contract stated on
+// Library: a *Book handed out is a snapshot the library never mutates. The 9P
+// tree relies on it — BookDir holds one of these behind an atomic pointer and
+// reads it from many goroutines with no lock — so a library that edited a
+// returned Book in place would tear values under those readers.
+func TestSearchSnapshotsAreImmutable(t *testing.T) {
+	lib := openTestLibrary(t)
+	ingestTestEpub(t, lib, buildTestEpub(t, "Before", "Alice"))
+
+	got, err := lib.Search(library.Query{})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	held := got[0]
+
+	if _, err := lib.Edit(held.ID(), library.Edits{Title: new("After")}); err != nil {
+		t.Fatalf("Edit: %v", err)
+	}
+
+	if held.Title() != "Before" {
+		t.Errorf("the held snapshot changed to %q; the library mutated a Book it had handed out", held.Title())
+	}
+
+	// The getters copy too, so a caller cannot reach back through one.
+	authors := held.Authors()
+	authors[0].Name = "Mallory"
+	if held.Authors()[0].Name != "Alice" {
+		t.Error("Authors() handed out the book's own slice; mutating it changed the snapshot")
+	}
+	tags := held.Tags()
+	tags = append(tags, "injected")
+	_ = tags
+	if len(held.Tags()) != 0 {
+		t.Error("Tags() handed out the book's own slice")
+	}
+}
