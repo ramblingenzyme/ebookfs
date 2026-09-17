@@ -11,7 +11,6 @@ import (
 func TestIngest(t *testing.T) {
 	s, root := newStore(t)
 
-	// Stage a fake epub.
 	tmpEpub := filepath.Join(root, ".inbox-tmp", "staged.epub")
 	if err := os.MkdirAll(filepath.Dir(tmpEpub), 0755); err != nil {
 		t.Fatal(err)
@@ -27,7 +26,6 @@ func TestIngest(t *testing.T) {
 		t.Fatalf("Ingest: %v", err)
 	}
 
-	// Verify the epub landed at the right place.
 	bookDir := filepath.Join(root, loc.Dir())
 	if _, err := os.Stat(bookDir); err != nil {
 		t.Errorf("book directory not created: %v", err)
@@ -44,7 +42,6 @@ func TestIngest(t *testing.T) {
 		t.Errorf("epub content = %q, want %q", string(data), "fake-epub-content")
 	}
 
-	// Verify meta.toml was written.
 	metaPath := filepath.Join(bookDir, metaFilename)
 	if _, err := os.Stat(metaPath); err != nil {
 		t.Errorf("meta.toml not found: %v", err)
@@ -58,10 +55,9 @@ func TestIngest(t *testing.T) {
 	}
 }
 
-// TestIngestSurfacesWriteMetaFailure verifies that Ingest returns an error
-// when the sidecar write fails, but does NOT clean up — the caller is
-// responsible for deciding whether to delete the partial directory.
-// REVIEW: why?
+// Ingest returns an error when the sidecar write fails, but does not clean up:
+// the caller is responsible for deciding whether to delete the partial
+// directory.
 func TestIngestSurfacesWriteMetaFailure(t *testing.T) {
 	s, root := newStore(t)
 
@@ -85,9 +81,9 @@ func TestIngestSurfacesWriteMetaFailure(t *testing.T) {
 	}
 }
 
-// TestIngestMissingStagedEpub is the earlier failure: nothing to move into
-// place. The book directory is created before the rename is attempted, so this
-// pins that the error is surfaced rather than leaving a half-built book behind.
+// The earlier failure: nothing to move into place. The book directory is
+// created before the rename is attempted, so the error is surfaced rather than
+// leaving a half-built book behind.
 func TestIngestMissingStagedEpub(t *testing.T) {
 	s, root := newStore(t)
 

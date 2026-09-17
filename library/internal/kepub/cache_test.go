@@ -90,13 +90,12 @@ func TestCacheSize(t *testing.T) {
 	c := NewCache(dir, noopSource{})
 	b := makeBook(1, "Test", "Alice")
 
-	// No cache file yet — should report cold.
+	// No cache file yet, so it reports cold.
 	_, ok := c.Size(b)
 	if ok {
 		t.Error("Size should report cold for missing cache file")
 	}
 
-	// Create a cache file.
 	cachePath := filepath.Join(dir, "1.kepub.epub")
 	if err := os.WriteFile(cachePath, []byte("kepub-data"), 0644); err != nil {
 		t.Fatal(err)
@@ -177,7 +176,6 @@ func TestCacheEnsureWithZeroDateModified(t *testing.T) {
 	b := makeBook(1, "Test", "Alice")
 	b.EpubSize = 9
 
-	// Ensure the cache file is created, then verify it on disk.
 	if err := c.Ensure(b); err != nil {
 		t.Fatalf("Ensure: %v", err)
 	}

@@ -12,7 +12,7 @@ func TestWalk(t *testing.T) {
 	writeBook(t, root, "Author, A/Book One (1)", "Book One - A.epub", "book1", &book.Meta{ID: 1})
 	writeBook(t, root, "Author, A/Book Two (2)", "Book Two - A.epub", "book2", &book.Meta{ID: 2})
 	writeBook(t, root, "Author, B/Book Three (3)", "Book Three - B.epub", "book3", &book.Meta{ID: 3})
-	// meta.toml present but no epub — should be skipped gracefully.
+	// meta.toml present but no epub: skipped gracefully.
 	writeBook(t, root, "Author, C/Stale (4)", "", "", &book.Meta{ID: 4})
 
 	results, err := s.Walk()

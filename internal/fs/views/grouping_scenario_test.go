@@ -27,11 +27,10 @@ import (
 )
 
 // groupingView describes a directory that files books into subdirectories keyed
-// by some property of the book — author, series, tag, status. The four differ
+// by some property of the book (author, series, tag, status). The four differ
 // only in which property they read and how many values it can hold, so the
 // behaviour they share (a group appears with its first book, is pruned with its
-// last, and follows the book when the property changes) is asserted once here
-// rather than restated four times over.
+// last, and follows the book when the property changes) is asserted once here.
 type groupingView struct {
 	name   string
 	newDir func(*registry.BookRegistry) fs.Dir
@@ -136,11 +135,11 @@ func mustGroupEntries(t *testing.T, d fs.Dir, key string) []string {
 	return names
 }
 
-// TestGroupNamesAreOneComponent pins that a group directory name cannot contain
-// a path separator. Author and series names are metadata read verbatim from the
-// epub, so a '/' in one reaches these views intact; an entry carrying it is one
-// a 9P client can never walk to, which hides every book filed under it. by-tag
-// already guarded this with tagEntryName; by-author and by-series did not.
+// A group directory name cannot contain a path separator. Author and series
+// names are metadata read verbatim from the epub, so a '/' in one reaches these
+// views intact; an entry carrying it is one a 9P client can never walk to, which
+// hides every book filed under it. by-tag already guarded this with
+// tagEntryName; by-author and by-series did not.
 func TestGroupNamesAreOneComponent(t *testing.T) {
 	for _, tc := range []struct {
 		name string

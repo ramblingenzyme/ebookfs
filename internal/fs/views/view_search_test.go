@@ -138,10 +138,9 @@ func TestSearchHandleConcurrentRequeryAndRegistryEvents(t *testing.T) {
 	}
 }
 
-// TestMakeMatchesFn covers the membership predicate field by field. It is the
-// single authority a handle uses for both its resync and its live updates, so
-// every field needs a matching and a non-matching case, and the AND across
-// fields needs one where a single field fails while the rest hold.
+// makeMatchesFn is the single authority a handle uses for both its resync and
+// its live updates, so every field needs a matching and a non-matching case, and
+// the AND across fields needs one where a single field fails while the rest hold.
 func TestMakeMatchesFn(t *testing.T) {
 	base := func() *library.Book {
 		b := makeBook(7, "Foundation and Empire", "Isaac Asimov", "Ray Bradbury")
@@ -170,7 +169,7 @@ func TestMakeMatchesFn(t *testing.T) {
 		// Any one author of a multi-author book is enough.
 		{"co-author matches", library.Query{Authors: []string{"Ray Bradbury"}}, base, true},
 		{"author does not match", library.Query{Authors: []string{"J.R.R. Tolkien"}}, base, false},
-		// Authors compare exactly — unlike titles, they are not a substring field.
+		// Authors compare exactly; unlike titles, they are not a substring field.
 		{"author is not a substring match", library.Query{Authors: []string{"Asimov"}}, base, false},
 
 		{"tag matches", library.Query{Tags: []string{"sci-fi"}}, base, true},
@@ -223,9 +222,9 @@ func TestMakeMatchesFn(t *testing.T) {
 	}
 }
 
-// TestSearchCtlReadsCommittedQuery covers ctl's read side. The value is
-// snapshotted at open like every other file in the tree, so a fid reports the
-// query that was current when it opened rather than tracking later requeries.
+// The value is snapshotted at open like every other file in the tree, so a fid
+// reports the query that was current when it opened rather than tracking later
+// requeries.
 func TestSearchCtlReadsCommittedQuery(t *testing.T) {
 	_, sd := newTestSearchDir(t, 0, 0)
 	handle := sd.allocateHandle()
@@ -269,9 +268,8 @@ func TestSearchCtlReadsCommittedQuery(t *testing.T) {
 	}
 }
 
-// TestSearchCloneAllocatesHandlePerFid drives allocation the way a client does:
-// every open of clone mints a handle, and reading the fid back reports which
-// one. Clunking clone must not reclaim it — the handle outlives the fid that
+// Every open of clone mints a handle, and reading the fid back reports which
+// one. Clunking clone must not reclaim it: the handle outlives the fid that
 // created it, and is released only by ctl or the cleanup sweep.
 func TestSearchCloneAllocatesHandlePerFid(t *testing.T) {
 	_, sd := newTestSearchDir(t, 0, 0)
@@ -320,9 +318,9 @@ func TestSearchCloneAllocatesHandlePerFid(t *testing.T) {
 	}
 }
 
-// TestSearchCtlExecutesQueryOnClunk pins the buffered-write contract: the query
-// is accumulated by Write and only run at clunk, so a client that writes in
-// several chunks gets one search rather than a partial one per write.
+// The buffered-write contract: the query is accumulated by Write and only run at
+// clunk, so a client that writes in several chunks gets one search rather than a
+// partial one per write.
 func TestSearchCtlExecutesQueryOnClunk(t *testing.T) {
 	reg, sd := newTestSearchDir(t, 0, 0)
 	handle := sd.allocateHandle()
@@ -368,8 +366,8 @@ func TestSearchCtlExecutesQueryOnClunk(t *testing.T) {
 	}
 }
 
-// TestSearchCtlRejectsUnparseableQuery checks the error surfaces at clunk and
-// leaves the previous results standing, rather than clearing them to nothing.
+// The error surfaces at clunk and leaves the previous results standing, rather
+// than clearing them to nothing.
 func TestSearchCtlRejectsUnparseableQuery(t *testing.T) {
 	reg, sd := newTestSearchDir(t, 0, 0)
 	handle := sd.allocateHandle()
@@ -394,9 +392,9 @@ func TestSearchCtlRejectsUnparseableQuery(t *testing.T) {
 	}
 }
 
-// TestSearchCtlIgnoresEmptyClunk covers the two no-op paths: a fid clunked
-// without ever writing, and one that wrote only whitespace. Neither may be
-// treated as a query, or opening ctl to read it would wipe the results.
+// The two no-op paths: a fid clunked without ever writing, and one that wrote
+// only whitespace. Neither may be treated as a query, or opening ctl to read it
+// would wipe the results.
 func TestSearchCtlIgnoresEmptyClunk(t *testing.T) {
 	reg, sd := newTestSearchDir(t, 0, 0)
 	handle := sd.allocateHandle()
@@ -432,10 +430,9 @@ func TestSearchCtlIgnoresEmptyClunk(t *testing.T) {
 	}
 }
 
-// TestSearchCtlCloseTearsDownHandle covers the client-driven release path.
-// Dropping the directory is only half of it: the results dir must also come off
-// the registry, or a handle no client can reach goes on receiving every book
-// event for the life of the process.
+// The client-driven release path. Dropping the directory is only part of it:
+// the results dir must also come off the registry, or a handle no client can
+// reach goes on receiving every book event for the life of the process.
 func TestSearchCtlCloseTearsDownHandle(t *testing.T) {
 	reg, sd := newTestSearchDir(t, 0, 0)
 	handle := sd.allocateHandle()
@@ -477,9 +474,9 @@ func TestSearchCtlCloseTearsDownHandle(t *testing.T) {
 	}
 }
 
-// TestSearchDirEvictsHandlesPastTTL pins the idle sweep. Allocation runs it
-// first, so a fresh open is enough to reclaim an abandoned handle — no waiting
-// on the five-minute cleanup ticker.
+// The idle sweep. Allocation runs it first, so a fresh open is enough to
+// reclaim an abandoned handle, with no waiting on the five-minute cleanup
+// ticker.
 func TestSearchDirEvictsHandlesPastTTL(t *testing.T) {
 	_, sd := newTestSearchDir(t, time.Hour, 0)
 
@@ -498,10 +495,9 @@ func TestSearchDirEvictsHandlesPastTTL(t *testing.T) {
 	}
 }
 
-// TestSearchDirEnforcesMaxHandles pins the cap itself. maxHandles is the only
-// thing bounding how many live listings a client can pin in memory, each one
-// registered for every book event, so a cap that admits one more than it says
-// is a cap that cannot be trusted to hold anywhere.
+// maxHandles is the only thing bounding how many live listings a client can pin
+// in memory, each one registered for every book event, so a cap that admits one
+// more than it says is a cap that cannot be trusted to hold anywhere.
 func TestSearchDirEnforcesMaxHandles(t *testing.T) {
 	const maxHandles = 3
 	_, sd := newTestSearchDir(t, 0, maxHandles)

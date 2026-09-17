@@ -1,20 +1,18 @@
 // Package epub_test drives the package from the outside, through Rewrite and
-// Parse only, and pins what an edit is allowed to do to a file — the part that
-// must not change.
+// Parse only, and pins what an edit is allowed to do to a file.
 //
 // The rules under test:
 //
 //   - an edit preserves every piece of metadata it was not asked to change,
 //     including metadata ebookfs did not write and does not understand;
-//   - an edit round-trips, i.e. Parse reads back what the edit asked for;
-//   - an edit is idempotent, so applying it twice does not accumulate
-//     duplicates or churn the file further.
+//   - an edit round-trips, so Parse reads back what the edit asked for;
+//   - an edit is idempotent, so applying it twice accumulates no duplicates and
+//     churns the file no further.
 //
-// Past the table-driven tests carrying those rules, the rest of the file pins
-// choices rather than rules: a calibre convention, a deliberate divergence, a
-// known-wrong behaviour held still. Those are ours to revisit, and each says in
-// its own comment what would justify changing it. Conformance assertions live in
-// spec_ext_test.go.
+// Past those table-driven tests, the rest of the file pins choices rather than
+// rules: a calibre convention, a deliberate divergence, a known-wrong behaviour
+// held still. Each says in its own comment what would justify changing it.
+// Conformance assertions live in spec_ext_test.go.
 package epub_test
 
 import (
@@ -35,9 +33,10 @@ import (
 // item is a piece of metadata no part of ebookfs writes, reads, or understands:
 // a publisher's alternate script for an author, a series ISSN, a set the book
 // belongs to, an editor, a calibre column. An edit that changes something else
-// must leave every one of them exactly where it was. Both bugs this suite
-// exists to catch — dropped creator refinements, a dropped series identifier —
-// were failures of that rule.
+// must leave every one of them exactly where it was.
+//
+// Both bugs this suite exists to catch, dropped creator refinements and a
+// dropped series identifier, were failures of that rule.
 type item struct {
 	name string
 	path string // etree path, relative to <metadata>
@@ -212,8 +211,8 @@ func TestRewritePreservesForeignMetadata(t *testing.T) {
 // assertOutsideMetadataUnchanged pins the widest form of the preservation rule:
 // a metadata edit changes nothing outside <metadata>. Serializing the manifest
 // and the spine and requiring them byte-identical catches more than naming the
-// attributes would — a dropped properties="cover-image", a lost spine toc, a
-// reordered item — and needs no list to keep in step with the fixtures.
+// attributes would: a dropped properties="cover-image", a lost spine toc, or a
+// reordered item, and needs no list to keep in step with the fixtures.
 //
 // Only metadata edits. A cover edit is supposed to touch the manifest, and the
 // tests that own that behaviour assert it themselves.
@@ -259,8 +258,8 @@ func TestRewriteRoundTrips(t *testing.T) {
 			if b.Title != "New Title" {
 				t.Errorf("title = %q", b.Title)
 			}
-			// Documented rule: a title change without a new sort title clears
-			// the old one, which described the old title.
+			// A title change without a new sort title clears the old one, which
+			// described the old title.
 			if b.SortTitle != "" {
 				t.Errorf("sort title = %q, want cleared by the title change", b.SortTitle)
 			}
@@ -330,15 +329,10 @@ func TestRewriteRoundTrips(t *testing.T) {
 	}
 }
 
-// TestRewriteIsIdempotent applies the same edit twice. The second write must
-// produce byte-identical OPF: anything else means the writer appends where it
-// should replace, and repeated edits would grow the file or reorder it forever.
-//
-// synctest freezes the clock so dcterms:modified cannot differ between the two
-// writes for the trivial reason that a wall-clock second elapsed between them,
-// which is a property of the machine and not of the writer. That the stamp is
-// left alone by an edit changing nothing is its own rule, pinned by
-// TestModifiedStampIsWrittenOnlyForARealChange.
+// The second write must produce byte-identical OPF, or the writer appends where
+// it should replace and repeated edits grow the file forever. synctest freezes
+// the clock so dcterms:modified cannot differ for the trivial reason that a
+// second elapsed.
 func TestRewriteIsIdempotent(t *testing.T) {
 	for _, c := range corpora() {
 		for _, tc := range preservingEdits() {
@@ -364,18 +358,10 @@ func TestRewriteIsIdempotent(t *testing.T) {
 	}
 }
 
-// TestRewriteIsIdempotentOnARebindingDocument is the corpus test's blind spot:
-// no fixture above rebinds a prefix, so none takes a second edit on a document
-// where our property is spelled differently from how we would write it fresh.
-//
-// sameProperty on the read side is what keeps it stable. The first edit declares
-// dcterms2; every later one must recognise that element as ours or mint
-// dcterms3, dcterms4 — growing the package element once per save. The foreign
-// property is checked each pass for the converse: recognising ours must not
-// start meaning we recognise theirs.
-//
-// spell's reuse branch never runs here (the element is found, not created) and
-// is covered in opf/vocab_test.go.
+// No fixture above rebinds a prefix, so none takes a second edit on a document
+// spelling our property differently from how we would write it fresh. The first
+// edit declares dcterms2; every later one must recognise that element as ours
+// or mint dcterms3, dcterms4, growing the package element once per save.
 func TestRewriteIsIdempotentOnARebindingDocument(t *testing.T) {
 	opf := strings.Replace(epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>The Title</dc:title>
@@ -421,15 +407,12 @@ func TestRewriteIsIdempotentOnARebindingDocument(t *testing.T) {
 	}
 }
 
-// --- packages carrying both series encodings ---------------------------------
+// --- packages carrying both series encodings ---
 //
 // A version="2.0" package may carry a belongs-to-collection meta (OPF 2.0
 // §2.2.10 lets <meta> carry anything), and the reader prefers the EPUB 3
-// collection whatever the version says — so a file can hold the series twice, in
+// collection whatever the version says. So a file can hold the series twice, in
 // two encodings that disagree.
-//
-// The rule: write every encoding the file already uses, plus the one its version
-// implies. Neither test below lets the two drift apart.
 
 func TestEPUB2SeriesEditUpdatesBothEncodings(t *testing.T) {
 	path := buildEpub(t, epub2(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
@@ -456,9 +439,9 @@ func TestEPUB2SeriesEditUpdatesBothEncodings(t *testing.T) {
 	assertSeriesEncodings(t, path, want, "2")
 }
 
-// TestEPUB3SeriesEditUpdatesStaleCalibreMetas is the mirror: a v3 package
-// carrying calibre metas has them brought into step, rather than left asserting
-// a series the collection no longer names. A calibre reader consults them first.
+// A v3 package carrying calibre metas has them brought into step rather than
+// left asserting a series the collection no longer names. A calibre reader
+// consults them first.
 func TestEPUB3SeriesEditUpdatesStaleCalibreMetas(t *testing.T) {
 	path := buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>The Title</dc:title>
@@ -477,9 +460,8 @@ func TestEPUB3SeriesEditUpdatesStaleCalibreMetas(t *testing.T) {
 	assertSeriesEncodings(t, path, want, "2")
 }
 
-// TestEPUB3SeriesEditDoesNotInjectCalibreMetas: a file that never carried
-// the proprietary encoding does not acquire it. "Keep every encoding in step" is
-// not licence to add one.
+// A file that never carried the proprietary encoding does not acquire it.
+// "Keep every encoding in step" is not licence to add one.
 func TestEPUB3SeriesEditDoesNotInjectCalibreMetas(t *testing.T) {
 	path := buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>The Title</dc:title>
@@ -534,11 +516,9 @@ func assertSeriesEncodings(t *testing.T, path, want, wantIndex string) {
 	}
 }
 
-// TestMultiLevelPositionNarrowsForEPUB2 pins the one place a multi-level
-// position cannot survive: EPUB 2 has no group-position, so the series goes
-// into calibre:series_index, which is a float by calibre's own convention.
-// Writing the first two levels is the closest a calibre reader can act on, and
-// it is a deliberate narrowing rather than a silent collapse to 1.
+// EPUB 2 has no group-position, so the series goes into calibre:series_index,
+// a float by calibre's convention. Writing the first two levels is a deliberate
+// narrowing, not a silent collapse to 1.
 func TestMultiLevelPositionNarrowsForEPUB2(t *testing.T) {
 	opf := epub2(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>An Article</dc:title>
@@ -561,14 +541,15 @@ func TestMultiLevelPositionNarrowsForEPUB2(t *testing.T) {
 	}
 }
 
-// --- repeatable Dublin Core elements -----------------------------------------
+// --- repeatable Dublin Core elements ---
 //
 // EPUB 3.3 §5.5.3.2.1 makes the optional DCMES elements "OPTIONAL child of
-// metadata. Repeatable." The spec is silent on which to present. Every other
-// repeatable field we read is first-wins (title §5.5.3.1.2, creator order
-// §5.5.3.2.3, language §5.5.3.1.3) and calibre takes the first, but
-// opfMetadata.Description is a plain string so encoding/xml keeps the last.
-// That is emergent, not chosen — this test proposes making it consistent.
+// metadata. Repeatable." The spec is silent on which to present.
+//
+// Every other repeatable field read here is first-wins (title §5.5.3.1.2,
+// creator order §5.5.3.2.3, language §5.5.3.1.3) and calibre takes the first,
+// but opfMetadata.Description is a plain string so encoding/xml keeps the last.
+// That is emergent, not chosen.
 
 func TestFirstDescriptionWins(t *testing.T) {
 
@@ -588,10 +569,9 @@ func TestFirstDescriptionWins(t *testing.T) {
 	}
 }
 
-// TestDanglingCoverMetaFallsThrough: a legacy cover meta naming an id that
-// is not in the manifest currently suppresses the id-heuristic fallback, so a
-// *broken* pointer does worse than a missing one. The spec says nothing here;
-// calibre keeps looking.
+// A legacy cover meta naming an id not in the manifest suppresses the
+// id-heuristic fallback, so a broken pointer does worse than a missing one.
+// The spec says nothing; calibre keeps looking.
 func TestDanglingCoverMetaFallsThrough(t *testing.T) {
 
 	opf := epub2(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
@@ -609,10 +589,9 @@ func TestDanglingCoverMetaFallsThrough(t *testing.T) {
 	}
 }
 
-// TestSeriesWithNoPositionDropsTheCalibreIndex covers a series whose collection
-// carries no group-position, in a file that still has a calibre:series_index
-// from some earlier tool. The position the edit carries over is empty, so the
-// stale index goes rather than staying behind to contradict the collection.
+// A collection with no group-position, in a file still holding a stale
+// calibre:series_index. The carried-over position is empty, so the stale index
+// goes rather than staying to contradict the collection.
 func TestSeriesWithNoPositionDropsTheCalibreIndex(t *testing.T) {
 	path := buildEpub(t, epub2(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>The Title</dc:title>
@@ -637,13 +616,11 @@ func TestSeriesWithNoPositionDropsTheCalibreIndex(t *testing.T) {
 	}
 }
 
-// --- an EPUB 2 creator can lose its sort name --------------------------------
+// --- an EPUB 2 creator can lose its sort name ---
 
-// TestEPUB2CreatorLosesAStaleSortName covers editing an author whose name is
-// unchanged but whose sort name is gone. The creator element is reused, so the
-// opf:file-as it was written with has to be removed rather than left behind
-// describing a sort order the caller just cleared. The EPUB 3 half of this is
-// TestSetAuthorsReuseBookkeeping in the internal tests.
+// Same author name, sort name cleared. The creator element is reused, so its
+// opf:file-as has to go rather than stay behind describing a sort order the
+// caller just cleared.
 func TestEPUB2CreatorLosesAStaleSortName(t *testing.T) {
 	opf := epub2(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>The Title</dc:title>
@@ -668,15 +645,11 @@ func TestEPUB2CreatorLosesAStaleSortName(t *testing.T) {
 	}
 }
 
-// TestEPUB3CreatorWithALegacySortNameTakesTheEdit covers an EPUB 3 package whose
-// creators still carry the EPUB 2 opf:file-as — common in v2 files upgraded in
-// place. Carrying both is allowed and no spec says which wins; disagreeing with
-// itself is not.
-//
-// The read prefers the attribute, the v3 write only touches the refinement, so
-// the edit lands where the read never looks and the stale value is reported
-// forever. titleField.set guards the same hazard for the title. The EPUB 2 half
-// is TestEPUB2CreatorLosesAStaleSortName above.
+// An EPUB 3 package whose creators still carry the EPUB 2 opf:file-as, common in
+// v2 files upgraded in place. Carrying both is allowed; disagreeing with itself
+// is not. The read prefers the attribute and a v3 write touches only the
+// refinement, so the edit would land where the read never looks and the stale
+// value would be reported forever.
 func TestEPUB3CreatorWithALegacySortNameTakesTheEdit(t *testing.T) {
 	opf := strings.Replace(epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>The Title</dc:title>
@@ -700,7 +673,7 @@ func TestEPUB3CreatorWithALegacySortNameTakesTheEdit(t *testing.T) {
 		t.Errorf("authors = %+v, want the sort name the edit asked for", bib.Authors)
 	}
 	// Whichever mechanism the writer picks, the file must not end up claiming
-	// both. A stale attribute left beside a fresh refinement is the failure.
+	// both. A stale attribute left beside a fresh refinement is that failure.
 	c := metadata(t, path).FindElement("creator")
 	if c == nil {
 		t.Fatal("creator was removed")
@@ -710,15 +683,11 @@ func TestEPUB3CreatorWithALegacySortNameTakesTheEdit(t *testing.T) {
 	}
 }
 
-// TestUnprefixedFileAsIsUpdatedNotDuplicated covers a creator carrying a bare
-// file-as rather than opf:file-as. Reading matches on the local name, so such an
-// attribute is found and reported as the sort name; writing always qualifies
-// with the opf prefix, so the update would land on a second attribute and leave
-// the one the read prefers untouched.
+// A creator carrying a bare file-as rather than opf:file-as. Reading matches the
+// local name and finds it; writing always qualifies with opf, so the update
+// lands on a second attribute and leaves the one the read prefers untouched.
 //
-// The element then asserts two sort names and the next read takes the stale one,
-// which is the same silent no-op TestEPUB3CreatorWithALegacySortNameTakesTheEdit
-// exists to prevent, one namespace lower.
+// The element then asserts two sort names and the next read takes the stale one.
 func TestUnprefixedFileAsIsUpdatedNotDuplicated(t *testing.T) {
 	opf := epub2(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>The Title</dc:title>
@@ -754,20 +723,15 @@ func TestUnprefixedFileAsIsUpdatedNotDuplicated(t *testing.T) {
 	}
 }
 
-// --- recovering from an empty value ------------------------------------------
+// --- recovering from an empty value ---
 //
 // §5.5.2 makes an empty dc:title, creator or date invalid, and there the spec
-// stops — what a reader does with one is unstated, so recovering rather than
-// rejecting is ours, which is why these are not with the conformance assertions.
-//
-// Skip the empty value, use the next usable one. Where nothing usable remains
-// the book still fails loudly.
+// stops. What a reader does with one is unstated, so recovering rather than
+// rejecting is our choice; these tests sit outside the conformance assertions.
 
-// TestEmptyDateIsSkipped completes the family. An empty
-// dc:date is invalid, and skipping it matters more than skipping an empty title
-// or creator does: pubdate returns a date only when exactly one untagged
-// dc:date carries a value, so counting an empty one would make it two and leave
-// the book with no publication date at all rather than the one it has.
+// An empty dc:date is invalid, and skipping it matters more than for a title or
+// creator: pubdate returns a date only when exactly one untagged dc:date has a
+// value, so counting an empty one makes it two and the book loses its date.
 func TestEmptyDateIsSkipped(t *testing.T) {
 	bib, err := epub.Parse(buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>The Title</dc:title>
@@ -783,13 +747,9 @@ func TestEmptyDateIsSkipped(t *testing.T) {
 	}
 }
 
-// TestEmptyCreatorIsSkippedNotFatal is the creator half of the same rule,
-// and the pair of branches it covers is the whole argument for skipping rather
-// than rejecting: a stray empty creator costs nothing, and a file with no
-// readable author at all still fails loudly.
-//
-// Rejecting the first case would lose an entire book over an element carrying
-// no information, which is the opposite of what the empty title above does.
+// A stray empty creator costs nothing, and a file with no readable author at all
+// still fails loudly. Rejecting the first would lose a whole book over an
+// element carrying no information.
 func TestEmptyCreatorIsSkippedNotFatal(t *testing.T) {
 	t.Run("skipped alongside a usable one", func(t *testing.T) {
 		bib, err := epub.Parse(buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
@@ -836,13 +796,11 @@ func TestEmptyFirstTitleFallsThrough(t *testing.T) {
 	}
 }
 
-// --- an edit has to land somewhere -------------------------------------------
+// --- an edit has to land somewhere ---
 
-// TestEmptyElementIsWrittenInPlace covers a file whose only dc:description is
-// empty. §5.5.2 requires non-empty values, so the file is malformed and no rule
-// says where a write should go. The element that is already there is used,
-// rather than a second one added beside it, so the file ends up with one
-// description however many rewrites it sees.
+// §5.5.2 requires non-empty values, so a file whose only dc:description is empty
+// is malformed and no rule says where a write goes. Reusing that element rather
+// than adding a second leaves one description however many rewrites it sees.
 func TestEmptyElementIsWrittenInPlace(t *testing.T) {
 	opf := epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>The Title</dc:title>
@@ -864,7 +822,7 @@ func TestEmptyElementIsWrittenInPlace(t *testing.T) {
 	if els[0].Text() != desc {
 		t.Errorf("first description = %q, want the edit", els[0].Text())
 	}
-	// first skips the empty element the write landed in front of.
+	// The reader skips the empty element the write landed in front of.
 	bib, err := epub.Parse(path)
 	if err != nil {
 		t.Fatal(err)
@@ -874,13 +832,11 @@ func TestEmptyElementIsWrittenInPlace(t *testing.T) {
 	}
 }
 
-// --- a repeated author name ---------------------------------------------------
+// --- a repeated author name ---
 
-// TestRewriteRefusesDuplicateAuthors covers an author list naming the same
-// person twice. edits.Validate rejects it, and Rewrite re-checks so an
-// unvalidated Edits cannot reach the file: two creators of one name have no
-// meaning in either spec, and reusing one element for both would silently
-// collapse the list instead.
+// Two creators of one name have no meaning in either spec, and reusing one
+// element for both would silently collapse the list. edits.Validate rejects it
+// and Rewrite re-checks, so an unvalidated Edits cannot reach the file.
 func TestRewriteRefusesDuplicateAuthors(t *testing.T) {
 	path := buildEpub(t, richOPF3)
 	before := readEntry(t, path, opfPath)
@@ -894,12 +850,11 @@ func TestRewriteRefusesDuplicateAuthors(t *testing.T) {
 	}
 }
 
-// --- refinements need a target -----------------------------------------------
+// --- refinements need a target ---
 
-// TestUnrefinedMetaIsNotACreatorsSortName covers a file carrying a file-as meta
-// with no refines attribute, next to a creator with no id. Both are missing the
-// thing that would link them, so the meta refines the package as a whole
-// (§5.3.6) and must not be read as that creator's sort name.
+// A file-as meta with no refines, beside a creator with no id. Nothing links
+// them, so the meta refines the package as a whole (§5.3.6) and must not be read
+// as that creator's sort name.
 func TestUnrefinedMetaIsNotACreatorsSortName(t *testing.T) {
 	opf := epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>The Title</dc:title>
@@ -916,13 +871,12 @@ func TestUnrefinedMetaIsNotACreatorsSortName(t *testing.T) {
 	}
 }
 
-// --- cover fallback ordering --------------------------------------------------
+// --- cover fallback ordering ---
 
-// TestCoverHeuristicTakesTheLastMatch pins the fallback for files that name no
-// cover at all: no cover-image property, no <meta name="cover">, just manifest
-// ids that happen to contain "cover". Neither spec describes this, and calibre
-// takes the first such item where this takes the last, so the divergence is
-// pinned rather than left to be discovered by a book showing the wrong cover.
+// No cover-image property, no <meta name="cover">, just manifest ids containing
+// "cover". Neither spec describes this. calibre takes the first such item and
+// this takes the last, pinned rather than left to be discovered by a book
+// showing the wrong cover.
 func TestCoverHeuristicTakesTheLastMatch(t *testing.T) {
 	const opf = `<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id">
@@ -949,15 +903,13 @@ func TestCoverHeuristicTakesTheLastMatch(t *testing.T) {
 	}
 }
 
-// --- duplicate refinements ----------------------------------------------------
+// --- duplicate refinements ---
 
-// TestDuplicateRefinementsKeepTheirDuplicates pins a known gap. D.3.6 gives
-// file-as "Cardinality: zero or one", so a creator carrying two of them is a
-// malformed file; the writer updates the first and leaves the second
-// contradicting it, and the reader takes the first. Removing every refinement
-// to append a replacement is the churn this package avoids everywhere else, so
-// the duplicate is left alone until a file is seen where it matters. Delete
-// this test when that changes.
+// A known gap. D.3.6 gives file-as "Cardinality: zero or one", so two on one
+// creator is malformed. The writer updates the first and leaves the second
+// contradicting it; the reader takes the first. Stripping every refinement to
+// append a replacement is the churn this package avoids everywhere else. Delete
+// this test if a file turns up where it matters.
 func TestDuplicateRefinementsKeepTheirDuplicates(t *testing.T) {
 	opf := epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>The Title</dc:title>
@@ -992,12 +944,10 @@ func TestDuplicateRefinementsKeepTheirDuplicates(t *testing.T) {
 	}
 }
 
-// --- identifiers -------------------------------------------------------------
+// --- identifiers ---
 
-// TestIdentifierKeying covers how a dc:identifier's scheme is derived. The key
-// is the scheme because that is what the value is; the element's XML id is a
-// document-local handle and only the last resort. An earlier version keyed by
-// the id throughout, which is what the schemaVersion bump reindexes away.
+// The scheme keys a dc:identifier because that is what the value is. The XML id
+// is a document-local handle and only the last resort (DECISIONS.md #24).
 func TestIdentifierKeying(t *testing.T) {
 	tests := []struct {
 		name string
@@ -1010,9 +960,9 @@ func TestIdentifierKeying(t *testing.T) {
     <dc:creator>A</dc:creator>`),
 		want: map[string]string{"isbn": "9780123456789"},
 	}, {
-		// etree matches an attribute by local name whatever prefix it carries,
-		// which is what lets a bare spelling read the same as opf:scheme —
-		// the reading OPFAttr.Set already documents on the write side.
+		// etree matches an attribute by local name whatever prefix it carries, so a
+		// bare spelling reads the same as opf:scheme. The write side documents
+		// that in OPFAttr.Set.
 		name: "unprefixed scheme attribute",
 		opf: epub2(`    <dc:identifier id="BookId" scheme="ASIN">B00X57B4KG</dc:identifier>
     <dc:title>T</dc:title>
@@ -1035,8 +985,8 @@ func TestIdentifierKeying(t *testing.T) {
     <dc:language>en</dc:language>`),
 		want: map[string]string{"doi": "10.1234/beta"},
 	}, {
-		// A code list we do not know is not ours to read, so the value's own
-		// URN gets the next turn — here there is none, and the id is left.
+		// A code list we do not know is not ours to read, so the value's own URN gets
+		// the next turn. Here there is none, and the id is left.
 		name: "identifier-type from another code list falls through",
 		opf: epub3(`    <dc:identifier id="pub-id">12345</dc:identifier>
     <meta refines="#pub-id" property="identifier-type" scheme="marc:relators">15</meta>
@@ -1159,10 +1109,9 @@ func TestIdentifierKeying(t *testing.T) {
 	}
 }
 
-// TestIdentifierTypeInReboundVocabulary covers the reason the scheme is matched
-// through the vocabulary rather than compared literally: D.1.4 lets a document
-// bind its own prefix to ONIX's code list, and a reader that only knew the
-// literal "onix:" would read this identifier as untyped.
+// D.1.4 lets a document bind its own prefix to ONIX's code list, so the scheme
+// is matched through the vocabulary. A reader comparing the literal "onix:"
+// would read this identifier as untyped.
 func TestIdentifierTypeInReboundVocabulary(t *testing.T) {
 	const opf = `<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id"
@@ -1190,15 +1139,12 @@ func TestIdentifierTypeInReboundVocabulary(t *testing.T) {
 	}
 }
 
-// --- xml:lang and dir --------------------------------------------------------
+// --- xml:lang and dir ---
 
-// TestMetadataDirectionalitySurvives pins that the language and direction a
-// publisher put on a metadata element survive an edit to a different field.
-// They are attributes of the element, so this holds only while elements are
-// reused rather than rebuilt.
-//
-// Nothing in §5.3.1 or §5.3.7 requires a writer to preserve them; this is the
-// same preservation rule the rest of this file pins, applied to attributes.
+// The language and direction a publisher put on a metadata element survive an
+// edit to a different field. They are attributes, so this holds only while
+// elements are reused rather than rebuilt. Nothing in §5.3.1 or §5.3.7 requires
+// preserving them.
 func TestMetadataDirectionalitySurvives(t *testing.T) {
 	const opf = `<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id" xml:lang="en" dir="ltr">
@@ -1232,11 +1178,10 @@ func TestMetadataDirectionalitySurvives(t *testing.T) {
 	}
 }
 
-// --- metadata we do not model ------------------------------------------------
+// --- metadata we do not model ---
 
-// TestUnmodelledMetadataSurvives pins that Dublin Core elements ebookfs has
-// no field for are still carried through an edit untouched. Not modelling
-// something is not a licence to drop it.
+// Dublin Core elements ebookfs has no field for are still carried through an
+// edit untouched. Not modelling something is not a licence to drop it.
 func TestUnmodelledMetadataSurvives(t *testing.T) {
 	var opf = epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>Original Title</dc:title>
@@ -1264,16 +1209,11 @@ func TestUnmodelledMetadataSurvives(t *testing.T) {
 	}
 }
 
-// --- a collection-type we do not own ------------------------------------------
+// --- a collection-type we do not own ---
 
-// TestSchemedCollectionTypeSurvivesASeriesEdit pins that a series edit leaves a
-// schemed collection-type alone. Both sides resolve to the first *unschemed*
-// refinement, since series/set are only defined "when no scheme is specified"
-// (D.3.4), so a value from someone else's code list is left as it was.
-//
-// Ours, not conformance: D.3.4 gives collection-type cardinality "zero or one",
-// so the two refinements this needs cannot occur in a conforming file. We handle
-// it anyway. The corpus above never produces two, which is why it is here.
+// Both sides resolve to the first unschemed refinement, since series and set
+// are defined only "when no scheme is specified" (D.3.4), so a value from
+// someone else's code list is left alone.
 func TestSchemedCollectionTypeSurvivesASeriesEdit(t *testing.T) {
 	path := buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>The Title</dc:title>
@@ -1316,17 +1256,16 @@ func TestSchemedCollectionTypeSurvivesASeriesEdit(t *testing.T) {
 	}
 }
 
-// --- renaming a series the reader cannot see ----------------------------------
+// --- renaming a series the reader cannot see ---
 
-// TestSeriesRenameDoesNotDuplicate covers the write-side consequence of a
-// collection the reader fails to resolve: when the reader cannot see the
-// existing collection, the writer cannot either, so a rename adds a second one
-// instead of rewriting the first — and the new one carries no group-position,
-// resetting the book's position to 1.
+// A collection the reader fails to resolve has a write-side consequence: the
+// writer cannot see it either, so a rename adds a second one instead of
+// rewriting the first, and the new one carries no group-position, resetting the
+// book's position to 1.
 //
-// The fixture is opfSpecStyleWhitespace from spec_ext_test.go, where the reason
-// a reader might miss the collection is spelled out. What is pinned here is only
-// our rule: one collection, position preserved across a rename.
+// The fixture is the spec whitespace one, whose whole reason for escaping the
+// reader is spelled out there. Pinned here is only our rule: one collection,
+// position preserved across a rename.
 func TestSeriesRenameDoesNotDuplicate(t *testing.T) {
 
 	path := buildEpub(t, opfSpecStyleWhitespace)
@@ -1495,8 +1434,8 @@ func TestNCXUntouchedByAnUnrelatedEdit(t *testing.T) {
 }
 
 // An unreadable NCX does not fail the edit, and is left exactly as it was. The
-// second case is malformed only in its nesting, which is the kind of document
-// etree used to correct silently.
+// second case is malformed only in its nesting, the kind of document etree used
+// to correct silently.
 func TestUnreadableNCXDoesNotFailTheEdit(t *testing.T) {
 	for _, tc := range []struct{ name, ncx string }{
 		{"syntax error", "<ncx><docTitle<</ncx>"},
@@ -1548,7 +1487,7 @@ func TestCDataDescriptionKeepsItsSpelling(t *testing.T) {
 	}
 }
 
-// --- multipart titles --------------------------------------------------------
+// --- multipart titles ---
 //
 // The fixture is §5.5.3.1.2's own example. The second element is another segment
 // of the same title, so replacing the title has to take it too.

@@ -17,7 +17,7 @@ func TestPutAuthorsWithExistingName(t *testing.T) {
 	)
 	storeInIndex(t, idx, b1)
 
-	// Second book with same author name — triggers ON CONFLICT upsert.
+	// Second book with the same author name, triggering the ON CONFLICT upsert.
 	b2 := book.NewBook(
 		book.Bib{Title: "Second", Authors: authors},
 		book.Meta{ID: 2},

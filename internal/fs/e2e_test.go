@@ -7,8 +7,8 @@
 // the only one that exercises the protocol itself.
 //
 // Held behind a build tag because it binds a port and runs the real library.
-// Nothing in CI builds that tag, which is how it sat uncompilable for four
-// commits after library.Open changed shape. Run it with:
+// Nothing in CI builds that tag, so a change to library.Open breaks this file
+// without failing any build. Run it with:
 //
 //	go test -tags e2e ./internal/fs/
 //

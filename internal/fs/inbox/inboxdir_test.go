@@ -35,7 +35,6 @@ func TestInboxCreateFile_Success(t *testing.T) {
 		t.Fatal("DispatchCreate returned nil file")
 	}
 
-	// File should be added as a child of the inbox dir.
 	if _, ok := dir.Children()["test.epub"]; !ok {
 		t.Error("inbox dir should contain 'test.epub'")
 	}

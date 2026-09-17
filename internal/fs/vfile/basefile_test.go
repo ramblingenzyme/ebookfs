@@ -10,10 +10,10 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library"
 )
 
-// These tests cover the read/open/close semantics shared by the two base file
-// types. The concrete files (cover/opf, epub, reader, field) embed one of these
-// and are tested only for their own surface — construction wiring, Stat, and
-// writes — rather than re-checking the base read behavior four times.
+// The read/open/close semantics shared by the two base file types. The concrete
+// files (cover/opf, epub, reader, field) embed one of these and are tested only
+// for their own surface (construction wiring, Stat, and writes) rather than
+// re-checking the base read behavior four times.
 
 // ---- snapshotFile (embedded by coverFile, opfFile, fieldFile) ----
 
@@ -179,9 +179,9 @@ func TestReadAtFileCloseReleasesReader(t *testing.T) {
 
 // ---- Snapshot ----
 
-// TestSnapshotFileSnapshot covers the accessor embedders use to seed a write
-// buffer from the value the client opened, so an edit builds on what was read
-// rather than on whatever the file says by the time the write lands.
+// The accessor embedders use to seed a write buffer from the value the client
+// opened, so an edit builds on what was read rather than on whatever the file
+// says by the time the write lands.
 func TestSnapshotFileSnapshot(t *testing.T) {
 	sf := newTestSnapshotFile(t, []byte("current value"))
 

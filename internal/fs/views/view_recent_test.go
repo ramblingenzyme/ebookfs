@@ -88,8 +88,7 @@ func TestRecentDirRemoveNotVisibleNoOp(t *testing.T) {
 	}
 }
 
-// TestRecentDirOutOfOrderArrival covers the case the other recent tests miss:
-// books arriving in an order unrelated to their DateAdded. The population is
+// Books arriving in an order unrelated to their DateAdded. The population is
 // kept ordered by insertion rather than re-sorted, so a book landing in the
 // middle of the ranking is the path most likely to break.
 func TestRecentDirOutOfOrderArrival(t *testing.T) {
@@ -98,8 +97,8 @@ func TestRecentDirOutOfOrderArrival(t *testing.T) {
 
 	base := time.Now()
 	const total = recentLimit + 3
-	// Book i was added i minutes after base, so the newest ids rank highest —
-	// but they arrive in a scrambled order.
+	// Book i was added i minutes after base, so the newest ids rank highest, but
+	// they arrive in a scrambled order.
 	for _, id := range []int64{4, 1, 8, 6, 2, 7, 3, 5} {
 		b := makeBook(id, fmt.Sprintf("Title %d", id), "Author")
 		b.Meta.DateAdded = base.Add(time.Duration(id) * time.Minute)
@@ -117,7 +116,7 @@ func TestRecentDirOutOfOrderArrival(t *testing.T) {
 		}
 	}
 
-	// all must stay ordered newest-first for the binary insert to hold.
+	// All must stay ordered newest-first for the binary insert to hold.
 	for i := 1; i < len(d.all); i++ {
 		prev, cur := d.all[i-1].Book(), d.all[i].Book()
 		if prev.DateAdded().Before(cur.DateAdded()) {

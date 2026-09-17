@@ -39,9 +39,9 @@ func TestQueryLoadsIdentifiers(t *testing.T) {
 func TestQueryBatchLoadsMultipleBooks(t *testing.T) {
 	idx := openTestIndex(t)
 
-	// Three books with distinct authors, tags, and identifiers — the batch
-	// loading path must hydrate each book correctly from the same three
-	// batch queries, not misattribute rows between books.
+	// Three books with distinct authors, tags, and identifiers: the batch loading
+	// path must hydrate each book correctly from the same three batch queries, not
+	// misattribute rows between books.
 	books := []*book.Book{
 		book.NewBook(
 			book.Bib{

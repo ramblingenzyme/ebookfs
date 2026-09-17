@@ -7,12 +7,10 @@ import (
 func TestCommandLog(t *testing.T) {
 	log := NewCommandLog(3)
 
-	// Empty log.
 	if entries := log.Entries(); len(entries) != 0 {
 		t.Fatalf("empty log entries = %d, want 0", len(entries))
 	}
 
-	// Append up to capacity.
 	log.Append("cmd1", "ok")
 	log.Append("cmd2", "ok")
 	log.Append("cmd3", "ok")

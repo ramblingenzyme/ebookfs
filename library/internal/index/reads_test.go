@@ -69,8 +69,7 @@ func TestStatsAggregates(t *testing.T) {
 	}
 }
 
-// TestStatsExcludesOrphans exercises the same orphan cleanup TestPutAuthorsWithExistingName
-// relies on: replacing a book's tags must not leave the old tag counted in Stats.
+// Replacing a book's tags must not leave the old tag counted in Stats.
 func TestStatsExcludesOrphans(t *testing.T) {
 	idx := openTestIndex(t)
 

@@ -423,10 +423,10 @@ func assertRounded(t *testing.T, field string, got, want *float64) {
 	}
 }
 
-// TestEditsNormalizedKeepsNonFinite pins the interaction Normalized's doc
-// comment relies on: rounding must leave NaN and ±Inf intact so Validate is
-// still the thing that rejects them. Were rounding to fold them to a finite
-// number, an unusable value would pass validation and reach the sidecar.
+// The interaction Normalized's doc comment relies on: rounding must leave NaN
+// and ±Inf intact so Validate is still the thing that rejects them. Were
+// rounding to fold them to a finite number, an unusable value would pass
+// validation and reach the sidecar.
 func TestEditsNormalizedKeepsNonFinite(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -450,9 +450,8 @@ func TestEditsNormalizedKeepsNonFinite(t *testing.T) {
 	}
 }
 
-// TestEditsNormalizedDoesNotMutateItsReceiver: Edits is taken by value, but it
-// carries pointers, so rewriting through them would reach back into the
-// caller's copy.
+// Edits is taken by value, but it carries pointers, so rewriting through them
+// would reach back into the caller's copy.
 func TestEditsNormalizedDoesNotMutateItsReceiver(t *testing.T) {
 	rating := 4.567
 	e := Edits{Rating: &rating}

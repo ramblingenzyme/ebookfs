@@ -25,9 +25,9 @@ func TestRegistryAddAndRemove(t *testing.T) {
 	}
 }
 
-// TestRegistryRemoveUnknownID keeps a real book registered, so removing an id
-// that was never added is distinguishable from removing everything — against an
-// empty registry a Remove that cleared the whole view would look identical.
+// Removing an id that was never added is distinguishable from removing
+// everything: a real book stays registered, so against an empty registry a
+// Remove that cleared the whole view would look identical.
 func TestRegistryRemoveUnknownID(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
@@ -50,8 +50,8 @@ func TestRegistryAddSameIDTwiceUsesSameDir(t *testing.T) {
 	reg.Add(wrapBook(b1))
 	reg.Add(wrapBook(b2))
 
-	// dirLocked returns the existing dir and doesn't update the book pointer,
-	// so the first title persists. The caller is expected to not reuse IDs.
+	// dirLocked returns the existing dir and does not update the book pointer, so
+	// the first title persists. The caller is expected not to reuse IDs.
 	children := dirChildNames(allBooks)
 	if len(children) != 1 {
 		t.Fatalf("expected 1 child, got %d: %v", len(children), children)
@@ -91,9 +91,8 @@ func TestBooksDirRemoveOnlyOne(t *testing.T) {
 	}
 }
 
-// TestBooksDirSlashInTitleIsOneEntry pins that a '/' in a title cannot become a
-// path separator in a 9P entry name, and — the part that would fail silently —
-// that the listing and the entries map agree on the name, so the book can still
+// A '/' in a title cannot become a path separator in a 9P entry name, and the
+// listing and the entries map must agree on the name, or the book can no longer
 // be removed. epub reports titles as the file wrote them (EPUB 3.3 §5.5.2), so
 // this is the layer that has to make one safe.
 func TestBooksDirSlashInTitleIsOneEntry(t *testing.T) {
@@ -170,10 +169,9 @@ func TestBooksDirDuplicateTitles(t *testing.T) {
 	}
 }
 
-// TestBooksDirMintedNameCollidesWithLiteralTitle pins the gap documented on
-// disambiguatedName. Add checks the plain title for a collision but not the
-// name it then mints, so a book literally titled "Foo (2)" and the minted name
-// for book id 2 titled "Foo" are the same key.
+// The gap documented on disambiguatedName. Add checks the plain title for a
+// collision but not the name it then mints, so a book literally titled "Foo (2)"
+// and the minted name for book id 2 titled "Foo" are the same key.
 //
 // Order matters: the literal has to be registered first, then the collision
 // that mints over it.

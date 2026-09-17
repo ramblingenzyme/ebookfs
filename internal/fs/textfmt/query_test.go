@@ -7,9 +7,9 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library"
 )
 
-// TestParseQuery covers the query language itself: every supported
-// prefix, the OR-within-a-field / AND-across-fields shape the syntax promises,
-// and each way a term can be rejected.
+// The query language itself: every supported prefix, the OR-within-a-field /
+// AND-across-fields shape the syntax promises, and each way a term can be
+// rejected.
 func TestParseQuery(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -29,13 +29,13 @@ func TestParseQuery(t *testing.T) {
 		{"distinct prefixes", "tag:sci-fi+status:unread", library.Query{Tags: []string{"sci-fi"}, Status: []string{"unread"}}, false},
 		// The term splits on its first colon only, so a value may contain more.
 		{"colon in value", "title:Dune: Part Two", library.Query{Titles: []string{"Dune: Part Two"}}, false},
-		// An empty value is a term, not a parse error — it reaches the matcher
+		// An empty value is a term, not a parse error: it reaches the matcher
 		// and simply matches nothing.
 		{"empty value", "tag:", library.Query{Tags: []string{""}}, false},
 		{"no colon", "sci-fi", library.Query{}, true},
 		{"unknown prefix", "publisher:Tor", library.Query{}, true},
 		{"non-numeric id", "id:abc", library.Query{}, true},
-		// Reached only if a caller skips its own empty check — searchCtlFile.Close
+		// Reached only if a caller skips its own empty check: searchCtlFile.Close
 		// drops empty writes and parseSelection rejects an empty id-spec.
 		{"empty query", "", library.Query{}, true},
 	}

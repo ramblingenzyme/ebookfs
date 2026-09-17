@@ -11,9 +11,9 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 )
 
-// Read/open/close semantics are covered by the readAtFile base tests in
-// basefile_test.go. These tests cover epubFile's own surface: that it wires
-// lib.OpenEpub for reads and reports name/size from the book snapshot in Stat.
+// epubFile's own surface, on top of the readAtFile semantics its base test
+// owns: it wires lib.OpenEpub for reads and reports name/size from the book
+// snapshot in Stat.
 
 func newTestEpubFile(t *testing.T, name string, lib libfake.Lib, get func() *library.Book) *epubFile {
 	t.Helper()

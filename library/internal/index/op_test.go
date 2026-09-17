@@ -27,8 +27,8 @@ func TestPutSuccessLeavesClean(t *testing.T) {
 	}
 }
 
-// Put without MarkPending must be rejected — without a pending row the
-// preceding store writes have no crash protection.
+// Put without MarkPending must be rejected: without a pending row the preceding
+// store writes have no crash protection.
 func TestPutWithoutMarkPendingErrors(t *testing.T) {
 	idx := openTestIndex(t)
 	op := idx.BeginOp()
@@ -78,7 +78,7 @@ func TestStoreFailureKeepsPending(t *testing.T) {
 
 	op := idx.BeginOp()
 	op.MarkPending()
-	// Simulate a store failure after marking pending — Put is never called.
+	// Simulate a store failure after marking pending: Put is never called.
 
 	if n := pendingCount(t, idx); n != 1 {
 		t.Fatalf("pending_ops = %d, want 1", n)
@@ -92,7 +92,7 @@ func TestPreStoreRefusalKeepsNoRow(t *testing.T) {
 	idx := openTestIndex(t)
 
 	_ = idx.BeginOp()
-	// Never call MarkPending — simulates a refusal before any disk mutation.
+	// Never call MarkPending, simulating a refusal before any disk mutation.
 
 	if n := pendingCount(t, idx); n != 0 {
 		t.Fatalf("pending_ops = %d, want 0 (a pre-disk refusal must not mark pending)", n)
@@ -114,12 +114,12 @@ func TestMarkPendingIdempotent(t *testing.T) {
 }
 
 // Defect (b): each operation owns its own pending row, so a concurrent success
-// deletes only its own marker and cannot clear a failed peer's row — the exact
+// deletes only its own marker and cannot clear a failed peer's row, the exact
 // clobber the old single shared dirty flag allowed.
 func TestPerOpIndependence(t *testing.T) {
 	idx := openTestIndex(t)
 
-	// Op A: MarkPending but never call Put — simulate a failed store write.
+	// Op A: MarkPending but never call Put, simulating a failed store write.
 	opA := idx.BeginOp()
 	opA.MarkPending()
 

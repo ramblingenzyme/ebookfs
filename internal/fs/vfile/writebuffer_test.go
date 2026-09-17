@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-// TestWriteBufferAccumulates covers the shape of one fid's buffered writes: a
-// 9P client sends a file's contents as a sequence of offset writes, and the
-// buffer has to reassemble them before the embedding file commits on clunk.
+// The shape of one fid's buffered writes: a 9P client sends a file's contents
+// as a sequence of offset writes, and the buffer has to reassemble them before
+// the embedding file commits on clunk.
 func TestWriteBufferAccumulates(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -71,8 +71,8 @@ func TestWriteBufferAccumulates(t *testing.T) {
 	}
 }
 
-// TestWriteBufferSeed covers the seeded case, used by files that let a client
-// edit the current value rather than replace it wholesale.
+// The seeded case, used by files that let a client edit the current value
+// rather than replace it wholesale.
 func TestWriteBufferSeed(t *testing.T) {
 	seed := func() []byte { return []byte("original") }
 
@@ -115,9 +115,8 @@ func TestWriteBufferSeed(t *testing.T) {
 	})
 }
 
-// TestWriteBufferEmptyWrite pins that a zero-length write neither errors nor
-// creates a buffer: an empty write must not turn a fid that never wrote into
-// one that committed an empty value.
+// A zero-length write neither errors nor creates a buffer: an empty write must
+// not turn a fid that never wrote into one that committed an empty value.
 func TestWriteBufferEmptyWrite(t *testing.T) {
 	w := NewWriteBuffer(4096)
 
@@ -144,9 +143,9 @@ func TestWriteBufferEmptyWrite(t *testing.T) {
 	}
 }
 
-// TestWriteBufferEnforcesLimit covers the size cap. The offset is client
-// controlled, so the check has to bound each term separately: offset+len can
-// wrap past the limit and admit an allocation the cap exists to prevent.
+// The size cap. The offset is client controlled, so the check has to bound each
+// term separately: offset+len can wrap past the limit and admit an allocation
+// the cap exists to prevent.
 func TestWriteBufferEnforcesLimit(t *testing.T) {
 	const max = 16
 
@@ -180,7 +179,7 @@ func TestWriteBufferEnforcesLimit(t *testing.T) {
 	}
 }
 
-// TestWriteBufferTake covers the handoff to the committing file.
+// The handoff to the committing file.
 func TestWriteBufferTake(t *testing.T) {
 	t.Run("a fid that never wrote yields nil", func(t *testing.T) {
 		w := NewWriteBuffer(4096)
@@ -203,9 +202,9 @@ func TestWriteBufferTake(t *testing.T) {
 	})
 }
 
-// TestWriteBufferPerFidIsolation pins that two clients writing the same file
-// concurrently accumulate separately. They share one WriteBuffer, so a buffer
-// keyed loosely would let one client's clunk commit the other's bytes.
+// Two clients writing the same file concurrently accumulate separately. They
+// share one WriteBuffer, so a buffer keyed loosely would let one client's clunk
+// commit the other's bytes.
 func TestWriteBufferPerFidIsolation(t *testing.T) {
 	w := NewWriteBuffer(4096)
 

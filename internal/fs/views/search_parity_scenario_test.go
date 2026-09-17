@@ -67,11 +67,11 @@ func TestSearchMatcherAgreesWithSQL(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		q    library.Query
-		// skip names the known divergence a case exercises. SQLite's LIKE folds
-		// case for ASCII only; makeMatchesFn uses strings.ToLower, which folds
-		// the whole of Unicode. Fixing it is a real choice — teach SQLite a
-		// Unicode-aware comparison, or stop the Go side folding past ASCII —
-		// and the two give different behaviour. Drop the skip to see it fail.
+		// skip names the known divergence a case exercises. SQLite's LIKE folds case
+		// for ASCII only; makeMatchesFn uses strings.ToLower, which folds the whole
+		// of Unicode. Fixing it is a real choice, teaching SQLite a Unicode-aware
+		// comparison or stopping the Go side folding past ASCII, and the two give
+		// different behaviour. Drop the skip to see it fail.
 		skip string
 	}{
 		{name: "everything", q: library.Query{}},

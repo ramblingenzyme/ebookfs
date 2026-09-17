@@ -1,6 +1,6 @@
-// The white-box half of ingest's tests; the black-box half is ingest_ext_test.go.
-// Reaching the state these pin — a book on disk that the index does not hold, and
-// an inbox temp directory that cannot be written — means touching lib.index and
+// The white-box side of ingest's tests; the black-box side is ingest_ext_test.go.
+// Reaching the state these pin (a book on disk that the index does not hold, and
+// an inbox temp directory that cannot be written) means touching lib.index and
 // lib.inboxTemp, which no public call exposes. The assertions themselves are on
 // public behaviour: ErrDuplicateOnDisk, and CreateIngest failing rather than
 // returning an unusable handle.
@@ -21,7 +21,7 @@ func TestIngestRejectsUnindexedBookOnDisk(t *testing.T) {
 	data := buildTestEpub(t, "Orphaned", "Alice")
 	b := ingestTestEpub(t, lib, data)
 
-	// Drop the book from the index only, leaving its files in the tree — the
+	// Drop the book from the index only, leaving its files in the tree, the
 	// state a skipped directory is in after a rebuild.
 	op := lib.index.BeginOp()
 	if err := op.MarkPending(); err != nil {

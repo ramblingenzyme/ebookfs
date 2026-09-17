@@ -311,10 +311,10 @@ func TestQueryByAuthor(t *testing.T) {
 	}
 }
 
-// TestQueryByAuthorSortName pins the two-column author match. ctl's
-// rename-author documents that <old> matches display name OR sort name, and it
-// relies on this query to find the books to rewrite — if only a.name were
-// matched, renaming by sort name would silently rewrite nothing.
+// The two-column author match. ctl's rename-author documents that <old> matches
+// display name OR sort name, and it relies on this query to find the books to
+// rewrite; if only a.name were matched, renaming by sort name would silently
+// rewrite nothing.
 func TestQueryByAuthorSortName(t *testing.T) {
 	idx := openTestIndex(t)
 
@@ -455,7 +455,6 @@ func TestQueryMultipleFilters(t *testing.T) {
 	storeInIndex(t, idx, bobUnread)
 	storeInIndex(t, idx, aliceRead)
 
-	// Filter by Bob AND read.
 	got, err := idx.Search(Query{Authors: []string{"Bob"}, Status: []string{"read"}})
 	if err != nil {
 		t.Fatalf("Query: %v", err)

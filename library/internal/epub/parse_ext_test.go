@@ -17,10 +17,10 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 )
 
-// --- parser-only fixtures & helpers ----------------------------------------
+// --- parser-only fixtures & helpers ---
 
 // multiRootContainer lists two package rootfiles where the first does not exist
-// in the zip — the shape seen in some Kobo epubs.
+// in the zip, the shape seen in some Kobo epubs.
 const multiRootContainer = `<?xml version="1.0"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
   <rootfiles>
@@ -162,7 +162,7 @@ func withoutEntry(entries []entry, name string) []entry {
 	return out
 }
 
-// --- cover resolution ------------------------------------------------------
+// --- cover resolution ---
 
 func TestTranslateCoverSkipsMarkupCoverImage(t *testing.T) {
 	path := writeEpub(t, baseEntries(opfMarkupCoverImage))
@@ -215,12 +215,9 @@ func TestParseResolvesEncodedCoverHref(t *testing.T) {
 	}
 }
 
-// TestParseResolvesEncodedRootfilePath is the container-side half of the test
-// above. §4.2.6.3.1.3 makes full-path "a path-relative-scheme-less-URL string",
-// so "OEBPS/My Book.opf" is declared "My%20Book.opf" while the entry holds the
-// decoded name. Undecoded, the book is unopenable and blamed on a rootfile that
-// is present. The edit path resolves through the same function, so it is checked
-// too.
+// §4.2.6.3.1.3 makes full-path a path-relative-scheme-less-URL, so "OEBPS/My Book.opf"
+// is declared "My%20Book.opf" while the entry holds the decoded name.
+// Undecoded, the book is unopenable and blamed on a rootfile that is present.
 func TestParseResolvesEncodedRootfilePath(t *testing.T) {
 	const container = `<?xml version="1.0"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -252,11 +249,9 @@ func TestParseResolvesEncodedRootfilePath(t *testing.T) {
 	}
 }
 
-// TestParseCollapsesRootfileMediaType covers the other container attribute read
-// through encoding/xml, which does not apply XML 1.0 §3.3.3 attribute-value
-// normalization. §4.2.6.3.1.3 requires the value to be the package media type;
-// a container that wraps it would otherwise have every rootfile skipped and
-// report ErrNoRootfile for a package document that is right there.
+// encoding/xml does not apply XML 1.0 §3.3.3 normalization. §4.2.6.3.1.3
+// requires the package media type, so a container wrapping it has every
+// rootfile skipped and reports ErrNoRootfile for a package that is right there.
 func TestParseCollapsesRootfileMediaType(t *testing.T) {
 	const container = `<?xml version="1.0"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -281,11 +276,9 @@ func TestParseCollapsesRootfileMediaType(t *testing.T) {
 	}
 }
 
-// TestParseAndWriteAgreeOnADuplicateEntry pins that a read and the edit that
-// follows resolve a duplicated entry name alike — badly repacked epubs do carry
-// two entries under one name. Disagreeing means an edit computed from one copy
-// and reported from the other, invisible until the copies differ. Either rule
-// would do; what matters is that it is one rule.
+// Badly repacked epubs carry two entries under one name. Disagreeing means an
+// edit computed from one copy and reported from the other, invisible until the
+// copies differ. Either rule would do; it has to be one rule.
 func TestParseAndWriteAgreeOnADuplicateEntry(t *testing.T) {
 	first := strings.Replace(opf3, "Original Title", "First Copy", 1)
 	second := strings.Replace(opf3, "Original Title", "Second Copy", 1)
@@ -307,8 +300,8 @@ func TestParseAndWriteAgreeOnADuplicateEntry(t *testing.T) {
 		t.Errorf("title = %q, want First Copy — Parse must resolve it the way findEntry does", bib.Title)
 	}
 
-	// The edit is computed from whichever copy the writer reads; the re-parse
-	// has to see the result, which it only can if both picked the same one.
+	// The edit is computed from whichever copy the writer reads, so the re-parse
+	// sees the result only when both picked the same one.
 	if _, err := writeBib(path, edits.Edits{Title: new("Edited Title")}); err != nil {
 		t.Fatal(err)
 	}
@@ -321,12 +314,9 @@ func TestParseAndWriteAgreeOnADuplicateEntry(t *testing.T) {
 	}
 }
 
-// TestParseRootfilePathEdgeCases covers what decoding full-path must not break.
-// %20 decodes, but url.Parse would also read "C:/..." as a scheme and truncate
-// at '#' or '?'; PathUnescape touches nothing but the escapes.
-//
-// The literal rows are the other direction: an entry whose name really does
-// contain '%20', so the raw value is tried when the decoded one misses.
+// %20 decodes, but url.Parse would read "C:/..." as a scheme and truncate at
+// '#' or '?'. PathUnescape touches nothing but the escapes. The literal rows
+// cover an entry whose name really contains '%20'.
 func TestParseRootfilePathEdgeCases(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
@@ -363,16 +353,12 @@ func TestParseRootfilePathEdgeCases(t *testing.T) {
 	}
 }
 
-// --- container & mimetype validation ---------------------------------------
+// --- container & mimetype validation ---
 
-// TestEntryPointsAgreeOnABadEpub pins that the three ways in classify a failure
-// to open the archive alike — each opens the file itself, so each could grow its
-// own rule. Callers tell "not a book" from "the disk is broken" with errors.Is
-// on ErrNotEpub.
-//
-// The missing-file row matters as much as the malformed ones: a nonexistent path
-// says nothing about contents, so labelling it ErrNotEpub is the obvious wrong
-// fix.
+// Each entry point opens the file itself, so each could grow its own rule.
+// Callers tell "not a book" from "the disk is broken" with errors.Is on
+// ErrNotEpub. A nonexistent path says nothing about contents, so labelling it
+// ErrNotEpub is the obvious wrong fix.
 func TestEntryPointsAgreeOnABadEpub(t *testing.T) {
 	good := writeEpub(t, baseEntries(opf3))
 	raw, err := os.ReadFile(good)
@@ -462,14 +448,10 @@ func TestParseToleratesMimetypeWhitespace(t *testing.T) {
 	}
 }
 
-// TestRewriteReplacesOnlyTheResolvedDuplicate is the write half of the
-// duplicate-entry rule. Lookup was unified on first-wins, but writeUpdatedEpub
-// matches its replacement map by name against every entry it copies, so both
-// copies of a duplicated package document were being overwritten.
-//
-// That is not merely untidy: the copy nobody resolved is somebody else's data,
-// and the archive is contractually copied verbatim. Only the entry the lookup
-// chose is ours to rewrite.
+// Lookup is first-wins, but writeUpdatedEpub matches its replacement map by
+// name against every entry copied, so both copies of a duplicated package
+// document were overwritten. The copy nobody resolved is somebody else's data,
+// and the archive is copied verbatim.
 func TestRewriteReplacesOnlyTheResolvedDuplicate(t *testing.T) {
 	first := strings.Replace(opf3, "Original Title", "First Copy", 1)
 	second := strings.Replace(opf3, "Original Title", "Second Copy", 1)
@@ -521,13 +503,8 @@ func TestRewriteReplacesOnlyTheResolvedDuplicate(t *testing.T) {
 	}
 }
 
-// TestParseDistinguishesMissingFromUndeclared is what metadataPath's `first`
-// variable exists for: telling a container that names a package document we
-// cannot find from one that names none. A broken archive and a container that
-// never pointed at an OPF send a reader to different places.
-//
-// TestMultipleRootfilesKobo cannot catch this — it exercises a package that *is*
-// found, so it never reaches either error.
+// A container naming a package document that cannot be found is not a container
+// naming none. The two send a reader to different places.
 func TestParseDistinguishesMissingFromUndeclared(t *testing.T) {
 	for _, tc := range []struct {
 		name, container string
@@ -595,7 +572,7 @@ func TestMultipleRootfilesKobo(t *testing.T) {
 }
 
 // A belongs-to-collection of type "set" is not a series, so it must be ignored
-// and the legacy calibre:series read instead — not mistaken for the series.
+// and the legacy calibre:series read instead. Not mistaken for the series.
 func TestTranslateSeriesSetCollectionIgnored(t *testing.T) {
 	path := writeEpub(t, baseEntries(opfSeriesSetCollection))
 	book, err := epub.Parse(path)
@@ -649,8 +626,8 @@ func TestTranslateDateSelection(t *testing.T) {
 			"",
 		},
 		{
-			// Selection is by authored count, so the unreadable sibling cannot
-			// resolve the ambiguity by dropping out — it stays two untagged dates.
+			// Selection is by authored count, so the unreadable sibling cannot resolve
+			// the ambiguity by dropping out. It stays two untagged dates.
 			"two untagged, one unreadable, still ambiguous",
 			`<dc:date>2019-05-01</dc:date>
      <dc:date>not-a-date</dc:date>`,

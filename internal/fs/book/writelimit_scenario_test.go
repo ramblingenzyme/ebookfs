@@ -3,8 +3,8 @@
 // once: an offset past the limit is rejected, a near-maxuint64 offset cannot
 // wrap past the check, and a write ending exactly at the limit is allowed.
 //
-// It lives apart from either file's paired test because neither owns the rule;
-// the buffer does, and a cap that held for one file only would be a bug.
+// Neither file owns the rule; the buffer does, so a cap holding for one file
+// only would be a bug.
 
 package book
 
@@ -23,10 +23,6 @@ type limitedWriteFile interface {
 	Write(fid uint64, offset uint64, data []byte) (uint32, error)
 }
 
-// TestWriteFileSizeLimits exercises the overflow-safe cap that coverFile and
-// fieldFile both apply in Write: an offset past the cap is rejected, a
-// near-maxuint64 offset can't wrap past the check, and a write ending exactly at
-// the cap is allowed.
 func TestWriteFileSizeLimits(t *testing.T) {
 	for _, tc := range []struct {
 		name  string

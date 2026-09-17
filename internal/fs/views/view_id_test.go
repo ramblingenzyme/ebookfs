@@ -142,7 +142,7 @@ func TestByIDDirMultipleBooks(t *testing.T) {
 	}
 }
 
-// TestByIDDirRemoveUnknown: as above, with a book present so the no-op is
+// Removing an unknown id is a no-op. A book is registered so the no-op is
 // observable rather than inferred from the absence of a panic.
 func TestByIDDirRemoveUnknown(t *testing.T) {
 	reg := newTestRegistry(t)

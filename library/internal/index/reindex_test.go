@@ -10,12 +10,12 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
 )
 
-// TestPathInfoRoundTrip pins the nanosecond encoding: every other test passes a
-// zero drift.PathInfo, so without this a broken encode/decode would surface only as
-// drift detection quietly rebuilding on every startup.
+// The nanosecond encoding: every other test passes a zero drift.PathInfo, so
+// without this a broken encode/decode would surface only as drift detection
+// quietly rebuilding on every startup.
 //
 // Both write paths are covered because each maps the observation onto its own
-// query params — Put through UpsertBook, Rebuild through InsertBook — so an
+// query params, Put through UpsertBook and Rebuild through InsertBook, so an
 // encoding fixed in one can stay broken in the other.
 func TestPathInfoRoundTrip(t *testing.T) {
 	writers := map[string]func(*testing.T, *Index, *book.Book, drift.PathInfo){
@@ -72,12 +72,11 @@ func TestPathInfoRoundTrip(t *testing.T) {
 	}
 }
 
-// TestEpubSizeComesFromObservation pins the collapse of the epub's two size
-// columns into one: books.epub_size is written from the observation handed to
-// Put, and a size set on the book itself is ignored. The book's copy is what 9P
-// reports as the file's length and what export sizing uses, while the drift
-// check compares the stat's — so a second column here means those two can
-// silently disagree, which is what this replaced.
+// The epub's two size columns collapsed into one: books.epub_size is written
+// from the observation handed to Put, and a size set on the book itself is
+// ignored. The book's copy is what 9P reports as the file's length and what
+// export sizing uses, while the drift check compares the stat's, so a second
+// column here means those two can silently disagree, which is what this replaced.
 func TestEpubSizeComesFromObservation(t *testing.T) {
 	idx := openTestIndex(t)
 
@@ -198,9 +197,8 @@ func TestRebuildClearsLeakedRows(t *testing.T) {
 	mustNeedReindex(t, idx, false)
 }
 
-// TestRebuildClearsLeakedRowsAndInsertsBooks verifies that Rebuild both
-// clears leaked rows and inserts the given books, exercising the full
-// Rebuild path through dropAllTables → insertBook → version stamp.
+// Rebuild both clears leaked rows and inserts the given books, exercising the
+// full path through dropAllTables, insertBook, and the version stamp.
 func TestRebuildClearsLeakedRowsAndInsertsBooks(t *testing.T) {
 	idx := openTestIndex(t)
 
@@ -215,7 +213,6 @@ func TestRebuildClearsLeakedRowsAndInsertsBooks(t *testing.T) {
 	}
 	mustNeedReindex(t, idx, true)
 
-	// Rebuild with fresh books.
 	fresh := []*book.Book{
 		newBook(10, "Fresh A"),
 		newBook(20, "Fresh B"),
@@ -226,7 +223,6 @@ func TestRebuildClearsLeakedRowsAndInsertsBooks(t *testing.T) {
 
 	mustNeedReindex(t, idx, false)
 
-	// Only the fresh books should exist.
 	all, err := idx.Search(Query{})
 	if err != nil {
 		t.Fatalf("Query: %v", err)

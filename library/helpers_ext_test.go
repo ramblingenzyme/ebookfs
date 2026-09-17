@@ -1,9 +1,10 @@
 // Helpers for the black-box tests in package library_test. They duplicate the
-// public-API half of helpers_test.go, which cannot be shared: a helper declared
-// in package library is invisible here, and the white-box tests that stay in
-// that package (drift, applymeta, the two error files) need the same five.
-// The white-box-only helpers — drifted, breakEpub, dropIndex, metaPathOf,
-// assertSettlesClean — are not duplicated and live with drift_test.go.
+// public-API portion of helpers_test.go, which cannot be shared: a helper
+// declared in package library is invisible here, and the white-box tests that
+// stay in that package (drift, applymeta, the two error files) need the same
+// five.
+// The white-box-only helpers (drifted, breakEpub, dropIndex, metaPathOf,
+// assertSettlesClean) are not duplicated and live with drift_test.go.
 
 package library_test
 

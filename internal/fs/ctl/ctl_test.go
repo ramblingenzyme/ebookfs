@@ -7,9 +7,9 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 )
 
-// TestCtlFileWriteExecutes drives the file through the 9P Write/Close cycle and
-// checks that the command runs and its outcome is recorded in the log, while
-// reads return only a usage hint (ctl does not echo command results).
+// The file through the 9P Write/Close cycle: the command runs and its outcome
+// is recorded in the log, while reads return only a usage hint (ctl does not
+// echo command results).
 func TestCtlFileWriteExecutes(t *testing.T) {
 	called := false
 	lib := libfake.Lib{DeleteFn: func(int64) error { called = true; return nil }}

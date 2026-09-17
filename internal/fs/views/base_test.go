@@ -9,7 +9,6 @@ import (
 func TestPruneEmptyNoOpForMissingChild(t *testing.T) {
 	g := newGroupingDir(newTestFS(t), "test")
 	g.pruneEmpty("nonexistent")
-	// Should not panic.
 }
 
 func TestPruneEmptyNoOpForNonEmptyDir(t *testing.T) {

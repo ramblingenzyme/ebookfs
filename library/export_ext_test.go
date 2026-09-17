@@ -56,7 +56,6 @@ func TestLibraryImplExporter(t *testing.T) {
 func TestLibraryImplExporterConvertRequiresCacheDir(t *testing.T) {
 	lib := openTestLibrary(t)
 
-	// Exporter succeeds with a cache_dir supplied alongside convert=true.
 	e, err := lib.Exporter(library.ReaderConfig{
 		Statuses: []string{"unread", "reading"},
 		Convert:  true,
@@ -70,10 +69,9 @@ func TestLibraryImplExporterConvertRequiresCacheDir(t *testing.T) {
 	}
 }
 
-// TestExporterIncludes runs the status filter over both renditions. They carry
-// separate copies of the same one-line rule, and it decides what a reader mount
-// can see, so a divergence between them is a mount quietly serving the wrong
-// set of books.
+// The status filter runs over both renditions. They carry separate copies of the
+// same one-line rule, and it decides what a reader mount can see, so a
+// divergence between them is a mount quietly serving the wrong set of books.
 func TestExporterIncludes(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -103,9 +101,9 @@ func TestExporterIncludes(t *testing.T) {
 	}
 }
 
-// TestExporterRejectsBadReaderConfig pins that ReaderConfig's invariants are
-// enforced by the package that owns the struct, not only by whatever parsed the
-// values. A caller building one in Go gets the same checks a TOML file does.
+// ReaderConfig's invariants are enforced by the package that owns the struct,
+// not only by whatever parsed the values. A caller building one in Go gets the
+// same checks a TOML file does.
 func TestExporterRejectsBadReaderConfig(t *testing.T) {
 	t.Run("convert without a cache dir", func(t *testing.T) {
 		lib := openTestLibrary(t)
@@ -132,11 +130,10 @@ func TestExporterRejectsBadReaderConfig(t *testing.T) {
 	})
 }
 
-// TestEpubExporter_Size_ReportsRecordedSize pins that Size answers from the size
-// recorded at index time rather than the filesystem — the book's path points at
-// nothing, and the call must still succeed without touching disk. Every indexed
-// book was stat'd on the way in, so a missing file surfaces at Open rather than
-// as a length the exporter has to guess at.
+// Size answers from the size recorded at index time rather than the filesystem:
+// the book's path points at nothing, and the call must still succeed without
+// touching disk. Every indexed book was stat'd on the way in, so a missing file
+// surfaces at Open rather than as a length the exporter has to guess at.
 func TestEpubExporter_Size_ReportsRecordedSize(t *testing.T) {
 	b := makeBook(1, "Test", "Author")
 	b.EpubPath = "/nonexistent/missing.epub"
@@ -151,10 +148,10 @@ func TestEpubExporter_Size_ReportsRecordedSize(t *testing.T) {
 	}
 }
 
-// TestEpubExporter_Size_Unrecorded covers the other side of that guard. A book
-// carrying no recorded size was never observed, and reporting 0 as authoritative
-// would have 9P advertise a zero-length file and export sizing believe it — so
-// the size reads as unknown and the caller falls back rather than trusting it.
+// A book carrying no recorded size was never observed, and reporting 0 as
+// authoritative would have 9P advertise a zero-length file and export sizing
+// believe it, so the size reads as unknown and the caller falls back rather
+// than trusting it.
 func TestEpubExporter_Size_Unrecorded(t *testing.T) {
 	b := makeBook(1, "Test", "Author") // EpubSize left at its zero value
 
@@ -211,11 +208,10 @@ func TestEpubExporter_Dirname(t *testing.T) {
 	}
 }
 
-// TestKepubCacheDelegates pins that the kepub rendition forwards to its cache
-// rather than answering for itself: a .kepub.epub name, the author dirname,
-// a cold size for a book never converted, and an Open that surfaces the
-// conversion's error. Close goes through lib.Close, which owns the exporters
-// it hands out.
+// The kepub rendition forwards to its cache rather than answering for itself: a
+// .kepub.epub name, the author dirname, a cold size for a book never converted,
+// and an Open that surfaces the conversion's error. Close goes through
+// lib.Close, which owns the exporters it hands out.
 func TestKepubCacheDelegates(t *testing.T) {
 	lib := openTestLibrary(t)
 	exp, err := lib.Exporter(library.ReaderConfig{
@@ -265,11 +261,10 @@ func TestKepubCacheDelegates(t *testing.T) {
 	}
 }
 
-// TestExporterOpenServesTheRealEpub covers the read path the reader/ view is
-// for. Everything else about the epub rendition — Includes, Filename, Dirname,
-// Size — answers from the book record without touching disk, so nothing
-// previously opened one. A mount that lists the right names and serves nothing
-// would have passed every other test here.
+// The read path the reader/ view is for. Everything else about the epub
+// rendition (Includes, Filename, Dirname, Size) answers from the book record
+// without touching disk, so nothing previously opened one. A mount that lists
+// the right names and serves nothing would have passed every other test here.
 func TestExporterOpenServesTheRealEpub(t *testing.T) {
 	lib := openTestLibrary(t)
 	b := ingestTestEpub(t, lib, buildTestEpub(t, "Readable", "Alice"))
