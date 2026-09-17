@@ -9,33 +9,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
-// newStore returns a Store rooted at a fresh temp dir, plus that root.
-func newStore(t *testing.T) (*Store, string) {
-	t.Helper()
-	root := t.TempDir()
-	return New(root, filepath.Join(root, ".inbox-tmp")), root
-}
-
-// writeBook materializes an on-disk book directory under root/libPath: the epub
-// (skipped when epubName is empty) and a meta.toml (skipped when meta is nil).
-func writeBook(t *testing.T, root, libPath, epubName, content string, meta *book.Meta) {
-	t.Helper()
-	dir := filepath.Join(root, libPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	if epubName != "" {
-		if err := os.WriteFile(filepath.Join(dir, epubName), []byte(content), 0644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if meta != nil {
-		if err := writeMeta(filepath.Join(dir, metaFilename), meta); err != nil {
-			t.Fatal(err)
-		}
-	}
-}
-
 // TestMoveSameDirectoryRenamesFilename reproduces a production bug: a book
 // ingested before FAT sanitization was consistently applied can have an
 // on-disk epub filename containing FAT-illegal characters (e.g. ':'), while
@@ -139,252 +112,6 @@ func TestMoveSameLocationNoop(t *testing.T) {
 	}
 }
 
-func TestEpubFilename(t *testing.T) {
-	tests := []struct {
-		name    string
-		authors []book.Author
-		title   string
-		want    string
-	}{
-		{"single author", []book.Author{{Name: "Alice"}}, "Wonderful Title", "Wonderful Title - Alice.epub"},
-		{"two authors", []book.Author{{Name: "Alice"}, {Name: "Bob"}}, "Title", "Title - Alice & Bob.epub"},
-		{"no authors", nil, "No Author Book", "No Author Book.epub"},
-		{"empty authors", []book.Author{}, "Empty Authors", "Empty Authors.epub"},
-		{"colon in title", []book.Author{{Name: "Alice"}}, "Title: Sub", "Title- Sub - Alice.epub"},
-		{"slash in author", []book.Author{{Name: "Alice/Author"}}, "Title", "Title - Alice-Author.epub"},
-		{"leading dot trimmed", []book.Author{{Name: "Alice"}}, ".hidden", "hidden - Alice.epub"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := epubFilename(tt.authors, tt.title)
-			if got != tt.want {
-				t.Errorf("epubFilename(%v, %q) = %q, want %q", tt.authors, tt.title, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestCanonicalDir(t *testing.T) {
-	tests := []struct {
-		name    string
-		authors []book.Author
-		title   string
-		id      int64
-		want    string
-	}{
-		{"basic", []book.Author{{Name: "Alice"}}, "The Title", 42, "Alice/The Title (42)"},
-		{"two authors", []book.Author{{Name: "Alice"}, {Name: "Bob"}}, "The Title", 42, "Alice & Bob/The Title (42)"},
-		{"unknown author", nil, "No Author", 1, "Unknown/No Author (1)"},
-		{"title with id", []book.Author{{Name: "Bob"}}, "My Book", 7, "Bob/My Book (7)"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := canonicalDir(tt.authors, tt.title, tt.id)
-			if got != tt.want {
-				t.Errorf("canonicalDir(%v, %q, %d) = %q, want %q", tt.authors, tt.title, tt.id, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestLayout(t *testing.T) {
-	s, _ := newStore(t)
-
-	loc := s.Layout([]book.Author{{Name: "Alice"}}, "My Title", 1)
-	wantRel := filepath.Join("Alice/My Title (1)", "My Title - Alice.epub")
-	if loc.EpubPath != wantRel {
-		t.Errorf("EpubPath = %q, want %q", loc.EpubPath, wantRel)
-	}
-}
-
-// TestLayoutSlashInTitleStaysOneDirectory pins that a '/' in a title or an
-// author name cannot split a library directory in two. The epub package reports
-// metadata as the file wrote it (EPUB 3.3 §5.5.2), so a title like "Either/Or"
-// reaches Layout intact and this is the only thing standing between it and a
-// stray nested directory.
-func TestLayoutSlashInTitleStaysOneDirectory(t *testing.T) {
-	s, _ := newStore(t)
-
-	loc := s.Layout([]book.Author{{Name: "AC/DC"}}, "Either/Or", 7)
-	dir := filepath.Dir(loc.EpubPath)
-	if got := strings.Count(dir, string(filepath.Separator)); got != 1 {
-		t.Errorf("directory = %q, want exactly two components, got %d separators", dir, got)
-	}
-	if want := filepath.Join("AC-DC", "Either-Or (7)"); dir != want {
-		t.Errorf("directory = %q, want %q", dir, want)
-	}
-}
-
-// TestLayoutCannotEscapeTheLibraryRoot pins the other half of PathSafe. An
-// author name is read verbatim from the epub, so ".." is a value a file can
-// carry, and filepath.Join would walk it out of the library root — the book
-// written outside the library entirely, with ingest, move and delete all then
-// operating on the escaped path. "." collapses into the root instead.
-func TestLayoutCannotEscapeTheLibraryRoot(t *testing.T) {
-	s, _ := newStore(t)
-
-	for _, name := range []string{"..", ".", "...", " "} {
-		loc := s.Layout([]book.Author{{Name: name}}, "Title", 5)
-		if strings.HasPrefix(loc.EpubPath, ".") || strings.Contains(loc.EpubPath, ".."+string(filepath.Separator)) {
-			t.Errorf("author %q gave EpubPath %q, which leaves the library root", name, loc.EpubPath)
-		}
-		if got := len(strings.Split(filepath.Dir(loc.EpubPath), string(filepath.Separator))); got != 2 {
-			t.Errorf("author %q gave directory %q, want exactly two components", name, filepath.Dir(loc.EpubPath))
-		}
-	}
-}
-
-func TestLayoutUnknownAuthor(t *testing.T) {
-	s, _ := newStore(t)
-
-	loc := s.Layout(nil, "Untitled", 99)
-	if loc.EpubPath != filepath.Join("Unknown/Untitled (99)", "Untitled.epub") {
-		t.Errorf("EpubPath = %q, want %q", loc.EpubPath, filepath.Join("Unknown/Untitled (99)", "Untitled.epub"))
-	}
-}
-func TestIngest(t *testing.T) {
-	s, root := newStore(t)
-
-	// Stage a fake epub.
-	tmpEpub := filepath.Join(root, ".inbox-tmp", "staged.epub")
-	if err := os.MkdirAll(filepath.Dir(tmpEpub), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(tmpEpub, []byte("fake-epub-content"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	loc := s.Layout([]book.Author{{Name: "Alice"}}, "Ingested", 10)
-	meta := &book.Meta{ID: 10}
-
-	if _, err := s.Ingest(tmpEpub, loc, meta); err != nil {
-		t.Fatalf("Ingest: %v", err)
-	}
-
-	// Verify the epub landed at the right place.
-	bookDir := filepath.Join(root, loc.Dir())
-	if _, err := os.Stat(bookDir); err != nil {
-		t.Errorf("book directory not created: %v", err)
-	}
-	gotEpub := filepath.Join(bookDir, loc.Filename())
-	if _, err := os.Stat(gotEpub); err != nil {
-		t.Errorf("epub not found at %s: %v", gotEpub, err)
-	}
-	data, err := os.ReadFile(gotEpub)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(data) != "fake-epub-content" {
-		t.Errorf("epub content = %q, want %q", string(data), "fake-epub-content")
-	}
-
-	// Verify meta.toml was written.
-	metaPath := filepath.Join(bookDir, metaFilename)
-	if _, err := os.Stat(metaPath); err != nil {
-		t.Errorf("meta.toml not found: %v", err)
-	}
-	gotMeta, err := readMeta(metaPath)
-	if err != nil {
-		t.Fatalf("readMeta: %v", err)
-	}
-	if gotMeta.ID != 10 {
-		t.Errorf("meta ID = %d, want %d", gotMeta.ID, 10)
-	}
-}
-
-func TestWalk(t *testing.T) {
-	s, root := newStore(t)
-
-	writeBook(t, root, "Author, A/Book One (1)", "Book One - A.epub", "book1", &book.Meta{ID: 1})
-	writeBook(t, root, "Author, A/Book Two (2)", "Book Two - A.epub", "book2", &book.Meta{ID: 2})
-	writeBook(t, root, "Author, B/Book Three (3)", "Book Three - B.epub", "book3", &book.Meta{ID: 3})
-	// meta.toml present but no epub — should be skipped gracefully.
-	writeBook(t, root, "Author, C/Stale (4)", "", "", &book.Meta{ID: 4})
-
-	results, err := s.Walk()
-	if err != nil {
-		t.Fatalf("Walk: %v", err)
-	}
-
-	if len(results) != 3 {
-		t.Fatalf("Walk returned %d entries, want 3", len(results))
-	}
-
-	found := make(map[string]bool)
-	for _, loc := range results {
-		found[loc.Dir()] = true
-	}
-	for _, want := range []string{"Author, A/Book One (1)", "Author, A/Book Two (2)", "Author, B/Book Three (3)"} {
-		if !found[want] {
-			t.Errorf("Walk did not return %q", want)
-		}
-	}
-}
-
-func TestWalkEmptyLibrary(t *testing.T) {
-	s, _ := newStore(t)
-
-	results, err := s.Walk()
-	if err != nil {
-		t.Fatalf("Walk on empty library: %v", err)
-	}
-	if len(results) != 0 {
-		t.Errorf("Walk returned %d entries, want 0", len(results))
-	}
-}
-
-func TestReadMetaRoundTrip(t *testing.T) {
-	s, root := newStore(t)
-
-	writeBook(t, root, "Author, A/Test (1)", "", "", nil)
-
-	loc := book.Location{EpubPath: filepath.Join("Author, A/Test (1)", "test.epub")}
-	original := &book.Meta{
-		ID:     42,
-		Status: "reading",
-		Rating: 3.5,
-		Tags:   []string{"sci-fi", "classic"},
-	}
-
-	if err := s.writeMeta(loc, original); err != nil {
-		t.Fatalf("writeMeta: %v", err)
-	}
-
-	got, err := s.ReadMeta(loc)
-	if err != nil {
-		t.Fatalf("ReadMeta: %v", err)
-	}
-
-	if got.ID != original.ID {
-		t.Errorf("ID = %d, want %d", got.ID, original.ID)
-	}
-	if got.Status != original.Status {
-		t.Errorf("Status = %q, want %q", got.Status, original.Status)
-	}
-	if got.Rating != original.Rating {
-		t.Errorf("Rating = %g, want %g", got.Rating, original.Rating)
-	}
-	if len(got.Tags) != len(original.Tags) || got.Tags[0] != original.Tags[0] {
-		t.Errorf("Tags = %v, want %v", got.Tags, original.Tags)
-	}
-}
-
-func TestPathTaken(t *testing.T) {
-	s, root := newStore(t)
-
-	writeBook(t, root, "Author A/Book Title (1)", "Book Title - Author A.epub", "fake epub", nil)
-
-	if !s.PathTaken([]book.Author{{Name: "Author A"}}, "Book Title") {
-		t.Error("PathTaken returned false for a file that is on disk")
-	}
-	if s.PathTaken([]book.Author{{Name: "Author A"}}, "Different Title") {
-		t.Error("PathTaken returned true for a title that is not on disk")
-	}
-	if s.PathTaken([]book.Author{{Name: "Nobody"}}, "Anything") {
-		t.Error("PathTaken returned true for a non-existent author dir")
-	}
-}
-
 func TestMoveDestinationAlreadyExistsError(t *testing.T) {
 	s, root := newStore(t)
 
@@ -400,161 +127,6 @@ func TestMoveDestinationAlreadyExistsError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "destination already exists") {
 		t.Errorf("error = %q, want 'destination already exists'", err)
-	}
-}
-
-func TestReadMetaNotExist(t *testing.T) {
-	_, err := readMeta("/nonexistent/path/meta.toml")
-	if err == nil {
-		t.Error("expected error reading non-existent meta.toml")
-	}
-}
-
-func TestReadMetaInvalidTOML(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "meta.toml")
-	if err := os.WriteFile(path, []byte("invalid toml {{{"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	_, err := readMeta(path)
-	if err == nil {
-		t.Error("expected error for invalid TOML in meta.toml")
-	}
-}
-
-func TestWriteMetaReadOnlyDir(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.Chmod(dir, 0444); err != nil {
-		t.Skip("cannot chmod temp dir:", err)
-	}
-	path := filepath.Join(dir, "meta.toml")
-	err := writeMeta(path, &book.Meta{ID: 1})
-	if err == nil {
-		t.Error("expected error writing meta.toml to read-only directory")
-	}
-}
-
-func TestDeleteRemovesBookDir(t *testing.T) {
-	s, root := newStore(t)
-
-	dir := filepath.Join(root, "Author, A", "Test (1)")
-	writeBook(t, root, "Author, A/Test (1)", "test.epub", "data", nil)
-
-	loc := book.Location{EpubPath: filepath.Join("Author, A/Test (1)", "test.epub")}
-	if err := s.Delete(loc); err != nil {
-		t.Fatalf("Delete: %v", err)
-	}
-	if _, err := os.Stat(dir); !os.IsNotExist(err) {
-		t.Errorf("book directory should be removed after delete")
-	}
-	if _, err := os.Stat(filepath.Join(root, "Author, A")); !os.IsNotExist(err) {
-		t.Errorf("empty author directory should also be removed after last book is deleted")
-	}
-}
-
-func TestEpubFilenameForFFallback(t *testing.T) {
-	// A title that is only dots triggers ForFAT to return an error (trimmed to empty),
-	// exercising the fallback to the raw title.
-	got := epubFilename([]book.Author{{Name: "Alice"}}, ".")
-	if got != ". - Alice.epub" {
-		t.Errorf("epubFilename = %q, want %q", got, ". - Alice.epub")
-	}
-}
-
-func TestDeleteWithReadOnlyDirError(t *testing.T) {
-	s, root := newStore(t)
-
-	dir := filepath.Join(root, "Author, A", "Test (1)")
-	writeBook(t, root, "Author, A/Test (1)", "test.epub", "data", nil)
-
-	if err := os.Chmod(dir, 0444); err != nil {
-		t.Skip("cannot chmod book dir:", err)
-	}
-	// Restore permissions so TempDir cleanup succeeds.
-	t.Cleanup(func() { os.Chmod(dir, 0755) })
-
-	loc := book.Location{EpubPath: filepath.Join("Author, A/Test (1)", "test.epub")}
-	err := s.Delete(loc)
-	if err == nil {
-		t.Error("expected error deleting a read-only book directory")
-	}
-}
-
-// TestIDFromPath pins the inverse of canonicalDir's " (id)" suffix. It is the
-// only way to recover a book's id when meta.toml can't be parsed, so it has to
-// reject anything it isn't certain about rather than guess.
-func TestIDFromPath(t *testing.T) {
-	tests := []struct {
-		path string
-		want int64
-		ok   bool
-	}{
-		// The three layouts this project has used.
-		{"Alice/Test Title (1)", 1, true},
-		{"Alice & Bob/Test Title (42)", 42, true},
-		{"Smith, Alice/Test Title (7)", 7, true},
-		// A title that itself ends in parentheses: the last group wins.
-		{"Alice/Test Title (Annotated) (9)", 9, true},
-		// Nothing to read.
-		{"Alice/Test Title", 0, false},
-		{"Alice", 0, false},
-		{"", 0, false},
-		// Present but not a usable id.
-		{"Alice/Test Title ()", 0, false},
-		{"Alice/Test Title (abc)", 0, false},
-		{"Alice/Test Title (0)", 0, false},
-		{"Alice/Test Title (-3)", 0, false},
-		// Unclosed or malformed.
-		{"Alice/Test Title (12", 0, false},
-		{"Alice/(5)", 0, false},
-	}
-	for _, tc := range tests {
-		got, ok := IDFromPath(tc.path)
-		if got != tc.want || ok != tc.ok {
-			t.Errorf("IDFromPath(%q) = (%d, %v), want (%d, %v)", tc.path, got, ok, tc.want, tc.ok)
-		}
-	}
-}
-
-// TestIngestSurfacesWriteMetaFailure verifies that Ingest returns an error
-// when the sidecar write fails, but does NOT clean up — the caller is
-// responsible for deciding whether to delete the partial directory.
-func TestIngestSurfacesWriteMetaFailure(t *testing.T) {
-	s, root := newStore(t)
-
-	staged := filepath.Join(t.TempDir(), "staged.epub")
-	if err := os.WriteFile(staged, []byte("epub"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	loc := book.Location{EpubPath: filepath.Join("Alice/Title (1)", "Title - Alice.epub")}
-	// Occupy meta.toml's name with a directory, so the sidecar write fails
-	// after the epub is already in place.
-	bookDir := filepath.Join(root, loc.Dir())
-	if err := os.MkdirAll(filepath.Join(bookDir, metaFilename), 0755); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := s.Ingest(staged, loc, &book.Meta{ID: 1}); err == nil {
-		t.Fatal("Ingest succeeded with an unwritable meta.toml, want the failure surfaced")
-	}
-	if _, err := os.Stat(bookDir); os.IsNotExist(err) {
-		t.Error("Ingest cleaned up the book directory; caller is responsible for cleanup")
-	}
-}
-
-// TestIngestMissingStagedEpub is the earlier failure: nothing to move into
-// place. The book directory is created before the rename is attempted, so this
-// pins that the error is surfaced rather than leaving a half-built book behind.
-func TestIngestMissingStagedEpub(t *testing.T) {
-	s, root := newStore(t)
-
-	loc := book.Location{EpubPath: filepath.Join("Alice/Title (1)", "Title - Alice.epub")}
-	_, err := s.Ingest(filepath.Join(t.TempDir(), "does-not-exist.epub"), loc, &book.Meta{ID: 1})
-	if err == nil {
-		t.Fatal("Ingest succeeded with no staged epub, want the failure surfaced")
-	}
-	if _, err := os.Stat(filepath.Join(root, loc.Dir(), metaFilename)); !os.IsNotExist(err) {
-		t.Error("meta.toml was written despite the epub never arriving")
 	}
 }
 
@@ -580,5 +152,58 @@ func TestMoveRollsBackWhenEpubRenameFails(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, to.Dir())); !os.IsNotExist(err) {
 		t.Errorf("destination %q still exists after rollback", to.Dir())
+	}
+}
+
+func TestPathTaken(t *testing.T) {
+	s, root := newStore(t)
+
+	writeBook(t, root, "Author A/Book Title (1)", "Book Title - Author A.epub", "fake epub", nil)
+
+	if !s.PathTaken([]book.Author{{Name: "Author A"}}, "Book Title") {
+		t.Error("PathTaken returned false for a file that is on disk")
+	}
+	if s.PathTaken([]book.Author{{Name: "Author A"}}, "Different Title") {
+		t.Error("PathTaken returned true for a title that is not on disk")
+	}
+	if s.PathTaken([]book.Author{{Name: "Nobody"}}, "Anything") {
+		t.Error("PathTaken returned true for a non-existent author dir")
+	}
+}
+
+func TestDeleteRemovesBookDir(t *testing.T) {
+	s, root := newStore(t)
+
+	dir := filepath.Join(root, "Author, A", "Test (1)")
+	writeBook(t, root, "Author, A/Test (1)", "test.epub", "data", nil)
+
+	loc := book.Location{EpubPath: filepath.Join("Author, A/Test (1)", "test.epub")}
+	if err := s.Delete(loc); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Errorf("book directory should be removed after delete")
+	}
+	if _, err := os.Stat(filepath.Join(root, "Author, A")); !os.IsNotExist(err) {
+		t.Errorf("empty author directory should also be removed after last book is deleted")
+	}
+}
+
+func TestDeleteWithReadOnlyDirError(t *testing.T) {
+	s, root := newStore(t)
+
+	dir := filepath.Join(root, "Author, A", "Test (1)")
+	writeBook(t, root, "Author, A/Test (1)", "test.epub", "data", nil)
+
+	if err := os.Chmod(dir, 0444); err != nil {
+		t.Skip("cannot chmod book dir:", err)
+	}
+	// Restore permissions so TempDir cleanup succeeds.
+	t.Cleanup(func() { os.Chmod(dir, 0755) })
+
+	loc := book.Location{EpubPath: filepath.Join("Author, A/Test (1)", "test.epub")}
+	err := s.Delete(loc)
+	if err == nil {
+		t.Error("expected error deleting a read-only book directory")
 	}
 }
