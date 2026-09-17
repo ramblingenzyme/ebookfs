@@ -1,3 +1,12 @@
+// What a served book costs in memory, since every book in the library holds a
+// BookDir and its child files for the process lifetime. Reports a fixed-size
+// breakdown via unsafe.Sizeof, then measures real allocation at 100, 1000 and
+// 10000 books, with and without a cover, separating the marginal cost of the
+// BookDir from the *library.Book it wraps.
+//
+// A benchmark rather than a test: it asserts nothing and fails nothing. Run it
+// with -bench and read the log lines when the per-book cost matters.
+
 package book
 
 import (

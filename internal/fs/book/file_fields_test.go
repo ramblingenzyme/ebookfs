@@ -352,6 +352,3 @@ func TestFieldFileOtruncNoWriteDoesNotCallSet(t *testing.T) {
 		t.Error("set was called even though no data was written")
 	}
 }
-
-// Write size-limit behavior (cap, overflow, at-limit) is covered together with
-// coverFile by TestWriteFileSizeLimits in basefile_test.go.

@@ -1,3 +1,11 @@
+// coverFile and fieldFile are the two writable files, and both cap writes
+// through the same vfile.WriteBuffer. This pins that shared cap for both at
+// once: an offset past the limit is rejected, a near-maxuint64 offset cannot
+// wrap past the check, and a write ending exactly at the limit is allowed.
+//
+// It lives apart from either file's paired test because neither owns the rule;
+// the buffer does, and a cap that held for one file only would be a bug.
+
 package book
 
 import (
