@@ -6,15 +6,18 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
-	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
-
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 )
+
+// noopSource is for tests that never reach a conversion.
+type noopSource struct{}
+
+func (noopSource) Content(int64) (epub.EpubReader, error) {
+	return nil, errors.New("not used in this test")
+}
 
 func TestCacheClose(t *testing.T) {
 	c := NewCache(t.TempDir(), noopSource{})
@@ -24,103 +27,38 @@ func TestCacheClose(t *testing.T) {
 	}
 }
 
-type noopSource struct{}
-
-func (noopSource) Content(int64) (epub.EpubReader, error) {
-	return nil, errors.New("not used in this test")
-}
-
-func TestWarmerWarmsBook(t *testing.T) {
-	var (
-		mu   sync.Mutex
-		seen []int64
-	)
-	w := newWarmer(func(b *bookmodel.Book) error {
-		mu.Lock()
-		seen = append(seen, b.Meta.ID)
-		mu.Unlock()
-		return nil
-	})
-	t.Cleanup(func() { close(w.ch) })
-
-	w.warm(makeBook(1, "Test", "Author"))
-
-	if !waitForWarm(t, func() bool {
-		mu.Lock()
-		defer mu.Unlock()
-		return len(seen) == 1 && seen[0] == 1
-	}) {
-		t.Fatal("timed out waiting for warm")
+// Close must not wait out a conversion in flight: it is called after the 9P
+// server is down, past main's shutdown deadline. Warm is only how this test
+// gets a conversion running.
+func TestCacheCloseCancelsConversion(t *testing.T) {
+	dir := t.TempDir()
+	c := NewCache(dir, fakeSource{t: t, dir: dir})
+	started := make(chan struct{})
+	c.convertFn = func(ctx context.Context, w io.Writer, _ io.ReaderAt, _ int64) error {
+		close(started)
+		<-ctx.Done()
+		return ctx.Err()
 	}
-}
 
-func TestWarmerWarmsMultipleBooks(t *testing.T) {
-	var (
-		mu   sync.Mutex
-		seen []int64
-	)
-	w := newWarmer(func(b *bookmodel.Book) error {
-		mu.Lock()
-		seen = append(seen, b.Meta.ID)
-		mu.Unlock()
-		return nil
-	})
-	t.Cleanup(func() { close(w.ch) })
-
-	w.warm(makeBook(1, "A", "Author"))
-	w.warm(makeBook(2, "B", "Author"))
-
-	if !waitForWarm(t, func() bool {
-		mu.Lock()
-		defer mu.Unlock()
-		return len(seen) == 2
-	}) {
-		t.Fatal("timed out waiting for both warms")
+	if err := os.WriteFile(filepath.Join(dir, "source.epub"), []byte("epub-data"), 0644); err != nil {
+		t.Fatal(err)
 	}
-}
+	b := makeBook(1, "Warm", "Author")
+	b.EpubSize = 9
 
-func TestWarmerErrorDoesNotPanic(t *testing.T) {
+	c.Warm(b)
+	<-started
+
 	done := make(chan struct{})
-	w := newWarmer(func(b *bookmodel.Book) error {
+	go func() {
 		defer close(done)
-		return testutil.ErrTest
-	})
-	t.Cleanup(func() { close(w.ch) })
-
-	w.warm(makeBook(1, "Test", "Author"))
-
+		c.Close()
+	}()
 	select {
 	case <-done:
 	case <-time.After(3 * time.Second):
-		t.Fatal("warmer goroutine did not call ensure function")
+		t.Fatal("Close blocked on the conversion in flight")
 	}
-}
-
-// warm after stop must drop the hint, not send on the closed channel (which
-// would panic). This is the shutdown-window race: the 9P server can call Warm
-// while Cache.Close is tearing the warmer down.
-func TestWarmAfterStopNoPanic(t *testing.T) {
-	w := newWarmer(func(*bookmodel.Book) error { return nil })
-	w.stop()
-	w.warm(makeBook(1, "Test", "Author"))
-}
-
-// Warm called concurrently with stop must never panic. Run under -race.
-func TestWarmConcurrentWithStopNoPanic(t *testing.T) {
-	w := newWarmer(func(*bookmodel.Book) error { return nil })
-
-	var wg sync.WaitGroup
-	for range 8 {
-		wg.Go(func() {
-			b := makeBook(1, "Test", "Author")
-			for range 1000 {
-				w.warm(b)
-			}
-		})
-	}
-
-	w.stop()
-	wg.Wait()
 }
 
 func TestCacheFilename(t *testing.T) {
@@ -172,43 +110,8 @@ func TestCacheSize(t *testing.T) {
 	}
 }
 
-// fakeSource returns a temp file filled with the given data.
-type fakeSource struct {
-	t   *testing.T
-	dir string
-}
-
-// srcContent wraps an *os.File to satisfy epub.EpubReader. The kepub cache
-// only reads from the reader; OPF and Cover are never called.
-type srcContent struct {
-	*os.File
-}
-
-func (c *srcContent) OPF() ([]byte, error)   { return nil, nil }
-func (c *srcContent) Cover() ([]byte, error) { return nil, nil }
-
-func (s fakeSource) Content(_ int64) (epub.EpubReader, error) {
-	path := filepath.Join(s.dir, "source.epub")
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	return &srcContent{f}, nil
-}
-
 func TestCacheEnsureCreatesFile(t *testing.T) {
-	dir := t.TempDir()
-	src := fakeSource{t: t, dir: dir}
-	c := NewCache(dir, src)
-	c.convertFn = func(_ context.Context, w io.Writer, _ io.ReaderAt, _ int64) error {
-		_, err := w.Write([]byte("fake-kepub"))
-		return err
-	}
-
-	srcPath := filepath.Join(dir, "source.epub")
-	if err := os.WriteFile(srcPath, []byte("epub-data"), 0644); err != nil {
-		t.Fatal(err)
-	}
+	c, dir := newTestCache(t, "fake-kepub")
 
 	// Set DateModified in the future so the cache will be considered stale.
 	b := makeBook(1, "Test", "Alice")
@@ -268,18 +171,7 @@ func TestCacheEnsureFreshIsNoop(t *testing.T) {
 }
 
 func TestCacheEnsureWithZeroDateModified(t *testing.T) {
-	dir := t.TempDir()
-	src := fakeSource{t: t, dir: dir}
-	c := NewCache(dir, src)
-	c.convertFn = func(_ context.Context, w io.Writer, _ io.ReaderAt, _ int64) error {
-		_, err := w.Write([]byte("kepub-content"))
-		return err
-	}
-
-	srcPath := filepath.Join(dir, "source.epub")
-	if err := os.WriteFile(srcPath, []byte("epub-data"), 0644); err != nil {
-		t.Fatal(err)
-	}
+	c, _ := newTestCache(t, "kepub-content")
 
 	b := makeBook(1, "Test", "Alice")
 	b.EpubSize = 9
@@ -295,46 +187,3 @@ func TestCacheEnsureWithZeroDateModified(t *testing.T) {
 		t.Errorf("cache content = %q, want %q", string(data), "kepub-content")
 	}
 }
-
-func TestCacheWarmProducesFile(t *testing.T) {
-	dir := t.TempDir()
-	src := fakeSource{t: t, dir: dir}
-	c := NewCache(dir, src)
-	c.convertFn = func(_ context.Context, w io.Writer, _ io.ReaderAt, _ int64) error {
-		_, err := w.Write([]byte("warm-content"))
-		return err
-	}
-
-	srcPath := filepath.Join(dir, "source.epub")
-	if err := os.WriteFile(srcPath, []byte("epub-data"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	b := makeBook(1, "Warm", "Author")
-	b.EpubSize = 9
-
-	c.Warm(b)
-	c.Close()
-
-	cachePath := filepath.Join(dir, "1.kepub.epub")
-	if _, err := os.Stat(cachePath); err != nil {
-		t.Errorf("cache file not created after warm: %v", err)
-	}
-}
-
-func waitForWarm(t *testing.T, f func() bool) bool {
-	t.Helper()
-	deadline := time.After(3 * time.Second)
-	for {
-		if f() {
-			return true
-		}
-		select {
-		case <-deadline:
-			return false
-		case <-time.After(10 * time.Millisecond):
-		}
-	}
-}
-
-var makeBook = testutil.MakeMutableBook
