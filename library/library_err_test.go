@@ -42,11 +42,28 @@ func TestCreateIngestReadOnlyDir(t *testing.T) {
 	}
 }
 
+// Every id-addressed read reports a missing book the same way, so a caller can
+// test one sentinel whichever it called.
 func TestGetMissingBookIsErrBookNotFound(t *testing.T) {
 	lib := openTestLibrary(t)
 
-	_, err := lib.Content(999)
-	if !errors.Is(err, ErrBookNotFound) {
-		t.Fatalf("Content(999) err = %v, want ErrBookNotFound", err)
+	if _, err := lib.Content(999); !errors.Is(err, ErrBookNotFound) {
+		t.Errorf("Content(999) err = %v, want ErrBookNotFound", err)
+	}
+	if _, err := lib.Get(999); !errors.Is(err, ErrBookNotFound) {
+		t.Errorf("Get(999) err = %v, want ErrBookNotFound", err)
+	}
+}
+
+func TestGetReturnsTheIngestedBook(t *testing.T) {
+	lib := openTestLibrary(t)
+	want := ingestTestEpub(t, lib, buildTestEpub(t, "Fetched By Id"))
+
+	got, err := lib.Get(want.ID())
+	if err != nil {
+		t.Fatalf("Get(%d): %v", want.ID(), err)
+	}
+	if got.ID() != want.ID() || got.Title() != want.Title() {
+		t.Errorf("Get = %d/%q, want %d/%q", got.ID(), got.Title(), want.ID(), want.Title())
 	}
 }

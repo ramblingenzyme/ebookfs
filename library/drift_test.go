@@ -154,7 +154,7 @@ func TestStoreDrifted(t *testing.T) {
 // Layout/Move pass — puts the epub back under its canonical name.
 func TestRenamedEpubHealedOnRestart(t *testing.T) {
 	cfg := testConfig(t)
-	lib := openLib(t, cfg, false)
+	lib := openLib(t, cfg)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Renamed"))
 	canonical := book.Filename()
 	if err := lib.Close(); err != nil {
@@ -166,7 +166,7 @@ func TestRenamedEpubHealedOnRestart(t *testing.T) {
 		t.Fatalf("rename epub: %v", err)
 	}
 
-	lib2 := openLib(t, cfg, false) // plain restart, no -reindex
+	lib2 := openLib(t, cfg) // plain restart, no -reindex
 
 	if _, err := lib2.Content(book.ID()); err != nil {
 		t.Errorf("Content after restart: %v (index still points at a stale filename)", err)
@@ -191,7 +191,7 @@ func TestRenamedEpubHealedOnRestart(t *testing.T) {
 // reservation is never what keeps the ids apart, and the test cannot fail.
 func TestUnstattableBookReservesID(t *testing.T) {
 	cfg := testConfig(t)
-	lib := openLib(t, cfg, false)
+	lib := openLib(t, cfg)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Ghost"))
 	if err := lib.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -200,7 +200,7 @@ func TestUnstattableBookReservesID(t *testing.T) {
 	breakEpub(t, book, cfg.Root)
 	dropIndex(t, cfg)
 
-	lib2 := openLib(t, cfg, false)
+	lib2 := openLib(t, cfg)
 
 	next := ingestTestEpub(t, lib2, buildTestEpub(t, "Newcomer"))
 	if next.ID() <= book.ID() {
@@ -214,7 +214,7 @@ func TestUnstattableBookReservesID(t *testing.T) {
 // startup and the whole library is reindexed forever over one broken file.
 func TestUnstattableBookSettlesClean(t *testing.T) {
 	cfg := testConfig(t)
-	lib := openLib(t, cfg, false)
+	lib := openLib(t, cfg)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Ghost"))
 	if err := lib.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -231,7 +231,7 @@ func TestUnstattableBookSettlesClean(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(cfg.Root, book.EpubPath()), buildTestEpub(t, "Ghost"), 0644); err != nil {
 		t.Fatalf("repair epub: %v", err)
 	}
-	lib2 := openLib(t, cfg, false)
+	lib2 := openLib(t, cfg)
 
 	got, err := lib2.Search(Query{})
 	if err != nil {
@@ -250,7 +250,7 @@ func TestUnstattableBookSettlesClean(t *testing.T) {
 // library is reindexed on every startup.
 func TestUnreadableMetaAndUnstattableEpubSettlesClean(t *testing.T) {
 	cfg := testConfig(t)
-	lib := openLib(t, cfg, false)
+	lib := openLib(t, cfg)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Ghost"))
 	if err := lib.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -279,7 +279,7 @@ func TestUnreadableMetaAndUnstattableEpubSettlesClean(t *testing.T) {
 // only one that fires.
 func TestUnreadableMetaReservesIDFromPath(t *testing.T) {
 	cfg := testConfig(t)
-	lib := openLib(t, cfg, false)
+	lib := openLib(t, cfg)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Ghost"))
 	meta, err := os.ReadFile(metaPathOf(book, cfg.Root))
 	if err != nil {
@@ -294,7 +294,7 @@ func TestUnreadableMetaReservesIDFromPath(t *testing.T) {
 	}
 	dropIndex(t, cfg)
 
-	lib2 := openLib(t, cfg, false)
+	lib2 := openLib(t, cfg)
 	next := ingestTestEpub(t, lib2, buildTestEpub(t, "Newcomer"))
 	if next.ID() <= book.ID() {
 		t.Fatalf("new book got id %d, reusing id %d held by the book with the unreadable sidecar",
@@ -308,7 +308,7 @@ func TestUnreadableMetaReservesIDFromPath(t *testing.T) {
 	if err := os.WriteFile(metaPathOf(book, cfg.Root), meta, 0644); err != nil {
 		t.Fatalf("repair meta.toml: %v", err)
 	}
-	lib3 := openLib(t, cfg, false)
+	lib3 := openLib(t, cfg)
 
 	got, err := lib3.Search(Query{})
 	if err != nil {
@@ -326,7 +326,7 @@ func TestUnreadableMetaReservesIDFromPath(t *testing.T) {
 // constraint failed: books.id") leaves the user with nothing to act on.
 func TestDuplicateBookIDFailsOpenNamingBothPaths(t *testing.T) {
 	cfg := testConfig(t)
-	lib := openLib(t, cfg, false)
+	lib := openLib(t, cfg)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Twin"))
 	if err := lib.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -348,7 +348,7 @@ func TestDuplicateBookIDFailsOpenNamingBothPaths(t *testing.T) {
 		}
 	}
 
-	lib2, err := Open(cfg, false)
+	lib2, err := Open(cfg)
 	if err == nil {
 		lib2.Close()
 		t.Fatal("Open succeeded with two directories claiming one book id, want a fatal error")
@@ -423,7 +423,7 @@ func TestStoreCleanAfterEdit(t *testing.T) {
 func TestCorruptEpubDoesNotReindexForever(t *testing.T) {
 	cfg := testConfig(t)
 
-	lib := openLib(t, cfg, false)
+	lib := openLib(t, cfg)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Doomed"))
 	if err := lib.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -436,7 +436,7 @@ func TestCorruptEpubDoesNotReindexForever(t *testing.T) {
 	}
 
 	// First restart: genuine drift, so this one reindexes and records the skip.
-	lib2 := openLib(t, cfg, false)
+	lib2 := openLib(t, cfg)
 	if drifted(t, lib2) {
 		t.Error("storeDrifted() = true right after a reindex that skipped the corrupt book — the skip was not recorded, so startups will reindex forever")
 	}
@@ -449,7 +449,7 @@ func TestCorruptEpubDoesNotReindexForever(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(cfg.Root, book.EpubPath()), buildTestEpub(t, "Repaired"), 0644); err != nil {
 		t.Fatalf("repair epub: %v", err)
 	}
-	lib3 := openLib(t, cfg, false)
+	lib3 := openLib(t, cfg)
 
 	got, err := lib3.Search(Query{})
 	if err != nil {
@@ -466,7 +466,7 @@ func TestCorruptEpubDoesNotReindexForever(t *testing.T) {
 func TestOpenReindexesOnDrift(t *testing.T) {
 	cfg := testConfig(t)
 
-	lib := openLib(t, cfg, false)
+	lib := openLib(t, cfg)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Before"))
 	id := book.ID()
 	if err := lib.Close(); err != nil {
@@ -478,7 +478,7 @@ func TestOpenReindexesOnDrift(t *testing.T) {
 		t.Fatalf("swap epub while server is down: %v", err)
 	}
 
-	lib2 := openLib(t, cfg, false) // plain restart, no -reindex
+	lib2 := openLib(t, cfg) // plain restart, no -reindex
 
 	got, err := lib2.Search(Query{IDs: []int64{id}})
 	if err != nil {
@@ -501,7 +501,7 @@ func TestOpenReindexesOnDrift(t *testing.T) {
 func stageLegacyLayout(t *testing.T, cfg Config, title string, authors []string, legacyAuthorDir, legacyEpub string) (*Book, book.Location) {
 	t.Helper()
 
-	lib := openLib(t, cfg, false)
+	lib := openLib(t, cfg)
 	b := ingestTestEpub(t, lib, buildTestEpub(t, title, authors...))
 	canonical := book.Unwrap(b).Location
 	if err := lib.Close(); err != nil {
@@ -554,7 +554,7 @@ func TestReindexMigratesToCanonicalPath(t *testing.T) {
 			cfg := testConfig(t)
 			book, canonical := stageLegacyLayout(t, cfg, tc.title, tc.authors, tc.legacyAuthorDir, tc.legacyEpub)
 
-			lib := openLib(t, cfg, true)
+			lib := openLib(t, cfg, WithForceReindex())
 
 			got, err := lib.Search(Query{IDs: []int64{book.ID()}})
 			if err != nil {
@@ -591,7 +591,7 @@ func TestReindexLeavesIndexClean(t *testing.T) {
 			cfg := testConfig(t)
 			stageLegacyLayout(t, cfg, tc.title, tc.authors, tc.legacyAuthorDir, tc.legacyEpub)
 
-			lib := openLib(t, cfg, false)
+			lib := openLib(t, cfg)
 
 			if drifted(t, lib) {
 				t.Error("storeDrifted() = true after a reindex, want false — the rebuild left the index disagreeing with the store, so every startup will reindex again")

@@ -20,16 +20,16 @@ func testConfig(t *testing.T) Config {
 
 func openTestLibrary(t *testing.T) *Library {
 	t.Helper()
-	return openLib(t, testConfig(t), false)
+	return openLib(t, testConfig(t))
 }
 
 // openLib opens a library at cfg and registers its close, so an assertion that
 // fails mid-test cannot leave the index open. Tests that reopen across a
 // simulated restart still Close explicitly for sequencing; the second close is
 // a no-op.
-func openLib(t *testing.T, cfg Config, forceReindex bool) *Library {
+func openLib(t *testing.T, cfg Config, opts ...Option) *Library {
 	t.Helper()
-	lib, err := Open(cfg, forceReindex)
+	lib, err := Open(cfg, opts...)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -95,7 +95,7 @@ func dropIndex(t *testing.T, cfg Config) {
 func assertSettlesClean(t *testing.T, cfg Config) {
 	t.Helper()
 	for i := 1; i <= 2; i++ {
-		lib, err := Open(cfg, false)
+		lib, err := Open(cfg)
 		if err != nil {
 			t.Fatalf("reopen %d: %v", i, err)
 		}

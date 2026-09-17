@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`Library.Get(id)`.** Returns one book by id, or an error wrapping `ErrBookNotFound`. `Content`, `Edit` and `Delete` were already id-addressed; reading one book was the gap.
+- **`library.Open` takes functional options.** `Open(cfg Config, opts ...Option)` replaces `Open(cfg Config, forceReindex bool)`, with `WithForceReindex()` as the first option. A bare `false` at the call site said nothing, and options are how the extension points planned for V2 — ingest hooks, subscribers, metadata handlers — are added without changing the signature again.
+
 - **`identifiers` file in each book directory.** Read-only, one `scheme=value` line per identifier, sorted by scheme. Identifiers were parsed and indexed before but never surfaced anywhere.
 
 ### Fixed

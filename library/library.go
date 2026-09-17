@@ -71,9 +71,30 @@ type Exporter interface {
 	Includes(*Book) bool      // whether the book appears in the reader view
 }
 
+// Option configures Open. Options are the extension point: an ingest hook, a
+// subscriber or a metadata handler is added as one, so none of them changes
+// Open's signature.
+type Option func(*options)
+
+type options struct {
+	forceReindex bool
+}
+
+// WithForceReindex rebuilds the index from the store even when it looks clean.
+// The drift check only compares what it can observe cheaply (see storeDrifted),
+// so an operator who knows better says so this way.
+func WithForceReindex() Option {
+	return func(o *options) { o.forceReindex = true }
+}
+
 // Open opens the library rooted at cfg.Root, rebuilding the index from the
-// store when it is missing, stale, or forceReindex is set.
-func Open(cfg Config, forceReindex bool) (*Library, error) {
+// store when it is missing, stale, or WithForceReindex is passed.
+func Open(cfg Config, opts ...Option) (*Library, error) {
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
+
 	if err := os.MkdirAll(cfg.Root, 0755); err != nil {
 		return nil, fmt.Errorf("creating library root: %w", err)
 	}
@@ -101,7 +122,7 @@ func Open(cfg Config, forceReindex bool) (*Library, error) {
 	// that fires, its scan is handed to the rebuild, which then neither walks
 	// the store nor stats the books a second time.
 	var onDisk *storeScan
-	needs := forceReindex || lib.needsReindex()
+	needs := o.forceReindex || lib.needsReindex()
 	if !needs {
 		onDisk, needs = lib.storeDrifted()
 	}

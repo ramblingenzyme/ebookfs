@@ -54,7 +54,11 @@ func main() {
 	}
 	setupLogging(cfg.Log)
 
-	lib, err := library.Open(library.Config(cfg.Library), *forceReindex)
+	var opts []library.Option
+	if *forceReindex {
+		opts = append(opts, library.WithForceReindex())
+	}
+	lib, err := library.Open(library.Config(cfg.Library), opts...)
 	if err != nil {
 		fatal("opening library", err)
 	}

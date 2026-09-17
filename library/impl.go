@@ -88,6 +88,17 @@ func (l *Library) Stats() (*Stats, error) {
 	return l.index.Stats()
 }
 
+// Get returns the book with the given id, or an error wrapping ErrBookNotFound
+// when the index does not hold it. The returned Book is an immutable snapshot;
+// see the concurrency contract on Library.
+func (l *Library) Get(id int64) (*Book, error) {
+	b, err := l.get(id)
+	if err != nil {
+		return nil, err
+	}
+	return book.NewImmutableBook(b), nil
+}
+
 // get returns the current state of book id from the index, hydrated with its
 // absolute epub path. Mutations fetch their base through it under the per-book
 // lock, so they always operate on the book's authoritative current state.
