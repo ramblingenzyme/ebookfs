@@ -19,7 +19,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 )
 
-// --- writer-only helpers ---------------------------------------------------
+// --- writer-only helpers ---
 
 func tinyJPEG(t *testing.T) []byte {
 	t.Helper()
@@ -40,8 +40,8 @@ func tinyPNG(t *testing.T) []byte {
 }
 
 // readEntryFromFile returns the entry's bytes and whether it was present.
-// readEntry in helpers_ext_test.go is the same lookup for the common case where
-// absence should fail the test.
+// readEntry is the same lookup for the common case where absence should fail
+// the test.
 func readEntryFromFile(t *testing.T, path, name string) ([]byte, bool) {
 	t.Helper()
 	zrc, err := zip.OpenReader(path)
@@ -66,7 +66,7 @@ func readEntryFromFile(t *testing.T, path, name string) ([]byte, bool) {
 	return nil, false
 }
 
-// --- WriteBib --------------------------------------------------------------
+// --- WriteBib ---
 
 func TestWriteBibSimpleFields(t *testing.T) {
 	for _, tc := range []struct {
@@ -121,10 +121,8 @@ func TestWriteBibPreservesContainerLayout(t *testing.T) {
 	}
 }
 
-// TestWriteBibDeduplicatesMimetype pins the one place the rewrite deliberately
-// does not copy verbatim. A source with two "mimetype" entries is malformed —
-// OCF requires exactly one, first and stored — so emitting both would preserve
-// the defect in the very respect the hoist exists to fix.
+// OCF requires exactly one mimetype entry, first and stored, so a source with
+// two is malformed and copying both preserves the defect the hoist exists to fix.
 func TestWriteBibDeduplicatesMimetype(t *testing.T) {
 	mt := entry{name: mimetypePath, data: []byte(mimetypeValue), store: true}
 	entries := append([]entry{mt}, baseEntries(opf3)[1:]...)
@@ -153,15 +151,10 @@ func TestWriteBibDeduplicatesMimetype(t *testing.T) {
 	assertOCFHeader(t, path, "after the write")
 }
 
-// TestWriteBibHoistsMimetypeToTheFront pins the OCF §4.3.3 layout of what we
-// write. Both input orders are run to show the guarantee is unconditional rather
-// than inherited: every other fixture puts mimetype first, so without the second
-// row the hoist could be deleted with nothing failing.
-//
-// Asserting the byte layout rather than the entry index, since that is what
-// breaks — sniffers read "mimetype" at offset 30 and its content at 38, so one
-// check covers position, STORED, and the MUST NOT on extra fields. validate
-// reads the entry by name and never looks at where it sits.
+// OCF §4.3.3 layout, asserted as bytes: sniffers read "mimetype" at offset 30
+// and its content at 38, so one check covers position, STORED and the MUST NOT
+// on extra fields. Both input orders run, or the hoist could be deleted with
+// nothing failing.
 func TestWriteBibHoistsMimetypeToTheFront(t *testing.T) {
 	rest := []entry{
 		{name: "META-INF/container.xml", data: []byte(containerXML)},
@@ -345,7 +338,7 @@ func TestWriteBibTitleChangeClearsStaleSortTitle(t *testing.T) {
 
 func TestWriteBibSortTitleForEpub2UsesCalibreMeta(t *testing.T) {
 	// EPUB 2 has no standard sort-title mechanism, so the proprietary meta calibre
-	// writes is used instead — the same fallback this package already uses for the
+	// writes is used instead, the same fallback this package already uses for the
 	// series. A refinement is an EPUB 3 construct and must not appear.
 	path := writeEpub(t, baseEntries(opf2))
 	book, err := writeBib(path, edits.Edits{SortTitle: new("Sorted, This")})
@@ -379,7 +372,7 @@ func TestWriteBibSortTitleForEpub2UsesCalibreMeta(t *testing.T) {
 
 func TestWriteBibAcceptsValidLanguageVerbatim(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
-	// A recognised tag is accepted and written through verbatim — validated, not
+	// A recognised tag is accepted and written through verbatim: validated, not
 	// canonicalised (calibre would rewrite "pt-BR" to a 3-letter code).
 	book, err := writeBib(path, edits.Edits{Language: new("pt-BR")})
 	if err != nil {
@@ -418,12 +411,9 @@ func TestWriteBibRefusesEncryptedOPF(t *testing.T) {
 	}
 }
 
-// TestWriteBibRefusesEncryptedOPFDeclaredAsAURL covers the decoded half of
-// CipherReference/@URI: a URL attribute, so "OEBPS/my book.opf" is declared
-// "OEBPS/my%20book.opf" while the zip entry holds the decoded name.
-//
-// Undecoded, the map is keyed by a name no entry has, IsEncrypted finds nothing,
-// and the edit rewrites a genuinely encrypted package document.
+// CipherReference/@URI is a URL attribute, so "OEBPS/my book.opf" is declared
+// "OEBPS/my%20book.opf". Undecoded, the map is keyed by a name no entry has and
+// the edit rewrites a genuinely encrypted package document.
 func TestWriteBibRefusesEncryptedOPFDeclaredAsAURL(t *testing.T) {
 	const container = `<?xml version="1.0"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -452,10 +442,8 @@ func TestWriteBibRefusesEncryptedOPFDeclaredAsAURL(t *testing.T) {
 	}
 }
 
-// Both values read from encryption.xml are XML attributes, which encoding/xml
-// does not normalize. A wrapped Algorithm should still be recognised as font
-// obfuscation (so the edit is allowed); a wrapped URI should still identify the
-// entry (so an encrypted OPF edit is refused).
+// encoding/xml does not normalize attribute values. A wrapped Algorithm must
+// still read as font obfuscation, a wrapped URI must still identify the entry.
 func TestEncryptionAttributesAreCollapsed(t *testing.T) {
 	t.Run("wrapped obfuscation algorithm still allows the edit", func(t *testing.T) {
 		enc := `<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" xmlns:enc="http://www.w3.org/2001/04/xmlenc#">
@@ -491,15 +479,9 @@ func TestEncryptionAttributesAreCollapsed(t *testing.T) {
 	})
 }
 
-// TestWriteBibRefusesEncryptedEntryNamedLiterally is the fail-open half of the
-// URI rule. A producer that wrote an unencoded name into both encryption.xml and
-// the zip has an entry whose name really does contain "%20", so the decoded form
-// matches nothing and isEncrypted reports a genuinely encrypted entry as
-// readable — and createReplace refuses edits on the strength of that answer.
-//
-// packagePaths already guards the same producer for the container's full-path by
-// trying the decoded form and then the literal. This is that rule applied where
-// getting it wrong lets an edit rewrite encrypted content.
+// The fail-open half. A producer writing an unencoded name into both
+// encryption.xml and the zip has an entry whose name really contains "%20", so
+// the decoded form matches nothing and an encrypted entry reads as readable.
 func TestWriteBibRefusesEncryptedEntryNamedLiterally(t *testing.T) {
 	const container = `<?xml version="1.0"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -627,7 +609,7 @@ func TestWriteCoverWithDirectoryEntries(t *testing.T) {
 	}
 }
 
-// --- WriteCover ------------------------------------------------------------
+// --- WriteCover ---
 
 func TestWriteCoverReplaces(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
@@ -683,7 +665,7 @@ func TestWriteCoverRejectsNonImage(t *testing.T) {
 
 func TestWriteCoverRejectsFormatMismatch(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
-	// PNG bytes into a .jpg cover entry must be rejected — we do not transcode.
+	// PNG bytes into a .jpg cover entry must be rejected. We do not transcode.
 	if _, err := writeCover(path, "OEBPS/cover.jpg", tinyPNG(t)); err == nil {
 		t.Fatal("expected rejection of PNG bytes into a .jpg cover entry, got nil")
 	}
@@ -691,8 +673,8 @@ func TestWriteCoverRejectsFormatMismatch(t *testing.T) {
 
 // reindexSeries applies an index-only series edit to the epub at path, with the
 // book model claiming series. Validate refuses a SeriesIndex edit on a book
-// with no series at all, so the model has to carry one — which is exactly the
-// shape library.Edit hands in, having read the book from the index.
+// with no series at all, so the model has to carry one, the shape library.Edit
+// hands in after reading the book from the index.
 func reindexSeries(t *testing.T, path, series, index string) bookmodel.Bib {
 	t.Helper()
 	b := &bookmodel.Book{
@@ -707,10 +689,8 @@ func reindexSeries(t *testing.T, path, series, index string) bookmodel.Bib {
 	return bib
 }
 
-// TestWriteBibSeriesIndexOnlyKeepsName covers the index-only series edit. With
-// no Series in the edits there is no name to write, so the only source is the
-// OPF itself — which is what currentSeriesName is for. Get it wrong and moving
-// a book to a new position in its series silently drops the series.
+// An index-only edit has no name to write, so the OPF is the only source. Get
+// it wrong and moving a book within its series silently drops the series.
 func TestWriteBibSeriesIndexOnlyKeepsName(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -734,10 +714,9 @@ func TestWriteBibSeriesIndexOnlyKeepsName(t *testing.T) {
 	}
 }
 
-// TestWriteBibSeriesIndexOnlyWithoutSeriesInOPF pins what happens when the two
-// sources disagree: the index says the book is in a series, the epub has no
-// such metadata. There is no name to write the new position against, so the
-// edit is dropped rather than inventing an empty collection.
+// Index says the book is in a series, the epub has no such metadata. With no
+// name to write against, the edit is dropped rather than inventing an empty
+// collection.
 func TestWriteBibSeriesIndexOnlyWithoutSeriesInOPF(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3)) // no series metadata
 
@@ -751,22 +730,21 @@ func TestWriteBibSeriesIndexOnlyWithoutSeriesInOPF(t *testing.T) {
 	// non-empty, so the position never escapes.
 }
 
-// --- Metadata we must not clobber -----------------------------------------
+// --- Metadata we must not clobber ---
 
 func TestSetSeriesPreservesExistingIndex(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
-	// First, set up a series with index 3
+	// Set up a series with index 3, then rename the series without setting an
+	// index. The index must survive as 3, not reset to 1.
 	if _, err := writeBib(path, edits.Edits{Series: new("The Trilogy"), SeriesIndex: new("3")}); err != nil {
 		t.Fatal(err)
 	}
 
-	// Now rename the series without setting index
 	book, err := writeBib(path, edits.Edits{Series: new("The Quartet")})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// The index should be preserved as 3, not reset to 1
 	if book.Series == nil || book.Series.Index != "3" {
 		t.Errorf("series index = %v, want 3.0 (preserved from before rename)", book.Series.Index)
 	}
@@ -777,16 +755,15 @@ func TestSetSeriesPreservesExistingIndex(t *testing.T) {
 // file-as it does.
 var opfWithAlternateScript = opf3With(`    <meta refines="#creator1" property="alternate-script" xml:lang="ja">ドゥ・ジェーン</meta>`)
 
-// opfSeriesWithIdentifier refines the collection with a dcterms:identifier —
-// EPUB 3 lets a series carry an ISSN — which is not ours to rewrite.
+// opfSeriesWithIdentifier refines the collection with a dcterms:identifier.
+// EPUB 3 lets a series carry an ISSN, which is not ours to rewrite.
 var opfSeriesWithIdentifier = opf3With(`    <meta property="belongs-to-collection" id="series1">The Trilogy</meta>
     <meta refines="#series1" property="collection-type">series</meta>
     <meta refines="#series1" property="group-position">2</meta>
     <meta refines="#series1" property="dcterms:identifier">urn:issn:1234-5678</meta>`)
 
-// TestSetSeriesReusesCollection pins that a series edit rewrites the collection
-// element it found rather than replacing it, so a refinement ebookfs does not
-// manage survives — and that clearing the series still takes the whole thing.
+// A series edit rewrites the collection it found, so an unmanaged refinement
+// survives. Clearing the series still takes the whole thing.
 func TestSetSeriesReusesCollection(t *testing.T) {
 	path := writeEpub(t, baseEntries(opfSeriesWithIdentifier))
 
@@ -842,18 +819,17 @@ func TestSetSeriesPreservesSets(t *testing.T) {
 
 	path := writeEpub(t, baseEntries(opfWithSet))
 
-	// Edit the series
+	// A series edit updates the collection and leaves the set beside it.
 	book, err := writeBib(path, edits.Edits{Series: new("The Quartet"), SeriesIndex: new("1")})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// The series should be updated
 	if book.Series == nil || book.Series.Name != "The Quartet" {
 		t.Errorf("series = %v, want The Quartet", book.Series)
 	}
 
-	// The set should still be present in the OPF
+	// The set survives the series edit.
 	opfBytes, ok := readEntryFromFile(t, path, "OEBPS/content.opf")
 	if !ok {
 		t.Fatal("OPF entry not found")
@@ -868,13 +844,10 @@ func TestSetSeriesPreservesSets(t *testing.T) {
 	}
 }
 
-// TestSetAuthorsReuseBookkeeping covers what reusing a creator element has to
-// get right: a refinement ebookfs does not manage survives an edit, an author
-// dropped from the list takes its refinements with it (nothing may keep
-// pointing at a creator that is gone), the written order is the order given
-// rather than the order the OPF happened to hold, and the managed refinements
-// are rewritten rather than duplicated. Each step edits the file the previous
-// one left behind.
+// What reusing a creator element has to get right: an unmanaged refinement
+// survives, a dropped author takes its refinements with it, the written order
+// is the order given, and managed refinements are rewritten rather than
+// duplicated. Each step edits what the previous one left.
 func TestSetAuthorsReuseBookkeeping(t *testing.T) {
 	path := writeEpub(t, baseEntries(opfWithAlternateScript))
 
@@ -941,11 +914,9 @@ func TestSetAuthorsReuseBookkeeping(t *testing.T) {
 	})
 }
 
-// TestModifiedStampIsWrittenOnlyForARealChange pins both halves of the
-// dcterms:modified rule. synctest gives the bubble a fake clock that only moves
-// when the test sleeps, so the stamp is an exact value rather than a format
-// check: a real edit records the time, and an edit asking for what the file
-// already says records nothing, even an hour later.
+// synctest's clock moves only when the test sleeps, so the stamp is an exact
+// value rather than a format check: a real edit records the time, an edit
+// asking for what the file already says records nothing, even an hour later.
 func TestModifiedStampIsWrittenOnlyForARealChange(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		path := writeEpub(t, baseEntries(opf3With("")))
@@ -975,13 +946,9 @@ func TestModifiedStampIsWrittenOnlyForARealChange(t *testing.T) {
 	})
 }
 
-// TestNoOpBibEditDoesNotRewriteTheFile pins the skip: an edit asking for what
-// the OPF already says leaves the epub alone. os.SameFile compares device and
-// inode, so it catches the rewrite even when the rebuilt zip is byte-identical
-// — rewriteEpub builds a temp file and renames it over the original.
-//
-// The returned Bib still comes from the file, which is the half the skip must
-// not cost us.
+// os.SameFile compares device and inode, so it catches the rewrite even when the
+// rebuilt zip is byte-identical. The returned Bib still comes from the file,
+// the half the skip must not cost.
 func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3))
 	statOf := func() os.FileInfo {
@@ -999,9 +966,8 @@ func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Both halves: a Title with no SortTitle clears a stale sort title, which is
-	// a real change (TestWriteBibTitleChangeClearsStaleSortTitle), and opf3
-	// carries one.
+	// A Title without a new SortTitle clears the stale sort title, which is a
+	// real change, and opf3 carries one.
 	for _, tc := range []struct {
 		name string
 		e    edits.Edits
@@ -1032,9 +998,8 @@ func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 	}
 }
 
-// TestParseReadsCalibreTitleSortFromEpub2 is the read half. calibre records a v2
-// sort title in calibre:title_sort and nowhere else, so without this fallback
-// every calibre-managed v2 book reads back as having no sort title at all.
+// calibre records a v2 sort title in calibre:title_sort and nowhere else, so
+// without this fallback every calibre-managed v2 book reads back with none.
 func TestParseReadsCalibreTitleSortFromEpub2(t *testing.T) {
 	opf := strings.Replace(opf2, "  </metadata>",
 		`    <meta name="calibre:title_sort" content="Hobbit, The"/>`+"\n  </metadata>", 1)
@@ -1047,10 +1012,8 @@ func TestParseReadsCalibreTitleSortFromEpub2(t *testing.T) {
 	}
 }
 
-// TestWriteBibSortTitleKeepsCalibreMetaInStepForEpub3 pins the v3 half of the
-// same rule the series follows: the calibre meta is updated when the file
-// already carries one, so it cannot be left contradicting the refinement, but is
-// never injected into a file without one (TestWriteBibSetsSortTitle).
+// The calibre meta is updated when the file already carries one, so it cannot
+// contradict the refinement, and is never injected into a file without one.
 func TestWriteBibSortTitleKeepsCalibreMetaInStepForEpub3(t *testing.T) {
 	path := writeEpub(t, baseEntries(opf3With(`    <meta name="calibre:title_sort" content="Stale, The"/>`)))
 	book, err := writeBib(path, edits.Edits{SortTitle: new("Fresh, The")})
@@ -1076,14 +1039,10 @@ func TestWriteBibSortTitleKeepsCalibreMetaInStepForEpub3(t *testing.T) {
 	}
 }
 
-// TestFailedValidationLeavesTheOriginal covers rewriteEpub's last line of
-// defence: it re-parses the rewritten epub before renaming, so a write that
-// would produce an unreadable book is abandoned. Nothing else exercises it.
-//
-// The trigger is a sort-title-only edit on a package with no <dc:title>: the
-// refinement needs an element to bind to, so one is minted empty, and an empty
-// title is not a book. Reachable only if the file changed on disk after being
-// indexed, since Parse rejects a titleless package.
+// rewriteEpub re-parses before renaming, so a write producing an unreadable book
+// is abandoned. The trigger is a sort-title-only edit on a package with no
+// dc:title: the refinement mints an empty element, and an empty title is not a
+// book. Reachable only if the file changed on disk after being indexed.
 func TestFailedValidationLeavesTheOriginal(t *testing.T) {
 	opf := opf3
 	for _, drop := range []string{
@@ -1115,7 +1074,7 @@ func TestFailedValidationLeavesTheOriginal(t *testing.T) {
 	}
 }
 
-// --- cover page dimensions -------------------------------------------------
+// --- cover page dimensions ---
 //
 // Replacing the cover leaves the page displaying it claiming the old image's
 // dimensions; package content says why that crops. These pin the repair and its
@@ -1205,7 +1164,7 @@ func TestCoverPageRefitByTheGuideReference(t *testing.T) {
 }
 
 func TestCoverPageRefitByTheFirstSpineItem(t *testing.T) {
-	// No guide at all, which is the EPUB 3 norm.
+	// No guide at all, the EPUB 3 norm.
 	path := coverPageEpub(t, coverPageOPF("coverpage", false), svgCoverPage, 1200, 1600)
 
 	if page := string(readEntry(t, path, "OEBPS/cover.xhtml")); !strings.Contains(page, `viewBox="0 0 1200 1600"`) {
@@ -1277,7 +1236,7 @@ func TestCoverPageImgAttributesAreRefitted(t *testing.T) {
 	}
 }
 
-// --- signed containers -----------------------------------------------------
+// --- signed containers ---
 
 // Every entry an edit replaces may be one a signature covers, and we cannot
 // re-sign. DECISIONS.md #23 says why the check is not narrower than this.
@@ -1341,9 +1300,9 @@ div > img { width: 100%; }
 	}
 }
 
-// TestSetAuthorsRenameDropsRefinements pins that a renamed author gets a fresh
-// creator rather than the old one relabelled, so a refinement written about the
-// old name does not end up describing the new one.
+// A renamed author gets a fresh creator rather than the old one relabelled, so
+// a refinement written about the old name does not end up describing the new
+// one.
 //
 // Ours, not the spec's. §5.3.6 binds a refinement to an element by id and says
 // nothing about what an editor should do when the value under that id changes.
@@ -1373,11 +1332,10 @@ func TestSetAuthorsRenameDropsRefinements(t *testing.T) {
 	}
 }
 
-// TestRewriteWithNoEditsIsATotalNoOp pins the short circuit Rewrite's doc
-// promises: an Edits carrying nothing returns b.Bib verbatim and leaves the
-// file alone. library.Edit depends on both halves. It calls Rewrite on every
-// edit including meta-only ones, so a rewrite here would rebuild the zip and
-// restamp dcterms:modified for a change to a rating.
+// Rewrite's short circuit, as its doc promises: an Edits carrying nothing
+// returns b.Bib verbatim and leaves the file alone. library.Edit depends on it:
+// it calls Rewrite on every edit including meta-only ones, so a rewrite here
+// would rebuild the zip and restamp dcterms:modified for a change to a rating.
 //
 // The Bib handed in deliberately disagrees with the file, so a Rewrite that
 // re-parsed instead of short-circuiting would return the file's title rather

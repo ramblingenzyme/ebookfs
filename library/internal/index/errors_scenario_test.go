@@ -4,8 +4,7 @@
 // NeedsReindex, dropAllTables) and a rolled-back transaction (insertBook,
 // putBook, finishBook, the three upserts, deleteBook, cleanupOrphans).
 //
-// Pairing these to a source file would scatter one rule across six of them. The
-// rule is that no write path swallows a database error.
+// The rule is that no write path swallows a database error.
 
 package index
 
@@ -23,7 +22,7 @@ import (
 // failure rather than swallowing it, so a mutation that cannot reach the
 // database fails loudly instead of leaving the index quietly wrong.
 //
-// It asserts only that an error comes back — not which one, and not what state
+// It asserts only that an error comes back, not which one and not what state
 // survives. Anything stronger belongs with the test that owns that behaviour.
 func TestClosedIndexSurfacesErrors(t *testing.T) {
 	tests := []struct {
@@ -73,10 +72,10 @@ func TestClosedIndexSurfacesErrors(t *testing.T) {
 	}
 }
 
-// TestRolledBackTxSurfacesErrors is TestClosedIndexSurfacesErrors one layer
-// down: the helpers that write through a *dbsqlc.Queries must propagate a
-// failed statement rather than returning nil and letting the caller commit a
-// half-written book. Same caveat — presence of an error is all it asserts.
+// TestRolledBackTxSurfacesErrors drives the helpers that write through a
+// *dbsqlc.Queries: a failed statement must propagate rather than return nil and
+// let the caller commit a half-written book. Same caveat: presence of an error
+// is all it asserts.
 func TestRolledBackTxSurfacesErrors(t *testing.T) {
 	tests := []struct {
 		name string

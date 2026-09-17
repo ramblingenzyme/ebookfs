@@ -52,7 +52,7 @@ func metaPathOf(book *Book, root string) string {
 }
 
 // breakEpub replaces book's epub with a symlink to nothing. store.Walk still
-// reports the directory — findEpub only reads the directory entry — while
+// reports the directory, since findEpub only reads the directory entry, while
 // os.Stat follows the link and fails, which is the one way to reach the
 // rebuild's "could not observe this book at all" path from a test.
 func breakEpub(t *testing.T, book *Book, root string) {
@@ -86,7 +86,7 @@ func dropIndex(t *testing.T, cfg Config) {
 // assertSettlesClean pins that a library at cfg stops drifting once it has been
 // rebuilt: the first Open reindexes and records what it found, and every Open
 // after that must see a clean index. A book the rebuild cannot read is the case
-// that breaks this — if the rebuild forgets it, drift detection sees a directory
+// that breaks this. If the rebuild forgets it, drift detection sees a directory
 // on disk it cannot account for and reindexes the whole library on every startup.
 //
 // Two restarts is the whole proof: one to record, one to confirm the record is

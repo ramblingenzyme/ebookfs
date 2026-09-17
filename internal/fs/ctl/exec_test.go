@@ -14,10 +14,10 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 )
 
-// TestDispatch pins that every command name routes to its handler rather than
-// falling through to the unknown-command default. Against an empty library the
-// results are determinate, so each row asserts the string its handler produces
-// — a name that silently stopped being routed would otherwise still look fine.
+// Every command name routes to its handler rather than falling through to the
+// unknown-command default. Against an empty library the results are determinate,
+// so each row asserts the string its handler produces; a name that silently
+// stopped being routed would otherwise still look fine.
 func TestDispatch(t *testing.T) {
 	const notFound = "ok: no books edited\nerrors: 1 book(s)\n  book 1: not found"
 
@@ -159,8 +159,8 @@ func TestSetStatus(t *testing.T) {
 	}
 }
 
-// TestSetRatingUnchanged verifies that setting a rating already in place is a
-// no-op: the book is skipped rather than rewritten.
+// Setting a rating already in place is a no-op: the book is skipped rather than
+// rewritten.
 func TestSetRatingUnchanged(t *testing.T) {
 	book := testutil.MakeMutableBook(12, "Title", "Author")
 	book.Meta.Rating = 4
@@ -327,8 +327,8 @@ func TestRenameAuthorMatchSortName(t *testing.T) {
 	}
 }
 
-// TestRenameAuthorMerge renames an author onto one the book already carries;
-// the result must collapse to a single author rather than duplicating it.
+// Renaming an author onto one the book already carries must collapse to a
+// single author rather than duplicate it.
 func TestRenameAuthorMerge(t *testing.T) {
 	book := testutil.MakeMutableBook(11, "Title", "Isaac Asimov")
 	book.Authors = append(book.Authors, library.Author{Name: "Paul French"})
@@ -389,11 +389,10 @@ func TestRenameSeries(t *testing.T) {
 	}
 }
 
-// TestCommandRejections pins what a client reads back from ctl when a command
-// cannot run: the usage line for a wrong argument count, and the specific error
-// for an argument that will not parse. These strings are the whole interface —
-// the write succeeds either way, so the result text is the only feedback there
-// is — and none of them were asserted before.
+// What a client reads back from ctl when a command cannot run: the usage line
+// for a wrong argument count, and the specific error for an argument that will
+// not parse. These strings are the whole interface, since the write succeeds
+// either way and the result text is the only feedback there is.
 func TestCommandRejections(t *testing.T) {
 	tests := []struct {
 		name string
@@ -447,9 +446,9 @@ func TestCommandRejections(t *testing.T) {
 	}
 }
 
-// TestCommandRejectionsAreLogged pins that a refusal is recorded like any other
-// command. The log is how a client sees what happened after the fact, so a
-// rejection that never reaches it is a command that silently did nothing.
+// A refusal is recorded like any other command. The log is how a client sees
+// what happened after the fact, so a rejection that never reaches it is a
+// command that silently did nothing.
 func TestCommandRejectionsAreLogged(t *testing.T) {
 	lib := libfake.Lib{}
 	reg, cmdLog := newTestCtl(t, lib)
@@ -468,9 +467,9 @@ func TestCommandRejectionsAreLogged(t *testing.T) {
 	}
 }
 
-// TestCommandSuccessStrings pins the other half: what a command reports when it
-// works. The counts are the only signal that a bulk edit did what was asked, so
-// "ok: no books edited" must not read the same as "ok: 2 books edited".
+// What a command reports when it works. The counts are the only signal that a
+// bulk edit did what was asked, so "ok: no books edited" must not read the same
+// as "ok: 2 books edited".
 func TestCommandSuccessStrings(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -540,9 +539,9 @@ func TestCommandSuccessStrings(t *testing.T) {
 	}
 }
 
-// TestCommandFailureStrings pins the reporting when the library refuses the
-// work. A per-book failure must be named and counted rather than folded into
-// the success line, or a bulk edit that half-failed reads as a clean run.
+// The reporting when the library refuses the work. A per-book failure must be
+// named and counted rather than folded into the success line, or a bulk edit
+// that half-failed reads as a clean run.
 func TestCommandFailureStrings(t *testing.T) {
 	t.Run("edit fails for one book", func(t *testing.T) {
 		books := []*library.Book{testutil.MakeBook(1, "A", "Author"), testutil.MakeBook(2, "B", "Author")}
@@ -606,8 +605,7 @@ func TestCommandFailureStrings(t *testing.T) {
 	})
 }
 
-// TestSingleBookCommandSuccessStrings covers the two commands that report on
-// one book rather than a selection.
+// The two commands that report on one book rather than a selection.
 func TestSingleBookCommandSuccessStrings(t *testing.T) {
 	t.Run("delete", func(t *testing.T) {
 		var deleted int64

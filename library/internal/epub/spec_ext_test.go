@@ -1,15 +1,11 @@
-// These tests are organised by the metadata vocabulary — EPUB 3.3 Appendix D
-// (meta properties) and OPF 2.0 publication metadata — rather than by this
-// package's functions.
-
-// Everything is anchored to specs/ with a section number, which is what the
-// TestSpec* prefix means: changing one means the package stops conforming.
-// Several pair that with a write-side assertion no spec requires, and say so.
-// Tests that are ours end to end live in rewrite_ext_test.go.
+// Organised by metadata vocabulary rather than by function: EPUB 3.3 Appendix D
+// and OPF 2.0 publication metadata. A TestSpec* name means the assertion cites a
+// section, so a failure means the package stopped conforming. Several add a
+// write-side assertion no spec requires and say so.
 //
-// The fixtures are minimal, not valid — no dcterms:modified, no nav document,
-// and epub2() names an ncx its manifest lacks. Each conforms in the respect its
-// test is about and no further.
+// Fixtures are minimal, not valid. No dcterms:modified, no nav document, and
+// epub2() names an ncx its manifest lacks. Each conforms only in the respect its
+// own test is about.
 //
 // https://www.w3.org/TR/epub-33/#app-meta-property-vocab
 // https://idpf.org/epub/20/spec/OPF_2.0_final_spec.html
@@ -28,15 +24,11 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 )
 
-// --- dc:title selection -------------------------------------------------------
+// --- dc:title selection ---
 //
 // EPUB 3.3 §5.5.3.1.2: "The first dc:title element in document order is the main
 // title of the EPUB publication." OPF 2.0 §2.2.1 defines no algorithm and
 // endorses "either the first title element or all the title elements".
-//
-// So first-in-document-order satisfies both. calibre instead resolves
-// title-type=main; we decline, deliberately. D.3.13 says nothing about
-// selection.
 
 var opfTitleTypes = epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title id="t1">The Complete Trilogy</dc:title>
@@ -49,16 +41,10 @@ var opfTitleTypes = epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:iden
     <dc:creator id="c1">Ann Rand</dc:creator>
     <dc:language>en</dc:language>`)
 
-// TestSpecFirstTitleWins pins §5.5.3.1.2 against a file whose title-type
-// refinements contradict document order — the first title is labelled
-// "collection" and a later one "main". 3.3 does not forbid such a file, but
-// nothing can honour both readings, and we resolve it the way the spec says:
-// first in document order, read and written. calibre would pick t2 — a deliberate divergence, not a bug.
-// Revisit only if round-tripping with calibre becomes a goal.
-//
-// The write half is ours, and it makes that divergence safe: replacing the
-// title leaves one dc:title, so no file remains on which the two readings can
-// disagree.
+// §5.5.3.1.2: the first dc:title in document order wins, read and written, even
+// when a later one is labelled "main". calibre picks that later one; deliberate
+// divergence. Replacing the title leaves one dc:title, so no file survives on
+// which the two readings disagree.
 func TestSpecFirstTitleWins(t *testing.T) {
 	path := buildEpub(t, opfTitleTypes)
 
@@ -97,7 +83,7 @@ func TestSpecFirstTitleWins(t *testing.T) {
 	}
 }
 
-// --- display-seq -------------------------------------------------------------
+// --- display-seq ---
 //
 // D.3.5: display-seq "only applies where precedence rules have not already been
 // defined (e.g., precedence is given to creators based on their appearance in
@@ -114,10 +100,8 @@ var opfDisplaySeq = epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:iden
     <meta refines="#c2" property="display-seq">1</meta>
     <dc:language>en</dc:language>`)
 
-// TestSpecCreatorOrderIsDocumentOrder pins that a contradicting display-seq does
-// not reorder the authors. Reading it as the precedence rule is the tempting
-// mistake: D.3.5 says it does not apply once one has been defined, and for
-// creators document order already is one.
+// D.3.5: display-seq does not apply once an order is defined, and for creators
+// document order is one. A contradicting display-seq must not reorder authors.
 func TestSpecCreatorOrderIsDocumentOrder(t *testing.T) {
 	path := buildEpub(t, opfDisplaySeq)
 	bib, err := epub.Parse(path)
@@ -129,15 +113,11 @@ func TestSpecCreatorOrderIsDocumentOrder(t *testing.T) {
 	}
 }
 
-// --- dcterms:modified --------------------------------------------------------
+// --- dcterms:modified ---
 
-// TestSpecModifiedIsUpdated is the inverse case: metadata the writer should
-// touch and does not.
-//
-// §5.5.5: "exactly one dcterms:modified property", in the "extended format:
-// YYYY-MM-DDThh:mm:ssZ", UTC and "Z"-terminated — all MUST. Updating it on a
-// change is only a lowercase "should", so non-RFC2119 per §1.5; we assert it
-// anyway.
+// §5.5.5 requires exactly one dcterms:modified, UTC, Z-terminated, in the
+// extended format. Updating it on a change is only a lowercase "should"
+// (§1.5), asserted here anyway.
 func TestSpecModifiedIsUpdated(t *testing.T) {
 
 	path := buildEpub(t, richOPF3) // carries dcterms:modified 2020-01-02T00:00:00Z
@@ -161,14 +141,11 @@ func TestSpecModifiedIsUpdated(t *testing.T) {
 	}
 }
 
-// --- collection-type ---------------------------------------------------------
+// --- collection-type ---
 //
 // D.3.4 defines exactly two collection-type values when no scheme is given:
-// series and set. "publisher-series" below is deliberately neither — the
+// series and set. "publisher-series" below is deliberately neither: the
 // unrecognised case, which must not be taken for the book's series.
-//
-// D.3.3 blesses the nesting the fixture uses: collections may "chain these
-// properties using the refines attribute".
 
 var opfCollections = epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>Original Title</dc:title>
@@ -182,14 +159,9 @@ var opfCollections = epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:ide
     <meta refines="#s1" property="collection-type">series</meta>
     <meta refines="#s1" property="group-position">2</meta>`)
 
-// TestSpecOnlySeriesCollectionIsTheSeries pins that neither a publisher-series
-// nor a set is mistaken for the book's series, and that a series nested inside
-// a set (expressed by the series meta refining the set) is renamed in place —
-// keeping its nesting and leaving the parent alone.
-//
-// The read half is D.3.4 (only an unschemed series is the series) and D.3.3 (the
-// nesting). The write half — rename in place, keep the nesting, leave the parent
-// alone — is ours; no spec says what a rename must do.
+// D.3.4: only an unschemed series collection is the book's series, so neither a
+// publisher-series nor a set counts. D.3.3 covers the nesting. Renaming in
+// place and leaving the parent alone is a choice; no spec says what a rename does.
 func TestSpecOnlySeriesCollectionIsTheSeries(t *testing.T) {
 	path := buildEpub(t, opfCollections)
 
@@ -228,7 +200,7 @@ func TestSpecOnlySeriesCollectionIsTheSeries(t *testing.T) {
 	}
 }
 
-// --- role --------------------------------------------------------------------
+// --- role ---
 //
 // EPUB 3 carries the MARC relator as a role refine, EPUB 2 as opf:role. Neither
 // spec states that an omitted role means "author": that is our reading of
@@ -267,15 +239,10 @@ func TestSpecOnlyAuthorRoleCreatorsAreAuthors(t *testing.T) {
 	}
 }
 
-// --- multiple dc:language ----------------------------------------------------
+// --- multiple dc:language ---
 
-// TestSpecFirstLanguageWins is spec-backed for EPUB 3, not merely our choice.
-// §5.5.3.1.3: "Although EPUB creators MAY specify additional dc:language elements
-// for multilingual Publications, reading systems will treat the first dc:language
-// element in document order as the primary language of the EPUB publication."
-// OPF 2.0 §2.2.12 permits multiple but defines no primary-selection rule, so for
-// EPUB 2 first-wins genuinely is ours. The write half is ours in both: nothing
-// says an edit must rewrite the first element rather than replace the list.
+// §5.5.3.1.3: the first dc:language in document order is primary. OPF 2.0
+// §2.2.12 allows several and names no rule, so first-wins is a choice for v2.
 func TestSpecFirstLanguageWins(t *testing.T) {
 	var opf = epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>Original Title</dc:title>
@@ -306,15 +273,9 @@ func TestSpecFirstLanguageWins(t *testing.T) {
 	}
 }
 
-// TestSpecSeriesCarryOverMatchesWhatTheReaderSees covers the rule that a
-// partial edit carries the other half over from the file — and that "the file"
-// means the same place a read would have taken it from.
-//
-// §5.5.2 requires non-empty values, so a belongs-to-collection with no name is
-// invalid and the reader falls through to the calibre metas to find a usable
-// series. A writer resolving the collection by its own rule instead sees the
-// empty name, reads it as "this book has no series", and an index-only edit
-// deletes a series the reader was reporting.
+// §5.5.2 requires non-empty values, so a nameless belongs-to-collection is
+// invalid and the read falls through to the calibre metas. A writer using its
+// own rule reads "no series" and an index-only edit deletes one that was showing.
 func TestSpecSeriesCarryOverMatchesWhatTheReaderSees(t *testing.T) {
 	path := buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>The Title</dc:title>
@@ -349,19 +310,16 @@ func TestSpecSeriesCarryOverMatchesWhatTheReaderSees(t *testing.T) {
 	}
 }
 
-// --- id uniqueness -----------------------------------------------------------
+// --- id uniqueness ---
 //
 // XML 1.0 §3.3.1: "ID values MUST uniquely identify the elements which bear
-// them." Not cosmetic — §5.3.6 makes refines target by fragment, so a duplicate
+// them." Not cosmetic. §5.3.6 makes refines target by fragment, so a duplicate
 // id binds a refinement to both elements and epubcheck rejects the package.
-//
-// The writer mints ids at three sites (title, creator, collection), all through
-// opf.ensureID, which scans every id rather than those of the same kind.
 
 func TestSpecMintedIDsDoNotCollide(t *testing.T) {
 	// Each fixture already contains an element squatting on the id the writer
 	// would otherwise mint, on a *different* kind of element than the one being
-	// written — which is what a per-kind scan cannot see.
+	// written, the case a per-kind scan cannot see.
 	for _, tc := range []struct {
 		name  string
 		meta  string
@@ -376,9 +334,8 @@ func TestSpecMintedIDsDoNotCollide(t *testing.T) {
 			edits: edits.Edits{SortTitle: new("Title, The")},
 		},
 		{
-			// Both spellings the minter has ever produced are squatted, on
-			// elements that are not creators — which is precisely what the old
-			// creator-only scan could not see.
+			// Both spellings the minter has ever produced are squatted, on elements
+			// that are not creators, precisely what the old creator-only scan missed.
 			name: "new creator vs a squatted ebookfs-creator",
 			meta: `    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title id="ebookfs-creator">The Title</dc:title>
@@ -405,9 +362,8 @@ func TestSpecMintedIDsDoNotCollide(t *testing.T) {
 	}
 }
 
-// TestSpecRepeatedEditsDoNotCollideIDs is the same rule over time: the writer
-// mints against a document that already contains ids it minted earlier, so
-// growing the author list one edit at a time must not hand out a name twice.
+// The writer mints ids against a document already holding ids it minted before,
+// so growing the author list one edit at a time must not repeat a name.
 func TestSpecRepeatedEditsDoNotCollideIDs(t *testing.T) {
 	path := buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>The Title</dc:title>
@@ -436,12 +392,9 @@ func TestSpecRepeatedEditsDoNotCollideIDs(t *testing.T) {
 	}
 }
 
-// TestSpecReorderingAuthorsKeepsIDsUnique covers the id-minting hazard that
-// reordering creates. A new author placed *before* an existing one is minted an
-// id while that existing creator has not yet been re-added, so any minting rule
-// that only looks at creators currently in the tree cannot see the id it is
-// about to duplicate — and duplicate ids cross-wire the refinements, silently
-// swapping one author's sort name for another's.
+// An author placed before an existing one is minted an id while that creator is
+// not yet back in the tree. Scanning only current creators cannot see the
+// duplicate, and duplicate ids cross-wire refinements.
 func TestSpecReorderingAuthorsKeepsIDsUnique(t *testing.T) {
 	path := buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>The Title</dc:title>
@@ -504,14 +457,11 @@ func authorNames(b *bookmodel.Bib) []string {
 	return out
 }
 
-// --- whitespace in metadata values -------------------------------------------
+// --- whitespace in metadata values ---
 //
 // §5.5.2: values MUST be non-empty "after leading and trailing ASCII whitespace
 // is stripped", and internal runs are "collapsed to a single space during
-// processing" — a processing step, so a conforming reader does it.
-//
-// The spec's own examples print values on their own indented line (§5.5.3.1.2,
-// OPF 2.0 §2.2), so the fixture below is ordinary input, not a curiosity.
+// processing". A processing step, so a conforming reader does it.
 
 var opfSpecStyleWhitespace = epub3(`    <dc:identifier id="pub-id">
       urn:uuid:A1B0D67E
@@ -535,11 +485,9 @@ var opfSpecStyleWhitespace = epub3(`    <dc:identifier id="pub-id">
       2
     </meta>`)
 
-// TestSpecWhitespaceIsCollapsed is the highest-value test in this file: the
-// package currently fails to parse this document at all ("no authors"), because
-// the role refine reads as "\n      aut\n    ". The same raw comparison drops the
-// series and stores a SortTitle with leading newlines, which becomes the key for
-// the default list order.
+// A wrapped role refine reads as "\n      aut\n    ", so the document parses as
+// "no authors". The same raw comparison drops the series and stores a SortTitle
+// with leading newlines, the key for the default list order.
 func TestSpecWhitespaceIsCollapsed(t *testing.T) {
 
 	bib, err := epub.Parse(buildEpub(t, opfSpecStyleWhitespace))
@@ -560,10 +508,8 @@ func TestSpecWhitespaceIsCollapsed(t *testing.T) {
 	}
 }
 
-// TestSpecWhitespaceInEPUB2RoleAttribute is the same failure through the EPUB 2
-// attribute path. XML 1.0 §3.3.3 attribute-value normalization turns a newline
-// inside an attribute value into a space but does not trim it, so a wrapped
-// opf:role arrives padded.
+// XML 1.0 §3.3.3 turns a newline inside an attribute value into a space without
+// trimming it, so a wrapped opf:role arrives padded.
 func TestSpecWhitespaceInEPUB2RoleAttribute(t *testing.T) {
 
 	opf := epub2(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
@@ -580,12 +526,9 @@ func TestSpecWhitespaceInEPUB2RoleAttribute(t *testing.T) {
 	}
 }
 
-// TestSpecWhitespaceInTheVersionAttribute is the same normalization failure at
-// the point that decides every other one. The package version attribute is the
-// only attribute read without going through attr(), so a wrapped version="3.0"
-// reports EPUB 2 — and then §5.5.5's required dcterms:modified is never updated,
-// and the calibre metas an EPUB 3 package is not supposed to carry are injected
-// into one that had none.
+// The package version attribute is the only one read without attr(), so a
+// wrapped version="3.0" reports EPUB 2. §5.5.5's dcterms:modified then never
+// updates, and calibre metas are injected into a package that had none.
 func TestSpecWhitespaceInTheVersionAttribute(t *testing.T) {
 	opf := strings.Replace(epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>The Title</dc:title>
@@ -615,15 +558,11 @@ func TestSpecWhitespaceInTheVersionAttribute(t *testing.T) {
 	}
 }
 
-// --- the prefix attribute -----------------------------------------------------
+// --- the prefix attribute ---
 //
 // D.1.4: "EPUB creators MUST declare the prefix mappings they use in the prefix
 // attribute of the package element." D.1.5 reserves a set that need no
 // declaration and only SHOULD NOT be overridden, so a document may rebind one.
-//
-// A property is therefore a name in a vocabulary, not a literal string. Missing
-// a declared last-modified date means adding a second, which breaks §5.5.5's
-// MUST for exactly one — the only failure here that invalidates a correct file.
 
 func TestSpecDeclaredPrefixResolvesToTheSameProperty(t *testing.T) {
 	opf := strings.Replace(epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
@@ -654,14 +593,9 @@ func TestSpecDeclaredPrefixResolvesToTheSameProperty(t *testing.T) {
 	}
 }
 
-// TestSpecRedefinedReservedPrefixIsNotOurProperty is the other half of D.1.4. A
-// document may bind a reserved prefix to its own vocabulary — D.1.5 only SHOULD
-// NOTs it — so the declaration says what the prefix means here.
-//
-// Honouring it is also the defence: this file's dcterms:modified is somebody
-// else's property, so it must not be read as the §5.5.5 date or overwritten with
-// a timestamp. The package has none, so the edit adds one under a prefix that
-// does resolve to DCMI.
+// D.1.4: a document may bind a reserved prefix to its own vocabulary, which
+// D.1.5 only SHOULD NOTs. This file's dcterms:modified belongs to someone else
+// and must not be read as the §5.5.5 date or overwritten.
 func TestSpecRedefinedReservedPrefixIsNotOurProperty(t *testing.T) {
 	opf := strings.Replace(epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>The Title</dc:title>
@@ -720,14 +654,9 @@ func TestSpecRedefinedReservedPrefixIsNotOurProperty(t *testing.T) {
 	}
 }
 
-// TestSpecNewRefineSpellsItsSchemeAndProperty pins the write half of D.1.4 for
-// refinements. A role refine carries scheme="marc:relators", which is a prefixed
-// name like any other, so a document that rebinds marc turns it into a code list
-// we did not mean — the same failure the property side guards against.
-//
-// marc is reserved (D.1.5) and needs no declaration, so the fix cannot be to
-// declare it blindly: it has to be spelled with whatever prefix resolves to the
-// MARC vocabulary in this document.
+// D.1.4 for refinements. scheme="marc:relators" is a prefixed name, so a
+// document rebinding marc turns it into a code list nobody meant. Spell it with
+// whatever prefix resolves to MARC here.
 func TestSpecNewRefineSpellsItsSchemeAndProperty(t *testing.T) {
 	opf := strings.Replace(epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>The Title</dc:title>
@@ -768,14 +697,11 @@ func TestSpecNewRefineSpellsItsSchemeAndProperty(t *testing.T) {
 	}
 }
 
-// --- a metadata value is text, not a path component ---------------------------
+// --- a metadata value is text, not a path component ---
 //
 // §5.5.2 licenses one transformation of a value: strip and collapse whitespace.
 // Substituting characters is not among them, and a writer that persists a
 // substitution has destroyed the value.
-//
-// A title becomes a path component downstream, which the path layer handles:
-// naming.PathSafe for directory and 9P names, naming.ForFAT for the filename.
 
 func TestSpecSlashInAValueIsNotRewritten(t *testing.T) {
 	path := buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
@@ -795,7 +721,7 @@ func TestSpecSlashInAValueIsNotRewritten(t *testing.T) {
 	}
 
 	// An edit to an unrelated field carries the author list back the way
-	// library.Edit does, which is how a read-side substitution reaches the file.
+	// library.Edit does, so a read-side substitution would reach the file.
 	desc := "A new description."
 	if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Description: &desc, Authors: &bib.Authors}); err != nil {
 		t.Fatal(err)
@@ -809,7 +735,7 @@ func TestSpecSlashInAValueIsNotRewritten(t *testing.T) {
 	}
 }
 
-// --- dc-metadata / x-metadata ------------------------------------------------
+// --- dc-metadata / x-metadata ---
 //
 // OPF 2.0 §2.2 (Publication Metadata):
 //   "Reading Systems must allow the specification of the deprecated dc-metadata
@@ -854,7 +780,7 @@ func TestSpecLegacyMetadataWrappers(t *testing.T) {
 	}
 }
 
-// --- role, cardinality zero or more ------------------------------------------
+// --- role, cardinality zero or more ---
 //
 // D.3.10 gives role cardinality "zero or more", with importance following
 // document order. The test runs both orders: a creator with several roles
@@ -902,7 +828,7 @@ func TestSpecMultipleRoleRefines(t *testing.T) {
 	}
 }
 
-// --- refines is a URL, not always "#id" --------------------------------------
+// --- refines is a URL, not always "#id" ---
 //
 // EPUB 3.3 §5.3.6 (The refines attribute):
 //   "EPUB creators MUST use as the value a path-relative-scheme-less-URL string,
@@ -963,7 +889,7 @@ func TestSpecPathQualifiedRefines(t *testing.T) {
 	}
 }
 
-// --- group-position ----------------------------------------------------------
+// --- group-position ---
 //
 // EPUB 3.3 Appendix D.3.7 (group-position):
 //   Allowed value(s): "A single xsd:unsignedInt or series of decimal-separated
@@ -993,10 +919,9 @@ func TestSpecGroupPositionMultiLevel(t *testing.T) {
 	}
 }
 
-// TestSpecGroupPositionLevelsAreNotDecimals: D.3.7 counts levels, so "1.10" is
-// volume 1, issue 10 — not the number 1.1. calibre:series_index is a float and
-// needs its trailing zeros dropped ("1.0" means "1"); group-position is never
-// calibre-written and must not get the same treatment.
+// D.3.7 counts levels, so "1.10" is volume 1, issue 10, not the number 1.1.
+// calibre:series_index is a float and needs trailing zeros dropped ("1.0" means
+// "1"). group-position is never calibre-written and must not get that treatment.
 func TestSpecGroupPositionLevelsAreNotDecimals(t *testing.T) {
 	epub3Index := func(pos string) string {
 		return epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
@@ -1026,9 +951,8 @@ func TestSpecGroupPositionLevelsAreNotDecimals(t *testing.T) {
 	}
 }
 
-// TestSpecGroupPositionMultiLevelRoundTrips is the write half: a multi-level
-// position must survive being set, not just being read. Writing it through a
-// float was what silently collapsed it.
+// A multi-level position must survive being set, not just being read. Writing
+// it through a float was what silently collapsed it.
 func TestSpecGroupPositionMultiLevelRoundTrips(t *testing.T) {
 	var opf = epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
     <dc:title>An Article</dc:title>
@@ -1055,7 +979,7 @@ func TestSpecGroupPositionMultiLevelRoundTrips(t *testing.T) {
 	}
 }
 
-// --- schemed collection-type -------------------------------------------------
+// --- schemed collection-type ---
 //
 // EPUB 3.3 Appendix D.3.4 (collection-type):
 //   "When the collection-type value is drawn from a code list or other formal
@@ -1082,16 +1006,16 @@ func TestSpecSchemedCollectionTypeIsNotOurSeries(t *testing.T) {
 	}
 }
 
-// --- cover resolution --------------------------------------------------------
+// --- cover resolution ---
 //
 // §5.9.2: legacy features are for EPUB 2 compatibility, and "EPUB 3 reading
-// systems will not use these features when presenting publications to users" —
-// which is what makes the manifest property win over <meta name="cover">.
+// systems will not use these features when presenting publications to users".
+// Which is what makes the manifest property win over <meta name="cover">.
 // §5.9.3 describes the legacy meta itself.
 
-// TestSpecCoverImagePropertyIsAToken: §5.9.1 makes properties "a space-separated
-// list of property values", so membership is a token comparison. A substring
-// test matches "my-cover-image", someone else's property.
+// §5.9.1 makes properties "a space-separated list of property values", so
+// membership is a token comparison. A substring test matches "my-cover-image",
+// somebody else's property.
 func TestSpecCoverImagePropertyIsAToken(t *testing.T) {
 	opf := func(properties string) string {
 		return `<?xml version="1.0" encoding="utf-8"?>
@@ -1132,9 +1056,8 @@ func TestSpecCoverImagePropertyIsAToken(t *testing.T) {
 	}
 }
 
-// TestSpecCoverImagePropertyBeatsLegacyMeta pins behaviour that is already
-// correct but stated only by the order of two loops in translateCover: reorder
-// them in a rewrite and the result flips with nothing failing.
+// Already correct, but stated only by the order of two loops in translateCover.
+// Reorder them in a rewrite and the result flips with nothing failing.
 func TestSpecCoverImagePropertyBeatsLegacyMeta(t *testing.T) {
 	const opf = `<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id">
@@ -1162,9 +1085,9 @@ func TestSpecCoverImagePropertyBeatsLegacyMeta(t *testing.T) {
 	}
 }
 
-// --- dc:date events ----------------------------------------------------------
+// --- dc:date events ---
 //
-// OPF 2.0 §2.2.7: the opf:event vocabulary is open — "the set of values for
+// OPF 2.0 §2.2.7: the opf:event vocabulary is open. "the set of values for
 // event are not defined by this specification". We recognise only the literal
 // "publication". Pinned so that closed-world reading changes on purpose.
 
@@ -1186,16 +1109,11 @@ func TestSpecUnrecognisedDateEventsLeaveNoPubdate(t *testing.T) {
 	}
 }
 
-// --- writing into the legacy wrappers ----------------------------------------
+// --- writing into the legacy wrappers ---
 //
 // OPF 2.0 §2.2 (Publication Metadata):
 //   "If the dc-metadata element is used, all dc elements must go in dc-metadata
 //    and all other metadata elements, if any, must go into x-metadata."
-//
-// TestSpecLegacyMetadataWrappers pins the read side. This pins the write side:
-// the MUST binds anything ebookfs adds to such a file just as much as what it
-// found there, so a new dc:description belongs in dc-metadata and a new
-// calibre:series_index in x-metadata, not loose under <metadata>.
 
 func TestSpecEditsLandInTheLegacyWrappers(t *testing.T) {
 	path := buildEpub(t, opfWrappers)
@@ -1235,13 +1153,9 @@ func TestSpecEditsLandInTheLegacyWrappers(t *testing.T) {
 	}
 }
 
-// TestSpecEditsCreateTheMissingXMetadataWrapper is the case the fixture above
-// cannot reach, and the common one: dc-metadata present, x-metadata absent
-// because the producer had no non-DC metadata. §2.2's MUST still binds what we
-// add, so a writer with a calibre meta has to create the wrapper.
-//
-// elements() reads both the wrappers and direct children, so this package is the
-// one reader that cannot see its own violation.
+// dc-metadata present, x-metadata absent. §2.2's MUST still binds what gets
+// added. elements() reads both wrappers and direct children, so this package is
+// the one reader that cannot see its own violation.
 func TestSpecEditsCreateTheMissingXMetadataWrapper(t *testing.T) {
 	const opf = `<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" xmlns:opf="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="pub-id">
@@ -1278,15 +1192,10 @@ func TestSpecEditsCreateTheMissingXMetadataWrapper(t *testing.T) {
 	}
 }
 
-// --- opf: attributes need a declared prefix ----------------------------------
+// --- opf: attributes need a declared prefix ---
 //
 // XML Namespaces §6.2 (Namespace Defaulting) states that default namespaces do
 // not apply directly to attributes.
-//
-// So an EPUB 2 file may bind the OPF namespace as the default and still need
-// xmlns:opf declared before opf:role and opf:file-as can be written. Writing
-// them unprefixed would put them in no namespace, which is not what OPF 2.0
-// §2.2.6 describes.
 
 func TestSpecEPUB2AttributesGetADeclaredPrefix(t *testing.T) {
 	// epub2() declares xmlns:opf; this file binds OPF as the default only.

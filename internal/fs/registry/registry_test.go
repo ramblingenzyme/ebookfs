@@ -14,7 +14,7 @@ import (
 )
 
 // fakeView is a minimal BookView; the registry only needs a registered view to
-// exercise the remove/add bracketing of a commit. It records nothing — the
+// exercise the remove/add bracketing of a commit. It records nothing, since the
 // concurrency assertions read the BookDir snapshot directly.
 type fakeView struct{}
 
@@ -30,11 +30,11 @@ func TestEditUnknownID(t *testing.T) {
 	}
 }
 
-// TestEditConcurrentSnapshotSwap exercises the snapshot swap under the
-// concurrency go9p produces: handler goroutines read a BookDir's Stat/Children
-// with no registry lock while edit commits swap the snapshot under r.mu. Run
-// with -race to verify; without it the test still asserts a reader never
-// observes a torn snapshot (a name that is neither the old nor the new title).
+// The snapshot swap under the concurrency go9p produces: handler goroutines read
+// a BookDir's Stat/Children with no registry lock while edit commits swap the
+// snapshot under r.mu. Run with -race to verify; without it the test still
+// asserts a reader never observes a torn snapshot (a name that is neither the
+// old nor the new title).
 func TestEditConcurrentSnapshotSwap(t *testing.T) {
 	// current mimics the library's authoritative state; EditFn runs under the
 	// registry mutex, so reading and replacing it is serialized.
@@ -129,8 +129,8 @@ func TestAddNotifiesEveryView(t *testing.T) {
 	}
 }
 
-// TestAddSameIDReusesTheBookDir pins that a re-add keeps the same BookDir. Open
-// 9P fids point at it, so replacing the object would strand every open handle.
+// A re-add keeps the same BookDir. Open 9P fids point at it, so replacing the
+// object would strand every open handle.
 func TestAddSameIDReusesTheBookDir(t *testing.T) {
 	reg, _ := newTestRegistry(t, libfake.Lib{})
 
@@ -189,10 +189,10 @@ func TestRemoveViewStopsNotifications(t *testing.T) {
 	}
 }
 
-// TestResyncViewReplaysEveryBook covers the primitive the search directory is
-// built on: a view that attaches after books exist — or changes its filter —
-// converges on the registry's current state. reset runs first, then every
-// registered book is offered, all under the registry lock.
+// The primitive the search directory is built on: a view that attaches after
+// books exist (or changes its filter) converges on the registry's current state.
+// reset runs first, then every registered book is offered, all under the
+// registry lock.
 func TestResyncViewReplaysEveryBook(t *testing.T) {
 	reg, _ := newTestRegistry(t, libfake.Lib{})
 	reg.Add(testutil.MakeBook(1, "First", "Alice"))
@@ -273,8 +273,8 @@ func TestEdit(t *testing.T) {
 }
 
 // snapshotView records the title each callback observed, not just the id. The
-// order of a commit is only half the contract; the other half is which snapshot
-// each side reads.
+// order of a commit is only half the contract; which snapshot each side reads is
+// the other.
 type snapshotView struct {
 	addedTitles   []string
 	removedTitles []string
@@ -288,13 +288,13 @@ func (v *snapshotView) Remove(d *book.BookDir) {
 	v.removedTitles = append(v.removedTitles, d.Book().Title())
 }
 
-// TestCommitShowsOldStateToRemoveAndNewStateToAdd pins the rule BookView is
-// written against: Add and Remove read the book's current state, so a commit
-// must bracket the swap as Remove, then swap, then Add. Remove has to see the
-// old title or it deletes the wrong entry and leaves a ghost in the 9P tree;
-// Add has to see the new one or it files the book under its old name.
+// The rule BookView is written against: Add and Remove read the book's current
+// state, so a commit must bracket the swap as Remove, then swap, then Add.
+// Remove has to see the old title or it deletes the wrong entry and leaves a
+// ghost in the 9P tree; Add has to see the new one or it files the book under
+// its old name.
 //
-// The existing bracketing test records ids, which are identical either way, so
+// The bracketing test above records ids, which are identical either way, so
 // swapping before the Remove would leave it passing while every view broke.
 func TestCommitShowsOldStateToRemoveAndNewStateToAdd(t *testing.T) {
 	current := testutil.MakeMutableBook(1, "Old Title", "Alice")
