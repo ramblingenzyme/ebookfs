@@ -1,5 +1,20 @@
 //go:build e2e
 
+// The whole stack over a real 9P connection: a client dials the served tree,
+// copies an epub into inbox/, then walks books/, reads a field file, writes a
+// new status, reads it back, streams the epub, and checks by-author/ lists the
+// book. Every other test in this package drives the tree in-process, so this is
+// the only one that exercises the protocol itself.
+//
+// Held behind a build tag because it binds a port and runs the real library.
+// Nothing in CI builds that tag, which is how it sat uncompilable for four
+// commits after library.Open changed shape. Run it with:
+//
+//	go test -tags e2e ./internal/fs/
+//
+// White-box because it reaches srv.ebookfs to serve without a listener of its
+// own; the assertions themselves are all client-side, through 9P.
+
 package fs
 
 import (
