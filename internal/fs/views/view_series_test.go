@@ -3,6 +3,9 @@ package views
 import (
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
+	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library"
 )
 
@@ -97,4 +100,14 @@ func TestSeriesEntryName_PadTriggeredByMaxIndex(t *testing.T) {
 			t.Errorf("unexpected entry %q, want one of %v", name, want)
 		}
 	}
+}
+
+func TestBySeriesDirRemoveNilSeriesNoOp(t *testing.T) {
+	reg := newTestRegistry(t)
+	d := NewBySeriesDir(reg)
+
+	b := testutil.MakeBook(1, "No Series", "Author")
+	bd := book.NewBookDir(newTestFS(t), libfake.Lib{}, func(int64, library.Edits) error { return nil }, b)
+
+	d.Remove(bd) // Should not panic — early return when Series is nil
 }
