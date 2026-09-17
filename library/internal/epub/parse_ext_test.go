@@ -19,21 +19,9 @@ import (
 
 // --- parser-only fixtures & helpers ---
 
-// multiRootContainer lists two package rootfiles where the first does not exist
-// in the zip, the shape seen in some Kobo epubs.
-const multiRootContainer = `<?xml version="1.0"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-  <rootfiles>
-    <rootfile full-path="OEBPS/missing.opf" media-type="application/oebps-package+xml"/>
-    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
-  </rootfiles>
-</container>`
-
 // opfMarkupCoverImage mislabels an XHTML cover page with
 // properties="cover-image"; the real raster cover is reached via <meta name="cover">.
-var opfMarkupCoverImage = opf3Meta(`
-    <dc:title>Original Title</dc:title>
-    <dc:creator id="creator1">Jane Doe</dc:creator>
+var opfMarkupCoverImage = opf3Meta(`    <dc:creator id="creator1">Jane Doe</dc:creator>
     <meta refines="#creator1" property="role">aut</meta>
     <meta name="cover" content="real-cover"/>`,
 	`<item id="coverpage" href="coverpage.xhtml" media-type="application/xhtml+xml" properties="cover-image"/>
@@ -44,8 +32,7 @@ var opfMarkupCoverImage = opf3Meta(`
 // opfSeriesSetCollection carries an EPUB 3 belongs-to-collection of type "set"
 // (a publisher bundle, not a series) alongside a legacy calibre:series. The set
 // must be ignored so the real series is the one read.
-var opfSeriesSetCollection = opf3Meta(`
-    <dc:title>Box Set Book</dc:title>
+var opfSeriesSetCollection = opf3Meta(`    <dc:title>Box Set Book</dc:title>
     <dc:creator id="creator1">Jane Doe</dc:creator>
     <meta refines="#creator1" property="role">aut</meta>
     <meta property="belongs-to-collection" id="c1">Some Box Set</meta>
@@ -57,8 +44,7 @@ var opfSeriesSetCollection = opf3Meta(`
 
 // opfSeriesNoIndexV3 is an EPUB 3 series collection with no group-position; the
 // index should default to 1.
-var opfSeriesNoIndexV3 = opf3Meta(`
-    <dc:title>Lonely Book</dc:title>
+var opfSeriesNoIndexV3 = opf3Meta(`    <dc:title>Lonely Book</dc:title>
     <dc:creator id="creator1">Jane Doe</dc:creator>
     <meta refines="#creator1" property="role">aut</meta>
     <meta property="belongs-to-collection" id="c1">Lonely Series</meta>
@@ -68,8 +54,7 @@ var opfSeriesNoIndexV3 = opf3Meta(`
 
 // opfSeriesNoIndexV2 is an EPUB 2 calibre:series with no calibre:series_index;
 // the index should default to 1.
-var opfSeriesNoIndexV2 = opf2Meta(`
-    <dc:title>Lonely Book</dc:title>
+var opfSeriesNoIndexV2 = opf2Meta(`    <dc:title>Lonely Book</dc:title>
     <dc:creator opf:role="aut">Jane Doe</dc:creator>
     <meta name="calibre:series" content="Lonely Series"/>`,
 )
@@ -77,43 +62,30 @@ var opfSeriesNoIndexV2 = opf2Meta(`
 // opf3Meta wraps a metadata block and an optional <manifest> body in an
 // EPUB 3 package skeleton. An empty manifest uses the default single-chapter
 // entry so callers need only supply their <metadata> children.
+// opf3Meta and opf2Meta are the shared builders under the names these tests
+// already use, with the manifest this file needs: no cover item, because the
+// cover-resolution tests here are about a package that declares one itself.
 func opf3Meta(metadata, manifest string) string {
-	if manifest == "" {
-		manifest = `<item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`
-	}
-	return `<?xml version="1.0" encoding="utf-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
-  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:identifier id="bookid">urn:uuid:1234</dc:identifier>
-    ` + metadata + `
-  </metadata>
-  <manifest>
-    ` + manifest + `
-  </manifest>
-  <spine><itemref idref="ch1"/></spine>
-</package>`
+	return epub3(metadata, manifestOr(nonEmpty(manifest), chapterOnlyManifest))
 }
 
-// opf2Meta wraps a metadata block in an EPUB 2 package skeleton.
 func opf2Meta(metadata string) string {
-	return `<?xml version="1.0" encoding="utf-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" xmlns:opf="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="bookid">
-  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:identifier id="bookid">urn:uuid:1234</dc:identifier>
-    ` + metadata + `
-  </metadata>
-  <manifest>
-    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
-  </manifest>
-  <spine toc="ncx"><itemref idref="ch1"/></spine>
-</package>`
+	return epub2(metadata, chapterOnlyManifest)
+}
+
+const chapterOnlyManifest = `<item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`
+
+func nonEmpty(s string) []string {
+	if s == "" {
+		return nil
+	}
+	return []string{s}
 }
 
 // opfWithDates builds a minimal EPUB 2 package whose <metadata> carries the
 // given raw <dc:date ...> elements, for exercising publication-date selection.
 func opfWithDates(dateXML string) string {
-	return opf2Meta(`
-    <dc:title>Dated Book</dc:title>
+	return opf2Meta(`    <dc:title>Dated Book</dc:title>
     <dc:creator opf:role="aut">Jane Doe</dc:creator>
     ` + dateXML)
 }
@@ -121,8 +93,7 @@ func opfWithDates(dateXML string) string {
 // opfV3WithModified is an EPUB 3 package with a publication dc:date and a
 // dcterms:modified meta; the latter is not a dc:date and must not be read as the
 // publication date.
-var opfV3WithModified = opf3Meta(`
-    <dc:title>V3 Book</dc:title>
+var opfV3WithModified = opf3Meta(`    <dc:title>V3 Book</dc:title>
     <dc:creator id="creator1">Jane Doe</dc:creator>
     <meta refines="#creator1" property="role">aut</meta>
     <dc:date>2015-06-01</dc:date>
@@ -178,9 +149,7 @@ func TestTranslateCoverSkipsMarkupCoverImage(t *testing.T) {
 // A percent-encoded cover href must resolve to the literal zip entry so the
 // cover is found by both Parse and the WriteCover/Reader lookups.
 func TestParseResolvesEncodedCoverHref(t *testing.T) {
-	opfEncoded := opf3Meta(`
-    <dc:title>Original Title</dc:title>
-    <dc:creator id="creator1">Jane Doe</dc:creator>
+	opfEncoded := opf3Meta(`    <dc:creator id="creator1">Jane Doe</dc:creator>
     <meta refines="#creator1" property="role">aut</meta>`,
 		`<item id="cover-img" href="cover%20image.jpg" media-type="image/jpeg" properties="cover-image"/>
     <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`,
@@ -219,12 +188,7 @@ func TestParseResolvesEncodedCoverHref(t *testing.T) {
 // is declared "My%20Book.opf" while the entry holds the decoded name.
 // Undecoded, the book is unopenable and blamed on a rootfile that is present.
 func TestParseResolvesEncodedRootfilePath(t *testing.T) {
-	const container = `<?xml version="1.0"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-  <rootfiles>
-    <rootfile full-path="OEBPS/My%20Book.opf" media-type="application/oebps-package+xml"/>
-  </rootfiles>
-</container>`
+	container := containerFor("OEBPS/My%20Book.opf", packageMediaType)
 
 	path := writeEpub(t, []entry{
 		{name: "mimetype", data: []byte(mimetypeValue), store: true},
@@ -253,15 +217,7 @@ func TestParseResolvesEncodedRootfilePath(t *testing.T) {
 // requires the package media type, so a container wrapping it has every
 // rootfile skipped and reports ErrNoRootfile for a package that is right there.
 func TestParseCollapsesRootfileMediaType(t *testing.T) {
-	const container = `<?xml version="1.0"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-  <rootfiles>
-    <rootfile full-path="OEBPS/content.opf"
-              media-type="
-                application/oebps-package+xml
-              "/>
-  </rootfiles>
-</container>`
+	container := containerFor("OEBPS/content.opf", wrapped(packageMediaType))
 
 	path := writeEpub(t, []entry{
 		{name: "mimetype", data: []byte(mimetypeValue), store: true},
@@ -331,12 +287,7 @@ func TestParseRootfilePathEdgeCases(t *testing.T) {
 		{"stray percent", "OEBPS/100%.opf", "OEBPS/100%.opf"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			container := `<?xml version="1.0"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-  <rootfiles>
-    <rootfile full-path="` + tc.declared + `" media-type="application/oebps-package+xml"/>
-  </rootfiles>
-</container>`
+			container := containerFor(tc.declared, packageMediaType)
 
 			path := writeEpub(t, []entry{
 				{name: "mimetype", data: []byte(mimetypeValue), store: true},
@@ -511,27 +462,19 @@ func TestParseDistinguishesMissingFromUndeclared(t *testing.T) {
 		want            error
 	}{
 		{
-			name: "declared but absent from the archive",
-			container: `<?xml version="1.0"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-  <rootfiles>
-    <rootfile full-path="OEBPS/nowhere.opf" media-type="application/oebps-package+xml"/>
-  </rootfiles>
-</container>`,
-			want: epub.ErrRootfileMissing,
+			name:      "declared but absent from the archive",
+			container: containerFor("OEBPS/nowhere.opf", packageMediaType),
+			want:      epub.ErrRootfileMissing,
 		},
 		{
-			name: "no rootfile of the package media type",
-			container: `<?xml version="1.0"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-  <rootfiles>
-    <rootfile full-path="OEBPS/content.opf" media-type="application/x-something-else"/>
-  </rootfiles>
-</container>`,
-			want: epub.ErrNoRootfile,
+			name:      "no rootfile of the package media type",
+			container: containerFor("OEBPS/content.opf", "application/x-something-else"),
+			want:      epub.ErrNoRootfile,
 		},
 		{
 			name: "no rootfiles at all",
+			// No builder: an empty <rootfiles> is the shape being tested, not
+			// a value inside one.
 			container: `<?xml version="1.0"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
   <rootfiles></rootfiles>

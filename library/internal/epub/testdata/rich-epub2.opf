@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" xmlns:opf="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <!-- a comment nobody should eat -->
+    <dc:identifier id="bookid" opf:scheme="uuid">urn:uuid:1234</dc:identifier>
+    <dc:title>Original Title</dc:title>
+    <dc:creator id="creator1" opf:role="aut" opf:file-as="Doe, Jane">Jane Doe</dc:creator>
+    <dc:contributor id="ed1" opf:role="edt">An Editor</dc:contributor>
+    <dc:language>en</dc:language>
+    <dc:date opf:event="publication">2020-01-02</dc:date>
+    <dc:description>Original description.</dc:description>
+    <meta name="calibre:series" content="The Trilogy"/>
+    <meta name="calibre:series_index" content="2"/>
+    <meta name="calibre:user_rating" content="8"/>
+    <meta name="publisher:internal-id" content="ACME-99"/>
+    <meta name="cover" content="cover-img"/>
+  </metadata>
+  <manifest>
+    <item id="cover-img" href="cover.jpg" media-type="image/jpeg"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine toc="ncx"><itemref idref="ch1"/></spine>
+</package>

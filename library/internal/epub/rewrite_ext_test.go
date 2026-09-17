@@ -90,63 +90,6 @@ func corpora() []corpus {
 	}
 }
 
-const richOPF3 = `<?xml version="1.0" encoding="utf-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
-  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <!-- a comment nobody should eat -->
-    <dc:identifier id="bookid">urn:uuid:1234</dc:identifier>
-    <dc:title id="t1">Original Title</dc:title>
-    <meta refines="#t1" property="file-as">Title, Original</meta>
-    <dc:creator id="creator1">Jane Doe</dc:creator>
-    <meta refines="#creator1" property="role" scheme="marc:relators">aut</meta>
-    <meta refines="#creator1" property="file-as">Doe, Jane</meta>
-    <meta refines="#creator1" property="alternate-script" xml:lang="ja">ドゥ・ジェーン</meta>
-    <dc:contributor id="ed1">An Editor</dc:contributor>
-    <meta refines="#ed1" property="role" scheme="marc:relators">edt</meta>
-    <dc:language>en</dc:language>
-    <dc:date>2020-01-02</dc:date>
-    <dc:description>Original description.</dc:description>
-    <meta property="dcterms:modified">2020-01-02T00:00:00Z</meta>
-    <meta property="belongs-to-collection" id="series1">The Trilogy</meta>
-    <meta refines="#series1" property="collection-type">series</meta>
-    <meta refines="#series1" property="group-position">2</meta>
-    <meta refines="#series1" property="dcterms:identifier">urn:issn:1234-5678</meta>
-    <meta property="belongs-to-collection" id="set1">Complete Works</meta>
-    <meta refines="#set1" property="collection-type">set</meta>
-    <meta name="calibre:user_rating" content="8"/>
-    <meta name="cover" content="cover-img"/>
-  </metadata>
-  <manifest>
-    <item id="cover-img" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
-    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
-  </manifest>
-  <spine><itemref idref="ch1"/></spine>
-</package>`
-
-const richOPF2 = `<?xml version="1.0" encoding="utf-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" xmlns:opf="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="bookid">
-  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <!-- a comment nobody should eat -->
-    <dc:identifier id="bookid" opf:scheme="uuid">urn:uuid:1234</dc:identifier>
-    <dc:title>Original Title</dc:title>
-    <dc:creator id="creator1" opf:role="aut" opf:file-as="Doe, Jane">Jane Doe</dc:creator>
-    <dc:contributor id="ed1" opf:role="edt">An Editor</dc:contributor>
-    <dc:language>en</dc:language>
-    <dc:date opf:event="publication">2020-01-02</dc:date>
-    <dc:description>Original description.</dc:description>
-    <meta name="calibre:series" content="The Trilogy"/>
-    <meta name="calibre:series_index" content="2"/>
-    <meta name="calibre:user_rating" content="8"/>
-    <meta name="publisher:internal-id" content="ACME-99"/>
-    <meta name="cover" content="cover-img"/>
-  </metadata>
-  <manifest>
-    <item id="cover-img" href="cover.jpg" media-type="image/jpeg"/>
-    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
-  </manifest>
-  <spine toc="ncx"><itemref idref="ch1"/></spine>
-</package>`
-
 // edits that change one field and must disturb nothing else. Deliberately
 // excluded: clearing the series and renaming an author, which are *supposed* to
 // take the series identifier and the alternate-script with them (the entity
@@ -363,11 +306,7 @@ func TestRewriteIsIdempotent(t *testing.T) {
 // edit declares dcterms2; every later one must recognise that element as ours
 // or mint dcterms3, dcterms4, growing the package element once per save.
 func TestRewriteIsIdempotentOnARebindingDocument(t *testing.T) {
-	opf := strings.Replace(epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>The Title</dc:title>
-    <dc:creator id="c1">Ann Rand</dc:creator>
-    <dc:language>en</dc:language>
-    <meta property="dcterms:modified">not-a-date</meta>`),
+	opf := strings.Replace(epub3(`    <meta property="dcterms:modified">not-a-date</meta>`),
 		`version="3.0"`, `version="3.0" prefix="dcterms: http://example.com/vocab#"`, 1)
 
 	path := buildEpub(t, opf)
@@ -415,10 +354,7 @@ func TestRewriteIsIdempotentOnARebindingDocument(t *testing.T) {
 // two encodings that disagree.
 
 func TestEPUB2SeriesEditUpdatesBothEncodings(t *testing.T) {
-	path := buildEpub(t, epub2(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>The Title</dc:title>
-    <dc:creator opf:role="aut">Ann Rand</dc:creator>
-    <dc:language>en</dc:language>
+	path := buildEpub(t, epub2(`    <dc:creator opf:role="aut">Ann Rand</dc:creator>
     <meta property="belongs-to-collection" id="c01">The Old Series</meta>
     <meta refines="#c01" property="collection-type">series</meta>
     <meta refines="#c01" property="group-position">2</meta>`))
@@ -443,11 +379,7 @@ func TestEPUB2SeriesEditUpdatesBothEncodings(t *testing.T) {
 // left asserting a series the collection no longer names. A calibre reader
 // consults them first.
 func TestEPUB3SeriesEditUpdatesStaleCalibreMetas(t *testing.T) {
-	path := buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>The Title</dc:title>
-    <dc:creator id="c1">Ann Rand</dc:creator>
-    <dc:language>en</dc:language>
-    <meta property="belongs-to-collection" id="c01">The Old Series</meta>
+	path := buildEpub(t, epub3(`    <meta property="belongs-to-collection" id="c01">The Old Series</meta>
     <meta refines="#c01" property="collection-type">series</meta>
     <meta refines="#c01" property="group-position">2</meta>
     <meta name="calibre:series" content="The Old Series"/>
@@ -463,11 +395,7 @@ func TestEPUB3SeriesEditUpdatesStaleCalibreMetas(t *testing.T) {
 // A file that never carried the proprietary encoding does not acquire it.
 // "Keep every encoding in step" is not licence to add one.
 func TestEPUB3SeriesEditDoesNotInjectCalibreMetas(t *testing.T) {
-	path := buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>The Title</dc:title>
-    <dc:creator id="c1">Ann Rand</dc:creator>
-    <dc:language>en</dc:language>
-    <meta property="belongs-to-collection" id="c01">The Old Series</meta>
+	path := buildEpub(t, epub3(`    <meta property="belongs-to-collection" id="c01">The Old Series</meta>
     <meta refines="#c01" property="collection-type">series</meta>`))
 
 	want := "The New Series"
@@ -495,16 +423,14 @@ func assertSeriesEncodings(t *testing.T, path, want, wantIndex string) {
 	if !slices.Equal(collections, []string{want}) {
 		t.Errorf("collections = %v, want exactly [%s]", collections, want)
 	}
-	if got := md.FindElement("//meta[@property='group-position']"); got == nil || got.Text() != wantIndex {
-		t.Errorf("group-position = %v, want %q carried over", got, wantIndex)
+	if got := property(t, md, "//meta[@property='group-position']"); got != wantIndex {
+		t.Errorf("group-position = %q, want %q carried over", got, wantIndex)
 	}
-	if got := md.FindElement("//meta[@name='calibre:series']"); got == nil ||
-		got.SelectAttrValue("content", "") != want {
-		t.Errorf("calibre:series = %v, want %q in step with the collection", got, want)
+	if got := legacyMeta(t, md, "//meta[@name='calibre:series']"); got != want {
+		t.Errorf("calibre:series = %q, want %q in step with the collection", got, want)
 	}
-	if got := md.FindElement("//meta[@name='calibre:series_index']"); got == nil ||
-		got.SelectAttrValue("content", "") != wantIndex {
-		t.Errorf("calibre:series_index = %v, want %q", got, wantIndex)
+	if got := legacyMeta(t, md, "//meta[@name='calibre:series_index']"); got != wantIndex {
+		t.Errorf("calibre:series_index = %q, want %q", got, wantIndex)
 	}
 
 	bib, err := epub.Parse(path)
@@ -520,10 +446,8 @@ func assertSeriesEncodings(t *testing.T, path, want, wantIndex string) {
 // a float by calibre's convention. Writing the first two levels is a deliberate
 // narrowing, not a silent collapse to 1.
 func TestMultiLevelPositionNarrowsForEPUB2(t *testing.T) {
-	opf := epub2(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>An Article</dc:title>
+	opf := epub2(`    <dc:title>An Article</dc:title>
     <dc:creator opf:role="aut">Ann Rand</dc:creator>
-    <dc:language>en</dc:language>
     <meta name="calibre:series" content="Physical Review D"/>
     <meta name="calibre:series_index" content="1"/>`)
 
@@ -553,11 +477,7 @@ func TestMultiLevelPositionNarrowsForEPUB2(t *testing.T) {
 
 func TestFirstDescriptionWins(t *testing.T) {
 
-	var opf = epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>The Title</dc:title>
-    <dc:creator id="c1">Ann Rand</dc:creator>
-    <dc:language>en</dc:language>
-    <dc:description>FIRST description.</dc:description>
+	var opf = epub3(`    <dc:description>FIRST description.</dc:description>
     <dc:description>SECOND description.</dc:description>`)
 
 	bib, err := epub.Parse(buildEpub(t, opf))
@@ -574,11 +494,7 @@ func TestFirstDescriptionWins(t *testing.T) {
 // The spec says nothing; calibre keeps looking.
 func TestDanglingCoverMetaFallsThrough(t *testing.T) {
 
-	opf := epub2(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>The Title</dc:title>
-    <dc:creator id="c1">Ann Rand</dc:creator>
-    <dc:language>en</dc:language>
-    <meta name="cover" content="does-not-exist"/>`)
+	opf := epub2(`    <meta name="cover" content="does-not-exist"/>`)
 
 	bib, err := epub.Parse(buildEpub(t, opf))
 	if err != nil {
@@ -593,10 +509,7 @@ func TestDanglingCoverMetaFallsThrough(t *testing.T) {
 // calibre:series_index. The carried-over position is empty, so the stale index
 // goes rather than staying to contradict the collection.
 func TestSeriesWithNoPositionDropsTheCalibreIndex(t *testing.T) {
-	path := buildEpub(t, epub2(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>The Title</dc:title>
-    <dc:creator opf:role="aut">Ann Rand</dc:creator>
-    <dc:language>en</dc:language>
+	path := buildEpub(t, epub2(`    <dc:creator opf:role="aut">Ann Rand</dc:creator>
     <meta property="belongs-to-collection" id="c01">The Old Series</meta>
     <meta refines="#c01" property="collection-type">series</meta>
     <meta name="calibre:series" content="The Old Series"/>
@@ -608,8 +521,8 @@ func TestSeriesWithNoPositionDropsTheCalibreIndex(t *testing.T) {
 	}
 
 	md := metadata(t, path)
-	if el := md.FindElement("meta[@name='calibre:series']"); el == nil || el.SelectAttrValue("content", "") != want {
-		t.Errorf("calibre:series = %v, want %q", el, want)
+	if got := legacyMeta(t, md, "meta[@name='calibre:series']"); got != want {
+		t.Errorf("calibre:series = %q, want %q", got, want)
 	}
 	if el := md.FindElement("meta[@name='calibre:series_index']"); el != nil {
 		t.Errorf("calibre:series_index = %q, want it gone with the position", el.SelectAttrValue("content", ""))
@@ -622,10 +535,7 @@ func TestSeriesWithNoPositionDropsTheCalibreIndex(t *testing.T) {
 // opf:file-as has to go rather than stay behind describing a sort order the
 // caller just cleared.
 func TestEPUB2CreatorLosesAStaleSortName(t *testing.T) {
-	opf := epub2(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>The Title</dc:title>
-    <dc:creator opf:role="aut" opf:file-as="Doe, Jane">Jane Doe</dc:creator>
-    <dc:language>en</dc:language>`)
+	opf := epub2(`    <dc:creator opf:role="aut" opf:file-as="Doe, Jane">Jane Doe</dc:creator>`)
 
 	path := buildEpub(t, opf)
 	authors := []bookmodel.Author{{Name: "Jane Doe"}}
@@ -633,7 +543,7 @@ func TestEPUB2CreatorLosesAStaleSortName(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := metadata(t, path).FindElement("creator").SelectAttrValue("opf:file-as", ""); got != "" {
+	if got := attrOf(t, metadata(t, path), "creator", "opf:file-as"); got != "" {
 		t.Errorf("opf:file-as = %q, want removed with the sort name", got)
 	}
 	bib, err := epub.Parse(path)
@@ -651,11 +561,8 @@ func TestEPUB2CreatorLosesAStaleSortName(t *testing.T) {
 // refinement, so the edit would land where the read never looks and the stale
 // value would be reported forever.
 func TestEPUB3CreatorWithALegacySortNameTakesTheEdit(t *testing.T) {
-	opf := strings.Replace(epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>The Title</dc:title>
-    <dc:creator id="c1" opf:file-as="Stale, Name">Ann Rand</dc:creator>
-    <meta refines="#c1" property="role" scheme="marc:relators">aut</meta>
-    <dc:language>en</dc:language>`),
+	opf := strings.Replace(epub3(`    <dc:creator id="c1" opf:file-as="Stale, Name">Ann Rand</dc:creator>
+    <meta refines="#c1" property="role" scheme="marc:relators">aut</meta>`),
 		`xmlns:dc="http://purl.org/dc/elements/1.1/"`,
 		`xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf"`, 1)
 
@@ -689,10 +596,7 @@ func TestEPUB3CreatorWithALegacySortNameTakesTheEdit(t *testing.T) {
 //
 // The element then asserts two sort names and the next read takes the stale one.
 func TestUnprefixedFileAsIsUpdatedNotDuplicated(t *testing.T) {
-	opf := epub2(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>The Title</dc:title>
-    <dc:creator opf:role="aut" file-as="Stale, Name">Ann Rand</dc:creator>
-    <dc:language>en</dc:language>`)
+	opf := epub2(`    <dc:creator opf:role="aut" file-as="Stale, Name">Ann Rand</dc:creator>`)
 
 	path := buildEpub(t, opf)
 	authors := []bookmodel.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
@@ -733,11 +637,7 @@ func TestUnprefixedFileAsIsUpdatedNotDuplicated(t *testing.T) {
 // creator: pubdate returns a date only when exactly one untagged dc:date has a
 // value, so counting an empty one makes it two and the book loses its date.
 func TestEmptyDateIsSkipped(t *testing.T) {
-	bib, err := epub.Parse(buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>The Title</dc:title>
-    <dc:creator id="c1">Ann Rand</dc:creator>
-    <dc:language>en</dc:language>
-    <dc:date>   </dc:date>
+	bib, err := epub.Parse(buildEpub(t, epub3(`    <dc:date>   </dc:date>
     <dc:date>2020-01-02</dc:date>`)))
 	if err != nil {
 		t.Fatal(err)
@@ -752,11 +652,8 @@ func TestEmptyDateIsSkipped(t *testing.T) {
 // element carrying no information.
 func TestEmptyCreatorIsSkippedNotFatal(t *testing.T) {
 	t.Run("skipped alongside a usable one", func(t *testing.T) {
-		bib, err := epub.Parse(buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>The Title</dc:title>
-    <dc:creator id="c1">Ann Rand</dc:creator>
-    <dc:creator id="c2">   </dc:creator>
-    <dc:language>en</dc:language>`)))
+		bib, err := epub.Parse(buildEpub(t, epub3(`    <dc:creator id="c1">Ann Rand</dc:creator>
+    <dc:creator id="c2">   </dc:creator>`)))
 		if err != nil {
 			t.Fatalf("a usable author sits beside the empty creator: %v", err)
 		}
@@ -766,10 +663,7 @@ func TestEmptyCreatorIsSkippedNotFatal(t *testing.T) {
 	})
 
 	t.Run("no readable author is an error", func(t *testing.T) {
-		_, err := epub.Parse(buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>The Title</dc:title>
-    <dc:creator id="c1">   </dc:creator>
-    <dc:language>en</dc:language>`)))
+		_, err := epub.Parse(buildEpub(t, epub3(`    <dc:creator id="c1">   </dc:creator>`)))
 		if err == nil {
 			t.Fatal("a book whose only creator is empty parsed anyway")
 		}
@@ -781,11 +675,8 @@ func TestEmptyCreatorIsSkippedNotFatal(t *testing.T) {
 
 func TestEmptyFirstTitleFallsThrough(t *testing.T) {
 
-	var opf = epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>   </dc:title>
-    <dc:title>The Real Title</dc:title>
-    <dc:creator id="c1">Ann Rand</dc:creator>
-    <dc:language>en</dc:language>`)
+	var opf = epub3(`    <dc:title>   </dc:title>
+    <dc:title>The Real Title</dc:title>`)
 
 	bib, err := epub.Parse(buildEpub(t, opf))
 	if err != nil {
@@ -802,11 +693,7 @@ func TestEmptyFirstTitleFallsThrough(t *testing.T) {
 // is malformed and no rule says where a write goes. Reusing that element rather
 // than adding a second leaves one description however many rewrites it sees.
 func TestEmptyElementIsWrittenInPlace(t *testing.T) {
-	opf := epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>The Title</dc:title>
-    <dc:creator id="c1">Ann Rand</dc:creator>
-    <dc:language>en</dc:language>
-    <dc:description>   </dc:description>
+	opf := epub3(`    <dc:description>   </dc:description>
     <dc:description></dc:description>`)
 
 	path := buildEpub(t, opf)
@@ -856,11 +743,7 @@ func TestRewriteRefusesDuplicateAuthors(t *testing.T) {
 // them, so the meta refines the package as a whole (§5.3.6) and must not be read
 // as that creator's sort name.
 func TestUnrefinedMetaIsNotACreatorsSortName(t *testing.T) {
-	opf := epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>The Title</dc:title>
-    <dc:creator>Ann Rand</dc:creator>
-    <meta property="file-as">Someone, Else</meta>
-    <dc:language>en</dc:language>`)
+	opf := epub3(`    <meta property="file-as">Someone, Else</meta>`)
 
 	bib, err := epub.Parse(buildEpub(t, opf))
 	if err != nil {
@@ -878,21 +761,9 @@ func TestUnrefinedMetaIsNotACreatorsSortName(t *testing.T) {
 // this takes the last, pinned rather than left to be discovered by a book
 // showing the wrong cover.
 func TestCoverHeuristicTakesTheLastMatch(t *testing.T) {
-	const opf = `<?xml version="1.0" encoding="utf-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id">
-  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>The Title</dc:title>
-    <dc:creator id="c1">Ann Rand</dc:creator>
-    <dc:language>en</dc:language>
-  </metadata>
-  <manifest>
-    <item id="cover-thumb" href="thumb.jpg" media-type="image/jpeg"/>
+	opf := epub3(``, `<item id="cover-thumb" href="thumb.jpg" media-type="image/jpeg"/>
     <item id="cover.jpg" href="cover.jpg" media-type="image/jpeg"/>
-    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
-  </manifest>
-  <spine><itemref idref="ch1"/></spine>
-</package>`
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`)
 
 	bib, err := epub.Parse(buildEpub(t, opf))
 	if err != nil {
@@ -911,12 +782,9 @@ func TestCoverHeuristicTakesTheLastMatch(t *testing.T) {
 // append a replacement is the churn this package avoids everywhere else. Delete
 // this test if a file turns up where it matters.
 func TestDuplicateRefinementsKeepTheirDuplicates(t *testing.T) {
-	opf := epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>The Title</dc:title>
-    <dc:creator id="c1">Ann Rand</dc:creator>
+	opf := epub3(`    <dc:creator id="c1">Ann Rand</dc:creator>
     <meta refines="#c1" property="file-as">First, Ann</meta>
-    <meta refines="#c1" property="file-as">Second, Ann</meta>
-    <dc:language>en</dc:language>`)
+    <meta refines="#c1" property="file-as">Second, Ann</meta>`)
 
 	path := buildEpub(t, opf)
 	authors := []bookmodel.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
@@ -955,91 +823,62 @@ func TestIdentifierKeying(t *testing.T) {
 		want map[string]string
 	}{{
 		name: "epub2 opf:scheme attribute",
-		opf: epub2(`    <dc:identifier id="BookId" opf:scheme="ISBN">9780123456789</dc:identifier>
-    <dc:title>T</dc:title>
-    <dc:creator>A</dc:creator>`),
+		opf:  epub2(`    <dc:identifier id="BookId" opf:scheme="ISBN">9780123456789</dc:identifier>`),
 		want: map[string]string{"isbn": "9780123456789"},
 	}, {
 		// etree matches an attribute by local name whatever prefix it carries, so a
 		// bare spelling reads the same as opf:scheme. The write side documents
 		// that in OPFAttr.Set.
 		name: "unprefixed scheme attribute",
-		opf: epub2(`    <dc:identifier id="BookId" scheme="ASIN">B00X57B4KG</dc:identifier>
-    <dc:title>T</dc:title>
-    <dc:creator>A</dc:creator>`),
+		opf:  epub2(`    <dc:identifier id="BookId" scheme="ASIN">B00X57B4KG</dc:identifier>`),
 		want: map[string]string{"asin": "B00X57B4KG"},
 	}, {
 		name: "onix codelist 5 identifier-type",
 		opf: epub3(`    <dc:identifier id="pub-id">9780123456789</dc:identifier>
-    <meta refines="#pub-id" property="identifier-type" scheme="onix:codelist5">15</meta>
-    <dc:title>T</dc:title>
-    <dc:creator>A</dc:creator>
-    <dc:language>en</dc:language>`),
+    <meta refines="#pub-id" property="identifier-type" scheme="onix:codelist5">15</meta>`),
 		want: map[string]string{"isbn": "9780123456789"},
 	}, {
 		name: "unschemed identifier-type is a name, not a code",
 		opf: epub3(`    <dc:identifier id="pub-id">10.1234/beta</dc:identifier>
-    <meta refines="#pub-id" property="identifier-type">DOI</meta>
-    <dc:title>T</dc:title>
-    <dc:creator>A</dc:creator>
-    <dc:language>en</dc:language>`),
+    <meta refines="#pub-id" property="identifier-type">DOI</meta>`),
 		want: map[string]string{"doi": "10.1234/beta"},
 	}, {
 		// A code list we do not know is not ours to read, so the value's own URN gets
 		// the next turn. Here there is none, and the id is left.
 		name: "identifier-type from another code list falls through",
 		opf: epub3(`    <dc:identifier id="pub-id">12345</dc:identifier>
-    <meta refines="#pub-id" property="identifier-type" scheme="marc:relators">15</meta>
-    <dc:title>T</dc:title>
-    <dc:creator>A</dc:creator>
-    <dc:language>en</dc:language>`),
+    <meta refines="#pub-id" property="identifier-type" scheme="marc:relators">15</meta>`),
 		want: map[string]string{"pub-id": "12345"},
 	}, {
 		// 22 is ONIX's "URN", which says the type is in the value.
 		name: "unrecognised onix code falls through to the urn",
 		opf: epub3(`    <dc:identifier id="pub-id">urn:isbn:9780123456789</dc:identifier>
-    <meta refines="#pub-id" property="identifier-type" scheme="onix:codelist5">22</meta>
-    <dc:title>T</dc:title>
-    <dc:creator>A</dc:creator>
-    <dc:language>en</dc:language>`),
+    <meta refines="#pub-id" property="identifier-type" scheme="onix:codelist5">22</meta>`),
 		want: map[string]string{"isbn": "9780123456789"},
 	}, {
 		// The v2 spelling of the same thing: a scheme of urn says only that the
 		// kind is in the value, so the value's own namespace answers and the
 		// identifier is not keyed under "urn" with the prefix still attached.
 		name: "opf:scheme of urn falls through to the value",
-		opf: epub2(`    <dc:identifier id="BookId" opf:scheme="URN">urn:isbn:9780123456789</dc:identifier>
-    <dc:title>T</dc:title>
-    <dc:creator>A</dc:creator>`),
+		opf:  epub2(`    <dc:identifier id="BookId" opf:scheme="URN">urn:isbn:9780123456789</dc:identifier>`),
 		want: map[string]string{"isbn": "9780123456789"},
 	}, {
 		name: "urn in the value names the scheme",
-		opf: epub3(`    <dc:identifier id="pub-id">urn:uuid:A1B0D67E</dc:identifier>
-    <dc:title>T</dc:title>
-    <dc:creator>A</dc:creator>
-    <dc:language>en</dc:language>`),
+		opf:  epub3(`    <dc:identifier id="pub-id">urn:uuid:A1B0D67E</dc:identifier>`),
 		want: map[string]string{"uuid": "A1B0D67E"},
 	}, {
 		name: "urn: and the NID are case-insensitive, the value is not",
-		opf: epub3(`    <dc:identifier id="pub-id">URN:UUID:A1B0D67E</dc:identifier>
-    <dc:title>T</dc:title>
-    <dc:creator>A</dc:creator>
-    <dc:language>en</dc:language>`),
+		opf:  epub3(`    <dc:identifier id="pub-id">URN:UUID:A1B0D67E</dc:identifier>`),
 		want: map[string]string{"uuid": "A1B0D67E"},
 	}, {
 		// The prefix is only redundant when it repeats the key. Under calibre's
 		// own scheme it is part of what the value says.
 		name: "urn under an unrelated scheme is kept whole",
-		opf: epub2(`    <dc:identifier id="BookId" opf:scheme="calibre">urn:uuid:A1B0D67E</dc:identifier>
-    <dc:title>T</dc:title>
-    <dc:creator>A</dc:creator>`),
+		opf:  epub2(`    <dc:identifier id="BookId" opf:scheme="calibre">urn:uuid:A1B0D67E</dc:identifier>`),
 		want: map[string]string{"calibre": "urn:uuid:A1B0D67E"},
 	}, {
 		name: "nothing names it, so the xml id does",
-		opf: epub3(`    <dc:identifier id="BookId">12345</dc:identifier>
-    <dc:title>T</dc:title>
-    <dc:creator>A</dc:creator>
-    <dc:language>en</dc:language>`),
+		opf:  epub3(`    <dc:identifier id="BookId">12345</dc:identifier>`),
 		want: map[string]string{"bookid": "12345"},
 	}, {
 		// Only the unique-identifier target has to carry an id, so a second
@@ -1048,18 +887,14 @@ func TestIdentifierKeying(t *testing.T) {
 		// identifier all the same.
 		name: "an identifier with no id at all is still carried",
 		opf: epub2(`    <dc:identifier id="BookId" opf:scheme="ISBN">9780123456789</dc:identifier>
-    <dc:identifier>B00X57B4KG</dc:identifier>
-    <dc:title>T</dc:title>
-    <dc:creator>A</dc:creator>`),
+    <dc:identifier>B00X57B4KG</dc:identifier>`),
 		want: map[string]string{"isbn": "9780123456789", "unknown": "B00X57B4KG"},
 	}, {
 		// Numbered rather than sharing one key, so first-wins does not eat the
 		// second: position is all that distinguishes them.
 		name: "two unnamed identifiers are numbered, not dropped",
 		opf: epub2(`    <dc:identifier>B00X57B4KG</dc:identifier>
-    <dc:identifier>12345</dc:identifier>
-    <dc:title>T</dc:title>
-    <dc:creator>A</dc:creator>`),
+    <dc:identifier>12345</dc:identifier>`),
 		want: map[string]string{"unknown": "B00X57B4KG", "unknown-2": "12345"},
 	}, {
 		// ISBN-10 and ISBN-13 are one scheme to us, and only one row can exist.
@@ -1067,28 +902,19 @@ func TestIdentifierKeying(t *testing.T) {
 		opf: epub3(`    <dc:identifier id="isbn13">9780123456789</dc:identifier>
     <meta refines="#isbn13" property="identifier-type" scheme="onix:codelist5">15</meta>
     <dc:identifier id="isbn10">0123456789</dc:identifier>
-    <meta refines="#isbn10" property="identifier-type" scheme="onix:codelist5">02</meta>
-    <dc:title>T</dc:title>
-    <dc:creator>A</dc:creator>
-    <dc:language>en</dc:language>`),
+    <meta refines="#isbn10" property="identifier-type" scheme="onix:codelist5">02</meta>`),
 		want: map[string]string{"isbn": "9780123456789"},
 	}, {
 		name: "an empty identifier is not one",
 		opf: epub3(`    <dc:identifier id="pub-id"></dc:identifier>
-    <dc:identifier id="other">urn:uuid:1234</dc:identifier>
-    <dc:title>T</dc:title>
-    <dc:creator>A</dc:creator>
-    <dc:language>en</dc:language>`),
+    <dc:identifier id="other">urn:uuid:1234</dc:identifier>`),
 		want: map[string]string{"uuid": "1234"},
 	}, {
 		name: "several identifiers, each keyed on its own terms",
 		opf: epub3(`    <dc:identifier id="pub-id">urn:uuid:A1B0D67E</dc:identifier>
     <dc:identifier id="isbn">urn:isbn:9780123456789</dc:identifier>
     <meta refines="#isbn" property="identifier-type" scheme="onix:codelist5">15</meta>
-    <dc:identifier id="mobi-asin">B00X57B4KG</dc:identifier>
-    <dc:title>T</dc:title>
-    <dc:creator>A</dc:creator>
-    <dc:language>en</dc:language>`),
+    <dc:identifier id="mobi-asin">B00X57B4KG</dc:identifier>`),
 		want: map[string]string{
 			"uuid":      "A1B0D67E",
 			"isbn":      "9780123456789",
@@ -1183,11 +1009,7 @@ func TestMetadataDirectionalitySurvives(t *testing.T) {
 // Dublin Core elements ebookfs has no field for are still carried through an
 // edit untouched. Not modelling something is not a licence to drop it.
 func TestUnmodelledMetadataSurvives(t *testing.T) {
-	var opf = epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>Original Title</dc:title>
-    <dc:creator id="c1">Ann Rand</dc:creator>
-    <dc:language>en</dc:language>
-    <dc:subject>Science Fiction</dc:subject>
+	var opf = epub3(`    <dc:subject>Science Fiction</dc:subject>
     <dc:subject>Space Opera</dc:subject>
     <dc:publisher>Acme Press</dc:publisher>
     <dc:rights>All rights reserved.</dc:rights>
@@ -1215,11 +1037,7 @@ func TestUnmodelledMetadataSurvives(t *testing.T) {
 // are defined only "when no scheme is specified" (D.3.4), so a value from
 // someone else's code list is left alone.
 func TestSchemedCollectionTypeSurvivesASeriesEdit(t *testing.T) {
-	path := buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>The Title</dc:title>
-    <dc:creator id="c1">Ann Rand</dc:creator>
-    <dc:language>en</dc:language>
-    <meta property="belongs-to-collection" id="c01">The Trilogy</meta>
+	path := buildEpub(t, epub3(`    <meta property="belongs-to-collection" id="c01">The Trilogy</meta>
     <meta refines="#c01" property="collection-type" scheme="onix:codelist148">12</meta>
     <meta refines="#c01" property="collection-type">series</meta>
     <meta refines="#c01" property="group-position">2</meta>`))
@@ -1296,22 +1114,6 @@ func TestSeriesRenameDoesNotDuplicate(t *testing.T) {
 // Neither spec makes <docTitle> and <docAuthor> track dc:title and dc:creator,
 // so these pin our rule: an edit keeps them in step, and never creates one that
 // was not there.
-
-const ncxOPF = `<?xml version="1.0" encoding="utf-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" xmlns:opf="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="bookid">
-  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:identifier id="bookid">urn:uuid:1234</dc:identifier>
-    <dc:title>Original Title</dc:title>
-    <dc:creator opf:role="aut">Jane Doe</dc:creator>
-    <dc:language>en</dc:language>
-  </metadata>
-  <manifest>
-    <item id="cover-img" href="cover.jpg" media-type="image/jpeg"/>
-    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
-    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
-  </manifest>
-  <spine toc="ncx"><itemref idref="ch1"/></spine>
-</package>`
 
 func ncxWith(body string) string {
 	return `<?xml version="1.0" encoding="utf-8"?>
@@ -1466,10 +1268,7 @@ func TestCDataDescriptionKeepsItsSpelling(t *testing.T) {
 	// Inside a CDATA section &amp; is five literal characters, not an escape,
 	// so this is also the value the reader must report.
 	const value = `<p>Fancy &amp; <b>bold</b></p>`
-	path := buildEpub(t, epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>Original Title</dc:title>
-    <dc:creator>Jane Doe</dc:creator>
-    <dc:language>en</dc:language>
+	path := buildEpub(t, epub3(`    <dc:creator>Jane Doe</dc:creator>
     <dc:description><![CDATA[`+value+`]]></dc:description>`))
 
 	title := "New Title"
@@ -1492,11 +1291,8 @@ func TestCDataDescriptionKeepsItsSpelling(t *testing.T) {
 // The fixture is §5.5.3.1.2's own example. The second element is another segment
 // of the same title, so replacing the title has to take it too.
 
-var opfMultipartTitle = epub3(`    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>
-    <dc:title>THE LORD OF THE RINGS</dc:title>
-    <dc:title>Part One: The Fellowship of the Ring</dc:title>
-    <dc:creator id="c1">Ann Rand</dc:creator>
-    <dc:language>en</dc:language>`)
+var opfMultipartTitle = epub3(`    <dc:title>THE LORD OF THE RINGS</dc:title>
+    <dc:title>Part One: The Fellowship of the Ring</dc:title>`)
 
 func TestTitleEditTakesTheOtherSegments(t *testing.T) {
 	path := buildEpub(t, opfMultipartTitle)

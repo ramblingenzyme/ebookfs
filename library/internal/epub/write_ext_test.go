@@ -399,12 +399,7 @@ func TestWriteBibBlankTitleRejected(t *testing.T) {
 }
 
 func TestWriteBibRefusesEncryptedOPF(t *testing.T) {
-	enc := `<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" xmlns:enc="http://www.w3.org/2001/04/xmlenc#">
-  <enc:EncryptedData>
-    <enc:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes256-cbc"/>
-    <enc:CipherData><enc:CipherReference URI="OEBPS/content.opf"/></enc:CipherData>
-  </enc:EncryptedData>
-</encryption>`
+	enc := encryptionXML(aes256, "OEBPS/content.opf")
 	path := writeEpub(t, baseEntries(opf3, entry{name: "META-INF/encryption.xml", data: []byte(enc)}))
 	if _, err := writeBib(path, edits.Edits{Title: new("Hack")}); err == nil {
 		t.Fatal("expected refusal on encrypted OPF, got nil")
@@ -415,18 +410,8 @@ func TestWriteBibRefusesEncryptedOPF(t *testing.T) {
 // "OEBPS/my%20book.opf". Undecoded, the map is keyed by a name no entry has and
 // the edit rewrites a genuinely encrypted package document.
 func TestWriteBibRefusesEncryptedOPFDeclaredAsAURL(t *testing.T) {
-	const container = `<?xml version="1.0"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-  <rootfiles>
-    <rootfile full-path="OEBPS/my%20book.opf" media-type="application/oebps-package+xml"/>
-  </rootfiles>
-</container>`
-	enc := `<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" xmlns:enc="http://www.w3.org/2001/04/xmlenc#">
-  <enc:EncryptedData>
-    <enc:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes256-cbc"/>
-    <enc:CipherData><enc:CipherReference URI="OEBPS/my%20book.opf"/></enc:CipherData>
-  </enc:EncryptedData>
-</encryption>`
+	container := containerFor("OEBPS/my%20book.opf", packageMediaType)
+	enc := encryptionXML(aes256, "OEBPS/my%20book.opf")
 
 	path := writeEpub(t, []entry{
 		{name: mimetypePath, data: []byte(mimetypeValue), store: true},
@@ -446,14 +431,7 @@ func TestWriteBibRefusesEncryptedOPFDeclaredAsAURL(t *testing.T) {
 // still read as font obfuscation, a wrapped URI must still identify the entry.
 func TestEncryptionAttributesAreCollapsed(t *testing.T) {
 	t.Run("wrapped obfuscation algorithm still allows the edit", func(t *testing.T) {
-		enc := `<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" xmlns:enc="http://www.w3.org/2001/04/xmlenc#">
-  <enc:EncryptedData>
-    <enc:EncryptionMethod Algorithm="
-        http://www.idpf.org/2008/embedding
-      "/>
-    <enc:CipherData><enc:CipherReference URI="OEBPS/fonts/x.otf"/></enc:CipherData>
-  </enc:EncryptedData>
-</encryption>`
+		enc := encryptionXML(wrapped(fontObfusc), "OEBPS/fonts/x.otf")
 		path := writeEpub(t, baseEntries(opf3,
 			entry{name: "META-INF/encryption.xml", data: []byte(enc)},
 			entry{name: "OEBPS/fonts/x.otf", data: []byte("obfuscated")},
@@ -464,14 +442,7 @@ func TestEncryptionAttributesAreCollapsed(t *testing.T) {
 	})
 
 	t.Run("wrapped URI still identifies the encrypted OPF", func(t *testing.T) {
-		enc := `<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" xmlns:enc="http://www.w3.org/2001/04/xmlenc#">
-  <enc:EncryptedData>
-    <enc:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes256-cbc"/>
-    <enc:CipherData><enc:CipherReference URI="
-        OEBPS/content.opf
-      "/></enc:CipherData>
-  </enc:EncryptedData>
-</encryption>`
+		enc := encryptionXML(aes256, wrapped("OEBPS/content.opf"))
 		path := writeEpub(t, baseEntries(opf3, entry{name: "META-INF/encryption.xml", data: []byte(enc)}))
 		if _, err := epub.Rewrite(path, book(t, path), edits.Edits{Title: new("Hack")}); err == nil {
 			t.Error("edited an encrypted OPF whose URI was wrapped")
@@ -483,18 +454,8 @@ func TestEncryptionAttributesAreCollapsed(t *testing.T) {
 // encryption.xml and the zip has an entry whose name really contains "%20", so
 // the decoded form matches nothing and an encrypted entry reads as readable.
 func TestWriteBibRefusesEncryptedEntryNamedLiterally(t *testing.T) {
-	const container = `<?xml version="1.0"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-  <rootfiles>
-    <rootfile full-path="OEBPS/a%20b.opf" media-type="application/oebps-package+xml"/>
-  </rootfiles>
-</container>`
-	enc := `<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" xmlns:enc="http://www.w3.org/2001/04/xmlenc#">
-  <enc:EncryptedData>
-    <enc:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes256-cbc"/>
-    <enc:CipherData><enc:CipherReference URI="OEBPS/a%20b.opf"/></enc:CipherData>
-  </enc:EncryptedData>
-</encryption>`
+	container := containerFor("OEBPS/a%20b.opf", packageMediaType)
+	enc := encryptionXML(aes256, "OEBPS/a%20b.opf")
 
 	// The entry name contains the percent-encoding literally, so the raw value is
 	// what matches and the decoded one does not.
@@ -514,12 +475,7 @@ func TestWriteBibRefusesEncryptedEntryNamedLiterally(t *testing.T) {
 
 func TestWriteBibAllowsFontObfuscation(t *testing.T) {
 	// Font obfuscation looks like encryption but must not block metadata edits.
-	enc := `<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" xmlns:enc="http://www.w3.org/2001/04/xmlenc#">
-  <enc:EncryptedData>
-    <enc:EncryptionMethod Algorithm="http://www.idpf.org/2008/embedding"/>
-    <enc:CipherData><enc:CipherReference URI="OEBPS/fonts/x.otf"/></enc:CipherData>
-  </enc:EncryptedData>
-</encryption>`
+	enc := encryptionXML(fontObfusc, "OEBPS/fonts/x.otf")
 	entries := baseEntries(opf3,
 		entry{name: "META-INF/encryption.xml", data: []byte(enc)},
 		entry{name: "OEBPS/fonts/x.otf", data: []byte("obfuscated-font")},
@@ -637,12 +593,7 @@ func TestWriteCoverReplaces(t *testing.T) {
 }
 
 func TestWriteCoverRefusesEncrypted(t *testing.T) {
-	enc := `<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" xmlns:enc="http://www.w3.org/2001/04/xmlenc#">
-  <enc:EncryptedData>
-    <enc:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes256-cbc"/>
-    <enc:CipherData><enc:CipherReference URI="OEBPS/cover.jpg"/></enc:CipherData>
-  </enc:EncryptedData>
-</encryption>`
+	enc := encryptionXML(aes256, "OEBPS/cover.jpg")
 	path := writeEpub(t, baseEntries(opf3, entry{name: "META-INF/encryption.xml", data: []byte(enc)}))
 	if _, err := writeCover(path, "OEBPS/cover.jpg", tinyJPEG(t)); err == nil {
 		t.Fatal("expected refusal on encrypted cover, got nil")
@@ -1089,18 +1040,6 @@ func jpegSized(t *testing.T, w, h int) []byte {
 	}
 	return buf.Bytes()
 }
-
-// The shape calibre and Sigil both produce.
-const svgCoverPage = `<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head><title>Cover</title></head>
-<body style="margin:0">
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="100%" height="100%" viewBox="0 0 600 800" preserveAspectRatio="xMidYMid meet">
-  <image width="600" height="800" xlink:href="cover.jpg"/>
-</svg>
-</body>
-</html>`
 
 // coverPageOPF reaches cover.xhtml by exactly one pointer, so a test says which
 // it exercises: first names the spine's opening document, guide adds the
