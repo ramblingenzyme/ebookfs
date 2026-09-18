@@ -60,7 +60,7 @@ repeating it is noise. Open on the fact instead:
 
 Length follows from how many facts survive the test below, not from a cap. A
 comment carrying four consequences is four facts long, and the spec tests in
-library/internal/epub are right to run past ten lines: each names a consequence,
+epub are right to run past ten lines: each names a consequence,
 a spec ambiguity, or a deliberate narrowing that the code cannot state. Padding
 is wrong at any length, and a cap would cut the wrong end first. Reasoning that
 spans packages belongs in DECISIONS.md with a pointer from the code.

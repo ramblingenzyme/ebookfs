@@ -178,10 +178,12 @@ Currently `library/` lives inside the `ebookfs` Go module. For third-party front
 
 **Open questions:**
 - Should `library/` be extracted to a separate repository (e.g. `github.com/ramblingenzyme/ebookfs-library`) or remain in a subdirectory with its own `go.mod` (monorepo with multi-module workspace)?
-- Does the `library/internal/` tree stay internal, or should some packages (epub parsing, store) become public?
+- Does the rest of the `library/internal/` tree stay internal, or should `store` become public? The epub half of this is answered: `epub/` is a public package at the repo root, and `library/internal/epub` is the adapter that translates it to the library's model.
 - How do versioning and release cadence interact with the main `ebookfs` binary?
 
 **Likely path:** Keep `library/` in the same repository with its own `go.mod` in the `library/` directory. The main module's `go.mod` uses a `replace` directive to point at the local copy during development. This avoids splitting repos while giving `library/` its own version tags.
+
+`epub/` complicates that. It sits at the repo root, and `library/internal/epub` imports it — so a `library/go.mod` would have the library module depending on the parent. Either `epub/` takes a third `go.mod` of its own, which suits a package that imports nothing of ebookfs, or it moves under `library/` when the split happens. The test corpus is the second question: `internal/epubtest` serves both suites and lives in the main module, so `epub/` as a separate module could not build its own tests without moving that too.
 
 ### 9. Non-goals for V2
 
