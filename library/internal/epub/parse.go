@@ -1,88 +1,72 @@
 package epub
 
 import (
-	"archive/zip"
 	"errors"
-	"path"
 
+	epubfile "github.com/ramblingenzyme/ebookfs/epub"
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf"
 )
 
+// Parse reads the epub's metadata into the Bib the library indexes.
 func Parse(bpath string) (*book.Bib, error) {
-	r, err := zip.OpenReader(bpath)
-	if err != nil {
-		return nil, notEpub(bpath, err)
-	}
-	defer r.Close()
-
-	a, err := openArchive(&r.Reader)
+	b, err := epubfile.Open(bpath)
 	if err != nil {
 		return nil, err
 	}
-	if err := a.validate(); err != nil {
-		return nil, err
-	}
-
-	opfBytes, err := a.read(a.opf)
-	if err != nil {
-		return nil, err
-	}
-	doc, err := opf.Parse(opfBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	bib, err := translate(doc.Metadata(path.Dir(a.opf)))
-	if err != nil {
-		return nil, err
-	}
-
-	// From the zip central directory, so nothing is decompressed. The epub's own
-	// size is left to the library, which stats it for drift detection anyway.
-	bib.OpfSize = a.size(a.opf)
-	if bib.CoverPath != "" {
-		bib.CoverSize = a.size(bib.CoverPath)
-	}
-
-	return bib, nil
+	defer b.Close()
+	return bib(b)
 }
 
-// translate turns the package document's own reading of itself into the Bib
-// ebookfs indexes, applying the two rules that are ebookfs's rather than the
-// format's: a book must be usable, and a malformed series position must still
-// display.
-func translate(m opf.Metadata) (*book.Bib, error) {
-	// ebookfs builds every path from the title and the authors, so a book
-	// missing either cannot be filed. The file is free to omit them.
-	if m.Title == "" {
-		return nil, errors.New("no title")
-	}
-	if len(m.Authors) == 0 {
-		return nil, errors.New("no authors")
+// bib turns what the file says about itself into the Bib ebookfs indexes,
+// applying the two rules that are ebookfs's rather than the format's: a book
+// must be usable, and a malformed series position must still display.
+func bib(b *epubfile.Book) (*book.Bib, error) {
+	if err := usable(b); err != nil {
+		return nil, err
 	}
 
 	bib := &book.Bib{
-		Title:       m.Title,
-		SortTitle:   m.SortTitle,
-		Description: m.Description,
-		Language:    m.Language,
-		Pubdate:     m.Pubdate,
-		Identifiers: m.Identifiers,
-		CoverPath:   m.CoverPath,
+		Title:       b.Title,
+		SortTitle:   b.SortTitle,
+		Description: b.Description,
+		Language:    b.Language,
+		Pubdate:     b.Pubdate(),
+		Identifiers: b.Identifiers(),
+		CoverPath:   b.CoverPath(),
+		// From the zip central directory, so nothing is decompressed. The
+		// epub's own size is left to the library, which stats it for drift
+		// detection anyway.
+		OpfSize: b.Size(b.PackagePath()),
 	}
-	for _, a := range m.Authors {
+	for _, a := range b.Authors {
 		bib.Authors = append(bib.Authors, book.Author{Name: a.Name, SortName: a.SortName})
 	}
-	if m.Series != nil {
+	if bib.CoverPath != "" {
+		bib.CoverSize = b.Size(bib.CoverPath)
+	}
+	if b.Series != nil {
 		// Defaulted on the way in, not in the document, so a rewrite cannot
 		// write it back.
-		index := m.Series.Index
+		index := b.Series.Index
 		if !edits.ValidSeriesIndex(index) {
 			index = "1"
 		}
-		bib.Series = &book.SeriesRef{Name: m.Series.Name, Index: index}
+		bib.Series = &book.SeriesRef{Name: b.Series.Name, Index: index}
 	}
 	return bib, nil
+}
+
+// usable reports whether the book can be filed. ebookfs builds every path from
+// the title and the authors, so a book missing either has nowhere to live; the
+// epub package reports both as the file states them, because an epub is free to
+// omit them.
+func usable(b *epubfile.Book) error {
+	if b.Title == "" {
+		return errors.New("no title")
+	}
+	if len(b.Authors) == 0 {
+		return errors.New("no authors")
+	}
+	return nil
 }

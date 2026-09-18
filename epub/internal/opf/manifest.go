@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/xml"
+	"github.com/ramblingenzyme/ebookfs/epub/internal/xml"
 )
 
 // The two things read out of the manifest that are not fields: where the NCX

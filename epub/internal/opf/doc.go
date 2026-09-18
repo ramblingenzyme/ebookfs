@@ -26,7 +26,7 @@ import (
 	"bytes"
 	"time"
 
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf/pkgdoc"
+	"github.com/ramblingenzyme/ebookfs/epub/internal/opf/pkgdoc"
 )
 
 // Author is a creator this package owns: one carrying the "aut" MARC relator,

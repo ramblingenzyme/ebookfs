@@ -3,7 +3,7 @@ package opf
 import (
 	"slices"
 
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf/pkgdoc"
+	"github.com/ramblingenzyme/ebookfs/epub/internal/opf/pkgdoc"
 )
 
 type authorsField struct{ d *pkgdoc.Doc }

@@ -1,14 +1,20 @@
 package epub
 
 import (
-	"archive/zip"
-	"errors"
-	"fmt"
 	"io"
-	"os"
+
+	epubfile "github.com/ramblingenzyme/ebookfs/epub"
 )
 
-var ErrClosed = errors.New("epub reader is closed")
+// Re-exported so the library's callers need not import the epub package to
+// name an error this one returns.
+var (
+	ErrClosed          = epubfile.ErrClosed
+	ErrContainer       = epubfile.ErrContainer
+	ErrNoRootfile      = epubfile.ErrNoRootfile
+	ErrRootfileMissing = epubfile.ErrRootfileMissing
+	ErrNotEpub         = epubfile.ErrNotEpub
+)
 
 // EpubReader provides access to a book's epub content from an open handle.
 // The handle keeps the file and zip central directory open so repeated calls
@@ -28,18 +34,16 @@ type EpubReader interface {
 	Cover() ([]byte, error) // cover image from the open epub
 }
 
-// Reader provides random access to an epub's contents through a single open
-// file handle. The underlying *os.File and zip.Reader stay open, so repeated
-// calls to OPF or Cover avoid re-reading the zip central directory.
+// Reader is an open epub, plus the cover path the index holds for it.
 //
-// Reader satisfies EpubReader (io.ReaderAt + io.Closer + OPF + Cover).
+// The path comes from outside because the epub package resolves it only when it
+// parses the package document, and this handle deliberately does not: it serves
+// the 9P read path, where every request would otherwise pay for an XML parse.
+// The index already recorded the path at ingest, so the parse is redundant as
+// well as expensive.
 type Reader struct {
-	f *os.File
-	// a indexes the entries and holds the resolved package document path. The
-	// same seam Parse and Rewrite use, so all three resolve an entry alike.
-	a         *archive
+	*epubfile.File
 	coverPath string // zip-relative path to cover image; empty if none
-	closed    bool   // true after Close; accessors return ErrClosed
 }
 
 // OpenReader opens the epub at epubPath and reads the zip central directory.
@@ -47,66 +51,27 @@ type Reader struct {
 // it may be empty. The returned reader keeps the file open; the caller must call
 // Close. The reader is non-nil iff err is nil.
 func OpenReader(epubPath, coverPath string) (EpubReader, error) {
-	f, err := os.Open(epubPath)
+	f, err := epubfile.OpenFile(epubPath)
 	if err != nil {
 		return nil, err
 	}
-	fi, err := f.Stat()
-	if err != nil {
-		f.Close()
-		return nil, err
-	}
-	zr, err := zip.NewReader(f, fi.Size())
-	if err != nil {
-		f.Close()
-		return nil, notEpub(epubPath, err)
-	}
-	a, err := openArchive(zr)
-	if err != nil {
-		f.Close()
-		return nil, err
-	}
-	if err := a.validate(); err != nil {
-		f.Close()
-		return nil, err
-	}
-	return &Reader{f: f, a: a, coverPath: coverPath}, nil
-}
-
-// ReadAt implements io.ReaderAt on the raw epub bytes.
-func (r *Reader) ReadAt(p []byte, off int64) (int, error) {
-	if r.closed {
-		return 0, ErrClosed
-	}
-	return r.f.ReadAt(p, off)
-}
-
-// Close releases the underlying file. The zip.Reader becomes invalid.
-// It is safe to call multiple times — subsequent calls return ErrClosed.
-func (r *Reader) Close() error {
-	if r.closed {
-		return ErrClosed
-	}
-	r.closed = true
-	return r.f.Close()
+	return &Reader{File: f, coverPath: coverPath}, nil
 }
 
 // OPF returns the raw OPF XML bytes, decompressing the entry on demand.
-func (r *Reader) OPF() ([]byte, error) {
-	if r.closed {
-		return nil, ErrClosed
-	}
-	return r.a.read(r.a.opf)
-}
+func (r *Reader) OPF() ([]byte, error) { return r.ReadEntry(r.PackagePath()) }
 
 // Cover returns the cover image bytes from the already-open zip. When coverPath
 // is empty (no cover in the epub) Cover returns an error.
+//
+// Closed is checked first so every accessor reports a use-after-close alike; a
+// book with no cover is otherwise indistinguishable from a handle that is gone.
 func (r *Reader) Cover() ([]byte, error) {
-	if r.closed {
-		return nil, ErrClosed
+	if r.Closed() {
+		return nil, epubfile.ErrClosed
 	}
 	if r.coverPath == "" {
-		return nil, fmt.Errorf("no cover in epub")
+		return nil, epubfile.ErrNoCover
 	}
-	return r.a.read(r.coverPath)
+	return r.ReadEntry(r.coverPath)
 }

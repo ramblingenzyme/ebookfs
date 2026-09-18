@@ -4,7 +4,7 @@ import (
 	"encoding/xml"
 	"io"
 
-	epubxml "github.com/ramblingenzyme/ebookfs/library/internal/epub/xml"
+	epubxml "github.com/ramblingenzyme/ebookfs/epub/internal/xml"
 )
 
 // Reading META-INF/container.xml, which says where the package document is.

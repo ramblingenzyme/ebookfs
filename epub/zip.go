@@ -7,7 +7,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/ocf"
+	"github.com/ramblingenzyme/ebookfs/epub/internal/ocf"
 )
 
 var (

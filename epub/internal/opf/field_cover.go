@@ -3,7 +3,7 @@ package opf
 import (
 	"strings"
 
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/xml"
+	"github.com/ramblingenzyme/ebookfs/epub/internal/xml"
 )
 
 // isRasterCoverType rejects markup "cover pages" the way calibre does: an empty

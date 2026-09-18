@@ -3,8 +3,8 @@ package opf
 import (
 	"strings"
 
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf/pkgdoc"
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/xml"
+	"github.com/ramblingenzyme/ebookfs/epub/internal/opf/pkgdoc"
+	"github.com/ramblingenzyme/ebookfs/epub/internal/xml"
 )
 
 const (

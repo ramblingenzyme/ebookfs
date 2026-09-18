@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	epubxml "github.com/ramblingenzyme/ebookfs/library/internal/epub/xml"
+	epubxml "github.com/ramblingenzyme/ebookfs/epub/internal/xml"
 )
 
 // Reading META-INF/encryption.xml, which covers two unrelated things spelled

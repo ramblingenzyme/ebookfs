@@ -1,24 +1,9 @@
 package epub
 
 import (
-	"archive/zip"
-	"bytes"
-	"fmt"
-	"image"
-	_ "image/jpeg" // register JPEG decoder for image.DecodeConfig
-	_ "image/png"  // register PNG decoder for image.DecodeConfig
-	"log/slog"
-	"os"
-	"path"
-	"path/filepath"
-	"strings"
-
+	epubfile "github.com/ramblingenzyme/ebookfs/epub"
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/content"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/ncx"
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/ocf"
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf"
 )
 
 // Rewrite applies e to the epub at epubPath atomically. Every refusal runs
@@ -27,7 +12,7 @@ import (
 // returned untouched.
 //
 // An edit asking for what the file already says skips the zip rebuild but is
-// still re-parsed, and refusals apply before that is known.
+// still re-read, and refusals apply before that is known.
 //
 // b is used only for validation and to locate the cover entry; its EpubPath is
 // not read, so this package never resolves against the store root.
@@ -42,129 +27,85 @@ func Rewrite(epubPath string, b *book.Book, e edits.Edits) (book.Bib, error) {
 		return book.Bib{}, v
 	}
 
-	zrc, err := zip.OpenReader(epubPath)
+	f, err := epubfile.Open(epubPath)
 	if err != nil {
-		return book.Bib{}, notEpub(epubPath, err)
+		return book.Bib{}, err
 	}
-	defer zrc.Close()
+	defer f.Close()
 
-	a, err := openArchive(&zrc.Reader)
-	if err != nil {
-		return book.Bib{}, err
-	}
-	if err := a.validate(); err != nil {
-		return book.Bib{}, err
-	}
-
-	replace, err := createReplace(a, b, e)
-	if err != nil {
-		return book.Bib{}, err
-	}
-	// Nothing to write, but the file is still re-read rather than trusting the
-	// Bib the caller handed in: library.Edit builds that from the index, which
-	// can disagree with the epub, and an edit is an occasion to reconcile it.
-	// Only the zip rebuild is skipped.
-	if len(replace) == 0 {
-		bib, err := Parse(epubPath)
-		if err != nil {
+	if e.HasCoverEdit() {
+		if err := f.SetCover(*e.Cover); err != nil {
 			return book.Bib{}, err
 		}
-		return *bib, nil
+	}
+	if e.HasBibEdits() {
+		apply(f, e)
+		// Before the write, not after it: the epub package has no opinion on a
+		// book with no title, so an edit that leaves one — a sort title written
+		// against a package carrying no dc:title mints an empty one — would
+		// otherwise be caught only once the original had been replaced.
+		if err := usable(f); err != nil {
+			return book.Bib{}, err
+		}
+	}
+	if err := f.Save(); err != nil {
+		return book.Bib{}, err
 	}
 
-	bib, err := rewriteEpub(epubPath, a, replace)
+	// Read back from the file rather than trusting the Bib the caller handed
+	// in: library.Edit builds that from the index, which can disagree with the
+	// epub, and an edit is an occasion to reconcile it. Save leaves the Book
+	// reading the rewritten file, so this costs no second parse.
+	bib, err := bib(f)
 	if err != nil {
 		return book.Bib{}, err
 	}
 	return *bib, nil
 }
 
-func createReplace(a *archive, b *book.Book, e edits.Edits) (map[string][]byte, error) {
-	// Before any other refusal: it does not depend on which entries the edit
-	// turns out to touch. DECISIONS.md #23 says why it is not narrowed to them.
-	if a.has(ocf.SignaturesPath) {
-		return nil, fmt.Errorf("refusing to edit: the epub is signed (%s) and an edit would invalidate the signature", ocf.SignaturesPath)
+// apply assigns the fields e names. Unwrapping the pointers is Edits' business,
+// not the book's: a nil means the edit did not name the field, which is an
+// encoding this package chose.
+func apply(f *epubfile.Book, e edits.Edits) {
+	if e.Title != nil {
+		f.Title = *e.Title
+		// A retitled book drops the sort title it carried, which was derived
+		// from the old title. Stated here rather than hidden in a setter,
+		// because it is ebookfs's rule and not the format's.
+		f.SortTitle = ""
 	}
-
-	enc, err := a.readEncryption()
-	if err != nil {
-		return nil, err
+	if e.SortTitle != nil {
+		f.SortTitle = *e.SortTitle
 	}
-	// Parsed whichever edit this is: a cover edit needs it to find the cover page.
-	opfBytes, err := a.read(a.opf)
-	if err != nil {
-		return nil, err
-	}
-	pkg, err := opf.Parse(opfBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	replace := make(map[string][]byte, 3)
-
-	if e.HasCoverEdit() {
-		if err := replaceCover(a, pkg, enc, b, e, replace); err != nil {
-			return nil, err
-		}
-	}
-
-	if e.HasBibEdits() {
-		if enc.IsEncrypted(a.opf) {
-			return nil, fmt.Errorf("refusing to edit: package document %q is encrypted", a.opf)
-		}
-		// An edit asking for what the file already says leaves no entry to
-		// replace, which is what lets Rewrite skip the rewrite entirely.
-		if pkg.Apply(func(d *opf.Doc) { applyBib(d, e) }) {
-			newOPF, err := pkg.Bytes()
-			if err != nil {
-				return nil, err
-			}
-			replace[a.opf] = newOPF
-		}
-
-		if err := replaceNCX(a, pkg, enc, e, replace); err != nil {
-			return nil, err
-		}
-	}
-
-	return replace, nil
-}
-
-// applyBib drives the package document's setters from e. Unwrapping the
-// pointers is Edits' business, not the document's: a nil means the edit did not
-// name the field, which is an encoding this package chose.
-func applyBib(d *opf.Doc, e edits.Edits) {
-	d.SetTitle(e.Title, e.SortTitle)
-
 	if e.Description != nil {
-		d.SetDescription(*e.Description)
+		f.Description = *e.Description
 	}
 	if e.Language != nil {
-		d.SetLanguage(*e.Language)
+		f.Language = *e.Language
 	}
 	if e.Authors != nil {
-		d.SetAuthors(authors(*e.Authors))
+		f.Authors = authors(*e.Authors)
 	}
 	if e.Series != nil || e.SeriesIndex != nil {
-		d.SetSeries(series(d.Series(), e))
+		f.Series = series(f.Series, e)
 	}
 }
 
-func authors(as []book.Author) []opf.Author {
-	out := make([]opf.Author, len(as))
+func authors(as []book.Author) []epubfile.Author {
+	out := make([]epubfile.Author, len(as))
 	for i, a := range as {
-		out[i] = opf.Author{Name: a.Name, SortName: a.SortName}
+		out[i] = epubfile.Author{Name: a.Name, SortName: a.SortName}
 	}
 	return out
 }
 
-// series folds a half-named series edit onto the membership the document
-// records, and returns nil for one to clear. cur is what a reader was shown, so
-// an index-only edit moves the book the reader saw rather than inventing a
+// series folds a half-named series edit onto the membership the file records,
+// and returns nil for one to clear. cur is what a reader was shown, so an
+// index-only edit moves the book the reader saw rather than inventing a
 // collection — and a book in no series has no position to set, so the edit is
-// dropped rather than minting an empty collection.
-func series(cur *opf.Series, e edits.Edits) *opf.Series {
-	s := opf.Series{}
+// dropped rather than minting an empty one.
+func series(cur *epubfile.Series, e edits.Edits) *epubfile.Series {
+	s := epubfile.Series{}
 	if cur != nil {
 		s = *cur
 	}
@@ -178,163 +119,4 @@ func series(cur *opf.Series, e edits.Edits) *opf.Series {
 		return nil
 	}
 	return &s
-}
-
-// replaceCover swaps the cover image entry in place and in the same format, so
-// the manifest, the cover-image property and the legacy <meta name="cover">
-// keep pointing at what they already did.
-func replaceCover(a *archive, pkg *opf.Doc, enc *ocf.EncryptionInfo, b *book.Book, e edits.Edits, replace map[string][]byte) error {
-	want := coverFormat(b.CoverPath)
-	if want == "" {
-		return fmt.Errorf("cover format not replaceable in place: %s", b.CoverPath)
-	}
-	cfg, got, err := image.DecodeConfig(bytes.NewReader(*e.Cover))
-	if err != nil {
-		return fmt.Errorf("cover data is not a valid PNG or JPEG image: %w", err)
-	}
-	if got != want {
-		return fmt.Errorf("cover image is %s but the epub's cover entry %q is %s; a matching format is required (no transcoding)", got, b.CoverPath, want)
-	}
-	if !a.has(b.CoverPath) {
-		return fmt.Errorf("cover not found in epub: %s", b.CoverPath)
-	}
-	if enc.IsEncrypted(b.CoverPath) {
-		return fmt.Errorf("refusing to replace encrypted cover: %s", b.CoverPath)
-	}
-	replace[b.CoverPath] = *e.Cover
-
-	return replaceCoverPage(a, pkg, enc, b.CoverPath, cfg.Width, cfg.Height, replace)
-}
-
-// replaceCoverPage refits the page displaying the cover; package content says
-// why. A candidate from opf is confirmed by finding the cover image inside it,
-// so an unreadable one is skipped silently — it was never confirmed to be the
-// cover page.
-func replaceCoverPage(a *archive, pkg *opf.Doc, enc *ocf.EncryptionInfo, coverPath string, width, height int, replace map[string][]byte) error {
-	for _, entry := range pkg.CoverPages(path.Dir(a.opf)) {
-		if !a.has(entry) || enc.IsEncrypted(entry) {
-			continue
-		}
-		data, err := a.read(entry)
-		if err != nil {
-			return err
-		}
-		doc, err := content.Parse(data, entry)
-		if err != nil {
-			continue
-		}
-		if doc.FitCover(coverPath, width, height) {
-			out, err := doc.Bytes()
-			if err != nil {
-				return err
-			}
-			replace[entry] = out
-			return nil
-		}
-	}
-	return nil
-}
-
-// coverFormat maps a cover entry's path to the image.DecodeConfig format name
-// that may replace it in place, or "" for anything outside calibre's png/jpg/jpeg
-// restriction.
-func coverFormat(coverPath string) string {
-	switch strings.ToLower(path.Ext(coverPath)) {
-	case ".jpg", ".jpeg":
-		return "jpeg"
-	case ".png":
-		return "png"
-	default:
-		return ""
-	}
-}
-
-// rewriteEpub writes a temp epub beside epubPath with the named entries swapped,
-// then renames it over the original. The temp file is cleaned up on any failure.
-//
-// Faithfulness rules, matching what calibre's safe_replace honours:
-//   - mimetype is written first and copied byte-for-byte, keeping its STORED
-//     form so magic-byte sniffers still recognise the file;
-//   - untouched entries are copied raw, preserving order, modtime and method;
-//   - every key in replace must match an entry, so a mistargeted edit fails
-//     loudly rather than silently dropping.
-func rewriteEpub(epubPath string, a *archive, replace map[string][]byte) (*book.Bib, error) {
-	dir := filepath.Dir(epubPath)
-	tmp, err := os.CreateTemp(dir, ".ebookfs-*.epub.tmp")
-	if err != nil {
-		return nil, err
-	}
-
-	tmpPath := tmp.Name()
-	defer os.Remove(tmpPath)
-	defer tmp.Close()
-
-	zw := zip.NewWriter(tmp)
-	if err := a.writeTo(zw, replace); err != nil {
-		return nil, err
-	}
-
-	if err := zw.Close(); err != nil {
-		return nil, err
-	}
-	if err := tmp.Sync(); err != nil {
-		return nil, err
-	}
-	if err := tmp.Close(); err != nil {
-		return nil, err
-	}
-
-	// Verify by re-parsing before we touch the original. A blanked title, dropped
-	// authors, or any structural breakage fails here and the original survives.
-	book, err := Parse(tmpPath)
-	if err != nil {
-		return nil, fmt.Errorf("rewritten epub failed validation: %w", err)
-	}
-
-	return book, os.Rename(tmpPath, epubPath)
-}
-
-// replaceNCX adds the rewritten NCX to replace, when the package declares one
-// and the edit touches a field it carries; package ncx says why.
-//
-// An NCX that cannot be read — encrypted, or malformed — is skipped rather than
-// failing the edit. The package document is the metadata of record, and
-// refusing would leave a book that arrived with an unreadable NCX permanently
-// unrenameable.
-func replaceNCX(a *archive, pkg *opf.Doc, enc *ocf.EncryptionInfo, e edits.Edits, replace map[string][]byte) error {
-	if e.Title == nil && e.Authors == nil {
-		return nil
-	}
-	entry := pkg.NCXPath(path.Dir(a.opf))
-	if entry == "" || !a.has(entry) || enc.IsEncrypted(entry) {
-		return nil
-	}
-
-	data, err := a.read(entry)
-	if err != nil {
-		return err
-	}
-	// Logged rather than returned: the edit succeeds, and nothing else reports
-	// that half of what the book says about itself is now stale.
-	doc, err := ncx.Parse(data)
-	if err != nil {
-		slog.Warn("epub: skipping unreadable NCX; its title and authors will not match the package document",
-			"entry", entry, "error", err)
-		return nil
-	}
-	var names []string
-	if e.Authors != nil {
-		names = make([]string, len(*e.Authors))
-		for i, a := range *e.Authors {
-			names[i] = a.Name
-		}
-	}
-	if doc.Apply(e.Title, names) {
-		out, err := doc.Bytes()
-		if err != nil {
-			return err
-		}
-		replace[entry] = out
-	}
-	return nil
 }
