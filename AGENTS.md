@@ -31,6 +31,16 @@ Not for: restating the name or the line below it; history, which git already
 holds; conventions that live in this file; the author's reasoning about where
 to put the code.
 
+Cite, don't paraphrase. Name the section, `§5.5.3.1.2`, `D.3.7`, `OPF 2.0
+§2.6`, and quote at most one clause, only where the exact wording is what the
+code turns on. Do not restate the spec's argument in your own words; the reader
+can open `specs/`.
+
+Say it once. A rule belongs in one place, usually the function that enforces
+it. Other sites point at it ("package ncx says why"). Repeating a rationale
+across a package doc, a method, its caller and its test is four places to
+update and three places to go stale.
+
 History has one legitimate form. A regression test may name the defect it
 guards, because that is why the test exists and git will not surface it to
 someone reading the file. "It used to be a path lookup, which missed a book
@@ -55,6 +65,9 @@ a spec ambiguity, or a deliberate narrowing that the code cannot state. Padding
 is wrong at any length, and a cap would cut the wrong end first. Reasoning that
 spans packages belongs in DECISIONS.md with a pointer from the code.
 
+Where a test asserts something the specs do not require, say which half is
+ours. The existing spec tests do this and it is worth keeping.
+
 In those spec tests the section number and the verbatim quote are the part that
 must survive. They let a reader check the assertion against the spec without
 leaving the file. Cut the prose around them, never them.
@@ -70,7 +83,9 @@ something important: "recording one would force a full reindex on every
 startup" beats "this matters".
 
 Explaining a choice means naming the alternative that was rejected and why it
-lost. No hedging, no asides, nothing addressed to one reader at one moment.
+lost. A rejected alternative gets a clause, not a paragraph: "…rather than X,
+which would Y" is the whole form. No hedging, no asides, nothing addressed to
+one reader at one moment.
 
 Name the thing doing the acting, and keep subject and verb together. An
 abstract summary noun standing in for a subject reads worse than a plain
@@ -95,6 +110,11 @@ Mechanics that keep it plain:
   - No decayed words: robust, seamless, dynamic, innovative, leverage as a
     verb. They carry no information.
   - No closing recap. If the last sentence restates the comment, delete it.
+  - No flourishes. Cut aphorisms, and cut the closing sentence that restates
+    the paragraph with feeling. These are all wrong: "…is the whole safety
+    rule of this package"; "…which beats writing a title into one of the two
+    places that claim to hold it"; "…an existing sibling is a position already
+    known to be right".
 
 Turn history into a standing property:
 
@@ -120,3 +140,11 @@ and the tests while reading worse than what it replaced. Rewrite comments one
 block at a time with the paragraph structure in hand, or make the script treat
 each paragraph as its own unit. Check `grep -c '^\s*//$'` before and after: that
 count must not fall.
+
+## `ponytail:` marks a deliberate ceiling
+
+A shortcut taken knowingly carries a `ponytail:` comment naming the limit and
+what would justify lifting it, in two lines.
+
+	// ponytail: rescans per call, O(n²) over a document holding tens of elements.
+	// Thread a set through the callers only if a profile ever says to.
