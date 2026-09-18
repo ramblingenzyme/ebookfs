@@ -1,6 +1,7 @@
 package ctl
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -77,10 +78,5 @@ func TestHelpCoversEveryDispatchedCommand(t *testing.T) {
 }
 
 func contains(haystack []string, needle string) bool {
-	for _, s := range haystack {
-		if s == needle {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(haystack, needle)
 }
