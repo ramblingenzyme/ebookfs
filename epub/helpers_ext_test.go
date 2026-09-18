@@ -25,46 +25,6 @@ func open(t *testing.T, path string) *epub.Book {
 	return b
 }
 
-// save opens the epub, applies edit, and saves it in place, returning the Book
-// so a test can read back what the file now says. Production drives this flow
-// through library.Edit.
-func save(t *testing.T, path string, edit func(*epub.Book)) *epub.Book {
-	t.Helper()
-	b, err := saveErr(t, path, edit)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return b
-}
-
-// saveErr is save for the tests that are about the refusal rather than the
-// result. The Book is returned either way so a caller can still read it.
-func saveErr(t *testing.T, path string, edit func(*epub.Book)) (*epub.Book, error) {
-	t.Helper()
-	b := open(t, path)
-	edit(b)
-	return b, b.Save()
-}
-
-// names is the author names in order, for the tests that are about which
-// creators the document yields rather than how they sort.
-func names(as []epub.Author) []string {
-	out := make([]string, len(as))
-	for i, a := range as {
-		out[i] = a.Name
-	}
-	return out
-}
-
-// authors builds the Authors slice from name/sort pairs.
-func authors(pairs ...string) []epub.Author {
-	var out []epub.Author
-	for i := 0; i < len(pairs); i += 2 {
-		out = append(out, epub.Author{Name: pairs[i], SortName: pairs[i+1]})
-	}
-	return out
-}
-
 var _ = epubtest.OPF3
 
 // parse opens the epub and closes it when the test ends, returning the error
@@ -78,10 +38,10 @@ func parse(t *testing.T, path string) (*epub.Book, error) {
 	return b, err
 }
 
-// writeBib applies edit to the epub at path and saves it in place, returning the
+// save applies edit to the epub at path and saves it in place, returning the
 // Book so a test can read back what the file now says. Production drives this
 // flow through library.Edit.
-func writeBib(t *testing.T, path string, edit func(*epub.Book)) (*epub.Book, error) {
+func save(t *testing.T, path string, edit func(*epub.Book)) (*epub.Book, error) {
 	t.Helper()
 	b, err := parse(t, path)
 	if err != nil {
@@ -91,12 +51,12 @@ func writeBib(t *testing.T, path string, edit func(*epub.Book)) (*epub.Book, err
 	return b, b.Save()
 }
 
-// writeCover replaces the cover image and saves. There is no cover path to pass:
+// setCover replaces the cover image and saves. There is no cover path to pass:
 // the manifest names the entry, and SetCover replaces that one in place.
 //
 // SetCover's refusals are returned rather than fatal: four tests here are about
 // which images it turns away.
-func writeCover(t *testing.T, path string, img []byte) (*epub.Book, error) {
+func setCover(t *testing.T, path string, img []byte) (*epub.Book, error) {
 	t.Helper()
 	b, err := parse(t, path)
 	if err != nil {

@@ -41,7 +41,7 @@ func TestSpecFirstTitleWins(t *testing.T) {
 	// The write side must target the same element the read side resolved, or the
 	// edit would appear not to happen.
 	want := "A New Title"
-	if _, err := writeBib(t, path, func(b *epub.Book) { b.Title = want }); err != nil {
+	if _, err := save(t, path, func(b *epub.Book) { b.Title = want }); err != nil {
 		t.Fatal(err)
 	}
 	md := epubtest.Metadata(t, path)
@@ -101,7 +101,7 @@ func TestSpecModifiedIsUpdated(t *testing.T) {
 
 	path := epubtest.Build(t, epubtest.RichOPF3) // carries dcterms:modified 2020-01-02T00:00:00Z
 	want := "A New Title"
-	if _, err := writeBib(t, path, func(b *epub.Book) { b.Title = want }); err != nil {
+	if _, err := save(t, path, func(b *epub.Book) { b.Title = want }); err != nil {
 		t.Fatal(err)
 	}
 	got := epubtest.Metadata(t, path).FindElement("//meta[@property='dcterms:modified']")
@@ -147,7 +147,7 @@ func TestSpecOnlySeriesCollectionIsTheSeries(t *testing.T) {
 	}
 
 	want := "The Quartet"
-	if _, err := writeBib(t, path, func(b *epub.Book) { rename(b, want) }); err != nil {
+	if _, err := save(t, path, func(b *epub.Book) { rename(b, want) }); err != nil {
 		t.Fatal(err)
 	}
 	md := epubtest.Metadata(t, path)
@@ -200,7 +200,7 @@ func TestSpecOnlyAuthorRoleCreatorsAreAuthors(t *testing.T) {
 
 	// An authors edit must not disturb the editor, who is not ours to rewrite.
 	authors := []epub.Author{{Name: "Ann Rand"}}
-	if _, err := writeBib(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
+	if _, err := save(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
 		t.Fatal(err)
 	}
 	if got := epubtest.TextOf(t, epubtest.Metadata(t, path), "//creator[@id='c2']"); got != "Acme Editorial Board" {
@@ -227,7 +227,7 @@ func TestSpecFirstLanguageWins(t *testing.T) {
 
 	// Editing it rewrites the first and leaves the second alone.
 	fr := "de"
-	if _, err := writeBib(t, path, func(b *epub.Book) { b.Language = fr }); err != nil {
+	if _, err := save(t, path, func(b *epub.Book) { b.Language = fr }); err != nil {
 		t.Fatal(err)
 	}
 	langs := epubtest.Metadata(t, path).SelectElements("language")
@@ -283,7 +283,7 @@ func TestSpecMintedIDsDoNotCollide(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := epubtest.Build(t, epubtest.EPUB3(tc.meta))
-			if _, err := writeBib(t, path, tc.edit); err != nil {
+			if _, err := save(t, path, tc.edit); err != nil {
 				t.Fatal(err)
 			}
 			assertUniqueIDs(t, path)
@@ -303,7 +303,7 @@ func TestSpecRepeatedEditsDoNotCollideIDs(t *testing.T) {
 		for i, n := range names {
 			authors[i] = epub.Author{Name: n}
 		}
-		if _, err := writeBib(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
+		if _, err := save(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
 			t.Fatalf("adding %s: %v", add, err)
 		}
 		assertUniqueIDs(t, path)
@@ -326,7 +326,7 @@ func TestSpecReorderingAuthorsKeepsIDsUnique(t *testing.T) {
     <meta refines="#ebookfs-creator" property="file-as">Alice, A</meta>`))
 
 	authors := []epub.Author{{Name: "Bob", SortName: "Bob, B"}, {Name: "Alice", SortName: "Alice, A"}}
-	if _, err := writeBib(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
+	if _, err := save(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
 		t.Fatal(err)
 	}
 	assertUniqueIDs(t, path)
@@ -420,7 +420,7 @@ func TestSpecWhitespaceInTheVersionAttribute(t *testing.T) {
 
 	path := epubtest.Build(t, opf)
 	sort := "Title, The"
-	if _, err := writeBib(t, path, func(b *epub.Book) { b.SortTitle = sort }); err != nil {
+	if _, err := save(t, path, func(b *epub.Book) { b.SortTitle = sort }); err != nil {
 		t.Fatal(err)
 	}
 
@@ -450,7 +450,7 @@ func TestSpecDeclaredPrefixResolvesToTheSameProperty(t *testing.T) {
 
 	path := epubtest.Build(t, opf)
 	want := "A New Title"
-	if _, err := writeBib(t, path, func(b *epub.Book) { b.Title = want }); err != nil {
+	if _, err := save(t, path, func(b *epub.Book) { b.Title = want }); err != nil {
 		t.Fatal(err)
 	}
 
@@ -477,7 +477,7 @@ func TestSpecRedefinedReservedPrefixIsNotOurProperty(t *testing.T) {
 
 	path := epubtest.Build(t, opf)
 	want := "A New Title"
-	if _, err := writeBib(t, path, func(b *epub.Book) { b.Title = want }); err != nil {
+	if _, err := save(t, path, func(b *epub.Book) { b.Title = want }); err != nil {
 		t.Fatal(err)
 	}
 
@@ -533,7 +533,7 @@ func TestSpecNewRefineSpellsItsSchemeAndProperty(t *testing.T) {
 
 	path := epubtest.Build(t, opf)
 	authors := []epub.Author{{Name: "Ann Rand"}, {Name: "Bo Li"}}
-	if _, err := writeBib(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
+	if _, err := save(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
 		t.Fatal(err)
 	}
 
@@ -588,7 +588,7 @@ func TestSpecSlashInAValueIsNotRewritten(t *testing.T) {
 	// An edit to an unrelated field carries the author list back the way
 	// library.Edit does, so a read-side substitution would reach the file.
 	desc := "A new description."
-	if _, err := writeBib(t, path, func(b *epub.Book) { b.Description = desc; b.Authors = bib.Authors }); err != nil {
+	if _, err := save(t, path, func(b *epub.Book) { b.Description = desc; b.Authors = bib.Authors }); err != nil {
 		t.Fatal(err)
 	}
 	raw := string(epubtest.ReadEntry(t, path, epubtest.OPFPath))
@@ -654,7 +654,7 @@ func TestSpecMultipleRoleRefines(t *testing.T) {
 
 			// A no-op author edit must not strip the role that is not ours.
 			authors := []epub.Author{{Name: "Maurice Sendak"}}
-			if _, err := writeBib(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
+			if _, err := save(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
 				t.Fatal(err)
 			}
 			md := epubtest.Metadata(t, path)
@@ -715,7 +715,7 @@ func TestSpecPathQualifiedRefines(t *testing.T) {
 	// D.3.6 file-as: "Cardinality: zero or one". An edit must not add a second
 	// one beside the refine it failed to match.
 	sort := "New, The"
-	if _, err := writeBib(t, path, func(b *epub.Book) { b.SortTitle = sort }); err != nil {
+	if _, err := save(t, path, func(b *epub.Book) { b.SortTitle = sort }); err != nil {
 		t.Fatal(err)
 	}
 	var fileAs int
@@ -787,7 +787,7 @@ func TestSpecGroupPositionLevelsAreNotDecimals(t *testing.T) {
 func TestSpecGroupPositionMultiLevelRoundTrips(t *testing.T) {
 	path := epubtest.Build(t, articleAt("1"))
 	want := "2.2.1" // no float holds this, which is the point
-	if _, err := writeBib(t, path, func(b *epub.Book) { reposition(b, want) }); err != nil {
+	if _, err := save(t, path, func(b *epub.Book) { reposition(b, want) }); err != nil {
 		t.Fatal(err)
 	}
 	bib, err := parse(t, path)
@@ -907,7 +907,7 @@ func TestSpecUnrecognisedDateEventsLeaveNoPubdate(t *testing.T) {
 func TestSpecEditsLandInTheLegacyWrappers(t *testing.T) {
 	path := epubtest.Build(t, epubtest.OPFWrappers)
 	desc, series, index := "A new description.", "Wonderland", "3"
-	if _, err := writeBib(t, path, func(b *epub.Book) { b.Description = desc; b.Series = &epub.Series{Name: series, Index: index} }); err != nil {
+	if _, err := save(t, path, func(b *epub.Book) { b.Description = desc; b.Series = &epub.Series{Name: series, Index: index} }); err != nil {
 		t.Fatal(err)
 	}
 
@@ -948,7 +948,7 @@ func TestSpecEditsLandInTheLegacyWrappers(t *testing.T) {
 func TestSpecEditsCreateTheMissingXMetadataWrapper(t *testing.T) {
 	path := epubtest.Build(t, epubtest.DCMetadataOnly)
 	series := "Wonderland"
-	if _, err := writeBib(t, path, func(b *epub.Book) { rename(b, series) }); err != nil {
+	if _, err := save(t, path, func(b *epub.Book) { rename(b, series) }); err != nil {
 		t.Fatal(err)
 	}
 
@@ -975,7 +975,7 @@ func TestSpecEPUB2AttributesGetADeclaredPrefix(t *testing.T) {
 
 	path := epubtest.Build(t, opf)
 	authors := []epub.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
-	if _, err := writeBib(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
+	if _, err := save(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1021,7 +1021,7 @@ func TestSpecSeriesReportedIsSeriesWritable(t *testing.T) {
 		t.Fatalf("series = %+v, want The Trilogy from the calibre metas", got)
 	}
 
-	b, err := writeBib(t, path, func(b *epub.Book) { reposition(b, "5") })
+	b, err := save(t, path, func(b *epub.Book) { reposition(b, "5") })
 	if err != nil {
 		t.Fatal(err)
 	}

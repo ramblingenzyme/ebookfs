@@ -17,8 +17,8 @@ import (
 )
 
 // A percent-encoded cover href must resolve to the literal zip entry so the
-// cover is found by both Parse and the WriteCover/Reader lookups.
-func TestParseResolvesEncodedCoverHref(t *testing.T) {
+// cover is found by both the metadata read and the entry lookups.
+func TestOpenResolvesEncodedCoverHref(t *testing.T) {
 	opfEncoded := epubtest.Pkg{Meta: `    <dc:creator id="creator1">Jane Doe</dc:creator>
     <meta refines="#creator1" property="role">aut</meta>`, Manifest: `<item id="cover-img" href="cover%20image.jpg" media-type="image/jpeg" properties="cover-image"/>
     <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`}.EPUB3()
@@ -303,7 +303,7 @@ func TestIdentifierTypeInReboundVocabulary(t *testing.T) {
 
 // calibre records a v2 sort title in calibre:title_sort and nowhere else, so
 // without this fallback every calibre-managed v2 book reads back with none.
-func TestParseReadsCalibreTitleSortFromEpub2(t *testing.T) {
+func TestOpenReadsCalibreTitleSortFromEPUB2(t *testing.T) {
 	opf := epubtest.OPF2.With(`    <meta name="calibre:title_sort" content="Hobbit, The"/>`)
 	bib, err := parse(t, epubtest.WriteEpub(t, epubtest.BaseEntries(opf)))
 	if err != nil {
