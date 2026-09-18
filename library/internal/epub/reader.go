@@ -6,8 +6,10 @@ import (
 	epubfile "github.com/ramblingenzyme/ebookfs/epub"
 )
 
-// Re-exported so the library's callers need not import the epub package to
-// name an error this one returns.
+// Re-exported so the library's callers need not import the epub package to name
+// an error this one returns. library aliases these in turn: a bad upload fails
+// Ingest with ErrNotEpub, and a fid held across a re-ingest fails a read with
+// ErrClosed, so both reach a caller that never names epub at all.
 var (
 	ErrClosed          = epubfile.ErrClosed
 	ErrContainer       = epubfile.ErrContainer
@@ -34,14 +36,16 @@ type EpubReader interface {
 	Cover() ([]byte, error) // cover image from the open epub
 }
 
-// Reader is an open epub, plus the cover path the index holds for it.
+// reader is an open epub, plus the cover path the index holds for it. It is
+// unexported because OpenReader hands back the EpubReader interface and nothing
+// outside constructs one.
 //
 // The path comes from outside because the epub package resolves it only when it
 // parses the package document, and this handle deliberately does not: it serves
 // the 9P read path, where every request would otherwise pay for an XML parse.
 // The index already recorded the path at ingest, so the parse is redundant as
 // well as expensive.
-type Reader struct {
+type reader struct {
 	*epubfile.File
 	coverPath string // zip-relative path to cover image; empty if none
 }
@@ -55,18 +59,18 @@ func OpenReader(epubPath, coverPath string) (EpubReader, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Reader{File: f, coverPath: coverPath}, nil
+	return &reader{File: f, coverPath: coverPath}, nil
 }
 
 // OPF returns the raw OPF XML bytes, decompressing the entry on demand.
-func (r *Reader) OPF() ([]byte, error) { return r.ReadEntry(r.PackagePath()) }
+func (r *reader) OPF() ([]byte, error) { return r.ReadEntry(r.PackagePath()) }
 
 // Cover returns the cover image bytes from the already-open zip. When coverPath
 // is empty (no cover in the epub) Cover returns an error.
 //
 // Closed is checked first so every accessor reports a use-after-close alike; a
 // book with no cover is otherwise indistinguishable from a handle that is gone.
-func (r *Reader) Cover() ([]byte, error) {
+func (r *reader) Cover() ([]byte, error) {
 	if r.Closed() {
 		return nil, epubfile.ErrClosed
 	}

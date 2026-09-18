@@ -48,7 +48,7 @@ func (b *Book) SetCover(img []byte) error {
 	if got != want {
 		return fmt.Errorf("cover image is %s but the epub's cover entry %q is %s; a matching format is required (no transcoding)", got, b.coverPath, want)
 	}
-	if !b.Has(b.coverPath) {
+	if !b.has(b.coverPath) {
 		return fmt.Errorf("cover not found in epub: %s", b.coverPath)
 	}
 	b.cover = img
@@ -88,7 +88,7 @@ func (b *Book) stage() (map[string][]byte, error) {
 	// turns out to touch. A signature names by URL the files it covers and we
 	// hold no key to re-sign with, so refusing on the file's mere presence
 	// over-refuses rather than under-detects.
-	if b.Has(ocf.SignaturesPath) {
+	if b.has(ocf.SignaturesPath) {
 		return nil, fmt.Errorf("refusing to edit: the epub is signed (%s) and an edit would invalidate the signature", ocf.SignaturesPath)
 	}
 
@@ -113,22 +113,20 @@ func (b *Book) stage() (map[string][]byte, error) {
 		}
 	}
 
-	if !b.clean() {
+	if m := b.moved(); m.changed() {
 		if enc.IsEncrypted(b.PackagePath()) {
 			return nil, fmt.Errorf("refusing to edit: package document %q is encrypted", b.PackagePath())
 		}
 		// A field assigned the value the document already carries leaves
 		// nothing to replace, which is what lets Save skip the rebuild.
-		if b.doc.Apply(b.write) {
+		if b.doc.Apply(func(d *opf.Doc) { b.write(d, m) }) {
 			out, err := b.doc.Bytes()
 			if err != nil {
 				return nil, err
 			}
 			replace[b.PackagePath()] = out
 		}
-		titleMoved := b.Title != b.orig.Title
-		authorsMoved := !slices.Equal(b.Authors, b.orig.Authors)
-		if err := b.syncNCX(enc, titleMoved, authorsMoved, replace); err != nil {
+		if err := b.syncNCX(enc, m, replace); err != nil {
 			return nil, err
 		}
 	}
@@ -136,12 +134,27 @@ func (b *Book) stage() (map[string][]byte, error) {
 	return replace, nil
 }
 
-// clean reports whether every diffed field still holds what Open read.
-func (b *Book) clean() bool {
+// moved is which fields differ from what Open read: the one answer to that
+// question, so a field added to Book cannot be written by one half of Save and
+// ignored by the other.
+type moved struct {
+	title, sortTitle, description, language, authors, series bool
+}
+
+func (b *Book) moved() moved {
 	o := b.orig
-	return b.Title == o.Title && b.SortTitle == o.SortTitle &&
-		b.Description == o.Description && b.Language == o.Language &&
-		slices.Equal(b.Authors, o.Authors) && sameSeries(b.Series, o.Series)
+	return moved{
+		title:       b.Title != o.Title,
+		sortTitle:   b.SortTitle != o.SortTitle,
+		description: b.Description != o.Description,
+		language:    b.Language != o.Language,
+		authors:     !slices.Equal(b.Authors, o.Authors),
+		series:      !sameSeries(b.Series, o.Series),
+	}
+}
+
+func (m moved) changed() bool {
+	return m.title || m.sortTitle || m.description || m.language || m.authors || m.series
 }
 
 func sameSeries(a, c *Series) bool {
@@ -151,38 +164,36 @@ func sameSeries(a, c *Series) bool {
 	return *a == *c
 }
 
-// write drives the package document's setters for the fields that moved. It is
+// write drives the package document's setters for the fields m names. It is
 // handed to Apply rather than called directly so that the §5.5.5 byte compare
 // brackets every write.
-func (b *Book) write(d *opf.Doc) {
-	o := b.orig
-
+func (b *Book) write(d *opf.Doc, m moved) {
 	// The title's two halves are not independent: writing a title takes the
 	// document's other dc:title segments with it, which a sort-title edit must
 	// not do. So the title is passed only when it moved, while the sort title
 	// is restated whenever either did — restating it keeps a title-only change
 	// from dropping the sort title the book carried.
-	if b.Title != o.Title || b.SortTitle != o.SortTitle {
+	if m.title || m.sortTitle {
 		var title *string
-		if b.Title != o.Title {
+		if m.title {
 			title = &b.Title
 		}
 		d.SetTitle(title, &b.SortTitle)
 	}
-	if b.Description != o.Description {
+	if m.description {
 		d.SetDescription(b.Description)
 	}
-	if b.Language != o.Language {
+	if m.language {
 		d.SetLanguage(b.Language)
 	}
-	if !slices.Equal(b.Authors, o.Authors) {
+	if m.authors {
 		as := make([]opf.Author, len(b.Authors))
 		for i, a := range b.Authors {
 			as[i] = opf.Author{Name: a.Name, SortName: a.SortName}
 		}
 		d.SetAuthors(as)
 	}
-	if !sameSeries(b.Series, o.Series) {
+	if m.series {
 		var s *opf.Series
 		if b.Series != nil {
 			s = &opf.Series{Name: b.Series.Name, Index: b.Series.Index}
@@ -198,7 +209,7 @@ func (b *Book) write(d *opf.Doc) {
 // page.
 func (b *Book) refitCoverPage(enc *ocf.EncryptionInfo, width, height int, replace map[string][]byte) error {
 	for _, entry := range b.doc.CoverPages(path.Dir(b.PackagePath())) {
-		if !b.Has(entry) || enc.IsEncrypted(entry) {
+		if !b.has(entry) || enc.IsEncrypted(entry) {
 			continue
 		}
 		data, err := b.ReadEntry(entry)
@@ -228,12 +239,12 @@ func (b *Book) refitCoverPage(enc *ocf.EncryptionInfo, width, height int, replac
 // failing the edit. The package document is the metadata of record, and
 // refusing would leave a book that arrived with an unreadable NCX permanently
 // unrenameable.
-func (b *Book) syncNCX(enc *ocf.EncryptionInfo, titleMoved, authorsMoved bool, replace map[string][]byte) error {
-	if !titleMoved && !authorsMoved {
+func (b *Book) syncNCX(enc *ocf.EncryptionInfo, m moved, replace map[string][]byte) error {
+	if !m.title && !m.authors {
 		return nil
 	}
 	entry := b.doc.NCXPath(path.Dir(b.PackagePath()))
-	if entry == "" || !b.Has(entry) || enc.IsEncrypted(entry) {
+	if entry == "" || !b.has(entry) || enc.IsEncrypted(entry) {
 		return nil
 	}
 
@@ -251,11 +262,11 @@ func (b *Book) syncNCX(enc *ocf.EncryptionInfo, titleMoved, authorsMoved bool, r
 	}
 
 	var title *string
-	if titleMoved {
+	if m.title {
 		title = &b.Title
 	}
 	var names []string
-	if authorsMoved {
+	if m.authors {
 		names = make([]string, len(b.Authors))
 		for i, a := range b.Authors {
 			names[i] = a.Name

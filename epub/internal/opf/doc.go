@@ -2,10 +2,11 @@
 // a book's metadata. The zip container around it belongs to the parent epub
 // package, and the XML under it to pkgdoc.
 //
-// A field is one piece of metadata ebookfs owns. Reading (get) and writing (set)
-// both go through it so the two cannot disagree. Book-level validation and
-// presentation defaults live in Bib instead, so set(get()) never invents
-// metadata the file did not carry.
+// A field is one piece of metadata this package models. Reading (get) and
+// writing (set) both go through it so the two cannot disagree, and set(get())
+// never invents metadata the file did not carry — nothing here defaults a value
+// or rejects a document for what it says. Whether what the file states is
+// usable is the caller's question, and Metadata reports it verbatim.
 //
 // Three rules keep the fields readable:
 //
@@ -104,11 +105,6 @@ func (o *Doc) SetAuthors(authors []Author) { o.authors().set(authors) }
 // SetSeries writes the series membership, or clears it when s is nil. Both
 // halves are stated, so a caller changing one reads the other back first.
 func (o *Doc) SetSeries(s *Series) { o.series().set(s) }
-
-// Series returns the membership the document records, or nil for none. The
-// position is reported as written: no index means an empty Index, not a
-// default.
-func (o *Doc) Series() *Series { return o.series().get() }
 
 // Metadata reads the book's metadata out of the document. base is the OPF's own
 // directory, needed only to resolve the cover href.

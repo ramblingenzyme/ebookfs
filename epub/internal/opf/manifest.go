@@ -15,7 +15,7 @@ import (
 const ncxMediaType = "application/x-dtbncx+xml"
 
 // NCXPath returns the container path of the NCX, or "". base is the OPF's own
-// directory, as for Bib.
+// directory, as for Metadata.
 //
 // Found by media type rather than through <spine toc="…">, since §5.7.1 demotes
 // that attribute to optional and legacy while the media type is required either

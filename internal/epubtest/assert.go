@@ -82,24 +82,24 @@ func LegacyMeta(t *testing.T, root *etree.Element, path string) string {
 
 func Property(t *testing.T, root *etree.Element, path string) string {
 	t.Helper()
-	return ElemAt(t, root, path).Text()
+	return elemAt(t, root, path).Text()
 }
 
 // AttrOf and TextOf are the same lookup for the elements that are not <meta>:
 // a dc element's text, or an attribute the spec puts somewhere else.
 func AttrOf(t *testing.T, root *etree.Element, path, attr string) string {
 	t.Helper()
-	return ElemAt(t, root, path).SelectAttrValue(attr, "")
+	return elemAt(t, root, path).SelectAttrValue(attr, "")
 }
 
 func TextOf(t *testing.T, root *etree.Element, path string) string {
 	t.Helper()
-	return ElemAt(t, root, path).Text()
+	return elemAt(t, root, path).Text()
 }
 
-// ElemAt returns the one element path matches, failing the test when nothing
+// elemAt returns the one element path matches, failing the test when nothing
 // does.
-func ElemAt(t *testing.T, root *etree.Element, path string) *etree.Element {
+func elemAt(t *testing.T, root *etree.Element, path string) *etree.Element {
 	t.Helper()
 	el := root.FindElement(path)
 	if el == nil {

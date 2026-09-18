@@ -350,3 +350,35 @@ func TestSearchSnapshotsAreImmutable(t *testing.T) {
 		}
 	}
 }
+
+// Every EpubReader accessor reports a use-after-close with an error a caller
+// can name. The 9P layer holds one of these per fid, and a client keeping a fid
+// across a re-ingest is how a closed reader gets read.
+func TestClosedEpubReaderIsErrClosed(t *testing.T) {
+	lib := openTestLibrary(t)
+	b := ingestTestEpub(t, lib, buildTestEpub(t, "Dune", "Frank Herbert"))
+
+	r, err := lib.Content(b.ID())
+	if err != nil {
+		t.Fatalf("Content: %v", err)
+	}
+	if err := r.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	for _, tc := range []struct {
+		name string
+		call func() error
+	}{
+		{"ReadAt", func() error { _, err := r.ReadAt(make([]byte, 4), 0); return err }},
+		{"OPF", func() error { _, err := r.OPF(); return err }},
+		{"Cover", func() error { _, err := r.Cover(); return err }},
+		{"Close again", r.Close},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.call(); !errors.Is(err, library.ErrClosed) {
+				t.Errorf("err = %v, want ErrClosed", err)
+			}
+		})
+	}
+}

@@ -78,8 +78,10 @@ func (f *File) ReadEntry(name string) ([]byte, error) {
 	return f.a.read(name)
 }
 
-// Has reports whether the archive carries an entry by that name.
-func (f *File) Has(name string) bool {
+// has reports whether the archive carries an entry by that name. Unexported
+// because nothing outside needs it: a caller wanting an entry calls ReadEntry
+// and handles the error.
+func (f *File) has(name string) bool {
 	if f.closed {
 		return false
 	}
