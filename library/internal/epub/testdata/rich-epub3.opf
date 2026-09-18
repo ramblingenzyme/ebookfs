@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <!-- a comment nobody should eat -->
+    <dc:identifier id="bookid">urn:uuid:1234</dc:identifier>
+    <dc:title id="t1">Original Title</dc:title>
+    <meta refines="#t1" property="file-as">Title, Original</meta>
+    <dc:creator id="creator1">Jane Doe</dc:creator>
+    <meta refines="#creator1" property="role" scheme="marc:relators">aut</meta>
+    <meta refines="#creator1" property="file-as">Doe, Jane</meta>
+    <meta refines="#creator1" property="alternate-script" xml:lang="ja">ドゥ・ジェーン</meta>
+    <dc:contributor id="ed1">An Editor</dc:contributor>
+    <meta refines="#ed1" property="role" scheme="marc:relators">edt</meta>
+    <dc:language>en</dc:language>
+    <dc:date>2020-01-02</dc:date>
+    <dc:description>Original description.</dc:description>
+    <meta property="dcterms:modified">2020-01-02T00:00:00Z</meta>
+    <meta property="belongs-to-collection" id="series1">The Trilogy</meta>
+    <meta refines="#series1" property="collection-type">series</meta>
+    <meta refines="#series1" property="group-position">2</meta>
+    <meta refines="#series1" property="dcterms:identifier">urn:issn:1234-5678</meta>
+    <meta property="belongs-to-collection" id="set1">Complete Works</meta>
+    <meta refines="#set1" property="collection-type">set</meta>
+    <meta name="calibre:user_rating" content="8"/>
+    <meta name="cover" content="cover-img"/>
+  </metadata>
+  <manifest>
+    <item id="cover-img" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine><itemref idref="ch1"/></spine>
+</package>

@@ -2,6 +2,8 @@ package views
 
 import (
 	"testing"
+
+	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 )
 
 func TestByTagDirTagWithSlash(t *testing.T) {
@@ -12,12 +14,10 @@ func TestByTagDirTagWithSlash(t *testing.T) {
 	b.Meta.Tags = []string{"a/b"}
 	reg.Add(wrapBook(b))
 
-	if _, ok := d.Children()["a_b"]; !ok {
-		t.Fatalf("by-tag should have 'a_b' subdir for tag 'a/b', got: %v", dirChildNames(d))
-	}
-	if _, ok := d.Children()["a/b"]; ok {
-		t.Error("by-tag should NOT have 'a/b' subdir (slash not valid in 9P names)")
-	}
+	fstest.HasChild(t, d, "a_b")
+
+	// A '/' is not a legal 9P name character.
+	fstest.NoChild(t, d, "a/b")
 }
 
 func TestByTagDirRemoveWithSlashTag(t *testing.T) {
@@ -29,7 +29,5 @@ func TestByTagDirRemoveWithSlashTag(t *testing.T) {
 	reg.Add(wrapBook(b))
 	reg.Remove(1)
 
-	if _, ok := d.Children()["x_y"]; ok {
-		t.Error("tag subdir should be pruned after remove")
-	}
+	fstest.NoChild(t, d, "x_y")
 }

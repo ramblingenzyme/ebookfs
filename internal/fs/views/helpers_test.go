@@ -3,10 +3,8 @@ package views
 import (
 	"testing"
 
-	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library"
 
-	"github.com/knusbaum/go9p/fs"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 )
@@ -14,11 +12,8 @@ import (
 var (
 	makeBook  = testutil.MakeMutableBook
 	newTestFS = testutil.NewTestFS
+	wrapBook  = testutil.WrapBook
 )
-
-func wrapBook(b *book.Book) *library.Book {
-	return book.NewImmutableBook(b)
-}
 
 func makeBookWithSeries(id int64, title, author string, seriesName, seriesIndex string) *library.Book {
 	b := makeBook(id, title, author)
@@ -31,12 +26,4 @@ func makeBookWithSeries(id int64, title, author string, seriesName, seriesIndex 
 func newTestRegistry(t *testing.T) *registry.BookRegistry {
 	t.Helper()
 	return registry.NewBookRegistry(newTestFS(t), nil)
-}
-
-func dirChildNames(d fs.Dir) []string {
-	var names []string
-	for name := range d.Children() {
-		names = append(names, name)
-	}
-	return names
 }

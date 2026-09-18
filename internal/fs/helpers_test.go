@@ -7,9 +7,8 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 )
 
-// The library-facade test doubles live in internal/testutil/libfake, and the
-// simple book/FS helpers in internal/testutil. These aliases let the composition
-// tests call them unqualified.
+// The book and FS helpers live in internal/testutil. These aliases let the
+// composition tests call them unqualified.
 var (
 	makeBook  = testutil.MakeMutableBook
 	newTestFS = testutil.NewTestFS

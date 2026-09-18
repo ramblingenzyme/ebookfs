@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 )
 
@@ -14,15 +15,11 @@ func TestRegistryAddAndRemove(t *testing.T) {
 	b := makeBook(1, "Test Book", "Author")
 	reg.Add(wrapBook(b))
 
-	if _, ok := d.Children()["Test Book"]; !ok {
-		t.Fatal("books dir should contain 'Test Book' after Add")
-	}
+	fstest.HasChild(t, d, "Test Book")
 
 	reg.Remove(1)
 
-	if _, ok := d.Children()["Test Book"]; ok {
-		t.Error("books dir should not contain 'Test Book' after Remove")
-	}
+	fstest.NoChild(t, d, "Test Book")
 }
 
 // Removing an id that was never added is distinguishable from removing
@@ -35,9 +32,7 @@ func TestRegistryRemoveUnknownID(t *testing.T) {
 
 	reg.Remove(999)
 
-	if _, ok := d.Children()["Kept"]; !ok {
-		t.Errorf("removing an unknown id disturbed the registered books: %v", dirChildNames(d))
-	}
+	fstest.HasChild(t, d, "Kept")
 }
 
 func TestRegistryAddSameIDTwiceUsesSameDir(t *testing.T) {
@@ -52,13 +47,8 @@ func TestRegistryAddSameIDTwiceUsesSameDir(t *testing.T) {
 
 	// dirLocked returns the existing dir and does not update the book pointer, so
 	// the first title persists. The caller is expected not to reuse IDs.
-	children := dirChildNames(allBooks)
-	if len(children) != 1 {
-		t.Fatalf("expected 1 child, got %d: %v", len(children), children)
-	}
-	if children[0] != "First Title" {
-		t.Errorf("expected 'First Title', got %q", children[0])
-	}
+	fstest.ChildCount(t, allBooks, 1)
+	fstest.HasChild(t, allBooks, "First Title")
 }
 
 func TestBooksDirMultipleBooks(t *testing.T) {
@@ -68,10 +58,7 @@ func TestBooksDirMultipleBooks(t *testing.T) {
 	reg.Add(testutil.MakeBook(1, "Alpha", "Author"))
 	reg.Add(testutil.MakeBook(2, "Beta", "Author"))
 
-	children := dirChildNames(d)
-	if len(children) != 2 {
-		t.Fatalf("expected 2 books, got %d: %v", len(children), children)
-	}
+	fstest.ChildCount(t, d, 2)
 }
 
 func TestBooksDirRemoveOnlyOne(t *testing.T) {
@@ -83,12 +70,8 @@ func TestBooksDirRemoveOnlyOne(t *testing.T) {
 
 	reg.Remove(2)
 
-	if _, ok := d.Children()["Remove"]; ok {
-		t.Error("'Remove' should be gone")
-	}
-	if _, ok := d.Children()["Keep"]; !ok {
-		t.Error("'Keep' should remain")
-	}
+	fstest.NoChild(t, d, "Remove")
+	fstest.HasChild(t, d, "Keep")
 }
 
 // A '/' in a title cannot become a path separator in a 9P entry name, and the
@@ -101,7 +84,7 @@ func TestBooksDirSlashInTitleIsOneEntry(t *testing.T) {
 
 	reg.Add(testutil.MakeBook(1, "Either/Or", "Author"))
 
-	children := dirChildNames(d)
+	children := fstest.ChildNames(d)
 	if len(children) != 1 {
 		t.Fatalf("expected 1 book, got %v", children)
 	}
@@ -109,19 +92,16 @@ func TestBooksDirSlashInTitleIsOneEntry(t *testing.T) {
 		t.Errorf("entry name = %q, want no path separator", children[0])
 	}
 
+	// The entries map can name a child that DeleteChild then cannot find.
 	reg.Remove(1)
-	if got := dirChildNames(d); len(got) != 0 {
-		t.Errorf("after remove: %v, want the book gone — the entries map named a child that could not be deleted", got)
-	}
+	fstest.ChildCount(t, d, 0)
 }
 
 func TestBooksDirEmptyNilMap(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
 
-	if n := len(d.Children()); n != 0 {
-		t.Errorf("new books dir should be empty, got %d children", n)
-	}
+	fstest.ChildCount(t, d, 0)
 }
 
 func TestBooksDirDuplicateTitles(t *testing.T) {
@@ -132,41 +112,22 @@ func TestBooksDirDuplicateTitles(t *testing.T) {
 	b2 := makeBook(2, "Same Title", "Bob")
 
 	reg.Add(wrapBook(b1))
-	if _, ok := d.Children()["Same Title"]; !ok {
-		t.Fatal("first book should appear under plain title")
-	}
+	fstest.HasChild(t, d, "Same Title")
 
 	reg.Add(wrapBook(b2))
-	if _, ok := d.Children()["Same Title"]; !ok {
-		t.Error("first book should remain at plain title")
-	}
-	if _, ok := d.Children()["Same Title (2)"]; !ok {
-		t.Error("second book should appear as 'Same Title (2)'")
-	}
-	if len(d.Children()) != 2 {
-		t.Errorf("expected 2 children, got %d", len(d.Children()))
-	}
+	fstest.HasChild(t, d, "Same Title")
+	fstest.HasChild(t, d, "Same Title (2)")
+	fstest.ChildCount(t, d, 2)
 
-	// Removing the first book should not affect the second.
+	// Removing the first book leaves the second at its minted name.
 	reg.Remove(1)
-	if _, ok := d.Children()["Same Title"]; ok {
-		t.Error("first book should be removed")
-	}
-	if _, ok := d.Children()["Same Title (2)"]; !ok {
-		t.Error("second book should remain after first is removed")
-	}
-	if len(d.Children()) != 1 {
-		t.Errorf("expected 1 child after removing first book, got %d", len(d.Children()))
-	}
+	fstest.NoChild(t, d, "Same Title")
+	fstest.HasChild(t, d, "Same Title (2)")
+	fstest.ChildCount(t, d, 1)
 
-	// Removing the second book cleans up the disambiguated entry.
 	reg.Remove(2)
-	if _, ok := d.Children()["Same Title (2)"]; ok {
-		t.Error("second book should be removed")
-	}
-	if len(d.Children()) != 0 {
-		t.Errorf("expected 0 children after removing both, got %d", len(d.Children()))
-	}
+	fstest.NoChild(t, d, "Same Title (2)")
+	fstest.ChildCount(t, d, 0)
 }
 
 // The gap documented on disambiguatedName. Add checks the plain title for a
@@ -188,7 +149,5 @@ func TestBooksDirMintedNameCollidesWithLiteralTitle(t *testing.T) {
 	reg.Add(wrapBook(makeBook(1, "Foo (2)", "Bob"))) // literal title
 	reg.Add(wrapBook(makeBook(2, "Foo", "Carol")))   // mints "Foo (2)"
 
-	if got := len(d.Children()); got != 3 {
-		t.Errorf("listing holds %d of 3 registered books: %v", got, dirChildNames(d))
-	}
+	fstest.ChildCount(t, d, 3)
 }

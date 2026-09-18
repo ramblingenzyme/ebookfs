@@ -7,14 +7,15 @@ import (
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/internal/fstest"
+	"github.com/ramblingenzyme/ebookfs/internal/libtest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 )
 
 // newTestBookDir builds a BookDir over a fresh FS with a no-op edit callback.
 func newTestBookDir(t *testing.T, b *library.Book) *BookDir {
 	t.Helper()
-	return NewBookDir(testutil.NewTestFS(t), libfake.Lib{}, func(int64, library.Edits) error { return nil }, b)
+	return NewBookDir(testutil.NewTestFS(t), libtest.ContentReader{}, func(int64, library.Edits) error { return nil }, b)
 }
 
 func TestNewBookDirCreatesCoverChild(t *testing.T) {
@@ -23,9 +24,7 @@ func TestNewBookDirCreatesCoverChild(t *testing.T) {
 
 	d := newTestBookDir(t, testutil.WrapBook(b))
 
-	if _, ok := d.Children()["cover.jpg"]; !ok {
-		t.Error("BookDir should contain 'cover.jpg' when CoverPath is set")
-	}
+	fstest.HasChild(t, d, "cover.jpg")
 }
 
 func TestNewBookDirNoCoverWhenEmpty(t *testing.T) {
@@ -34,9 +33,7 @@ func TestNewBookDirNoCoverWhenEmpty(t *testing.T) {
 
 	d := newTestBookDir(t, testutil.WrapBook(b))
 
-	if _, ok := d.Children()["cover.jpg"]; ok {
-		t.Error("BookDir should not contain 'cover.jpg' when CoverPath is empty")
-	}
+	fstest.NoChild(t, d, "cover.jpg")
 }
 
 func TestBookDirStatReportsTitle(t *testing.T) {
@@ -51,36 +48,14 @@ func TestBookDirStatReportsTitle(t *testing.T) {
 func TestBookDirHasIDChild(t *testing.T) {
 	d := newTestBookDir(t, testutil.MakeBook(1, "Test", "Author"))
 
-	child := d.Children()["id"]
-	if child == nil {
-		t.Fatal("BookDir should have 'id' child")
-	}
-	if _, ok := child.(*fs.StaticFile); !ok {
-		t.Errorf("'id' child should be a StaticFile")
-	}
+	fstest.ChildAs[*fs.StaticFile](t, d, "id")
 }
 
 // readChild opens a child file and reads it whole, the way a client cat'ing it
 // would.
 func readChild(t *testing.T, d *BookDir, name string) string {
 	t.Helper()
-	child, ok := d.Children()[name]
-	if !ok {
-		t.Fatalf("BookDir should have a %q child", name)
-	}
-	f, ok := child.(fs.File)
-	if !ok {
-		t.Fatalf("%q child is not a file", name)
-	}
-	const fid = 1
-	if err := f.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open(%s): %v", name, err)
-	}
-	data, err := f.Read(fid, 0, 4096)
-	if err != nil {
-		t.Fatalf("Read(%s): %v", name, err)
-	}
-	return string(data)
+	return fstest.Fid(t, fstest.ChildAs[fs.File](t, d, name), 1).Get(proto.Mode(0), 4096)
 }
 
 // The rendering, including the sort: a map has no order, and a file that

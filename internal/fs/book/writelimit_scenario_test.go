@@ -12,8 +12,8 @@ import (
 	"testing"
 
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/internal/libtest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library"
 )
 
@@ -31,7 +31,7 @@ func TestWriteFileSizeLimits(t *testing.T) {
 	}{
 		{"coverFile", maxCoverFileSize, func(t *testing.T) limitedWriteFile {
 			b := testutil.MakeBook(1, "Test", "Author")
-			return newCoverFile(newStat(testutil.NewTestFS(t), "cover.jpg", 0644), libfake.Lib{}, func(int64, library.Edits) error { return nil }, testutil.Fixed(b))
+			return newCoverFile(newStat(testutil.NewTestFS(t), "cover.jpg", 0644), libtest.ContentReader{}, func(int64, library.Edits) error { return nil }, testutil.Fixed(b))
 		}},
 		{"fieldFile", maxFieldFileSize, func(t *testing.T) limitedWriteFile {
 			return newFieldFile(newStat(testutil.NewTestFS(t), "field", 0644), func() string { return "" }, nil)

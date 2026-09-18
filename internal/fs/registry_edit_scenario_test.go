@@ -12,6 +12,7 @@ package fs
 import (
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/internal/libtest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/library"
 
@@ -19,24 +20,14 @@ import (
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/views"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
+	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 )
 
 // writeField drives a field edit the way a 9P client would: open the named
 // fieldFile with Otrunc, write the new value, and close to commit.
 func writeField(t *testing.T, bd fs.Dir, name, value string) {
 	t.Helper()
-	ff := bd.Children()[name].(fs.File)
-	fid := uint64(1)
-	if err := ff.Open(fid, proto.Otrunc); err != nil {
-		t.Fatalf("Open %s field: %v", name, err)
-	}
-	if _, err := ff.Write(fid, 0, []byte(value)); err != nil {
-		t.Fatalf("Write %s field: %v", name, err)
-	}
-	if err := ff.Close(fid); err != nil {
-		t.Fatalf("Close %s field: %v", name, err)
-	}
+	fstest.Fid(t, fstest.ChildAs[fs.File](t, bd, name), 1).Set(proto.Otrunc, value)
 }
 
 func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
@@ -45,7 +36,7 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 	book.Meta.Status = "unread"
 	// The real library fetches the edit base by id; the fake closes over the
 	// test's book instead.
-	lib := libfake.Lib{
+	lib := libtest.Editor{
 		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			updated := *book
 			if e.Title != nil {
@@ -66,35 +57,20 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 
 	reg.Add(testutil.WrapBook(book))
 
-	bd := allBooks.Children()["Old Title"].(fs.Dir)
-	writeField(t, bd, "title", "New Title")
+	writeField(t, fstest.ChildAs[fs.Dir](t, allBooks, "Old Title"), "title", "New Title")
 
-	if _, ok := allBooks.Children()["New Title"]; !ok {
-		t.Error("allBooks should show 'New Title'")
-	}
-	if _, ok := allBooks.Children()["Old Title"]; ok {
-		t.Error("allBooks should not show 'Old Title'")
-	}
+	fstest.HasChild(t, allBooks, "New Title")
+	fstest.NoChild(t, allBooks, "Old Title")
+	fstest.HasChild(t, byID, "1. New Title")
 
-	if _, ok := byID.Children()["1. New Title"]; !ok {
-		t.Error("by-id should show '1. New Title'")
-	}
-
-	// by-author: book should still be under Alice (author unchanged)
-	ad, ok := byAuthor.Children()["Alice"]
-	if !ok {
-		t.Fatal("by-author should still have Alice")
-	}
-	ald := ad.(fs.Dir)
-	if _, ok := ald.Children()["New Title"]; !ok {
-		t.Error("Alice's dir should contain 'New Title'")
-	}
+	// The author did not change, so the book stays under Alice.
+	fstest.HasChild(t, fstest.ChildAs[fs.Dir](t, byAuthor, "Alice"), "New Title")
 }
 
 func TestRegistryEditAuthorsRehomesInByAuthor(t *testing.T) {
 	f := newTestFS(t)
 	book := makeBook(1, "Test", "Alice")
-	lib := libfake.Lib{
+	lib := libtest.Editor{
 		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			updated := *book
 			if e.Authors != nil {
@@ -111,24 +87,10 @@ func TestRegistryEditAuthorsRehomesInByAuthor(t *testing.T) {
 
 	reg.Add(testutil.WrapBook(book))
 
-	bd := allBooks.Children()["Test"].(fs.Dir)
-	writeField(t, bd, "authors", "Bob")
+	writeField(t, fstest.ChildAs[fs.Dir](t, allBooks, "Test"), "authors", "Bob")
 
-	if _, ok := byAuthor.Children()["Bob"]; !ok {
-		t.Error("by-author should have 'Bob'")
-	}
-	ad, ok := byAuthor.Children()["Bob"]
-	if !ok {
-		t.Fatal("by-author should have 'Bob'")
-	}
-	ald := ad.(fs.Dir)
-	if _, ok := ald.Children()["Test"]; !ok {
-		t.Error("Bob's dir should contain 'Test'")
-	}
-
-	if _, ok := byAuthor.Children()["Alice"]; ok {
-		t.Error("Alice's dir should be pruned after author change")
-	}
+	fstest.HasChild(t, fstest.ChildAs[fs.Dir](t, byAuthor, "Bob"), "Test")
+	fstest.NoChild(t, byAuthor, "Alice")
 }
 
 func TestRegistryEditStatusChangesReaderView(t *testing.T) {
@@ -136,7 +98,7 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 	book := makeBook(1, "Test", "Author1")
 	book.EpubPath = "Test.epub"
 	book.Meta.Status = "unread"
-	lib := libfake.Lib{
+	lib := libtest.Editor{
 		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			updated := *book
 			if e.Status != nil {
@@ -148,24 +110,14 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 	}
 	reg := registry.NewBookRegistry(f, lib)
 	allBooks := views.NewAllBooksDir(reg)
-	readerDir := views.NewReaderDir(reg, libfake.Exporter{StatusList: []string{"reading"}})
+	readerDir := views.NewReaderDir(reg, libtest.Exporter{StatusList: []string{"reading"}})
 
 	reg.Add(testutil.WrapBook(book))
 
 	// Reader view should not show the book when status is "unread".
-	if n := len(readerDir.Children()); n != 0 {
-		t.Fatalf("expected 0 reader children for unread book, got %d", n)
-	}
+	fstest.ChildCount(t, readerDir, 0)
 
-	bd := allBooks.Children()["Test"].(fs.Dir)
-	writeField(t, bd, "status", "reading")
+	writeField(t, fstest.ChildAs[fs.Dir](t, allBooks, "Test"), "status", "reading")
 
-	ad, ok := readerDir.Children()["Author1"]
-	if !ok {
-		t.Fatal("reader should have 'Author1' subdir for a 'reading' status book")
-	}
-	ald := ad.(fs.ModDir)
-	if _, ok := ald.Children()["Test.epub"]; !ok {
-		t.Error("Author1's reader dir should contain 'Test.epub'")
-	}
+	fstest.HasChild(t, fstest.ChildAs[fs.ModDir](t, readerDir, "Author1"), "Test.epub")
 }

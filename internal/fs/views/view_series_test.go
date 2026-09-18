@@ -4,8 +4,9 @@ import (
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
+	"github.com/ramblingenzyme/ebookfs/internal/fstest"
+	"github.com/ramblingenzyme/ebookfs/internal/libtest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library"
 )
 
@@ -88,18 +89,12 @@ func TestSeriesEntryName_PadTriggeredByMaxIndex(t *testing.T) {
 	reg.Add(wrapBook(b1))
 	reg.Add(wrapBook(b2))
 
-	sd := d.Children()["S"].(*seriesBookListDir)
-	children := dirChildNames(sd)
-	if len(children) != 2 {
-		t.Fatalf("expected 2 books, got %d", len(children))
-	}
-	// With maxIdx >= 10, lower-indexed books should be zero-padded.
-	want := map[string]bool{"01 - First": true, "10 - Tenth": true}
-	for _, name := range children {
-		if !want[name] {
-			t.Errorf("unexpected entry %q, want one of %v", name, want)
-		}
-	}
+	sd := fstest.ChildAs[*seriesBookListDir](t, d, "S")
+
+	// With maxIdx >= 10, lower-indexed books are zero-padded.
+	fstest.ChildCount(t, sd, 2)
+	fstest.HasChild(t, sd, "01 - First")
+	fstest.HasChild(t, sd, "10 - Tenth")
 }
 
 func TestBySeriesDirRemoveNilSeriesNoOp(t *testing.T) {
@@ -107,7 +102,7 @@ func TestBySeriesDirRemoveNilSeriesNoOp(t *testing.T) {
 	d := NewBySeriesDir(reg)
 
 	b := testutil.MakeBook(1, "No Series", "Author")
-	bd := book.NewBookDir(newTestFS(t), libfake.Lib{}, func(int64, library.Edits) error { return nil }, b)
+	bd := book.NewBookDir(newTestFS(t), libtest.ContentReader{}, func(int64, library.Edits) error { return nil }, b)
 
 	d.Remove(bd) // Should not panic — early return when Series is nil
 }

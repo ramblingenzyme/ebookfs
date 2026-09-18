@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 )
 
@@ -14,17 +15,8 @@ func testFieldFileStat(t *testing.T, mode uint32) *proto.Stat {
 func TestFieldFileRead(t *testing.T) {
 	ff := newFieldFile(testFieldFileStat(t, 0444), func() string { return "hello" }, nil)
 
-	fid := uint64(1)
-	if err := ff.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
-	data, err := ff.Read(fid, 0, 10)
-	if err != nil {
-		t.Fatalf("Read: %v", err)
-	}
-	if string(data) != "hello\n" {
-		t.Errorf("Read = %q, want %q", data, "hello\n")
+	if got := fstest.Fid(t, ff, 1).Get(proto.Mode(0), 10); got != "hello\n" {
+		t.Errorf("Read = %q, want %q", got, "hello\n")
 	}
 }
 
@@ -35,40 +27,19 @@ func TestFieldFileRead(t *testing.T) {
 func TestFieldFileReadEmpty(t *testing.T) {
 	ff := newFieldFile(testFieldFileStat(t, 0444), func() string { return "" }, nil)
 
-	fid := uint64(1)
-	if err := ff.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
-	data, err := ff.Read(fid, 0, 10)
-	if err != nil {
-		t.Fatalf("Read: %v", err)
-	}
-	if string(data) != "\n" {
-		t.Errorf("Read(empty field) = %q, want %q", data, "\n")
+	if got := fstest.Fid(t, ff, 1).Get(proto.Mode(0), 10); got != "\n" {
+		t.Errorf("Read(empty field) = %q, want %q", got, "\n")
 	}
 }
 
 func TestFieldFileWriteClose(t *testing.T) {
-
 	var got string
 	ff := newFieldFile(testFieldFileStat(t, 0644), func() string { return "" }, func(s string) error {
 		got = s
 		return nil
 	})
 
-	fid := uint64(1)
-	if err := ff.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
-	if _, err := ff.Write(fid, 0, []byte("new value")); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
-
-	if err := ff.Close(fid); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
+	fstest.Fid(t, ff, 1).Set(proto.Mode(0), "new value")
 
 	if got != "new value" {
 		t.Errorf("set was called with %q, want %q", got, "new value")
@@ -76,25 +47,13 @@ func TestFieldFileWriteClose(t *testing.T) {
 }
 
 func TestFieldFileWriteTrailingNewlineTrimmed(t *testing.T) {
-
 	var got string
 	ff := newFieldFile(testFieldFileStat(t, 0644), func() string { return "" }, func(s string) error {
 		got = s
 		return nil
 	})
 
-	fid := uint64(1)
-	if err := ff.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
-	if _, err := ff.Write(fid, 0, []byte("value\n")); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
-
-	if err := ff.Close(fid); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
+	fstest.Fid(t, ff, 1).Set(proto.Mode(0), "value\n")
 
 	if got != "value" {
 		t.Errorf("set was called with %q, want %q", got, "value")
@@ -102,21 +61,15 @@ func TestFieldFileWriteTrailingNewlineTrimmed(t *testing.T) {
 }
 
 func TestFieldFileNoWriteDoesNotCallSet(t *testing.T) {
-
 	called := false
 	ff := newFieldFile(testFieldFileStat(t, 0644), func() string { return "" }, func(s string) error {
 		called = true
 		return nil
 	})
 
-	fid := uint64(1)
-	if err := ff.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
-	if err := ff.Close(fid); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
+	fid := fstest.Fid(t, ff, 1)
+	fid.Open(proto.Mode(0))
+	fid.Close()
 
 	if called {
 		t.Error("set was called even though no data was written")
@@ -126,20 +79,11 @@ func TestFieldFileNoWriteDoesNotCallSet(t *testing.T) {
 func TestFieldFileWriteReadOnly(t *testing.T) {
 	ff := newFieldFile(testFieldFileStat(t, 0444), func() string { return "val" }, nil)
 
-	fid := uint64(1)
-	if err := ff.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
+	fid := fstest.Fid(t, ff, 1)
+	fid.Open(proto.Mode(0))
+	fid.Write(0, "new")
 
-	if _, err := ff.Write(fid, 0, []byte("new")); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
-
-	err := ff.Close(fid)
-	if err == nil {
-		t.Fatal("expected error writing to read-only fieldFile")
-	}
-	if err.Error() != "read-only" {
+	if err := fid.WantCloseError(); err.Error() != "read-only" {
 		t.Errorf("got error %q, want %q", err.Error(), "read-only")
 	}
 }
@@ -165,84 +109,46 @@ func TestFieldFileStatLengthEmpty(t *testing.T) {
 func TestFieldFilePerFidBuffers(t *testing.T) {
 	ff := newFieldFile(testFieldFileStat(t, 0644), func() string { return "original" }, nil)
 
-	fid1, fid2 := uint64(1), uint64(2)
-	if err := ff.Open(fid1, proto.Mode(0)); err != nil {
-		t.Fatalf("Open fid1: %v", err)
-	}
-	if err := ff.Open(fid2, proto.Mode(0)); err != nil {
-		t.Fatalf("Open fid2: %v", err)
-	}
+	fid1, fid2 := fstest.Fid(t, ff, 1), fstest.Fid(t, ff, 2)
+	fid1.Open(proto.Mode(0))
+	fid2.Open(proto.Mode(0))
 
-	if _, err := ff.Write(fid1, 0, []byte("fid1 write")); err != nil {
-		t.Fatalf("Write fid1: %v", err)
-	}
+	fid1.Write(0, "fid1 write")
 
 	// Reads return the Open snapshot regardless of writes.
-	for _, tc := range []struct {
-		fid  uint64
-		want string
-	}{
-		{fid1, "original\n"},
-		{fid2, "original\n"},
-	} {
-		data, err := ff.Read(tc.fid, 0, 20)
-		if err != nil {
-			t.Fatalf("Read fid %d: %v", tc.fid, err)
-		}
-		if string(data) != tc.want {
-			t.Errorf("Read fid %d = %q, want %q", tc.fid, data, tc.want)
-		}
+	if got := fid1.Read(0, 20); got != "original\n" {
+		t.Errorf("fid1 read = %q, want %q", got, "original\n")
+	}
+	if got := fid2.Read(0, 20); got != "original\n" {
+		t.Errorf("fid2 read = %q, want %q", got, "original\n")
 	}
 }
 
 func TestFieldFileGetUpdatesOnReopen(t *testing.T) {
-
 	value := "first"
 	ff := newFieldFile(testFieldFileStat(t, 0444), func() string { return value }, nil)
 
-	fid := uint64(1)
-	if err := ff.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
+	fid := fstest.Fid(t, ff, 1)
+	if got := fid.Get(proto.Mode(0), 10); got != "first\n" {
+		t.Errorf("Read = %q, want %q", got, "first\n")
 	}
 
-	data, _ := ff.Read(fid, 0, 10)
-	if string(data) != "first\n" {
-		t.Errorf("Read = %q, want %q", data, "first\n")
-	}
-
-	ff.Close(fid)
+	fid.Close()
 	value = "second"
 
-	if err := ff.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Reopen: %v", err)
-	}
-
-	data, _ = ff.Read(fid, 0, 10)
-	if string(data) != "second\n" {
-		t.Errorf("Read after reopen = %q, want %q", data, "second\n")
+	if got := fid.Get(proto.Mode(0), 10); got != "second\n" {
+		t.Errorf("Read after reopen = %q, want %q", got, "second\n")
 	}
 }
 
 func TestFieldFileOtruncOverwrite(t *testing.T) {
-
 	var got string
 	ff := newFieldFile(testFieldFileStat(t, 0644), func() string { return "oldvalue" }, func(s string) error {
 		got = s
 		return nil
 	})
 
-	fid := uint64(1)
-	if err := ff.Open(fid, proto.Otrunc); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
-	if _, err := ff.Write(fid, 0, []byte("new")); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
-
-	if err := ff.Close(fid); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
+	fstest.Fid(t, ff, 1).Set(proto.Otrunc, "new")
 
 	if got != "new" {
 		t.Errorf("set was called with %q, want %q", got, "new")
@@ -250,26 +156,17 @@ func TestFieldFileOtruncOverwrite(t *testing.T) {
 }
 
 func TestFieldFileAppendWithoutOtrunc(t *testing.T) {
-
 	var got string
 	ff := newFieldFile(testFieldFileStat(t, 0644), func() string { return "old" }, func(s string) error {
 		got = s
 		return nil
 	})
 
-	fid := uint64(1)
-	if err := ff.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
+	fid := fstest.Fid(t, ff, 1)
+	fid.Open(proto.Mode(0))
 	// Snapshot is "old\n" = 4 bytes. Write at end.
-	if _, err := ff.Write(fid, 4, []byte("new\n")); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
-
-	if err := ff.Close(fid); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
+	fid.Write(4, "new\n")
+	fid.Close()
 
 	if got != "old\nnew" {
 		t.Errorf("set was called with %q, want %q", got, "old\nnew")
@@ -277,26 +174,17 @@ func TestFieldFileAppendWithoutOtrunc(t *testing.T) {
 }
 
 func TestFieldFilePartialOverwriteWithoutOtrunc(t *testing.T) {
-
 	var got string
 	ff := newFieldFile(testFieldFileStat(t, 0644), func() string { return "hello world" }, func(s string) error {
 		got = s
 		return nil
 	})
 
-	fid := uint64(1)
-	if err := ff.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
+	fid := fstest.Fid(t, ff, 1)
+	fid.Open(proto.Mode(0))
 	// Replace "lo " at offset 3 with "XY".
-	if _, err := ff.Write(fid, 3, []byte("XY")); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
-
-	if err := ff.Close(fid); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
+	fid.Write(3, "XY")
+	fid.Close()
 
 	if got != "helXY world" {
 		t.Errorf("set was called with %q, want %q", got, "helXY world")
@@ -304,27 +192,15 @@ func TestFieldFilePartialOverwriteWithoutOtrunc(t *testing.T) {
 }
 
 func TestFieldFileShorterOverwriteWithoutOtrunc(t *testing.T) {
-
 	var got string
 	ff := newFieldFile(testFieldFileStat(t, 0644), func() string { return "reading" }, func(s string) error {
 		got = s
 		return nil
 	})
 
-	fid := uint64(1)
-	if err := ff.Open(fid, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
 	// Write "read\n" at offset 0, shorter than the snapshot "reading\n". Without
 	// the fix, residual bytes produce "read\ning".
-	if _, err := ff.Write(fid, 0, []byte("read\n")); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
-
-	if err := ff.Close(fid); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
+	fstest.Fid(t, ff, 1).Set(proto.Mode(0), "read\n")
 
 	if got != "read" {
 		t.Errorf("set was called with %q, want %q", got, "read")
@@ -332,21 +208,15 @@ func TestFieldFileShorterOverwriteWithoutOtrunc(t *testing.T) {
 }
 
 func TestFieldFileOtruncNoWriteDoesNotCallSet(t *testing.T) {
-
 	called := false
 	ff := newFieldFile(testFieldFileStat(t, 0644), func() string { return "old" }, func(s string) error {
 		called = true
 		return nil
 	})
 
-	fid := uint64(1)
-	if err := ff.Open(fid, proto.Otrunc); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
-	if err := ff.Close(fid); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
+	fid := fstest.Fid(t, ff, 1)
+	fid.Open(proto.Otrunc)
+	fid.Close()
 
 	if called {
 		t.Error("set was called even though no data was written")

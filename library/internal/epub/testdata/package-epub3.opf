@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="bookid">urn:uuid:1234</dc:identifier>
+    <dc:title id="t1">Original Title</dc:title>
+    <meta refines="#t1" property="file-as">Title, Original</meta>
+    <dc:creator id="creator1">Jane Doe</dc:creator>
+    <meta refines="#creator1" property="role" scheme="marc:relators">aut</meta>
+    <meta refines="#creator1" property="file-as">Doe, Jane</meta>
+    <dc:language>en</dc:language>
+    <dc:date>2020-01-02</dc:date>
+    <dc:description>Original description.</dc:description>
+    <meta name="cover" content="cover-img"/>
+  </metadata>
+  <manifest>
+    <item id="cover-img" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine><itemref idref="ch1"/></spine>
+</package>

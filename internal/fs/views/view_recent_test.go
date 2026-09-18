@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 )
 
 func TestRecentDirOrdersNewestFirst(t *testing.T) {
@@ -19,16 +21,9 @@ func TestRecentDirOrdersNewestFirst(t *testing.T) {
 	reg.Add(wrapBook(b1))
 	reg.Add(wrapBook(b2))
 
-	children := dirChildNames(d)
-	if len(children) != 2 {
-		t.Fatalf("expected 2 children, got %d: %v", len(children), children)
-	}
-	if _, ok := d.Children()["Newest"]; !ok {
-		t.Errorf("expected 'Newest' to be listed, got %v", children)
-	}
-	if _, ok := d.Children()["Oldest"]; !ok {
-		t.Errorf("expected 'Oldest' to be listed, got %v", children)
-	}
+	fstest.ChildCount(t, d, 2)
+	fstest.HasChild(t, d, "Newest")
+	fstest.HasChild(t, d, "Oldest")
 }
 
 func TestRecentDirCapsAtLimitAndBackfillsOnRemove(t *testing.T) {
@@ -60,9 +55,7 @@ func TestRecentDirCapsAtLimitAndBackfillsOnRemove(t *testing.T) {
 	if _, ok := d.visible[1]; !ok {
 		t.Errorf("expected backfilled book (id 1) to become visible, got %v", d.visible)
 	}
-	if _, ok := d.Children()["Title 1"]; !ok {
-		t.Errorf("expected backfilled book to be filed under its title, got children %v", dirChildNames(d))
-	}
+	fstest.HasChild(t, d, "Title 1")
 }
 
 func TestRecentDirRemoveNotVisibleNoOp(t *testing.T) {
@@ -76,16 +69,13 @@ func TestRecentDirRemoveNotVisibleNoOp(t *testing.T) {
 		reg.Add(wrapBook(b))
 	}
 
-	before := dirChildNames(d)
+	before := fstest.ChildNames(d)
 
 	// id 1 is the oldest and should not be visible; removing it should not
 	// change the visible set.
 	reg.Remove(1)
 
-	after := dirChildNames(d)
-	if len(after) != len(before) {
-		t.Fatalf("expected visible set to stay the same size, before=%v after=%v", before, after)
-	}
+	fstest.ChildCount(t, d, len(before))
 }
 
 // Books arriving in an order unrelated to their DateAdded. The population is

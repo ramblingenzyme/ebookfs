@@ -6,8 +6,9 @@ import (
 	"time"
 
 	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/ebookfs/internal/fstest"
+	"github.com/ramblingenzyme/ebookfs/internal/libtest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil/libfake"
 	"github.com/ramblingenzyme/ebookfs/library"
 )
 
@@ -46,7 +47,7 @@ func TestFormatStatsZeroTimes(t *testing.T) {
 
 func TestStatsFileReadsLiveStats(t *testing.T) {
 	calls := 0
-	lib := libfake.Lib{
+	lib := libtest.StatsReader{
 		StatsFn: func() (*library.Stats, error) {
 			calls++
 			return &library.Stats{Books: calls}, nil
@@ -54,46 +55,29 @@ func TestStatsFileReadsLiveStats(t *testing.T) {
 	}
 	f := NewStatsFile(testutil.NewTestFS(t), lib)
 
-	if err := f.Open(1, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-	data, err := f.Read(1, 0, 1024)
-	if err != nil {
-		t.Fatalf("Read: %v", err)
-	}
-	if !strings.Contains(string(data), "books: 1\n") {
-		t.Errorf("Read() = %q, want it to contain %q", data, "books: 1")
+	if got := fstest.Fid(t, f, 1).Get(proto.Mode(0), 1024); !strings.Contains(got, "books: 1\n") {
+		t.Errorf("Read() = %q, want it to contain %q", got, "books: 1")
 	}
 
 	// A second Open re-derives content, observing the updated stats.
-	if err := f.Open(2, proto.Mode(0)); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-	data, err = f.Read(2, 0, 1024)
-	if err != nil {
-		t.Fatalf("Read: %v", err)
-	}
-	if !strings.Contains(string(data), "books: 2\n") {
-		t.Errorf("second Read() = %q, want it to contain %q", data, "books: 2")
+	if got := fstest.Fid(t, f, 2).Get(proto.Mode(0), 1024); !strings.Contains(got, "books: 2\n") {
+		t.Errorf("second Read() = %q, want it to contain %q", got, "books: 2")
 	}
 }
 
 func TestStatsFileStatReportsLength(t *testing.T) {
-	lib := libfake.Lib{
+	lib := libtest.StatsReader{
 		StatsFn: func() (*library.Stats, error) {
 			return &library.Stats{Books: 7}, nil
 		},
 	}
 	f := NewStatsFile(testutil.NewTestFS(t), lib)
 
-	want := len(formatStats(&library.Stats{Books: 7}))
-	if got := f.Stat().Length; got != uint64(want) {
-		t.Errorf("Stat().Length = %d, want %d", got, want)
-	}
+	fstest.StatLength(t, f, uint64(len(formatStats(&library.Stats{Books: 7}))))
 }
 
 func TestStatsFileOpenPropagatesError(t *testing.T) {
-	lib := libfake.Lib{
+	lib := libtest.StatsReader{
 		StatsFn: func() (*library.Stats, error) {
 			return nil, testutil.ErrTest
 		},

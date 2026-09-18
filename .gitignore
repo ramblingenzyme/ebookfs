@@ -1,3 +1,5 @@
 ebookfs
 config.toml
 coverage.out
+.opencode
+/testdata
