@@ -1,9 +1,9 @@
-// What Rewrite does with an Edits that the epub package's own fields cannot
+// What Rewrite does with an bookmodel.Edits that the epub package's own fields cannot
 // say: a nil means the edit did not name the field, so one half of a series
 // carries the other over, a retitled book drops its stale sort title, and an
 // edit naming nothing at all is not an edit.
 //
-// Also the two refusals that are this layer's: Validate as a backstop, and the
+// Also the two refusals that are this layer's: bookmodel.Validate as a backstop, and the
 // title check that must run before anything is written.
 
 package epub_test
@@ -17,11 +17,10 @@ import (
 	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/internal/epubtest"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 )
 
 // reindexSeries applies an index-only series edit to the epub at path, with the
-// book model claiming series. Validate refuses a SeriesIndex edit on a book
+// book model claiming series. bookmodel.Validate refuses a SeriesIndex edit on a book
 // with no series at all, so the model has to carry one, the shape library.Edit
 // hands in after reading the book from the index.
 func reindexSeries(t *testing.T, path, series, index string) bookmodel.Bib {
@@ -30,7 +29,7 @@ func reindexSeries(t *testing.T, path, series, index string) bookmodel.Bib {
 		Location: bookmodel.Location{EpubPath: path},
 		Bib:      bookmodel.Bib{Series: &bookmodel.SeriesRef{Name: series, Index: "1"}},
 	}
-	bib, err := epub.Rewrite(path, b, edits.Edits{SeriesIndex: new(index)})
+	bib, err := epub.Rewrite(path, b, bookmodel.Edits{SeriesIndex: new(index)})
 	if err != nil {
 		t.Fatalf("Rewrite: %v", err)
 	}
@@ -47,7 +46,7 @@ func TestWriteBibSeriesIndexOnlyKeepsName(t *testing.T) {
 	}{{"epub3", epubtest.OPF3}, {"epub2", epubtest.OPF2}} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := epubtest.WriteEpub(t, epubtest.BaseEntries(tc.opf))
-			if _, err := writeBib(path, edits.Edits{Series: new("The Saga"), SeriesIndex: new("1")}); err != nil {
+			if _, err := writeBib(path, bookmodel.Edits{Series: new("The Saga"), SeriesIndex: new("1")}); err != nil {
 				t.Fatal(err)
 			}
 
@@ -81,7 +80,7 @@ func TestWriteBibSeriesIndexOnlyWithoutSeriesInOPF(t *testing.T) {
 
 func TestWriteBibBlankTitleRejected(t *testing.T) {
 	path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
-	if _, err := writeBib(path, edits.Edits{Title: new("   ")}); err == nil {
+	if _, err := writeBib(path, bookmodel.Edits{Title: new("   ")}); err == nil {
 		t.Fatal("expected error blanking title, got nil")
 	}
 	// Original must be untouched and still valid.
@@ -107,7 +106,7 @@ func TestWriteBibTitleChangeClearsStaleSortTitle(t *testing.T) {
 		t.Fatalf("precondition: sort title = %q, want Title, Original", before.SortTitle)
 	}
 
-	book, err := writeBib(path, edits.Edits{Title: new("Wuthering Heights")})
+	book, err := writeBib(path, bookmodel.Edits{Title: new("Wuthering Heights")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +115,7 @@ func TestWriteBibTitleChangeClearsStaleSortTitle(t *testing.T) {
 	}
 }
 
-// Rewrite's short circuit, as its doc promises: an Edits carrying nothing
+// Rewrite's short circuit, as its doc promises: an bookmodel.Edits carrying nothing
 // returns b.Bib verbatim and leaves the file alone. library.Edit depends on it:
 // it calls Rewrite on every edit including meta-only ones, so a rewrite here
 // would rebuild the zip and restamp dcterms:modified for a change to a rating.
@@ -135,7 +134,7 @@ func TestRewriteWithNoEditsIsATotalNoOp(t *testing.T) {
 	b := book(t, path)
 	b.Bib.Title = "Not What The File Says"
 
-	got, err := epub.Rewrite(path, b, edits.Edits{})
+	got, err := epub.Rewrite(path, b, bookmodel.Edits{})
 	if err != nil {
 		t.Fatalf("Rewrite: %v", err)
 	}
@@ -174,7 +173,7 @@ func TestFailedValidationLeavesTheOriginal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := writeBib(path, edits.Edits{SortTitle: new("Hobbit, The")}); err == nil {
+	if _, err := writeBib(path, bookmodel.Edits{SortTitle: new("Hobbit, The")}); err == nil {
 		t.Fatal("expected the rewrite to be rejected, got nil")
 	}
 
@@ -211,11 +210,11 @@ func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 	// real change, and epubtest.OPF3 carries one.
 	for _, tc := range []struct {
 		name string
-		e    edits.Edits
+		e    bookmodel.Edits
 	}{
-		{"title with its existing sort title", edits.Edits{Title: &current.Title, SortTitle: &current.SortTitle}},
-		{"description already equal", edits.Edits{Description: &current.Description}},
-		{"language already equal", edits.Edits{Language: &current.Language}},
+		{"title with its existing sort title", bookmodel.Edits{Title: &current.Title, SortTitle: &current.SortTitle}},
+		{"description already equal", bookmodel.Edits{Description: &current.Description}},
+		{"language already equal", bookmodel.Edits{Language: &current.Language}},
 	} {
 		bib, err := writeBib(path, tc.e)
 		if err != nil {
@@ -231,7 +230,7 @@ func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 
 	// Control: a real change must still land, or the check above proves nothing.
 	changed := current.Title + " (Revised)"
-	if _, err := writeBib(path, edits.Edits{Title: new(changed)}); err != nil {
+	if _, err := writeBib(path, bookmodel.Edits{Title: new(changed)}); err != nil {
 		t.Fatal(err)
 	}
 	if os.SameFile(before, statOf()) {
@@ -240,14 +239,14 @@ func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 }
 
 // Two creators of one name have no meaning in either spec, and reusing one
-// element for both would silently collapse the list. edits.Validate rejects it
-// and Rewrite re-checks, so an unvalidated Edits cannot reach the file.
+// element for both would silently collapse the list. bookmodel.Validate rejects it
+// and Rewrite re-checks, so an unvalidated bookmodel.Edits cannot reach the file.
 func TestRewriteRefusesDuplicateAuthors(t *testing.T) {
 	path := epubtest.Build(t, epubtest.RichOPF3)
 	before := epubtest.ReadEntry(t, path, epubtest.OPFPath)
 
 	authors := []bookmodel.Author{{Name: "Jane Doe"}, {Name: "Jane Doe"}}
-	if _, err := writeBib(path, edits.Edits{Authors: &authors}); err == nil {
+	if _, err := writeBib(path, bookmodel.Edits{Authors: &authors}); err == nil {
 		t.Fatal("a duplicated author was accepted")
 	}
 	if !bytes.Equal(before, epubtest.ReadEntry(t, path, epubtest.OPFPath)) {

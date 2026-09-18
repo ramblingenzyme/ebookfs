@@ -8,13 +8,12 @@ import (
 
 	bookmodel "github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 )
 
 // writeBib applies edits to the package document of the epub at epubPath,
 // rewrites the file in place, and returns the re-parsed Bib. Production code
 // drives that flow through library.Edit.
-func writeBib(epubPath string, e edits.Edits) (bookmodel.Bib, error) {
+func writeBib(epubPath string, e bookmodel.Edits) (bookmodel.Bib, error) {
 	return epub.Rewrite(epubPath, &bookmodel.Book{Location: bookmodel.Location{EpubPath: epubPath}}, e)
 }
 

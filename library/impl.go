@@ -14,7 +14,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/syncutil"
 	"github.com/ramblingenzyme/ebookfs/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index"
 	"github.com/ramblingenzyme/ebookfs/library/internal/store"
 )
@@ -145,7 +144,7 @@ func (l *Library) Edit(id int64, e Edits) (*Book, error) {
 	// point — so meta-only edits (which skip the epub rewrite) can't slip
 	// through unchecked.
 	e = e.Normalized()
-	if v := edits.Validate(e, b); v != nil {
+	if v := book.Validate(e, b); v != nil {
 		return nil, v
 	}
 

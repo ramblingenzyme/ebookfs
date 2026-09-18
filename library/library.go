@@ -10,14 +10,13 @@ import (
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 	"github.com/ramblingenzyme/ebookfs/library/internal/index"
 	"github.com/ramblingenzyme/ebookfs/library/internal/store"
 )
 
-type Edits = edits.Edits
-type ValidationError = edits.ValidationError
-type FieldError = edits.FieldError
+type Edits = book.Edits
+type ValidationError = book.ValidationError
+type FieldError = book.FieldError
 type Query = index.Query
 type Order = index.Order
 type Stats = index.Stats

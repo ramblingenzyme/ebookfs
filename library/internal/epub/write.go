@@ -3,7 +3,6 @@ package epub
 import (
 	epubfile "github.com/ramblingenzyme/ebookfs/epub"
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 )
 
 // Rewrite applies e to the epub at epubPath atomically. Every refusal runs
@@ -16,14 +15,14 @@ import (
 //
 // b is used only for validation and to locate the cover entry; its EpubPath is
 // not read, so this package never resolves against the store root.
-func Rewrite(epubPath string, b *book.Book, e edits.Edits) (book.Bib, error) {
+func Rewrite(epubPath string, b *book.Book, e book.Edits) (book.Bib, error) {
 	if !e.HasCoverEdit() && !e.HasBibEdits() {
 		return b.Bib, nil
 	}
 
-	// Backstop: Library.Edit is the enforcement point, and an unvalidated Edits
+	// Backstop: Library.Edit is the enforcement point, and an unvalidated book.Edits
 	// must never reach a file.
-	if v := edits.Validate(e, b); v != nil {
+	if v := book.Validate(e, b); v != nil {
 		return book.Bib{}, v
 	}
 
@@ -63,10 +62,10 @@ func Rewrite(epubPath string, b *book.Book, e edits.Edits) (book.Bib, error) {
 	return *bib, nil
 }
 
-// apply assigns the fields e names. Unwrapping the pointers is Edits' business,
+// apply assigns the fields e names. Unwrapping the pointers is book.Edits' business,
 // not the book's: a nil means the edit did not name the field, which is an
 // encoding this package chose.
-func apply(f *epubfile.Book, e edits.Edits) {
+func apply(f *epubfile.Book, e book.Edits) {
 	if e.Title != nil {
 		f.Title = *e.Title
 		// A retitled book drops the sort title it carried, which was derived
@@ -104,7 +103,7 @@ func authors(as []book.Author) []epubfile.Author {
 // index-only edit moves the book the reader saw rather than inventing a
 // collection — and a book in no series has no position to set, so the edit is
 // dropped rather than minting an empty one.
-func series(cur *epubfile.Series, e edits.Edits) *epubfile.Series {
+func series(cur *epubfile.Series, e book.Edits) *epubfile.Series {
 	s := epubfile.Series{}
 	if cur != nil {
 		s = *cur

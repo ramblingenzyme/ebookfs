@@ -1,4 +1,4 @@
-package edits
+package book
 
 import (
 	"fmt"
@@ -7,8 +7,6 @@ import (
 	"strings"
 
 	"golang.org/x/text/language"
-
-	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
 // Edits is a partial update to a Book's fields. A nil pointer leaves the field
@@ -30,7 +28,7 @@ type Edits struct {
 	SortTitle   *string
 	Description *string
 	Language    *string
-	Authors     *[]book.Author
+	Authors     *[]Author
 	Series      *string
 	SeriesIndex *string
 
@@ -113,7 +111,7 @@ type fieldValidator struct {
 
 // Validate validates e against the book's current state and returns per-field errors.
 // A nil return means all fields are valid.
-func Validate(e Edits, b *book.Book) *ValidationError {
+func Validate(e Edits, b *Book) *ValidationError {
 	validators := []fieldValidator{
 		{"status", e.validateStatus},
 		{"rating", e.validateRating},
@@ -139,8 +137,8 @@ func Validate(e Edits, b *book.Book) *ValidationError {
 }
 
 func (e Edits) validateStatus() string {
-	if e.Status != nil && !book.IsValidStatus(*e.Status) {
-		return fmt.Sprintf("invalid status %q: must be %s", *e.Status, book.StatusList())
+	if e.Status != nil && !IsValidStatus(*e.Status) {
+		return fmt.Sprintf("invalid status %q: must be %s", *e.Status, StatusList())
 	}
 	return ""
 }
@@ -210,7 +208,7 @@ func (e Edits) validateLanguage() string {
 	return ""
 }
 
-func (e Edits) validateCover(b *book.Book) string {
+func (e Edits) validateCover(b *Book) string {
 	if e.Cover == nil {
 		return ""
 	}
@@ -232,7 +230,7 @@ var seriesIndexPattern = regexp.MustCompile(`^[0-9]+(\.[0-9]+)*$`)
 // against, rather than keeping a second opinion about what a position is.
 func ValidSeriesIndex(s string) bool { return seriesIndexPattern.MatchString(s) }
 
-func (e Edits) validateSeriesIndex(b *book.Book) string {
+func (e Edits) validateSeriesIndex(b *Book) string {
 	if e.SeriesIndex == nil {
 		return ""
 	}

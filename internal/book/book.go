@@ -1,6 +1,13 @@
-// Package book defines the internal book record types used by store,
-// index, and library. These types are not exposed to external consumers;
-// the public library.Book wrapper provides read-only access.
+// Package book defines the internal book record types used by store, index,
+// and library, and Edits, the partial update to one. These types are not
+// exposed to external consumers; the public library.Book wrapper provides
+// read-only access.
+//
+// Edits belongs here rather than with the epub adapter because it spans the
+// whole record exactly as Book does: seven fields the epub carries, and Status,
+// Rating and Tags, which live in the meta.toml sidecar and no EPUB file holds.
+// Validate checks it against the Book it would apply to, and the status
+// vocabulary it checks against is this package's too.
 package book
 
 import (
