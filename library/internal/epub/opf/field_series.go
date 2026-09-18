@@ -3,7 +3,6 @@ package opf
 import (
 	"strings"
 
-	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf/pkgdoc"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub/xml"
 )
@@ -19,9 +18,9 @@ func (o *Doc) series() seriesField { return seriesField{o.d} }
 
 // get returns the series as the document records it: no index means an empty
 // Index, not a default.
-func (f seriesField) get() *book.SeriesRef {
+func (f seriesField) get() *Series {
 	if coll := f.collection(); coll.Exists() {
-		return &book.SeriesRef{
+		return &Series{
 			Name:  coll.Get(),
 			Index: coll.Refine("group-position").Get(),
 		}
@@ -34,23 +33,22 @@ func (f seriesField) get() *book.SeriesRef {
 	if name == "" {
 		return nil
 	}
-	return &book.SeriesRef{Name: name, Index: f.d.Named("calibre:series_index").Get()}
+	return &Series{Name: name, Index: f.d.Named("calibre:series_index").Get()}
 }
 
-// set writes the series membership, or clears it when the name is empty. EPUB 3
-// records it as a belongs-to-collection meta with refinements; EPUB 2 has no
-// standard mechanism, so the proprietary calibre metas are used instead. Either
-// half is nil when the edit did not name it, and is carried over from get.
-func (f seriesField) set(name, index *string) {
+// set writes the series membership, or clears it when s is nil or its name is
+// empty. EPUB 3 records it as a belongs-to-collection meta with refinements;
+// EPUB 2 has no standard mechanism, so the proprietary calibre metas are used
+// instead.
+//
+// Both halves are stated. A caller changing one reads the other back from get
+// first, which is where the reader's answer comes from: an empty-named
+// collection is invisible to get, so the name it reports may be the calibre
+// meta's rather than the collection's.
+func (f seriesField) set(s *Series) {
 	series, position := "", ""
-	if cur := f.get(); cur != nil {
-		series, position = cur.Name, cur.Index
-	}
-	if name != nil {
-		series = xml.Collapse(*name)
-	}
-	if index != nil {
-		position = *index
+	if s != nil {
+		series, position = xml.Collapse(s.Name), s.Index
 	}
 
 	coll := f.collection()

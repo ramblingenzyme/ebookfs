@@ -114,7 +114,7 @@ func createReplace(a *archive, b *book.Book, e edits.Edits) (map[string][]byte, 
 		}
 		// An edit asking for what the file already says leaves no entry to
 		// replace, which is what lets Rewrite skip the rewrite entirely.
-		if pkg.Apply(e) {
+		if pkg.Apply(func(d *opf.Doc) { applyBib(d, e) }) {
 			newOPF, err := pkg.Bytes()
 			if err != nil {
 				return nil, err
@@ -128,6 +128,56 @@ func createReplace(a *archive, b *book.Book, e edits.Edits) (map[string][]byte, 
 	}
 
 	return replace, nil
+}
+
+// applyBib drives the package document's setters from e. Unwrapping the
+// pointers is Edits' business, not the document's: a nil means the edit did not
+// name the field, which is an encoding this package chose.
+func applyBib(d *opf.Doc, e edits.Edits) {
+	d.SetTitle(e.Title, e.SortTitle)
+
+	if e.Description != nil {
+		d.SetDescription(*e.Description)
+	}
+	if e.Language != nil {
+		d.SetLanguage(*e.Language)
+	}
+	if e.Authors != nil {
+		d.SetAuthors(authors(*e.Authors))
+	}
+	if e.Series != nil || e.SeriesIndex != nil {
+		d.SetSeries(series(d.Series(), e))
+	}
+}
+
+func authors(as []book.Author) []opf.Author {
+	out := make([]opf.Author, len(as))
+	for i, a := range as {
+		out[i] = opf.Author{Name: a.Name, SortName: a.SortName}
+	}
+	return out
+}
+
+// series folds a half-named series edit onto the membership the document
+// records, and returns nil for one to clear. cur is what a reader was shown, so
+// an index-only edit moves the book the reader saw rather than inventing a
+// collection — and a book in no series has no position to set, so the edit is
+// dropped rather than minting an empty collection.
+func series(cur *opf.Series, e edits.Edits) *opf.Series {
+	s := opf.Series{}
+	if cur != nil {
+		s = *cur
+	}
+	if e.Series != nil {
+		s.Name = *e.Series
+	}
+	if e.SeriesIndex != nil {
+		s.Index = *e.SeriesIndex
+	}
+	if s.Name == "" {
+		return nil
+	}
+	return &s
 }
 
 // replaceCover swaps the cover image entry in place and in the same format, so
@@ -272,7 +322,14 @@ func replaceNCX(a *archive, pkg *opf.Doc, enc *ocf.EncryptionInfo, e edits.Edits
 			"entry", entry, "error", err)
 		return nil
 	}
-	if doc.Apply(e) {
+	var names []string
+	if e.Authors != nil {
+		names = make([]string, len(*e.Authors))
+		for i, a := range *e.Authors {
+			names[i] = a.Name
+		}
+	}
+	if doc.Apply(e.Title, names) {
 		out, err := doc.Bytes()
 		if err != nil {
 			return err
