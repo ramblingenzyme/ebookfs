@@ -3,7 +3,7 @@
 // nothing, and names what was there instead, since a failed lookup is most
 // often an element written under the wrong parent rather than one that vanished.
 
-package epub_test
+package epubtest
 
 import (
 	"archive/zip"
@@ -14,10 +14,11 @@ import (
 	"github.com/beevik/etree"
 )
 
-func metadata(t *testing.T, path string) *etree.Element {
+// Metadata returns the <metadata> element of the epub's package document.
+func Metadata(t *testing.T, path string) *etree.Element {
 	t.Helper()
 	doc := etree.NewDocument()
-	if err := doc.ReadFromBytes(readEntry(t, path, opfPath)); err != nil {
+	if err := doc.ReadFromBytes(ReadEntry(t, path, OPFPath)); err != nil {
 		t.Fatalf("result is not parseable XML: %v", err)
 	}
 	md := doc.FindElement("//metadata")
@@ -27,10 +28,10 @@ func metadata(t *testing.T, path string) *etree.Element {
 	return md
 }
 
-// readEntryFromFile returns the entry's bytes and whether it was present.
-// readEntry is the same lookup for the common case where absence should fail
+// ReadEntryFromFile returns the entry's bytes and whether it was present.
+// ReadEntry is the same lookup for the common case where absence should fail
 // the test.
-func readEntryFromFile(t *testing.T, path, name string) ([]byte, bool) {
+func ReadEntryFromFile(t *testing.T, path, name string) ([]byte, bool) {
 	t.Helper()
 	zrc, err := zip.OpenReader(path)
 	if err != nil {
@@ -54,18 +55,18 @@ func readEntryFromFile(t *testing.T, path, name string) ([]byte, bool) {
 	return nil, false
 }
 
-// readEntry returns the entry's bytes, failing the test when it is absent.
-// readEntryFromFile is the same lookup for tests that need to assert on absence.
-func readEntry(t *testing.T, path, name string) []byte {
+// ReadEntry returns the entry's bytes, failing the test when it is absent.
+// ReadEntryFromFile is the same lookup for tests that need to assert on absence.
+func ReadEntry(t *testing.T, path, name string) []byte {
 	t.Helper()
-	b, ok := readEntryFromFile(t, path, name)
+	b, ok := ReadEntryFromFile(t, path, name)
 	if !ok {
 		t.Fatalf("entry %q not found", name)
 	}
 	return b
 }
 
-// legacyMeta and property read the two encodings of the same idea. An EPUB 2
+// LegacyMeta and Property read the two encodings of the same idea. An EPUB 2
 // <meta name="x" content="v"/> carries its value in an attribute; an EPUB 3
 // <meta property="x">v</meta> carries it as text. Which one a file uses is what
 // half these tests turn on, so the difference is named here instead of respelled
@@ -74,29 +75,31 @@ func readEntry(t *testing.T, path, name string) []byte {
 // Both fail when nothing matches, and both return a value rather than comparing
 // it: the caller's own message names the spec consequence, and "%v" on an
 // *etree.Element prints etree's struct rather than the value in question.
-func legacyMeta(t *testing.T, root *etree.Element, path string) string {
+func LegacyMeta(t *testing.T, root *etree.Element, path string) string {
 	t.Helper()
-	return attrOf(t, root, path, "content")
+	return AttrOf(t, root, path, "content")
 }
 
-func property(t *testing.T, root *etree.Element, path string) string {
+func Property(t *testing.T, root *etree.Element, path string) string {
 	t.Helper()
-	return elemAt(t, root, path).Text()
+	return ElemAt(t, root, path).Text()
 }
 
-// attrOf and elemAt are the same lookup for the elements that are not <meta>:
+// AttrOf and TextOf are the same lookup for the elements that are not <meta>:
 // a dc element's text, or an attribute the spec puts somewhere else.
-func attrOf(t *testing.T, root *etree.Element, path, attr string) string {
+func AttrOf(t *testing.T, root *etree.Element, path, attr string) string {
 	t.Helper()
-	return elemAt(t, root, path).SelectAttrValue(attr, "")
+	return ElemAt(t, root, path).SelectAttrValue(attr, "")
 }
 
-func textOf(t *testing.T, root *etree.Element, path string) string {
+func TextOf(t *testing.T, root *etree.Element, path string) string {
 	t.Helper()
-	return elemAt(t, root, path).Text()
+	return ElemAt(t, root, path).Text()
 }
 
-func elemAt(t *testing.T, root *etree.Element, path string) *etree.Element {
+// ElemAt returns the one element path matches, failing the test when nothing
+// does.
+func ElemAt(t *testing.T, root *etree.Element, path string) *etree.Element {
 	t.Helper()
 	el := root.FindElement(path)
 	if el == nil {
@@ -105,7 +108,7 @@ func elemAt(t *testing.T, root *etree.Element, path string) *etree.Element {
 	return el
 }
 
-// childTags names what is there, since a failed lookup is most often a element
+// childTags names what is there, since a failed lookup is most often an element
 // written under the wrong parent rather than one that vanished.
 func childTags(root *etree.Element) string {
 	var tags []string

@@ -6,7 +6,7 @@
 // The whole directory is embedded rather than each file, so adding a document
 // is adding a file.
 
-package epub_test
+package epubtest
 
 import (
 	"embed"
@@ -18,7 +18,7 @@ var fixtures embed.FS
 
 // packageFixture is fixture for the documents that are package documents, so
 // they carry the methods rather than needing a conversion at every use.
-func packageFixture(name string) packageDoc { return packageDoc(fixture(name)) }
+func packageFixture(name string) PackageDoc { return PackageDoc(fixture(name)) }
 
 // fixture drops the trailing newline a text file ends in. These go into epub
 // entries verbatim, and one test compares a rewritten cover page against the
@@ -34,36 +34,38 @@ func fixture(name string) string {
 }
 
 var (
-	opf3        = packageFixture("package-epub3.opf")
-	opf2        = packageFixture("package-epub2.opf")
-	richOPF3    = packageFixture("rich-epub3.opf")
-	richOPF2    = packageFixture("rich-epub2.opf")
-	ncxOPF      = packageFixture("ncx-package.opf")
-	opfWrappers = packageFixture("legacy-wrappers.opf")
+	OPF3        = packageFixture("package-epub3.opf")
+	OPF2        = packageFixture("package-epub2.opf")
+	RichOPF3    = packageFixture("rich-epub3.opf")
+	RichOPF2    = packageFixture("rich-epub2.opf")
+	NCXOPF      = packageFixture("ncx-package.opf")
+	OPFWrappers = packageFixture("legacy-wrappers.opf")
 
-	// dc-metadata present, x-metadata absent: §2.2's MUST still binds what an
-	// edit adds, and this is the one package a reader cannot see violating it.
-	dcMetadataOnly = packageFixture("dc-metadata-only.opf")
+	// DCMetadataOnly has dc-metadata present and x-metadata absent: §2.2's MUST
+	// still binds what an edit adds, and this is the one package a reader cannot
+	// see violating it.
+	DCMetadataOnly = packageFixture("dc-metadata-only.opf")
 
-	// The shape calibre and Sigil both produce.
-	svgCoverPage = fixture("svg-cover-page.xhtml")
+	// SVGCoverPage is the shape calibre and Sigil both produce.
+	SVGCoverPage = fixture("svg-cover-page.xhtml")
 
-	// Two package rootfiles where the first does not exist in the zip, the
-	// shape seen in some Kobo epubs. It has no builder because two rootfiles is
-	// the shape being tested, not a value inside one.
-	multiRootContainer = fixture("container-multi-root.xml")
+	// MultiRootContainer declares two package rootfiles where the first does not
+	// exist in the zip, the shape seen in some Kobo epubs. It has no builder
+	// because two rootfiles is the shape being tested, not a value inside one.
+	MultiRootContainer = fixture("container-multi-root.xml")
 )
 
-var containerXML = containerFor(opfPath, packageMediaType)
+// ContainerXML is META-INF/container.xml for the standard fixture layout.
+var ContainerXML = ContainerFor(OPFPath, PackageMediaType)
 
-// metas joins metadata parts into a <metadata> body, indenting each line, so a
+// Metas joins metadata parts into a <metadata> body, indenting each line, so a
 // fixture composes from named pieces instead of splicing calls into a backtick
 // string. A raw XML line is a valid part, which is what lets a fixture name the
 // pieces it is about and write out the one it is not.
-func metas(parts ...string) string {
+func Metas(parts ...string) string {
 	var out []string
 	for _, part := range parts {
-		for _, line := range strings.Split(part, "\n") {
+		for line := range strings.SplitSeq(part, "\n") {
 			if line == "" {
 				out = append(out, "")
 				continue
@@ -74,12 +76,12 @@ func metas(parts ...string) string {
 	return strings.Join(out, "\n")
 }
 
-// collection is the EPUB 3 series encoding: the collection, the collection-type
+// Collection is the EPUB 3 series encoding: the collection, the collection-type
 // refinement saying what kind it is, and a group-position when the book has one
 // (§5.5.3.3, D.3.3). An empty position is a book in a series with no stated place
 // in it. parent nests this collection inside another, which D.3.3 allows and
 // which only a series inside a set uses.
-func collection(id, name, kind, position string, parent ...string) string {
+func Collection(id, name, kind, position string, parent ...string) string {
 	refines := ""
 	if len(parent) == 1 {
 		refines = ` refines="#` + parent[0] + `"`
@@ -92,10 +94,10 @@ func collection(id, name, kind, position string, parent ...string) string {
 	return out
 }
 
-// calibreSeries is the EPUB 2 encoding of the same thing, the pair of metas
+// CalibreSeries is the EPUB 2 encoding of the same thing, the pair of metas
 // calibre writes. An empty index omits calibre:series_index, which is what a
 // series carrying no position looks like on the way out.
-func calibreSeries(name, index string) string {
+func CalibreSeries(name, index string) string {
 	out := `<meta name="calibre:series" content="` + name + `"/>`
 	if index != "" {
 		out += "\n" + `<meta name="calibre:series_index" content="` + index + `"/>`
@@ -103,26 +105,28 @@ func calibreSeries(name, index string) string {
 	return out
 }
 
-// packageMediaType is how a reader decides a rootfile is the package document
+// PackageMediaType is how a reader decides a rootfile is the package document
 // (OCF 3.3 §4.2.1). Declared here rather than reached for in epub, since these
 // tests drive it from the outside and the spec fixes the value.
-const packageMediaType = "application/oebps-package+xml"
+const PackageMediaType = "application/oebps-package+xml"
 
-// wrapped is an attribute value split across lines the way an editor breaks a
+// Wrapped is an attribute value split across lines the way an editor breaks a
 // long one. The newlines are the subject: XML 1.0 §3.3.3 turns each into a
 // space, so the value arrives padded.
-func wrapped(value string) string { return "\n        " + value + "\n      " }
+func Wrapped(value string) string { return "\n        " + value + "\n      " }
 
+// The two encryption algorithms these tests distinguish: one that means the
+// entry is really encrypted, one that means it is only font-obfuscated.
 const (
-	aes256     = "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
-	fontObfusc = "http://www.idpf.org/2008/embedding"
+	AES256     = "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+	FontObfusc = "http://www.idpf.org/2008/embedding"
 )
 
-// encryptionXML is META-INF/encryption.xml naming one encrypted resource. The
+// EncryptionXML is META-INF/encryption.xml naming one encrypted resource. The
 // two arguments are what the tests vary: the algorithm says whether the file is
 // really encrypted or only font-obfuscated (OCF 3.3 §4.5), and the URI says
 // which entry it covers.
-func encryptionXML(algorithm, uri string) string {
+func EncryptionXML(algorithm, uri string) string {
 	return `<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" xmlns:enc="http://www.w3.org/2001/04/xmlenc#">
   <enc:EncryptedData>
     <enc:EncryptionMethod Algorithm="` + algorithm + `"/>
@@ -131,11 +135,11 @@ func encryptionXML(algorithm, uri string) string {
 </encryption>`
 }
 
-// containerFor is META-INF/container.xml naming one rootfile. Both arguments are
+// ContainerFor is META-INF/container.xml naming one rootfile. Both arguments are
 // what the tests vary: the path, which may be percent-encoded or name an entry
 // that is not in the archive, and the media type, which decides whether the
 // rootfile is recognised at all.
-func containerFor(fullPath, mediaType string) string {
+func ContainerFor(fullPath, mediaType string) string {
 	return `<?xml version="1.0"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
   <rootfiles>

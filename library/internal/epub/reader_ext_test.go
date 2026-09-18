@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/internal/epubtest"
 	"github.com/ramblingenzyme/ebookfs/library/internal/epub"
 )
 
@@ -14,7 +15,7 @@ import (
 // through vfile.ReadAtFile, where a client holding a fid across a re-ingest is
 // exactly how a use-after-close arises.
 func TestReaderClosedContract(t *testing.T) {
-	path := writeEpub(t, baseEntries(opf3))
+	path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
 	r, err := epub.OpenReader(path, "OEBPS/cover.jpg")
 	if err != nil {
 		t.Fatal(err)
@@ -60,7 +61,7 @@ func TestReaderClosedContract(t *testing.T) {
 // empty bytes: Bib.CoverPath is "" when the epub carries no cover image, and
 // that value is handed straight to OpenReader.
 func TestReaderWithNoCover(t *testing.T) {
-	path := writeEpub(t, baseEntries(opf3))
+	path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
 	r, err := epub.OpenReader(path, "")
 	if err != nil {
 		t.Fatal(err)
