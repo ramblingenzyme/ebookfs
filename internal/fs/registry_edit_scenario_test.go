@@ -12,6 +12,7 @@ package fs
 import (
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/internal/libtest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/library"
 
@@ -35,7 +36,7 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 	book.Meta.Status = "unread"
 	// The real library fetches the edit base by id; the fake closes over the
 	// test's book instead.
-	lib := editor{
+	lib := libtest.Editor{
 		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			updated := *book
 			if e.Title != nil {
@@ -69,7 +70,7 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 func TestRegistryEditAuthorsRehomesInByAuthor(t *testing.T) {
 	f := newTestFS(t)
 	book := makeBook(1, "Test", "Alice")
-	lib := editor{
+	lib := libtest.Editor{
 		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			updated := *book
 			if e.Authors != nil {
@@ -97,7 +98,7 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 	book := makeBook(1, "Test", "Author1")
 	book.EpubPath = "Test.epub"
 	book.Meta.Status = "unread"
-	lib := editor{
+	lib := libtest.Editor{
 		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			updated := *book
 			if e.Status != nil {
@@ -109,7 +110,7 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 	}
 	reg := registry.NewBookRegistry(f, lib)
 	allBooks := views.NewAllBooksDir(reg)
-	readerDir := views.NewReaderDir(reg, exporter{StatusList: []string{"reading"}})
+	readerDir := views.NewReaderDir(reg, libtest.Exporter{StatusList: []string{"reading"}})
 
 	reg.Add(testutil.WrapBook(book))
 

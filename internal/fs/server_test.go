@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ramblingenzyme/ebookfs/internal/libtest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/library"
 
@@ -13,7 +14,7 @@ import (
 )
 
 func TestSetupServer(t *testing.T) {
-	lib := fakeLibrary{searchDeleter: searchDeleter{
+	lib := libtest.Library{SearchDeleter: libtest.SearchDeleter{
 		SearchFn: func(_ library.Query) ([]*library.Book, error) {
 			b1 := makeBook(1, "Book One", "Alice")
 			b1.Meta.Status = "unread"
@@ -22,7 +23,7 @@ func TestSetupServer(t *testing.T) {
 			return []*library.Book{testutil.WrapBook(b1), testutil.WrapBook(b2)}, nil
 		},
 	}}
-	exp := exporter{StatusList: []string{"unread"}}
+	exp := libtest.Exporter{StatusList: []string{"unread"}}
 
 	srv, err := SetupServer(lib, exp, 30*time.Minute, 100)
 	if err != nil {
@@ -40,26 +41,26 @@ func TestSetupServer(t *testing.T) {
 }
 
 func TestSetupServer_QueryError(t *testing.T) {
-	lib := fakeLibrary{searchDeleter: searchDeleter{
+	lib := libtest.Library{SearchDeleter: libtest.SearchDeleter{
 		SearchFn: func(_ library.Query) ([]*library.Book, error) {
 			return nil, errTest
 		},
 	}}
-	_, err := SetupServer(lib, exporter{}, 30*time.Minute, 100)
+	_, err := SetupServer(lib, libtest.Exporter{}, 30*time.Minute, 100)
 	if err == nil {
 		t.Fatal("expected error from SetupServer when Query fails")
 	}
 }
 
 func TestSetupServer_BooksPopulated(t *testing.T) {
-	lib := fakeLibrary{searchDeleter: searchDeleter{
+	lib := libtest.Library{SearchDeleter: libtest.SearchDeleter{
 		SearchFn: func(_ library.Query) ([]*library.Book, error) {
 			b := makeBook(1, "Present", "Alice")
 			b.Meta.Status = "unread"
 			return []*library.Book{testutil.WrapBook(b)}, nil
 		},
 	}}
-	srv, err := SetupServer(lib, exporter{}, 30*time.Minute, 100)
+	srv, err := SetupServer(lib, libtest.Exporter{}, 30*time.Minute, 100)
 	if err != nil {
 		t.Fatalf("SetupServer: %v", err)
 	}

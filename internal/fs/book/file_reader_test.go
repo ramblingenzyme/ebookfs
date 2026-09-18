@@ -8,6 +8,7 @@ import (
 
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fstest"
+	"github.com/ramblingenzyme/ebookfs/internal/libtest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 )
 
@@ -23,9 +24,9 @@ func testReaderFile(t *testing.T, exp Renderer) *ReaderFile {
 // Stat.
 
 func TestReaderFileOpenRead(t *testing.T) {
-	rf := testReaderFile(t, renderer{
+	rf := testReaderFile(t, libtest.Renderer{
 		OpenFn: func(b *library.Book) (library.EpubReader, error) {
-			return &epubReader{Reader: bytes.NewReader([]byte("hello epub"))}, nil
+			return &libtest.EpubReader{Reader: bytes.NewReader([]byte("hello epub"))}, nil
 		},
 	})
 
@@ -37,7 +38,7 @@ func TestReaderFileOpenRead(t *testing.T) {
 }
 
 func TestReaderFileStatReportsSize(t *testing.T) {
-	rf := testReaderFile(t, renderer{
+	rf := testReaderFile(t, libtest.Renderer{
 		SizeFn: func(b *library.Book) (int64, bool) { return 42, true },
 	})
 
@@ -48,7 +49,7 @@ func TestReaderFileStatReportsSize(t *testing.T) {
 }
 
 func TestReaderFileStatFallbackToZero(t *testing.T) {
-	rf := testReaderFile(t, renderer{
+	rf := testReaderFile(t, libtest.Renderer{
 		SizeFn: func(b *library.Book) (int64, bool) { return 0, false },
 	})
 

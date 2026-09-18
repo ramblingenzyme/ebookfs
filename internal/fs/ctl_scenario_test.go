@@ -19,6 +19,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/views"
 	"github.com/ramblingenzyme/ebookfs/internal/fstest"
+	"github.com/ramblingenzyme/ebookfs/internal/libtest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/library"
 )
@@ -43,12 +44,12 @@ func ctlTree(t *testing.T, cur *bookmodel.Book) (*ctl.CtlFile, *ctl.CommandLog, 
 	t.Helper()
 	f := newTestFS(t)
 
-	search := searchDeleter{
+	search := libtest.SearchDeleter{
 		SearchFn: func(library.Query) ([]*library.Book, error) {
 			return []*library.Book{testutil.WrapBook(cur)}, nil
 		},
 	}
-	edit := editor{
+	edit := libtest.Editor{
 		EditFn: func(_ int64, e library.Edits) (*library.Book, error) {
 			next := *cur
 			if e.Status != nil {

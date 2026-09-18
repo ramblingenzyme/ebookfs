@@ -6,12 +6,13 @@ import (
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
+	"github.com/ramblingenzyme/ebookfs/internal/libtest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 )
 
 func TestNewInboxDir(t *testing.T) {
 	f := testutil.NewTestFS(t)
-	d := NewInboxDir(f, ingester{}, nil)
+	d := NewInboxDir(f, libtest.Ingester{}, nil)
 
 	s := d.Stat()
 	if s.Name != "inbox" {

@@ -9,6 +9,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/library"
 
 	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
+	"github.com/ramblingenzyme/ebookfs/internal/libtest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 )
 
@@ -21,7 +22,7 @@ func (fakeView) Add(*book.BookDir)    {}
 func (fakeView) Remove(*book.BookDir) {}
 
 func TestEditUnknownID(t *testing.T) {
-	reg := NewBookRegistry(testutil.NewTestFS(t), editor{})
+	reg := NewBookRegistry(testutil.NewTestFS(t), libtest.Editor{})
 
 	status := "read"
 	if err := reg.Edit(999, library.Edits{Status: &status}); err == nil {
@@ -38,7 +39,7 @@ func TestEditConcurrentSnapshotSwap(t *testing.T) {
 	// current mimics the library's authoritative state; EditFn runs under the
 	// registry mutex, so reading and replacing it is serialized.
 	current := testutil.MakeMutableBook(1, "Title A", "Alice")
-	lib := editor{
+	lib := libtest.Editor{
 		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			updated := *current
 			if e.Title != nil {
@@ -100,7 +101,7 @@ type recordingView struct {
 func (v *recordingView) Add(d *book.BookDir)    { v.added = append(v.added, d.Book().ID()) }
 func (v *recordingView) Remove(d *book.BookDir) { v.removed = append(v.removed, d.Book().ID()) }
 
-func newTestRegistry(t *testing.T, lib editor) (*BookRegistry, *recordingView) {
+func newTestRegistry(t *testing.T, lib Editor) (*BookRegistry, *recordingView) {
 	t.Helper()
 	reg := NewBookRegistry(testutil.NewTestFS(t), lib)
 	v := &recordingView{}
@@ -110,7 +111,7 @@ func newTestRegistry(t *testing.T, lib editor) (*BookRegistry, *recordingView) {
 
 func TestFSReturnsTheServingFilesystem(t *testing.T) {
 	f := testutil.NewTestFS(t)
-	reg := NewBookRegistry(f, editor{})
+	reg := NewBookRegistry(f, libtest.Editor{})
 
 	if reg.FS() != f {
 		t.Error("FS() returned a different filesystem than the registry was built on")
@@ -118,7 +119,7 @@ func TestFSReturnsTheServingFilesystem(t *testing.T) {
 }
 
 func TestAddNotifiesEveryView(t *testing.T) {
-	reg, v := newTestRegistry(t, editor{})
+	reg, v := newTestRegistry(t, libtest.Editor{})
 
 	reg.Add(testutil.MakeBook(1, "First", "Alice"))
 	reg.Add(testutil.MakeBook(2, "Second", "Bob"))
@@ -131,7 +132,7 @@ func TestAddNotifiesEveryView(t *testing.T) {
 // A re-add keeps the same BookDir. Open 9P fids point at it, so replacing the
 // object would strand every open handle.
 func TestAddSameIDReusesTheBookDir(t *testing.T) {
-	reg, _ := newTestRegistry(t, editor{})
+	reg, _ := newTestRegistry(t, libtest.Editor{})
 
 	reg.Add(testutil.MakeBook(1, "First", "Alice"))
 	first := reg.books[1]
@@ -144,7 +145,7 @@ func TestAddSameIDReusesTheBookDir(t *testing.T) {
 
 func TestRemove(t *testing.T) {
 	t.Run("notifies views and forgets the book", func(t *testing.T) {
-		reg, v := newTestRegistry(t, editor{})
+		reg, v := newTestRegistry(t, libtest.Editor{})
 		reg.Add(testutil.MakeBook(1, "Doomed", "Alice"))
 
 		reg.Remove(1)
@@ -158,7 +159,7 @@ func TestRemove(t *testing.T) {
 	})
 
 	t.Run("unknown id is a no-op", func(t *testing.T) {
-		reg, v := newTestRegistry(t, editor{})
+		reg, v := newTestRegistry(t, libtest.Editor{})
 		reg.Add(testutil.MakeBook(1, "Kept", "Alice"))
 
 		reg.Remove(999)
@@ -173,7 +174,7 @@ func TestRemove(t *testing.T) {
 }
 
 func TestRemoveViewStopsNotifications(t *testing.T) {
-	reg, v := newTestRegistry(t, editor{})
+	reg, v := newTestRegistry(t, libtest.Editor{})
 	reg.Add(testutil.MakeBook(1, "Before", "Alice"))
 
 	reg.RemoveView(v)
@@ -193,7 +194,7 @@ func TestRemoveViewStopsNotifications(t *testing.T) {
 // reset runs first, then every registered book is offered, all under the
 // registry lock.
 func TestResyncViewReplaysEveryBook(t *testing.T) {
-	reg, _ := newTestRegistry(t, editor{})
+	reg, _ := newTestRegistry(t, libtest.Editor{})
 	reg.Add(testutil.MakeBook(1, "First", "Alice"))
 	reg.Add(testutil.MakeBook(2, "Second", "Bob"))
 
@@ -219,7 +220,7 @@ func TestResyncViewReplaysEveryBook(t *testing.T) {
 func TestEdit(t *testing.T) {
 	t.Run("persists and rehomes the book", func(t *testing.T) {
 		current := testutil.MakeMutableBook(1, "Old Title", "Alice")
-		lib := editor{
+		lib := libtest.Editor{
 			EditFn: func(_ int64, e library.Edits) (*library.Book, error) {
 				updated := *current
 				updated.Title = *e.Title
@@ -244,7 +245,7 @@ func TestEdit(t *testing.T) {
 	})
 
 	t.Run("unknown id", func(t *testing.T) {
-		reg, _ := newTestRegistry(t, editor{})
+		reg, _ := newTestRegistry(t, libtest.Editor{})
 
 		if err := reg.Edit(999, library.Edits{Status: new("read")}); err == nil {
 			t.Error("Edit on an unknown id returned nil, want an error")
@@ -252,7 +253,7 @@ func TestEdit(t *testing.T) {
 	})
 
 	t.Run("library failure leaves the tree untouched", func(t *testing.T) {
-		lib := editor{
+		lib := libtest.Editor{
 			EditFn: func(int64, library.Edits) (*library.Book, error) { return nil, errors.New("disk full") },
 		}
 		reg, v := newTestRegistry(t, lib)
@@ -297,7 +298,7 @@ func (v *snapshotView) Remove(d *book.BookDir) {
 // view broke.
 func TestCommitShowsOldStateToRemoveAndNewStateToAdd(t *testing.T) {
 	current := testutil.MakeMutableBook(1, "Old Title", "Alice")
-	lib := editor{
+	lib := libtest.Editor{
 		EditFn: func(_ int64, e library.Edits) (*library.Book, error) {
 			updated := *current
 			updated.Title = *e.Title

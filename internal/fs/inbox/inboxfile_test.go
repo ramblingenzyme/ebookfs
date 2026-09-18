@@ -10,13 +10,14 @@ import (
 
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fstest"
+	"github.com/ramblingenzyme/ebookfs/internal/libtest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/library"
 )
 
 func TestInboxFileOpenCreateIngestError(t *testing.T) {
 	f := testutil.NewTestFS(t)
-	lib := ingester{
+	lib := libtest.Ingester{
 		CreateIngestFn: func() (library.IngestHandle, error) {
 			return nil, errors.New("CreateIngest failed")
 		},
@@ -31,7 +32,7 @@ func TestInboxFileOpenCreateIngestError(t *testing.T) {
 
 func TestInboxFileDoubleOpenRejected(t *testing.T) {
 	f := testutil.NewTestFS(t)
-	inf := NewInboxFile(f, ingester{}, "test.epub", 0644, nil)
+	inf := NewInboxFile(f, libtest.Ingester{}, "test.epub", 0644, nil)
 
 	fstest.Fid(t, inf, 1).Open(proto.Mode(0))
 
@@ -43,7 +44,7 @@ func TestInboxFileDoubleOpenRejected(t *testing.T) {
 
 func TestInboxFileOpenWithFidZero(t *testing.T) {
 	f := testutil.NewTestFS(t)
-	inf := NewInboxFile(f, ingester{}, "test.epub", 0644, nil)
+	inf := NewInboxFile(f, libtest.Ingester{}, "test.epub", 0644, nil)
 
 	// Open with fid 0, a legal fid that used to be rejected as "already open"
 	// because the check was i.fid != 0 instead of i.handle != nil.
@@ -58,7 +59,7 @@ func TestInboxFileOpenWithFidZero(t *testing.T) {
 
 func TestInboxFileWriteWithoutOpen(t *testing.T) {
 	f := testutil.NewTestFS(t)
-	inf := NewInboxFile(f, ingester{}, "test.epub", 0644, nil)
+	inf := NewInboxFile(f, libtest.Ingester{}, "test.epub", 0644, nil)
 
 	_, err := inf.Write(1, 0, []byte("data"))
 	if err == nil {
@@ -68,7 +69,7 @@ func TestInboxFileWriteWithoutOpen(t *testing.T) {
 
 func TestInboxFileCloseWithoutOpen(t *testing.T) {
 	f := testutil.NewTestFS(t)
-	inf := NewInboxFile(f, ingester{}, "test.epub", 0644, nil)
+	inf := NewInboxFile(f, libtest.Ingester{}, "test.epub", 0644, nil)
 
 	fstest.Fid(t, inf, 1).Close()
 }
@@ -76,7 +77,7 @@ func TestInboxFileCloseWithoutOpen(t *testing.T) {
 func TestInboxFileReopenAfterClose(t *testing.T) {
 	ingestCount := 0
 	f := testutil.NewTestFS(t)
-	lib := ingester{
+	lib := libtest.Ingester{
 		IngestFn: func(_ string) (*library.Book, error) {
 			ingestCount++
 			return testutil.MakeBook(int64(ingestCount), "Test", "Author"), nil
@@ -105,7 +106,7 @@ func TestInboxFileReopenAfterClose(t *testing.T) {
 func TestInboxFileCloseWithParentDeadlockRegression(t *testing.T) {
 	ingested := make(chan *library.Book, 1)
 	f := testutil.NewTestFS(t)
-	lib := ingester{
+	lib := libtest.Ingester{
 		IngestFn: func(_ string) (*library.Book, error) {
 			return testutil.MakeBook(42, "Test", "Author"), nil
 		},

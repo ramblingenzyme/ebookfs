@@ -19,6 +19,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/views"
 	"github.com/ramblingenzyme/ebookfs/internal/fstest"
+	"github.com/ramblingenzyme/ebookfs/internal/libtest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 	"github.com/ramblingenzyme/ebookfs/library"
 )
@@ -29,7 +30,7 @@ func inboxTree(t *testing.T, ingested *bookmodel.Book) (*fs.FS, fs.Dir, map[stri
 	t.Helper()
 	f := newTestFS(t)
 
-	ingest := ingester{
+	ingest := libtest.Ingester{
 		IngestFn: func(string) (*library.Book, error) {
 			if ingested == nil {
 				return nil, errTest
@@ -38,7 +39,7 @@ func inboxTree(t *testing.T, ingested *bookmodel.Book) (*fs.FS, fs.Dir, map[stri
 		},
 	}
 
-	reg := registry.NewBookRegistry(f, editor{})
+	reg := registry.NewBookRegistry(f, libtest.Editor{})
 	dirs := map[string]fs.Dir{
 		"books":     views.NewAllBooksDir(reg),
 		"by-author": views.NewByAuthorDir(reg),

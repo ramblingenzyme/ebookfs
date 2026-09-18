@@ -9,6 +9,7 @@ import (
 
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fstest"
+	"github.com/ramblingenzyme/ebookfs/internal/libtest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 )
 
@@ -16,15 +17,15 @@ import (
 // owns: it wires lib.OpenEpub for reads and reports name/size from the book
 // snapshot in Stat.
 
-func newTestEpubFile(t *testing.T, name string, lib contentReader, get func() *library.Book) *epubFile {
+func newTestEpubFile(t *testing.T, name string, lib ContentReader, get func() *library.Book) *epubFile {
 	t.Helper()
 	return newEpubFile(newStat(testutil.NewTestFS(t), name, 0444), lib, get)
 }
 
 func TestEpubFileOpenRead(t *testing.T) {
-	lib := contentReader{
+	lib := libtest.ContentReader{
 		ContentFn: func(_ int64) (library.EpubReader, error) {
-			return &epubReader{Reader: bytes.NewReader([]byte("epub content"))}, nil
+			return &libtest.EpubReader{Reader: bytes.NewReader([]byte("epub content"))}, nil
 		},
 	}
 	ef := newTestEpubFile(t, "test.epub", lib, testutil.Fixed(testutil.MakeBook(1, "Test", "Author")))
@@ -39,7 +40,7 @@ func TestEpubFileOpenRead(t *testing.T) {
 func TestEpubFileStatSize(t *testing.T) {
 	book := testutil.MakeMutableBook(1, "Test", "Author")
 	book.EpubPath = "/nonexistent/test.epub"
-	ef := newTestEpubFile(t, "test.epub", contentReader{}, testutil.Fixed(testutil.WrapBook(book)))
+	ef := newTestEpubFile(t, "test.epub", libtest.ContentReader{}, testutil.Fixed(testutil.WrapBook(book)))
 
 	s := ef.Stat()
 	if s.Name != "test.epub" {
@@ -52,7 +53,7 @@ func TestEpubFileStatSize(t *testing.T) {
 }
 
 func TestEpubFileStatNilBook(t *testing.T) {
-	ef := newTestEpubFile(t, "test.epub", contentReader{}, func() *library.Book { return nil })
+	ef := newTestEpubFile(t, "test.epub", libtest.ContentReader{}, func() *library.Book { return nil })
 
 	s := ef.Stat()
 	if s.Name != "test.epub" {
@@ -74,7 +75,7 @@ func TestEpubFileStatWithRealFile(t *testing.T) {
 	book.EpubPath = path
 	book.EpubSize = int64(len(content))
 
-	ef := newTestEpubFile(t, "book.epub", contentReader{}, testutil.Fixed(testutil.WrapBook(book)))
+	ef := newTestEpubFile(t, "book.epub", libtest.ContentReader{}, testutil.Fixed(testutil.WrapBook(book)))
 
 	s := ef.Stat()
 	if s.Name != "book.epub" {
