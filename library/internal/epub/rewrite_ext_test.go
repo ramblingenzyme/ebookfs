@@ -306,8 +306,7 @@ func TestRewriteIsIdempotent(t *testing.T) {
 // edit declares dcterms2; every later one must recognise that element as ours
 // or mint dcterms3, dcterms4, growing the package element once per save.
 func TestRewriteIsIdempotentOnARebindingDocument(t *testing.T) {
-	opf := epub3(`    <meta property="dcterms:modified">not-a-date</meta>`).
-		attr(`prefix="dcterms: http://example.com/vocab#"`)
+	opf := pkg{meta: `    <meta property="dcterms:modified">not-a-date</meta>`, attrs: `prefix="dcterms: http://example.com/vocab#"`}.epub3()
 
 	path := buildEpub(t, opf)
 	var first string
@@ -760,9 +759,9 @@ func TestUnrefinedMetaIsNotACreatorsSortName(t *testing.T) {
 // this takes the last, pinned rather than left to be discovered by a book
 // showing the wrong cover.
 func TestCoverHeuristicTakesTheLastMatch(t *testing.T) {
-	opf := epub3(``).manifest(`<item id="cover-thumb" href="thumb.jpg" media-type="image/jpeg"/>
+	opf := pkg{manifest: `<item id="cover-thumb" href="thumb.jpg" media-type="image/jpeg"/>
     <item id="cover.jpg" href="cover.jpg" media-type="image/jpeg"/>
-    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`)
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`}.epub3()
 
 	bib, err := epub.Parse(buildEpub(t, opf))
 	if err != nil {
@@ -938,9 +937,8 @@ func TestIdentifierKeying(t *testing.T) {
 // is matched through the vocabulary. A reader comparing the literal "onix:"
 // would read this identifier as untyped.
 func TestIdentifierTypeInReboundVocabulary(t *testing.T) {
-	opf := epub3(`    <dc:identifier id="pub-id">9780123456789</dc:identifier>
-    <meta refines="#pub-id" property="identifier-type" scheme="onx:codelist5">15</meta>`).
-		attr(`prefix="onx: http://www.editeur.org/ONIX/book/codelists/current.html#"`)
+	opf := pkg{meta: `    <dc:identifier id="pub-id">9780123456789</dc:identifier>
+    <meta refines="#pub-id" property="identifier-type" scheme="onx:codelist5">15</meta>`, attrs: `prefix="onx: http://www.editeur.org/ONIX/book/codelists/current.html#"`}.epub3()
 
 	bib, err := epub.Parse(buildEpub(t, opf))
 	if err != nil {
@@ -959,8 +957,7 @@ func TestIdentifierTypeInReboundVocabulary(t *testing.T) {
 // elements are reused rather than rebuilt. Nothing in §5.3.1 or §5.3.7 requires
 // preserving them.
 func TestMetadataDirectionalitySurvives(t *testing.T) {
-	opf := epub3(`    <dc:title xml:lang="ar" dir="rtl">العنوان</dc:title>`).
-		attr(`xml:lang="en" dir="ltr"`)
+	opf := pkg{meta: `    <dc:title xml:lang="ar" dir="rtl">العنوان</dc:title>`, attrs: `xml:lang="en" dir="ltr"`}.epub3()
 
 	path := buildEpub(t, opf)
 	desc := "A new description."

@@ -21,40 +21,39 @@ import (
 
 // opfMarkupCoverImage mislabels an XHTML cover page with
 // properties="cover-image"; the real raster cover is reached via <meta name="cover">.
-var opfMarkupCoverImage = epub3(`    <dc:creator id="creator1">Jane Doe</dc:creator>
+var opfMarkupCoverImage = pkg{meta: `    <dc:creator id="creator1">Jane Doe</dc:creator>
     <meta refines="#creator1" property="role">aut</meta>
-    <meta name="cover" content="real-cover"/>`).manifest(
-	`<item id="coverpage" href="coverpage.xhtml" media-type="application/xhtml+xml" properties="cover-image"/>
+    <meta name="cover" content="real-cover"/>`, manifest: `<item id="coverpage" href="coverpage.xhtml" media-type="application/xhtml+xml" properties="cover-image"/>
     <item id="real-cover" href="cover.jpg" media-type="image/jpeg"/>
-    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`)
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`}.epub3()
 
 // opfSeriesSetCollection carries an EPUB 3 belongs-to-collection of type "set"
 // (a publisher bundle, not a series) alongside a legacy calibre:series. The set
 // must be ignored so the real series is the one read.
-var opfSeriesSetCollection = epub3(metas(
+var opfSeriesSetCollection = pkg{meta: metas(
 	`<dc:title>Box Set Book</dc:title>`,
 	`<dc:creator id="creator1">Jane Doe</dc:creator>`,
 	`<meta refines="#creator1" property="role">aut</meta>`,
 	collection("c1", "Some Box Set", "set", ""),
 	calibreSeries("Real Series", "3"),
-)).manifest(chapterOnlyManifest)
+), manifest: chapterOnlyManifest}.epub3()
 
 // opfSeriesNoIndexV3 is an EPUB 3 series collection with no group-position; the
 // index should default to 1.
-var opfSeriesNoIndexV3 = epub3(metas(
+var opfSeriesNoIndexV3 = pkg{meta: metas(
 	`<dc:title>Lonely Book</dc:title>`,
 	`<dc:creator id="creator1">Jane Doe</dc:creator>`,
 	`<meta refines="#creator1" property="role">aut</meta>`,
 	collection("c1", "Lonely Series", "series", ""),
-)).manifest(chapterOnlyManifest)
+), manifest: chapterOnlyManifest}.epub3()
 
 // opfSeriesNoIndexV2 is an EPUB 2 calibre:series with no calibre:series_index;
 // the index should default to 1.
-var opfSeriesNoIndexV2 = epub2(metas(
+var opfSeriesNoIndexV2 = pkg{meta: metas(
 	`<dc:title>Lonely Book</dc:title>`,
 	`<dc:creator opf:role="aut">Jane Doe</dc:creator>`,
 	calibreSeries("Lonely Series", ""),
-)).manifest(chapterOnlyManifest)
+), manifest: chapterOnlyManifest}.epub2()
 
 // chapterOnlyManifest is the manifest these tests want: no cover item, because
 // the cover-resolution tests here are about a package that declares one itself.
@@ -63,19 +62,19 @@ const chapterOnlyManifest = `<item id="ch1" href="chapter1.xhtml" media-type="ap
 // opfWithDates builds a minimal EPUB 2 package whose <metadata> carries the
 // given raw <dc:date ...> elements, for exercising publication-date selection.
 func opfWithDates(dateXML string) packageDoc {
-	return epub2(`    <dc:title>Dated Book</dc:title>
+	return pkg{meta: `    <dc:title>Dated Book</dc:title>
     <dc:creator opf:role="aut">Jane Doe</dc:creator>
-    ` + dateXML).manifest(chapterOnlyManifest)
+    ` + dateXML, manifest: chapterOnlyManifest}.epub2()
 }
 
 // opfV3WithModified is an EPUB 3 package with a publication dc:date and a
 // dcterms:modified meta; the latter is not a dc:date and must not be read as the
 // publication date.
-var opfV3WithModified = epub3(`    <dc:title>V3 Book</dc:title>
+var opfV3WithModified = pkg{meta: `    <dc:title>V3 Book</dc:title>
     <dc:creator id="creator1">Jane Doe</dc:creator>
     <meta refines="#creator1" property="role">aut</meta>
     <dc:date>2015-06-01</dc:date>
-    <meta property="dcterms:modified">2022-09-09T00:00:00Z</meta>`).manifest(chapterOnlyManifest)
+    <meta property="dcterms:modified">2022-09-09T00:00:00Z</meta>`, manifest: chapterOnlyManifest}.epub3()
 
 func withContainer(entries []entry, container string) []entry {
 	out := make([]entry, len(entries))
@@ -125,10 +124,9 @@ func TestTranslateCoverSkipsMarkupCoverImage(t *testing.T) {
 // A percent-encoded cover href must resolve to the literal zip entry so the
 // cover is found by both Parse and the WriteCover/Reader lookups.
 func TestParseResolvesEncodedCoverHref(t *testing.T) {
-	opfEncoded := epub3(`    <dc:creator id="creator1">Jane Doe</dc:creator>
-    <meta refines="#creator1" property="role">aut</meta>`).manifest(
-		`<item id="cover-img" href="cover%20image.jpg" media-type="image/jpeg" properties="cover-image"/>
-    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`)
+	opfEncoded := pkg{meta: `    <dc:creator id="creator1">Jane Doe</dc:creator>
+    <meta refines="#creator1" property="role">aut</meta>`, manifest: `<item id="cover-img" href="cover%20image.jpg" media-type="image/jpeg" properties="cover-image"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`}.epub3()
 	entries := []entry{
 		{name: "mimetype", data: []byte(mimetypeValue), store: true},
 		{name: "META-INF/container.xml", data: []byte(containerXML)},

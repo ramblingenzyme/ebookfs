@@ -39,33 +39,6 @@ func tinyPNG(t *testing.T) []byte {
 	return buf.Bytes()
 }
 
-// readEntryFromFile returns the entry's bytes and whether it was present.
-// readEntry is the same lookup for the common case where absence should fail
-// the test.
-func readEntryFromFile(t *testing.T, path, name string) ([]byte, bool) {
-	t.Helper()
-	zrc, err := zip.OpenReader(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer zrc.Close()
-	for _, f := range zrc.File {
-		if f.Name == name {
-			rc, err := f.Open()
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer rc.Close()
-			b := new(bytes.Buffer)
-			if _, err := b.ReadFrom(rc); err != nil {
-				t.Fatal(err)
-			}
-			return b.Bytes(), true
-		}
-	}
-	return nil, false
-}
-
 // --- WriteBib ---
 
 func TestWriteBibSimpleFields(t *testing.T) {
@@ -1039,13 +1012,17 @@ func jpegSized(t *testing.T, w, h int) []byte {
 	return buf.Bytes()
 }
 
-// coverPagePackage declares a cover page in the manifest but points at it from
-// nowhere. A test adds exactly one pointer, .spine or .guide, so it says which
-// of the two it exercises.
-var coverPagePackage = epub3(``).manifest(
-	`<item id="cover-img" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
+// Both packages declare a cover page in the manifest and point at it exactly
+// once, so a test says in its fixture which of the two pointers it exercises.
+// coverPageManifest alone points at it from nowhere.
+const coverPageManifest = `<item id="cover-img" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
     <item id="coverpage" href="cover.xhtml" media-type="application/xhtml+xml"/>
-    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`)
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`
+
+var (
+	coverPageInGuide = pkg{manifest: coverPageManifest, guide: true}.epub3()
+	coverPageInSpine = pkg{manifest: coverPageManifest, spine: "coverpage"}.epub3()
+)
 
 // coverPageEpub builds a book whose cover page is page, and replaces the cover
 // with a w by h image. It returns the epub's path.
@@ -1060,7 +1037,7 @@ func coverPageEpub(t *testing.T, opf packageDoc, page string, w, h int) string {
 
 func TestCoverPageRefitByTheGuideReference(t *testing.T) {
 	// The spine opens on a chapter, so only the guide reaches the cover page.
-	path := coverPageEpub(t, coverPagePackage.spine("ch1").guide(), svgCoverPage, 1200, 1600)
+	path := coverPageEpub(t, coverPageInGuide, svgCoverPage, 1200, 1600)
 
 	page := string(readEntry(t, path, "OEBPS/cover.xhtml"))
 	for _, want := range []string{
@@ -1084,7 +1061,7 @@ func TestCoverPageRefitByTheGuideReference(t *testing.T) {
 
 func TestCoverPageRefitByTheFirstSpineItem(t *testing.T) {
 	// No guide at all, the EPUB 3 norm.
-	path := coverPageEpub(t, coverPagePackage.spine("coverpage"), svgCoverPage, 1200, 1600)
+	path := coverPageEpub(t, coverPageInSpine, svgCoverPage, 1200, 1600)
 
 	if page := string(readEntry(t, path, "OEBPS/cover.xhtml")); !strings.Contains(page, `viewBox="0 0 1200 1600"`) {
 		t.Errorf("cover page was not refitted:\n%s", page)
@@ -1118,7 +1095,7 @@ func TestCoverPageUntouched(t *testing.T) {
 		{"replacement is the same size", svgCoverPage, 600, 800},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			path := coverPageEpub(t, coverPagePackage.spine("ch1").guide(), tc.page, tc.w, tc.h)
+			path := coverPageEpub(t, coverPageInGuide, tc.page, tc.w, tc.h)
 
 			if got := string(readEntry(t, path, "OEBPS/cover.xhtml")); got != tc.page {
 				t.Errorf("cover page was rewritten:\n%s", got)
@@ -1130,7 +1107,7 @@ func TestCoverPageUntouched(t *testing.T) {
 // §6.1.2 allows any HTML named entity, so &nbsp; must not read as broken.
 func TestCoverPageWithAnHTMLEntityIsRefitted(t *testing.T) {
 	page := strings.Replace(svgCoverPage, "<title>Cover</title>", "<title>Cover&nbsp;Page</title>", 1)
-	path := coverPageEpub(t, coverPagePackage.spine("ch1").guide(), page, 1200, 1600)
+	path := coverPageEpub(t, coverPageInGuide, page, 1200, 1600)
 
 	if got := string(readEntry(t, path, "OEBPS/cover.xhtml")); !strings.Contains(got, `viewBox="0 0 1200 1600"`) {
 		t.Errorf("cover page was not refitted:\n%s", got)
@@ -1145,7 +1122,7 @@ func TestCoverPageImgAttributesAreRefitted(t *testing.T) {
 <head><title>Cover</title></head>
 <body><img src="cover.jpg" width="600" height="800" alt="Cover"/></body>
 </html>`
-	path := coverPageEpub(t, coverPagePackage.spine("ch1").guide(), page, 1200, 1600)
+	path := coverPageEpub(t, coverPageInGuide, page, 1200, 1600)
 
 	got := string(readEntry(t, path, "OEBPS/cover.xhtml"))
 	if !strings.Contains(got, `width="1200"`) || !strings.Contains(got, `height="1600"`) {
@@ -1206,7 +1183,7 @@ div > img { width: 100%; }
 ]]></style></head>
 <body><div><img src="cover.jpg" width="600" height="800" alt="Cover"/></div></body>
 </html>`
-	path := coverPageEpub(t, coverPagePackage.spine("ch1").guide(), page, 1200, 1600)
+	path := coverPageEpub(t, coverPageInGuide, page, 1200, 1600)
 
 	got := string(readEntry(t, path, "OEBPS/cover.xhtml"))
 	if !strings.Contains(got, `width="1200"`) {
