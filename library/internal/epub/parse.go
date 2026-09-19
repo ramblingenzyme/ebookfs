@@ -1,3 +1,17 @@
+// Package epub adapts the standalone epub package to the library's model. The
+// file format lives there; this package translates, and holds the rules that
+// are ebookfs's rather than the format's.
+//
+// Three of them. A book needs a title and authors to be filed, because the
+// store builds every path from both, so Parse refuses one missing either while
+// the format package reports what the file says. A series position the spec
+// disallows still has to display, so it is defaulted on the way in and never
+// written back. And a retitled book drops the sort title it carried, which
+// described the old title.
+//
+// On the write side the job is unwrapping book.Edits, whose nil field means the
+// caller did not name it. That encoding is the library's rather than the
+// format's, so the epub package is handed values and never pointers.
 package epub
 
 import (
@@ -5,7 +19,6 @@ import (
 
 	epubfile "github.com/ramblingenzyme/ebookfs/epub"
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 )
 
 // Parse reads the epub's metadata into the Bib the library indexes.
@@ -49,7 +62,7 @@ func bib(b *epubfile.Book) (*book.Bib, error) {
 		// Defaulted on the way in, not in the document, so a rewrite cannot
 		// write it back.
 		index := b.Series.Index
-		if !edits.ValidSeriesIndex(index) {
+		if !book.ValidSeriesIndex(index) {
 			index = "1"
 		}
 		bib.Series = &book.SeriesRef{Name: b.Series.Name, Index: index}
