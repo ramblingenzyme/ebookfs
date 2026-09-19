@@ -23,7 +23,7 @@ import (
 	"slices"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-	"github.com/ramblingenzyme/ebookfs/library"
+	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
 // ContentReader is the read half of the backend: fs/book's ContentReader, and the

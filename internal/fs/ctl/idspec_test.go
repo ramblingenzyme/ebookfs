@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/ramblingenzyme/ebookfs/library"
+	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
 func TestParseSelection(t *testing.T) {

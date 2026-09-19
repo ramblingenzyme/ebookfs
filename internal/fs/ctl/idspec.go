@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/ramblingenzyme/ebookfs/internal/fs/textfmt"
-	"github.com/ramblingenzyme/ebookfs/library"
+	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
 // parseSelection resolves a ctl id-spec to a library.Query addressing the

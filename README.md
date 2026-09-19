@@ -2,7 +2,7 @@
 
 A self-hosted ebook library server that exposes your collection as a synthetic filesystem over the 9P protocol — a lightweight, network-transparent alternative to Calibre.
 
-![basic demo](./images/basic-demo.png)
+![basic demo](./assets/basic-demo.png)
 
 ## Quick Start
 
@@ -64,7 +64,7 @@ sudo umount /mnt/ebookfs
 - Filesystem-as-API
 
 ### V2
-- Encapsulated backend, so `github.com/ramblingenzyme/ebookfs/library` can be used to build other frontends, e.g. OPDS and HTTP
+- Encapsulated backend, so `github.com/ramblingenzyme/ebookfs/pkg/library` can be used to build other frontends, e.g. OPDS and HTTP
 See [ROADMAP.md](./ROADMAP.md) for more details
 
 ## Install
@@ -79,7 +79,7 @@ docker run -p 5640:5640 \
   -v /path/to/config.toml:/etc/ebookfs/config.toml:ro \
   ghcr.io/ramblingenzyme/ebookfs:<latest|vX...>
 # Docker (build locally)
-docker build -t ebookfs .
+docker build -f build/Dockerfile -t ebookfs .
 docker run -p 5640:5640 \
   -v /path/to/library:/var/lib/ebookfs/library \
   -v /path/to/config.toml:/etc/ebookfs/config.toml:ro \
