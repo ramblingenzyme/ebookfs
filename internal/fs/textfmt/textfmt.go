@@ -7,7 +7,7 @@ package textfmt
 import (
 	"strings"
 
-	"github.com/ramblingenzyme/ebookfs/library"
+	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
 // ParseAuthor parses a single author spec in "Name | Sort" form, the format

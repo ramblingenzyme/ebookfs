@@ -14,7 +14,7 @@ import (
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
-	"github.com/ramblingenzyme/ebookfs/library"
+	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
 // parityBooks opens a library holding one book per title/author pair and
