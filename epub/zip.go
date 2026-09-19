@@ -7,7 +7,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/ocf"
+	"github.com/ramblingenzyme/ebookfs/epub/internal/ocf"
 )
 
 var (
@@ -42,8 +42,9 @@ func notEpub(path string, err error) error {
 // files indexes zr.File rather than replacing it: writeTo walks the slice in
 // order and copies every entry, duplicates included.
 //
-// Closing is the caller's — Parse drops the archive, Rewrite holds it for the
-// copy, Reader for the life of the handle.
+// Closing is the caller's: File holds the archive for the life of the handle,
+// and Save holds it across the rewrite so untouched entries can be copied from
+// the original while the replacement is built.
 type archive struct {
 	zr    *zip.Reader
 	files map[string]*zip.File // index over zr.File; first wins
@@ -51,8 +52,9 @@ type archive struct {
 }
 
 // openArchive indexes the entries and resolves the package document. It does
-// not validate: Parse wants a malformed container reported as ErrNotEpub, and
-// callers that only need an entry by name should not pay for the mimetype read.
+// not validate: a malformed container is reported as ErrNotEpub by validate,
+// which OpenFile calls once, so resolving an entry by name costs no mimetype
+// read of its own.
 func openArchive(zr *zip.Reader) (*archive, error) {
 	a := &archive{zr: zr, files: make(map[string]*zip.File, len(zr.File))}
 	for _, f := range a.zr.File {

@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf/pkgdoc"
+	"github.com/ramblingenzyme/ebookfs/epub/internal/opf/pkgdoc"
 )
 
 // The identifier field: read-only, but with more encoding to describe than the

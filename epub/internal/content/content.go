@@ -13,7 +13,7 @@ import (
 	"strconv"
 
 	"github.com/beevik/etree"
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/xml"
+	"github.com/ramblingenzyme/ebookfs/epub/internal/xml"
 )
 
 type Doc struct {

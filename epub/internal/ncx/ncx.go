@@ -17,8 +17,6 @@ import (
 	"errors"
 
 	"github.com/beevik/etree"
-	"github.com/ramblingenzyme/ebookfs/internal/book"
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 )
 
 type Doc struct {
@@ -48,16 +46,19 @@ func Parse(b []byte) (*Doc, error) {
 
 func (d *Doc) Bytes() ([]byte, error) { return d.doc.WriteToBytes() }
 
-// Apply writes the title and authors — the only fields the NCX copies — and
-// reports whether that changed anything. Nothing is serialized until Bytes.
-func (d *Doc) Apply(e edits.Edits) bool {
+// Apply writes the title and author names — the only fields the NCX copies —
+// and reports whether that changed anything. Nothing is serialized until Bytes.
+//
+// A nil title or a nil names slice is one the caller did not touch. Names
+// rather than authors: the NCX has nowhere to record a sort name.
+func (d *Doc) Apply(title *string, names []string) bool {
 	before, _ := d.Bytes()
 
-	if e.Title != nil {
-		d.title().set(*e.Title)
+	if title != nil {
+		d.title().set(*title)
 	}
-	if e.Authors != nil {
-		d.authors().set(*e.Authors)
+	if names != nil {
+		d.authors().set(names)
 	}
 
 	// Serialized, as opf.Doc.Apply does: a set may find the value already there.
@@ -75,25 +76,25 @@ func (d *Doc) authors() authorsField { return authorsField{d} }
 // already carries one: naming no author contradicts nothing. Extras go after
 // the last rather than at the end of <ncx>, whose content model fixes the order
 // of its children (head, docTitle, docAuthor*, navMap, …).
-func (f authorsField) set(authors []book.Author) {
+func (f authorsField) set(names []string) {
 	existing := f.d.ncx.SelectElements("docAuthor")
 	if len(existing) == 0 {
 		return
 	}
 
 	last := existing[len(existing)-1]
-	for i, a := range authors {
+	for i, name := range names {
 		if i < len(existing) {
-			slot(existing[i]).set(a.Name)
+			slot(existing[i]).set(name)
 			continue
 		}
 		el := etree.NewElement(qualify(last.Space, "docAuthor"))
 		f.d.ncx.InsertChildAt(last.Index()+1, el)
-		slot(el).set(a.Name)
+		slot(el).set(name)
 		last = el
 	}
 
-	for i := len(authors); i < len(existing); i++ {
+	for i := len(names); i < len(existing); i++ {
 		f.d.ncx.RemoveChild(existing[i])
 	}
 }

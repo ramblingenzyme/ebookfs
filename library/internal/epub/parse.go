@@ -1,48 +1,72 @@
 package epub
 
 import (
-	"archive/zip"
-	"path"
+	"errors"
 
+	epubfile "github.com/ramblingenzyme/ebookfs/epub"
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-	"github.com/ramblingenzyme/ebookfs/library/internal/epub/opf"
+	"github.com/ramblingenzyme/ebookfs/library/internal/epub/edits"
 )
 
+// Parse reads the epub's metadata into the Bib the library indexes.
 func Parse(bpath string) (*book.Bib, error) {
-	r, err := zip.OpenReader(bpath)
-	if err != nil {
-		return nil, notEpub(bpath, err)
-	}
-	defer r.Close()
-
-	a, err := openArchive(&r.Reader)
+	b, err := epubfile.Open(bpath)
 	if err != nil {
 		return nil, err
 	}
-	if err := a.validate(); err != nil {
+	defer b.Close()
+	return bib(b)
+}
+
+// bib turns what the file says about itself into the Bib ebookfs indexes,
+// applying the two rules that are ebookfs's rather than the format's: a book
+// must be usable, and a malformed series position must still display.
+func bib(b *epubfile.Book) (*book.Bib, error) {
+	if err := usable(b); err != nil {
 		return nil, err
 	}
 
-	opfBytes, err := a.read(a.opf)
-	if err != nil {
-		return nil, err
+	bib := &book.Bib{
+		Title:       b.Title,
+		SortTitle:   b.SortTitle,
+		Description: b.Description,
+		Language:    b.Language,
+		Pubdate:     b.Pubdate(),
+		Identifiers: b.Identifiers(),
+		CoverPath:   b.CoverPath(),
+		// From the zip central directory, so nothing is decompressed. The
+		// epub's own size is left to the library, which stats it for drift
+		// detection anyway.
+		OpfSize: b.Size(b.PackagePath()),
 	}
-	doc, err := opf.Parse(opfBytes)
-	if err != nil {
-		return nil, err
+	for _, a := range b.Authors {
+		bib.Authors = append(bib.Authors, book.Author{Name: a.Name, SortName: a.SortName})
 	}
+	if bib.CoverPath != "" {
+		bib.CoverSize = b.Size(bib.CoverPath)
+	}
+	if b.Series != nil {
+		// Defaulted on the way in, not in the document, so a rewrite cannot
+		// write it back.
+		index := b.Series.Index
+		if !edits.ValidSeriesIndex(index) {
+			index = "1"
+		}
+		bib.Series = &book.SeriesRef{Name: b.Series.Name, Index: index}
+	}
+	return bib, nil
+}
 
-	book, err := doc.Bib(path.Dir(a.opf))
-	if err != nil {
-		return nil, err
+// usable reports whether the book can be filed. ebookfs builds every path from
+// the title and the authors, so a book missing either has nowhere to live; the
+// epub package reports both as the file states them, because an epub is free to
+// omit them.
+func usable(b *epubfile.Book) error {
+	if b.Title == "" {
+		return errors.New("no title")
 	}
-
-	// From the zip central directory, so nothing is decompressed. The epub's own
-	// size is left to the library, which stats it for drift detection anyway.
-	book.OpfSize = a.size(a.opf)
-	if book.CoverPath != "" {
-		book.CoverSize = a.size(book.CoverPath)
+	if len(b.Authors) == 0 {
+		return errors.New("no authors")
 	}
-
-	return book, nil
+	return nil
 }
