@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
@@ -20,9 +21,26 @@ type FieldError = book.FieldError
 type Query = index.Query
 type Order = index.Order
 type Stats = index.Stats
+type Facet = index.Facet
 type Author = book.Author
 type Series = book.SeriesRef
 type EpubReader = epub.EpubReader
+
+// The reading-status vocabulary, re-exported so a frontend can render a
+// status filter without naming the strings itself. book.Edits validates
+// against the same constants.
+const (
+	StatusUnread    = book.StatusUnread
+	StatusReading   = book.StatusReading
+	StatusRead      = book.StatusRead
+	StatusAbandoned = book.StatusAbandoned
+)
+
+// Statuses returns the vocabulary in presentation order. It hands back a copy
+// rather than exposing the slice, so a caller sorting or truncating it for its
+// own listing cannot reorder the vocabulary for everything else in the
+// process.
+func Statuses() []string { return slices.Clone(book.Statuses) }
 
 const (
 	OrderSortTitle    = index.OrderSortTitle
@@ -68,6 +86,11 @@ var (
 // from the 9P layer on a handle a client may hold across a re-ingest, so a
 // use-after-close is an ordinary end for one rather than a caller's mistake.
 var ErrClosed = epub.ErrClosed
+
+// ErrNoCover is returned by EpubReader.Cover when the book's package document
+// points at no cover image. Surfaced here for the same reason as ErrClosed: a
+// frontend serving covers meets it on an ordinary book, not a broken one.
+var ErrNoCover = epub.ErrNoCover
 
 // Exporter produces the rsync-export rendition of a book for the reader/ view.
 // It is the single swap point between serving the original epub and a converted

@@ -23,8 +23,8 @@ import (
 	"time"
 
 	"github.com/beevik/etree"
-	"github.com/ramblingenzyme/ebookfs/pkg/epub"
 	"github.com/ramblingenzyme/ebookfs/internal/epubtest"
+	"github.com/ramblingenzyme/ebookfs/pkg/epub"
 )
 
 var opfTitleTypes = epubtest.EPUB3(`    <dc:title id="t1">The Complete Trilogy</dc:title>

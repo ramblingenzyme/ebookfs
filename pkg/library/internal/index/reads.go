@@ -8,6 +8,7 @@ import (
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/drift"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index/dbsqlc"
 )
 
 func (idx *Index) queryBooks(q *bookQuery) ([]*book.Book, error) {
@@ -101,4 +102,36 @@ func (idx *Index) Stats() (*Stats, error) {
 	}
 
 	return s, nil
+}
+
+// ListAuthors returns every author with at least one book, ordered by sort
+// name. ListSeries and ListTags are the same by their own name.
+func (idx *Index) ListAuthors() ([]Facet, error) {
+	rows, err := idx.queries.ListAuthors(idx.ctx)
+	return facets(rows, err, func(r dbsqlc.ListAuthorsRow) (string, int64) { return r.Name, r.BookCount })
+}
+
+func (idx *Index) ListSeries() ([]Facet, error) {
+	rows, err := idx.queries.ListSeries(idx.ctx)
+	return facets(rows, err, func(r dbsqlc.ListSeriesRow) (string, int64) { return r.Name, r.BookCount })
+}
+
+func (idx *Index) ListTags() ([]Facet, error) {
+	rows, err := idx.queries.ListTags(idx.ctx)
+	return facets(rows, err, func(r dbsqlc.ListTagsRow) (string, int64) { return r.Name, r.BookCount })
+}
+
+// facets converts a name-and-count row set into Facets, preserving the SQL
+// ordering. The three list queries differ only in their generated row type,
+// which the type parameter erases.
+func facets[R any](rows []R, err error, split func(R) (string, int64)) ([]Facet, error) {
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Facet, len(rows))
+	for i, r := range rows {
+		name, n := split(r)
+		out[i] = Facet{Name: name, Count: int(n)}
+	}
+	return out, nil
 }

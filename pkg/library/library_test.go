@@ -112,3 +112,18 @@ func TestCheckSameFilesystemMissingTarget(t *testing.T) {
 		t.Fatal("expected error when target directory doesn't exist")
 	}
 }
+
+// Statuses hands out a copy. A frontend that sorts the vocabulary for its own
+// listing would otherwise reorder it for every other caller in the process,
+// including the error messages book.StatusList builds from it.
+func TestStatusesIsACopy(t *testing.T) {
+	first := Statuses()
+	if len(first) == 0 {
+		t.Fatal("Statuses is empty")
+	}
+	first[0] = "clobbered"
+
+	if second := Statuses(); second[0] != StatusUnread {
+		t.Errorf("Statuses()[0] = %q after a caller wrote to an earlier result, want %q", second[0], StatusUnread)
+	}
+}

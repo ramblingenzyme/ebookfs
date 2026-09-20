@@ -16,8 +16,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ramblingenzyme/ebookfs/pkg/epub"
 	"github.com/ramblingenzyme/ebookfs/internal/epubtest"
+	"github.com/ramblingenzyme/ebookfs/pkg/epub"
 )
 
 func withContainer(entries []epubtest.Entry, container string) []epubtest.Entry {

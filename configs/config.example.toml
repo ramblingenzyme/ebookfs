@@ -28,6 +28,22 @@ listen = "0.0.0.0:5640"
 # at startup until it is wired into the 9P server.
 auth = "none"
 
+[opds]
+# An OPDS 1.2 / 2.0 catalog of the whole library, read-only, for ebook reader
+# apps (KOReader, Moon+ Reader, Thorium). Mounted at /opds.
+# Empty listen means no catalog and no open port; this is the default.
+listen = ""  # e.g. "0.0.0.0:8080"
+# The catalog's canonical absolute URL. Set it whenever the catalog is reachable
+# from outside this host: without it the absolute URLs in served documents come
+# from the client's own Host and X-Forwarded-* headers.
+base_url = ""  # e.g. "https://books.example.com"
+# The catalog's own rendition choice, separate from [reader]: reader/ is rsynced
+# to one known device, while the catalog serves whichever app holds the URL.
+# false serves the original epub, which is what a generic OPDS client wants;
+# kepub is Kobo's format. Conversions land in reader.cache_dir either way, so a
+# book converted for one half is already converted for the other.
+convert = false
+
 [log]
 level = "info"   # debug | info | warn | error
 format = "text"  # text | json

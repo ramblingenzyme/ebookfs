@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -250,4 +251,50 @@ index_path = ""
 			t.Fatal("expected error: index_path required")
 		}
 	})
+}
+
+// An empty opds.base_url is the default and the disabled case. A relative one
+// is rejected at startup rather than served: every absolute URL the catalog
+// embeds would otherwise be built from client-controlled headers, and the
+// operator who set the field meant to prevent exactly that.
+func TestOPDSBaseURLMustBeAbsolute(t *testing.T) {
+	tests := []struct {
+		base    string
+		wantErr bool
+	}{
+		{"", false},
+		{"https://books.example.com", false},
+		{"http://127.0.0.1:8080", false},
+		{"books.example.com", true},
+		{"/opds", true},
+	}
+	for _, tt := range tests {
+		path := writeConfig(t, reqLibSection+"[opds]\nbase_url = \""+tt.base+"\"\n")
+		_, err := Load(path)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("base_url = %q: err = %v, wantErr %v", tt.base, err, tt.wantErr)
+		}
+	}
+}
+
+// There is no opds.cache_dir: the catalog converts into reader.cache_dir, so a
+// book converted for one half is already converted for the other. Asking the
+// catalog to convert with nowhere to cache is refused, and the message names
+// the field that is actually missing.
+func TestOPDSConvertUsesReaderCacheDir(t *testing.T) {
+	_, err := Load(writeConfig(t, reqLibSection+"[reader]\ncache_dir = \"\"\n\n[opds]\nconvert = true\n"))
+	if err == nil {
+		t.Fatal("opds.convert = true with no reader.cache_dir loaded without error")
+	}
+	if !strings.Contains(err.Error(), "reader.cache_dir") {
+		t.Errorf("error = %v, want it to name reader.cache_dir", err)
+	}
+
+	cfg, err := Load(writeConfig(t, reqLibSection+"[reader]\ncache_dir = \"/r/cache\"\n\n[opds]\nconvert = true\n"))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.OPDS.Convert || cfg.Reader.CacheDir != "/r/cache" {
+		t.Errorf("OPDS.Convert = %v, Reader.CacheDir = %q", cfg.OPDS.Convert, cfg.Reader.CacheDir)
+	}
 }

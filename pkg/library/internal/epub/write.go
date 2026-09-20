@@ -1,8 +1,8 @@
 package epub
 
 import (
-	epubfile "github.com/ramblingenzyme/ebookfs/pkg/epub"
 	"github.com/ramblingenzyme/ebookfs/internal/book"
+	epubfile "github.com/ramblingenzyme/ebookfs/pkg/epub"
 )
 
 // Rewrite applies e to the epub at epubPath atomically. Every refusal runs

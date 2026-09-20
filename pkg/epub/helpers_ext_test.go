@@ -10,8 +10,8 @@ import (
 	"image/jpeg"
 	"testing"
 
-	"github.com/ramblingenzyme/ebookfs/pkg/epub"
 	"github.com/ramblingenzyme/ebookfs/internal/epubtest"
+	"github.com/ramblingenzyme/ebookfs/pkg/epub"
 )
 
 // open opens the epub and closes it when the test ends.

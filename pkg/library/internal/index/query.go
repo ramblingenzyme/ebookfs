@@ -46,6 +46,14 @@ const (
 	OrderPubdate                   // most recently published first
 )
 
+// Facet is one distinct value of a groupable field, with the number of books
+// behind it. The count comes from SQL, so listing authors, series or tags
+// never loads a book row.
+type Facet struct {
+	Name  string
+	Count int
+}
+
 type Stats struct {
 	Books        int
 	Authors      int

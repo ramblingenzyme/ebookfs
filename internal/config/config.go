@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -12,6 +13,7 @@ type Config struct {
 	Library LibraryConfig `toml:"library"`
 	Reader  ReaderConfig  `toml:"reader"`
 	Server  ServerConfig  `toml:"server"`
+	OPDS    OPDSConfig    `toml:"opds"`
 	Search  SearchConfig  `toml:"search"`
 	Log     LogConfig     `toml:"log"`
 }
@@ -36,6 +38,27 @@ type ReaderConfig struct {
 	Statuses []string `toml:"statuses"`
 	Convert  bool     `toml:"convert"`
 	CacheDir string   `toml:"cache_dir"`
+}
+
+// OPDSConfig configures the OPDS catalog. An empty Listen disables it, which
+// is the default: an install that has never heard of OPDS opens no port.
+// BaseURL is the catalog's canonical absolute URL (scheme://host, no trailing
+// slash) and should be set whenever the catalog is reachable from outside the
+// host: without it, the absolute URLs in served documents are derived from the
+// client's own Host and X-Forwarded-* headers.
+type OPDSConfig struct {
+	Listen  string `toml:"listen"`   // e.g. "0.0.0.0:8080"; empty disables
+	BaseURL string `toml:"base_url"` // e.g. "https://books.example.com"
+
+	// Convert is the catalog's own rendition choice, independent of [reader]:
+	// the catalog serves whatever app holds the OPDS URL, while reader/ is
+	// rsynced to one known device. It defaults to false because kepub is
+	// Kobo's format and a generic OPDS client wants the epub.
+	//
+	// There is no opds.cache_dir. A book's kepub is the same file whoever
+	// asked for it, so both halves convert into reader.cache_dir and a book
+	// converted for one is already converted for the other.
+	Convert bool `toml:"convert"`
 }
 
 type ServerConfig struct {
@@ -79,6 +102,7 @@ func defaults() *Config {
 			Convert:  false,
 			CacheDir: "/var/lib/ebookfs/kepub-cache",
 		},
+		OPDS: OPDSConfig{Convert: false},
 		Server: ServerConfig{
 			Listen: "0.0.0.0:5640",
 			Auth:   "none",
@@ -109,6 +133,23 @@ func (c *Config) validateReader() error {
 		if !book.IsValidStatus(s) {
 			return fmt.Errorf("reader.statuses contains invalid status %q: must be %s", s, book.StatusList())
 		}
+	}
+	return nil
+}
+
+func (c *Config) validateOPDS() error {
+	if c.OPDS.Convert && c.Reader.CacheDir == "" {
+		return fmt.Errorf("reader.cache_dir is required when opds.convert is true; the catalog converts into the same cache")
+	}
+	if c.OPDS.BaseURL == "" {
+		return nil
+	}
+	u, err := url.Parse(c.OPDS.BaseURL)
+	if err != nil {
+		return fmt.Errorf("opds.base_url is not a URL: %w", err)
+	}
+	if u.Scheme == "" || u.Host == "" {
+		return fmt.Errorf("opds.base_url must be absolute (scheme://host), got %q", c.OPDS.BaseURL)
 	}
 	return nil
 }
@@ -145,6 +186,10 @@ func (c *Config) validate() error {
 	}
 
 	if err := c.validateSearch(); err != nil {
+		return err
+	}
+
+	if err := c.validateOPDS(); err != nil {
 		return err
 	}
 

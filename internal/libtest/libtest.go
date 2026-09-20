@@ -1,4 +1,4 @@
-// Package libtest holds the doubles for the library facade, one per interface a
+// Package mock holds the doubles for the library facade, one per interface a
 // consumer declares. A wider double embeds the narrower one it contains, so
 // fs/book gets Renderer and its two methods rather than Exporter and its six.
 // That narrowness is the point: the shared fake this replaces lacked it, which
@@ -198,4 +198,48 @@ type Library struct {
 	SearchDeleter
 	Ingester
 	StatsReader
+}
+
+// Getter is the single-book read opds declares alongside Search. No GetFn
+// fails loudly: a test reaching a book by id has one to serve, or it is
+// asserting on the miss and stubs it.
+type Getter struct {
+	GetFn func(int64) (*library.Book, error)
+}
+
+func (g Getter) Get(id int64) (*library.Book, error) {
+	if g.GetFn != nil {
+		return g.GetFn(id)
+	}
+	return nil, errors.New("libtest: no GetFn")
+}
+
+// Facets is the three navigation listings opds builds its author, series and
+// tag feeds from. A nil hook means the library holds none of that field,
+// which is a real answer and the one an empty library gives.
+type Facets struct {
+	AuthorsFn func() ([]library.Facet, error)
+	SeriesFn  func() ([]library.Facet, error)
+	TagsFn    func() ([]library.Facet, error)
+}
+
+func (f Facets) Authors() ([]library.Facet, error) { return call(f.AuthorsFn) }
+func (f Facets) Series() ([]library.Facet, error)  { return call(f.SeriesFn) }
+func (f Facets) Tags() ([]library.Facet, error)    { return call(f.TagsFn) }
+
+func call(fn func() ([]library.Facet, error)) ([]library.Facet, error) {
+	if fn != nil {
+		return fn()
+	}
+	return nil, nil
+}
+
+// Catalog is the union opds.SetupServer takes, assembled the same way Library
+// is. SearchDeleter carries a Delete the catalog never calls; it is the
+// double that owns SearchFn, and a read-only frontend simply leaves it alone.
+type Catalog struct {
+	SearchDeleter
+	ContentReader
+	Getter
+	Facets
 }

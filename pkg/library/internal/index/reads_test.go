@@ -1,6 +1,7 @@
 package index
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
@@ -93,5 +94,83 @@ func TestStatsExcludesOrphans(t *testing.T) {
 	}
 	if s.Tags != 1 {
 		t.Errorf("Tags = %d, want 1 (stale tag should be swept)", s.Tags)
+	}
+}
+
+// The three facet listings count books per value and order them the way the
+// navigation feeds present them: authors by sort name, series and tags by
+// name. Sort names are deliberately the reverse of the display names here, so
+// a listing ordered by the wrong column fails.
+func TestFacetListings(t *testing.T) {
+	idx := openTestIndex(t)
+
+	b1 := book.NewBook(
+		book.Bib{
+			Title:   "First",
+			Authors: []book.Author{{Name: "Alice Zeta", SortName: "Zeta, Alice"}},
+			Series:  &book.SeriesRef{Name: "EPIC", Index: "1"},
+		},
+		book.Meta{ID: 1, Tags: []string{"space", "sci-fi"}},
+		book.Location{EpubPath: "A/First (1)/book.epub"},
+	)
+	b2 := book.NewBook(
+		book.Bib{
+			Title: "Second",
+			Authors: []book.Author{
+				{Name: "Alice Zeta", SortName: "Zeta, Alice"},
+				{Name: "Bob Alpha", SortName: "Alpha, Bob"},
+			},
+		},
+		book.Meta{ID: 2, Tags: []string{"sci-fi"}},
+		book.Location{EpubPath: "A/Second (2)/book.epub"},
+	)
+	storeInIndex(t, idx, b1)
+	storeInIndex(t, idx, b2)
+
+	tests := []struct {
+		name string
+		list func() ([]Facet, error)
+		want []Facet
+	}{
+		{"authors", idx.ListAuthors, []Facet{{"Bob Alpha", 1}, {"Alice Zeta", 2}}},
+		{"series", idx.ListSeries, []Facet{{"EPIC", 1}}},
+		{"tags", idx.ListTags, []Facet{{"sci-fi", 2}, {"space", 1}}},
+	}
+	for _, tt := range tests {
+		got, err := tt.list()
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		if !slices.Equal(got, tt.want) {
+			t.Errorf("%s = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}
+
+// A value nothing points at is absent, not a zero-count row: the listings join
+// through the book tables, and Delete prunes the orphan anyway.
+func TestFacetListingsSkipOrphans(t *testing.T) {
+	idx := openTestIndex(t)
+	b := makeTestBook(1, "Only", []string{"Alice"}, "sci-fi", book.StatusUnread)
+	storeInIndex(t, idx, b)
+
+	op := idx.BeginOp()
+	if err := op.MarkPending(); err != nil {
+		t.Fatalf("MarkPending: %v", err)
+	}
+	if err := op.Delete(1); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	for name, list := range map[string]func() ([]Facet, error){
+		"authors": idx.ListAuthors,
+		"tags":    idx.ListTags,
+	} {
+		got, err := list()
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if len(got) != 0 {
+			t.Errorf("%s = %v, want none", name, got)
+		}
 	}
 }

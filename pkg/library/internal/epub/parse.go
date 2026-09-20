@@ -17,8 +17,8 @@ package epub
 import (
 	"errors"
 
-	epubfile "github.com/ramblingenzyme/ebookfs/pkg/epub"
 	"github.com/ramblingenzyme/ebookfs/internal/book"
+	epubfile "github.com/ramblingenzyme/ebookfs/pkg/epub"
 )
 
 // Parse reads the epub's metadata into the Bib the library indexes.

@@ -182,3 +182,33 @@ VALUES (?, ?, ?, ?, ?);
 
 -- name: SetBookIDSequence :exec
 INSERT INTO book_id_seq(id) VALUES(?) ON CONFLICT(id) DO NOTHING;
+
+-- Facet listing
+--
+-- One row per distinct value with the number of books behind it, for a
+-- navigation feed that lists authors, series or tags without loading a book
+-- row. Authors order by sort_name, which is why the catalog never re-sorts
+-- them: collation is the database's job, and "van Gogh" files under V here.
+-- An orphaned value cannot appear: the joins are inner, and Delete prunes
+-- orphans anyway.
+
+-- name: ListAuthors :many
+SELECT a.name, COUNT(ba.book_id) AS book_count
+FROM authors a
+JOIN book_authors ba ON ba.author_id = a.id
+GROUP BY a.id
+ORDER BY a.sort_name, a.name;
+
+-- name: ListSeries :many
+SELECT s.name, COUNT(b.id) AS book_count
+FROM series s
+JOIN books b ON b.series_id = s.id
+GROUP BY s.id
+ORDER BY s.name;
+
+-- name: ListTags :many
+SELECT t.name, COUNT(bt.book_id) AS book_count
+FROM tags t
+JOIN book_tags bt ON bt.tag_id = t.id
+GROUP BY t.id
+ORDER BY t.name;

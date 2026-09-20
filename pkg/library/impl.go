@@ -87,6 +87,17 @@ func (l *Library) Stats() (*Stats, error) {
 	return l.index.Stats()
 }
 
+// Authors returns every author in the library with the number of books
+// credited to them, ordered by sort name. Series and Tags do the same for
+// their own field, ordered by name. A frontend building a navigation listing
+// uses these instead of a full Search, which would load every book to count
+// them.
+func (l *Library) Authors() ([]Facet, error) { return l.index.ListAuthors() }
+
+func (l *Library) Series() ([]Facet, error) { return l.index.ListSeries() }
+
+func (l *Library) Tags() ([]Facet, error) { return l.index.ListTags() }
+
 // Get returns the book with the given id, or an error wrapping ErrBookNotFound
 // when the index does not hold it. The returned Book is an immutable snapshot;
 // see the concurrency contract on Library.
