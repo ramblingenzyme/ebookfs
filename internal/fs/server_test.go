@@ -5,25 +5,25 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ramblingenzyme/ebookfs/internal/libtest"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 
 	"github.com/knusbaum/go9p/fs"
-	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 )
 
 func TestSetupServer(t *testing.T) {
-	lib := libtest.Library{SearchDeleter: libtest.SearchDeleter{
+	lib := mock.Library{SearchDeleter: mock.SearchDeleter{
 		SearchFn: func(_ library.Query) ([]*library.Book, error) {
 			b1 := makeBook(1, "Book One", "Alice")
 			b1.Meta.Status = "unread"
 			b2 := makeBook(2, "Book Two", "Bob")
 			b2.Meta.Status = "read"
-			return []*library.Book{testutil.WrapBook(b1), testutil.WrapBook(b2)}, nil
+			return []*library.Book{util.WrapBook(b1), util.WrapBook(b2)}, nil
 		},
 	}}
-	exp := libtest.Exporter{StatusList: []string{"unread"}}
+	exp := mock.Exporter{StatusList: []string{"unread"}}
 
 	srv, err := SetupServer(lib, exp, 30*time.Minute, 100)
 	if err != nil {
@@ -41,26 +41,26 @@ func TestSetupServer(t *testing.T) {
 }
 
 func TestSetupServer_QueryError(t *testing.T) {
-	lib := libtest.Library{SearchDeleter: libtest.SearchDeleter{
+	lib := mock.Library{SearchDeleter: mock.SearchDeleter{
 		SearchFn: func(_ library.Query) ([]*library.Book, error) {
 			return nil, errTest
 		},
 	}}
-	_, err := SetupServer(lib, libtest.Exporter{}, 30*time.Minute, 100)
+	_, err := SetupServer(lib, mock.Exporter{}, 30*time.Minute, 100)
 	if err == nil {
 		t.Fatal("expected error from SetupServer when Query fails")
 	}
 }
 
 func TestSetupServer_BooksPopulated(t *testing.T) {
-	lib := libtest.Library{SearchDeleter: libtest.SearchDeleter{
+	lib := mock.Library{SearchDeleter: mock.SearchDeleter{
 		SearchFn: func(_ library.Query) ([]*library.Book, error) {
 			b := makeBook(1, "Present", "Alice")
 			b.Meta.Status = "unread"
-			return []*library.Book{testutil.WrapBook(b)}, nil
+			return []*library.Book{util.WrapBook(b)}, nil
 		},
 	}}
-	srv, err := SetupServer(lib, libtest.Exporter{}, 30*time.Minute, 100)
+	srv, err := SetupServer(lib, mock.Exporter{}, 30*time.Minute, 100)
 	if err != nil {
 		t.Fatalf("SetupServer: %v", err)
 	}

@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/knusbaum/go9p/fs"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 )
 
 // creatorDir is a directory that accepts creates, recording what it was asked
@@ -30,7 +30,7 @@ func (d *creatorDir) Create(f *fs.FS, name string, perm uint32, mode uint8) (fs.
 // one central switch, so the hook's whole job is to route to the parent and
 // refuse when the parent has no policy.
 func TestDispatchCreate(t *testing.T) {
-	f := testutil.NewTestFS(t)
+	f := util.NewTestFS(t)
 
 	t.Run("delegates to a parent that accepts creates", func(t *testing.T) {
 		parent := &creatorDir{Dir: fs.NewStaticDir(NewStat(f, "inbox", 0777))}

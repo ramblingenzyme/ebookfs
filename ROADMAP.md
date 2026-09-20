@@ -183,7 +183,7 @@ Currently `library/` lives inside the `ebookfs` Go module. For third-party front
 
 **Likely path:** Keep `library/` in the same repository with its own `go.mod` in the `library/` directory. The main module's `go.mod` uses a `replace` directive to point at the local copy during development. This avoids splitting repos while giving `library/` its own version tags.
 
-`epub/` complicates that. It sits at the repo root, and `library/internal/epub` imports it — so a `library/go.mod` would have the library module depending on the parent. Either `epub/` takes a third `go.mod` of its own, which suits a package that imports nothing of ebookfs, or it moves under `library/` when the split happens. The test corpus is the second question: `internal/epubtest` serves both suites and lives in the main module, so `epub/` as a separate module could not build its own tests without moving that too.
+`epub/` complicates that. It sits at the repo root, and `library/internal/epub` imports it — so a `library/go.mod` would have the library module depending on the parent. Either `epub/` takes a third `go.mod` of its own, which suits a package that imports nothing of ebookfs, or it moves under `library/` when the split happens. The test corpus is the second question: `internal/testing/epubtest` serves both suites and lives in the main module, so `epub/` as a separate module could not build its own tests without moving that too.
 
 ### 9. Non-goals for V2
 

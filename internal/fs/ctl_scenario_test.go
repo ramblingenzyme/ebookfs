@@ -18,9 +18,9 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/fs/ctl"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/views"
-	"github.com/ramblingenzyme/ebookfs/internal/fstest"
-	"github.com/ramblingenzyme/ebookfs/internal/libtest"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
@@ -44,12 +44,12 @@ func ctlTree(t *testing.T, cur *bookmodel.Book) (*ctl.CtlFile, *ctl.CommandLog, 
 	t.Helper()
 	f := newTestFS(t)
 
-	search := libtest.SearchDeleter{
+	search := mock.SearchDeleter{
 		SearchFn: func(library.Query) ([]*library.Book, error) {
-			return []*library.Book{testutil.WrapBook(cur)}, nil
+			return []*library.Book{util.WrapBook(cur)}, nil
 		},
 	}
-	edit := libtest.Editor{
+	edit := mock.Editor{
 		EditFn: func(_ int64, e library.Edits) (*library.Book, error) {
 			next := *cur
 			if e.Status != nil {
@@ -62,7 +62,7 @@ func ctlTree(t *testing.T, cur *bookmodel.Book) (*ctl.CtlFile, *ctl.CommandLog, 
 				next.Authors = *e.Authors
 			}
 			cur = &next
-			return testutil.WrapBook(cur), nil
+			return util.WrapBook(cur), nil
 		},
 	}
 
@@ -73,7 +73,7 @@ func ctlTree(t *testing.T, cur *bookmodel.Book) (*ctl.CtlFile, *ctl.CommandLog, 
 		"by-tag":    views.NewByTagDir(reg),
 		"by-status": views.NewByStatusDir(reg),
 	}
-	reg.Add(testutil.WrapBook(cur))
+	reg.Add(util.WrapBook(cur))
 
 	log := ctl.NewCommandLog(16)
 	return ctl.NewCtlFile(f, search, reg, log), log, dirs

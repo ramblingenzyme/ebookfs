@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/knusbaum/go9p/proto"
-	"github.com/ramblingenzyme/ebookfs/internal/fstest"
-	"github.com/ramblingenzyme/ebookfs/internal/libtest"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
@@ -47,13 +47,13 @@ func TestFormatStatsZeroTimes(t *testing.T) {
 
 func TestStatsFileReadsLiveStats(t *testing.T) {
 	calls := 0
-	lib := libtest.StatsReader{
+	lib := mock.StatsReader{
 		StatsFn: func() (*library.Stats, error) {
 			calls++
 			return &library.Stats{Books: calls}, nil
 		},
 	}
-	f := NewStatsFile(testutil.NewTestFS(t), lib)
+	f := NewStatsFile(util.NewTestFS(t), lib)
 
 	if got := fstest.Fid(t, f, 1).Get(proto.Mode(0), 1024); !strings.Contains(got, "books: 1\n") {
 		t.Errorf("Read() = %q, want it to contain %q", got, "books: 1")
@@ -66,25 +66,25 @@ func TestStatsFileReadsLiveStats(t *testing.T) {
 }
 
 func TestStatsFileStatReportsLength(t *testing.T) {
-	lib := libtest.StatsReader{
+	lib := mock.StatsReader{
 		StatsFn: func() (*library.Stats, error) {
 			return &library.Stats{Books: 7}, nil
 		},
 	}
-	f := NewStatsFile(testutil.NewTestFS(t), lib)
+	f := NewStatsFile(util.NewTestFS(t), lib)
 
 	fstest.StatLength(t, f, uint64(len(formatStats(&library.Stats{Books: 7}))))
 }
 
 func TestStatsFileOpenPropagatesError(t *testing.T) {
-	lib := libtest.StatsReader{
+	lib := mock.StatsReader{
 		StatsFn: func() (*library.Stats, error) {
-			return nil, testutil.ErrTest
+			return nil, util.ErrTest
 		},
 	}
-	f := NewStatsFile(testutil.NewTestFS(t), lib)
+	f := NewStatsFile(util.NewTestFS(t), lib)
 
-	if err := f.Open(1, proto.Mode(0)); err != testutil.ErrTest {
-		t.Errorf("Open error = %v, want %v", err, testutil.ErrTest)
+	if err := f.Open(1, proto.Mode(0)); err != util.ErrTest {
+		t.Errorf("Open error = %v, want %v", err, util.ErrTest)
 	}
 }

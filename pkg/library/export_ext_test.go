@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
@@ -24,11 +24,11 @@ func TestLibraryImplExporter(t *testing.T) {
 	}
 	book := makeBook(1, "Test", "Author")
 	book.Meta.Status = "unread"
-	if !e.Includes(testutil.WrapBook(book)) {
+	if !e.Includes(util.WrapBook(book)) {
 		t.Errorf("Includes should return true for a book with status %q", book.Meta.Status)
 	}
 	book.Meta.Status = "read"
-	if e.Includes(testutil.WrapBook(book)) {
+	if e.Includes(util.WrapBook(book)) {
 		t.Errorf("Includes should return false for a book with status %q", book.Meta.Status)
 	}
 }
@@ -97,31 +97,31 @@ func TestKepubCacheDelegates(t *testing.T) {
 	b.EpubPath = "mybook.epub"
 
 	b.Meta.Status = "reading"
-	if !exp.Includes(testutil.WrapBook(b)) {
+	if !exp.Includes(util.WrapBook(b)) {
 		t.Error("Includes should be true for the configured status")
 	}
 	b.Meta.Status = "read"
-	if exp.Includes(testutil.WrapBook(b)) {
+	if exp.Includes(util.WrapBook(b)) {
 		t.Error("Includes should be false for an unconfigured status")
 	}
 
-	if fn := exp.Filename(testutil.WrapBook(b)); fn != "mybook.kepub.epub" {
+	if fn := exp.Filename(util.WrapBook(b)); fn != "mybook.kepub.epub" {
 		t.Errorf("Filename = %q, want %q", fn, "mybook.kepub.epub")
 	}
 
-	if dn := exp.Dirname(testutil.WrapBook(b)); dn != "Alice" {
+	if dn := exp.Dirname(util.WrapBook(b)); dn != "Alice" {
 		t.Errorf("Dirname = %q, want %q", dn, "Alice")
 	}
 
-	if _, ok := exp.Size(testutil.WrapBook(b)); ok {
+	if _, ok := exp.Size(util.WrapBook(b)); ok {
 		t.Error("Size should report cold for a book with no cached conversion")
 	}
 
 	// Warm must not panic.
-	exp.Warm(testutil.WrapBook(b))
+	exp.Warm(util.WrapBook(b))
 
 	// The book is not in this library, so the conversion has no epub to read.
-	if _, err := exp.Open(testutil.WrapBook(b)); err == nil {
+	if _, err := exp.Open(util.WrapBook(b)); err == nil {
 		t.Error("expected an error opening a book the library does not hold")
 	}
 

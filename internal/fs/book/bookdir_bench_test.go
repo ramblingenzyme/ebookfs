@@ -17,7 +17,7 @@ import (
 	"unsafe"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 
 	"github.com/knusbaum/go9p/fs"
@@ -56,7 +56,7 @@ func representativeBook(id int64, withCover bool) *library.Book {
 	}
 	libPath := "Le Guin, Ursula K/The Left Hand of Darkness (1042)"
 	epubName := "The Left Hand of Darkness - Ursula K. Le Guin.epub"
-	return testutil.WrapBook(book.NewBook(bib, book.Meta{ID: id, Status: "unread", Tags: []string{"sci-fi", "classic", "feminist"}}, book.Location{
+	return util.WrapBook(book.NewBook(bib, book.Meta{ID: id, Status: "unread", Tags: []string{"sci-fi", "classic", "feminist"}}, book.Location{
 		EpubPath: filepath.Join(libPath, epubName),
 	}))
 }

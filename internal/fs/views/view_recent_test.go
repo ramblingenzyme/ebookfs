@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ramblingenzyme/ebookfs/internal/fstest"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
 )
 
 func TestRecentDirOrdersNewestFirst(t *testing.T) {

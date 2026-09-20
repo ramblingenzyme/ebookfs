@@ -3,7 +3,7 @@ package views
 import (
 	"testing"
 
-	"github.com/ramblingenzyme/ebookfs/internal/fstest"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
 )
 
 func TestByTagDirTagWithSlash(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 )
 
 // The hint reaches a conversion at all. Cache.Warm is the whole public surface
@@ -59,7 +59,7 @@ func TestWarmerErrorDoesNotPanic(t *testing.T) {
 	done := make(chan struct{})
 	c.convertFn = func(context.Context, io.Writer, io.ReaderAt, int64) error {
 		defer close(done)
-		return testutil.ErrTest
+		return util.ErrTest
 	}
 
 	b := makeBook(1, "Test", "Author")

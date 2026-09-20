@@ -10,10 +10,10 @@ import (
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 )
 
-var makeBook = testutil.MakeMutableBook
+var makeBook = util.MakeMutableBook
 
 // The status filter runs over both renditions. They carry separate copies of the
 // same one-line rule, and it decides what a reader mount can see, so a
@@ -41,7 +41,7 @@ func TestExporterIncludes(t *testing.T) {
 					b := makeBook(1, "Test", "Author")
 					b.Meta.Status = tt.status
 					exp := newExp(tt.statuses)
-					if got := exp.Includes(testutil.WrapBook(b)); got != tt.want {
+					if got := exp.Includes(util.WrapBook(b)); got != tt.want {
 						t.Errorf("Includes = %v, want %v", got, tt.want)
 					}
 				})
@@ -59,7 +59,7 @@ func TestEpubExporter_Size_ReportsRecordedSize(t *testing.T) {
 	b.EpubPath = "/nonexistent/missing.epub"
 	b.EpubSize = 4242
 
-	size, ok := epubExporter{}.Size(testutil.WrapBook(b))
+	size, ok := epubExporter{}.Size(util.WrapBook(b))
 	if !ok {
 		t.Error("Size should be known for any indexed book")
 	}
@@ -75,7 +75,7 @@ func TestEpubExporter_Size_ReportsRecordedSize(t *testing.T) {
 func TestEpubExporter_Size_Unrecorded(t *testing.T) {
 	b := makeBook(1, "Test", "Author") // EpubSize left at its zero value
 
-	size, ok := epubExporter{}.Size(testutil.WrapBook(b))
+	size, ok := epubExporter{}.Size(util.WrapBook(b))
 	if ok {
 		t.Errorf("Size = (%d, true) for a book with no recorded size, want it reported as unknown", size)
 	}
@@ -85,7 +85,7 @@ func TestEpubExporter_Filename(t *testing.T) {
 	b := makeBook(1, "Test", "Author")
 	b.EpubPath = "mybook.epub"
 
-	name := epubExporter{}.Filename(testutil.WrapBook(b))
+	name := epubExporter{}.Filename(util.WrapBook(b))
 	if name != "mybook.epub" {
 		t.Errorf("Filename = %q, want %q", name, "mybook.epub")
 	}
@@ -120,7 +120,7 @@ func TestEpubExporter_Dirname(t *testing.T) {
 			}
 			b := makeBook(1, "Test", names...)
 			b.Authors = authors
-			got := epubExporter{}.Dirname(testutil.WrapBook(b))
+			got := epubExporter{}.Dirname(util.WrapBook(b))
 			if got != tt.want {
 				t.Errorf("Dirname = %q, want %q", got, tt.want)
 			}
