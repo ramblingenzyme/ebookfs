@@ -2,11 +2,11 @@ package library
 
 // Config is the library's storage layout. All three paths are required. The
 // library creates Root and InboxTemp if they are missing, and refuses to open
-// unless InboxTemp is on the same filesystem as Root — ingest finalises by
+// unless InboxTemp is on the same filesystem as Root, since ingest finalises by
 // renaming out of one into the other, and rename does not cross filesystems.
 //
-// Deliberately free of serialization tags: how a caller obtains these paths —
-// a TOML file, flags, environment — is the caller's concern, not the library's.
+// Deliberately free of serialization tags. How a caller obtains these paths,
+// from a TOML file, flags or the environment, is the caller's concern.
 type Config struct {
 	// Root is the library tree: one directory per author, one per book beneath.
 	Root string
@@ -17,7 +17,7 @@ type Config struct {
 	IndexPath string
 }
 
-// ReaderConfig configures the export rendition served by Library.Exporter —
+// ReaderConfig configures the export rendition served by Library.Exporter:
 // the reader/ view an e-reader is synced from. Statuses selects which books
 // appear; Convert toggles kepub conversion (false serves the original epub);
 // CacheDir holds converted kepubs and MUST live outside Config.Root so the

@@ -29,7 +29,7 @@ func Put(s Slot, value string) {
 // knowing whether the file already carries one.
 //
 // newEl and parent are separate because a field may own the order its elements
-// sit in — see Place.
+// sit in; see Place.
 type Element struct {
 	d        *Doc
 	el       *etree.Element        // nil until found or created
@@ -119,10 +119,10 @@ func (r *Refine) Unschemed() *Refine {
 	return &narrowed
 }
 
-// Schemed is the other half of the same narrowing: the refinements whose value
-// is a code in the named list, such as an identifier-type from onix:codelist5.
-// The scheme is matched through the vocabulary, so a document that rebound the
-// prefix is read on its own terms.
+// Schemed narrows to the refinements whose value is a code in the named list,
+// such as an identifier-type from onix:codelist5. The scheme is matched through
+// the vocabulary, so a document that rebound the prefix is read on its own
+// terms.
 func (r *Refine) Schemed(scheme string) *Refine {
 	narrowed := *r
 	narrowed.unschemedOnly = false
@@ -160,7 +160,7 @@ func (r *Refine) Get() string {
 // keeps its position in the document.
 //
 // ponytail: duplicates of one property are left in place and only the first is
-// updated. Revisit if epubcheck rejects a file we wrote.
+// updated. Revisit if epubcheck rejects a file this package wrote.
 func (r *Refine) Set(value string) {
 	if ms := r.elements(); len(ms) > 0 {
 		ms[0].SetText(value)
@@ -190,7 +190,7 @@ func (r *Refine) Values() []string {
 }
 
 // Add appends unconditionally, for properties where an existing value may be
-// one we do not own, such as a creator's second role.
+// one this package does not own, such as a creator's second role.
 func (r *Refine) Add(value, scheme string) {
 	r.d.addRefine(r.owner.mintID(), r.property, value, scheme)
 }
@@ -308,7 +308,7 @@ func (d *Doc) metaSlot(property, idPrefix string, el *etree.Element) *Element {
 		newEl: func() *etree.Element {
 			m := etree.NewElement("meta")
 			// spell, not property: in a document that rebound the vocabulary
-			// our name resolves in, the literal would mean something else to
+			// this name resolves in, the literal would mean something else to
 			// every other reader.
 			m.CreateAttr("property", d.vocab.spell(property))
 			return m

@@ -47,7 +47,7 @@ func NewReaderFile(stat *proto.Stat, exp Renderer, book func() *library.Book) *R
 	}
 }
 
-// Stat reports the export size when known (cheap; never triggers a conversion),
+// Stat reports the export size when known (never triggers a conversion),
 // so a cold kepub lists as length 0 until its cache is warm.
 func (r *ReaderFile) Stat() proto.Stat {
 	s := r.BaseFile.Stat()

@@ -23,7 +23,7 @@ func NewWriteBuffer(max uint64) WriteBuffer {
 // when non-nil, provides the buffer's initial content the first time fid
 // writes (so a client can append or edit at a middle offset); nil starts
 // empty. A first write at offset 0 shorter than the seeded content replaces it
-// entirely — the buffer is truncated to the written bytes so residual old
+// entirely. The buffer is truncated to the written bytes, so residual old
 // content can't leak through (Linux v9fs on 9P2000 doesn't send Otrunc).
 func (w *WriteBuffer) Write(fid uint64, offset uint64, data []byte, seed func() []byte) (uint32, error) {
 	if len(data) == 0 {

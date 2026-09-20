@@ -22,10 +22,10 @@ func (a *AttrText) UnmarshalXMLAttr(x xml.Attr) error {
 	return nil
 }
 
-// AttrURL is an attribute the spec types as a URL and we match against a zip
-// entry name. Decoded is what a conforming file means; Raw is kept because a
-// producer that wrote an unencoded name into both the XML and the zip has an
-// entry whose name really does contain "%20".
+// AttrURL is an attribute the spec types as a URL and this package matches
+// against a zip entry name. Decoded is what a conforming file means. Raw is
+// kept because a producer that wrote an unencoded name into both the XML and
+// the zip has an entry whose name really does contain "%20".
 type AttrURL struct{ Raw, Decoded string }
 
 func (u *AttrURL) UnmarshalXMLAttr(x xml.Attr) error {
@@ -42,7 +42,7 @@ func (u *AttrURL) Candidates() []string {
 	return []string{u.Decoded, u.Raw}
 }
 
-// An invalid escape is not a path we can decode, so the literal stands — which
+// An invalid escape is not a decodable path, so the literal stands, which
 // is also what a name containing a bare '%' needs.
 func unescapePath(s string) string {
 	decoded, err := url.PathUnescape(s)

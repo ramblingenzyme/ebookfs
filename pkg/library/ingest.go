@@ -126,9 +126,9 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 }
 
 // authorNames returns the authors' distinct display names, the set Index.Exists
-// compares against. Names are non-empty by construction — epub.Parse drops
+// compares against. Names are non-empty by construction, since epub.Parse drops
 // creators whose name sanitizes to nothing and rejects a book left with none,
-// and Edits rejects an empty author name — so there is nothing to filter here.
+// and Edits rejects an empty author name, so there is nothing to filter here.
 // Filtering would be wrong anyway: the set compared has to be the set written,
 // or the same book ingests twice.
 func authorNames(authors []book.Author) []string {

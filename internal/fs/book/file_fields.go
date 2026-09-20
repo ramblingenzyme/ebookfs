@@ -14,7 +14,7 @@ const maxFieldFileSize = 1 << 20 // 1 MiB
 // Content is snapshotted per fid on Open; writes are buffered per fid and
 // committed (trimmed of trailing newline) when the fid is closed.
 //
-// When the client opens with Otrunc (shell >), the write buffer starts empty —
+// When the client opens with Otrunc (shell >), the write buffer starts empty;
 // the first write completely replaces the field value. Without Otrunc (>> or
 // in-place edit), the write buffer starts as a copy of the current value so
 // the client can append, edit a middle offset, etc. A first write at offset 0
@@ -49,8 +49,8 @@ func (f *fieldFile) Stat() proto.Stat {
 }
 
 func (f *fieldFile) Open(fid uint64, omode proto.Mode) error {
-	// The base loads and caches the per-fid snapshot (and self-locks); we then
-	// record whether the client asked for truncation.
+	// The base loads and caches the per-fid snapshot (and self-locks). This then
+	// records whether the client asked for truncation.
 	if err := f.SnapshotFile.Open(fid, omode); err != nil {
 		return err
 	}

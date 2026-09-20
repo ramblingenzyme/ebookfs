@@ -1,6 +1,6 @@
 // Package content edits EPUB content documents (§6): the XHTML making up the
-// book itself. One thing in them is ours — the dimensions a cover page
-// hardcodes for the cover image — and that is repair, undoing damage another
+// book itself. One thing in them is ours, the dimensions a cover page hardcodes
+// for the cover image, and that is repair, undoing damage another
 // edit would otherwise do. opf.CoverPages says which document is the cover page.
 package content
 
@@ -48,9 +48,10 @@ func (d *Doc) Bytes() ([]byte, error) { return d.doc.WriteToBytes() }
 // whether the document said anything about it to change; one not referencing
 // the cover image is not a cover page and is left alone.
 //
-// The usual cover page is an SVG wrapper whose viewBox — the coordinate space
-// the image is drawn into — is the old image's pixel size, so a replacement of
-// different proportions renders cropped while every file stays valid.
+// The usual cover page is an SVG wrapper whose viewBox is the old image's pixel
+// size. The viewBox is the coordinate space the image is drawn into, so a
+// replacement of different proportions renders cropped while every file stays
+// valid.
 func (d *Doc) FitCover(coverPath string, width, height int) bool {
 	before, _ := d.Bytes()
 
@@ -71,7 +72,7 @@ func (d *Doc) FitCover(coverPath string, width, height int) bool {
 
 // coverImages returns the SVG <image> and HTML <img> elements whose reference
 // resolves to the cover's container path. Matched by local name, so xlink:href
-// and a bare href are both found — §6.2.3 allows either.
+// and a bare href are both found; §6.2.3 allows either.
 func (d *Doc) coverImages(coverPath string) []*etree.Element {
 	var out []*etree.Element
 	for _, tag := range []string{"image", "img"} {

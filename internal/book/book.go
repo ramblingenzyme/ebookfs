@@ -3,11 +3,8 @@
 // exposed to external consumers; the public library.Book wrapper provides
 // read-only access.
 //
-// Edits belongs here rather than with the epub adapter because it spans the
-// whole record exactly as Book does: seven fields the epub carries, and Status,
-// Rating and Tags, which live in the meta.toml sidecar and no EPUB file holds.
-// Validate checks it against the Book it would apply to, and the status
-// vocabulary it checks against is this package's too.
+// Edits spans the whole record as Book does: seven fields the epub carries,
+// plus Status, Rating and Tags, which live in the meta.toml sidecar.
 package book
 
 import (
@@ -18,7 +15,6 @@ import (
 	"time"
 )
 
-// Author represents a book author with optional sort name for display.
 type Author struct {
 	ID       int64
 	Name     string
@@ -32,9 +28,9 @@ type SeriesRef struct {
 	// Index is the book's position in the series, held as the string the epub
 	// carries. EPUB 3.3 Appendix D.3.7 allows "a single xsd:unsignedInt or
 	// series of decimal-separated numbers (e.g., 1 or 2.2.1)", and Example 89
-	// notes that 98.4 means volume 98, issue 4 — not the number 98.4. A float
-	// cannot represent either, and parsing one silently turned every book in a
-	// multi-level series into volume 1.
+	// notes that 98.4 means volume 98, issue 4, rather than the number 98.4.
+	// A float represents neither, and parsing one collapses every multi-level
+	// position to volume 1.
 	Index string
 }
 
@@ -59,7 +55,6 @@ const (
 // Statuses lists every valid reading status, in presentation order.
 var Statuses = []string{StatusUnread, StatusReading, StatusRead, StatusAbandoned}
 
-// IsValidStatus reports whether s is one of Statuses.
 func IsValidStatus(s string) bool {
 	return slices.Contains(Statuses, s)
 }
@@ -100,7 +95,6 @@ type Book struct {
 	EpubSize int64
 }
 
-// NewBook returns a Book with all fields populated.
 func NewBook(bib Bib, meta Meta, loc Location) *Book {
 	if bib.Authors == nil {
 		bib.Authors = []Author{}
@@ -127,12 +121,11 @@ func NewBook(bib Bib, meta Meta, loc Location) *Book {
 	return &Book{Location: loc, Bib: bib, Meta: meta}
 }
 
-// HasSeries reports whether the book belongs to a series.
+// HasSeries is safe on a nil Book, so callers resolving a series need no guard.
 func (b *Book) HasSeries() bool {
 	return b != nil && b.Series != nil
 }
 
-// SeriesName returns the book's series name, or "" when the book has no series.
 func (b *Book) SeriesName() string {
 	if !b.HasSeries() {
 		return ""
@@ -140,13 +133,9 @@ func (b *Book) SeriesName() string {
 	return b.Series.Name
 }
 
-// ImmutableBook is an immutable snapshot of a book's state. It wraps the
-// internal Book and provides read-only access via getters. The wrapper prevents
-// external callers from mutating library state, while allowing internal
-// construction and mutation within the library package.
-//
-// A Book is a snapshot at the time it was returned: after an Edit, call
-// Library.Content or Search again for updated state.
+// ImmutableBook wraps a Book in read-only getters, so a caller outside this
+// package cannot mutate library state. It is a snapshot; pkg/library.Library
+// says when to fetch a fresh one.
 type ImmutableBook struct {
 	inner *Book
 }
@@ -157,25 +146,20 @@ func NewImmutableBook(b *Book) *ImmutableBook {
 	return &ImmutableBook{inner: b}
 }
 
-// Unwrap returns the underlying mutable Book. This is for internal use only;
-// external code should use the getter methods instead.
+// Unwrap escapes the read-only wrapper. Only this module's packages may call
+// it; everything else goes through the getters.
 func Unwrap(b *ImmutableBook) *Book {
 	return b.inner
 }
 
-// ID returns the book's unique identifier.
 func (b *ImmutableBook) ID() int64 { return b.inner.Meta.ID }
 
-// Title returns the book's title.
 func (b *ImmutableBook) Title() string { return b.inner.Title }
 
-// SortTitle returns the book's sort title, or "" if unset.
 func (b *ImmutableBook) SortTitle() string { return b.inner.SortTitle }
 
-// Authors returns a copy of the book's authors list.
 func (b *ImmutableBook) Authors() []Author { return slices.Clone(b.inner.Authors) }
 
-// Series returns the book's series reference, or nil if the book is not in a series.
 func (b *ImmutableBook) Series() *SeriesRef {
 	if b.inner.Series == nil {
 		return nil
@@ -184,13 +168,10 @@ func (b *ImmutableBook) Series() *SeriesRef {
 	return &s
 }
 
-// HasSeries reports whether the book belongs to a series.
 func (b *ImmutableBook) HasSeries() bool { return b.inner.HasSeries() }
 
-// SeriesName returns the book's series name, or "" when the book has no series.
 func (b *ImmutableBook) SeriesName() string { return b.inner.SeriesName() }
 
-// SeriesIndex returns the book's position in its series, or "" if not in a series.
 func (b *ImmutableBook) SeriesIndex() string {
 	if b.inner.Series == nil {
 		return ""
@@ -198,52 +179,37 @@ func (b *ImmutableBook) SeriesIndex() string {
 	return b.inner.Series.Index
 }
 
-// Language returns the book's language code (BCP 47 / ISO 639).
+// Language is a BCP 47 / ISO 639 code.
 func (b *ImmutableBook) Language() string { return b.inner.Language }
 
-// Pubdate returns the book's publication date as a string.
 func (b *ImmutableBook) Pubdate() string { return b.inner.Pubdate }
 
-// Description returns the book's description or summary.
 func (b *ImmutableBook) Description() string { return b.inner.Description }
 
-// Identifiers returns a copy of the book's identifiers map (e.g., ISBN, ASIN).
 func (b *ImmutableBook) Identifiers() map[string]string { return maps.Clone(b.inner.Identifiers) }
 
-// CoverPath returns the zip-relative path to the cover image, or "" if none.
 func (b *ImmutableBook) CoverPath() string { return b.inner.CoverPath }
 
-// OpfSize returns the OPF file's uncompressed size, or 0 if unavailable.
 func (b *ImmutableBook) OpfSize() int64 { return b.inner.OpfSize }
 
-// CoverSize returns the cover image's uncompressed size, or 0 if unavailable.
 func (b *ImmutableBook) CoverSize() int64 { return b.inner.CoverSize }
 
-// EpubPath returns the book's relative path within the store.
 func (b *ImmutableBook) EpubPath() string { return b.inner.EpubPath }
 
-// Dir returns the directory portion of the book's location.
 func (b *ImmutableBook) Dir() string { return b.inner.Dir() }
 
-// Filename returns the epub's basename within its directory.
 func (b *ImmutableBook) Filename() string { return b.inner.Filename() }
 
-// EpubSize returns the epub file's size on disk.
 func (b *ImmutableBook) EpubSize() int64 { return b.inner.EpubSize }
 
-// DateAdded returns when the book was added to the library.
 func (b *ImmutableBook) DateAdded() time.Time { return b.inner.Meta.DateAdded }
 
-// DateModified returns when the book's metadata was last modified.
 func (b *ImmutableBook) DateModified() time.Time { return b.inner.Meta.DateModified }
 
-// Status returns the book's reading status.
 func (b *ImmutableBook) Status() string { return b.inner.Meta.Status }
 
-// Rating returns the book's rating (0-5).
 func (b *ImmutableBook) Rating() float64 { return b.inner.Meta.Rating }
 
-// Tags returns a copy of the book's custom tags list.
 func (b *ImmutableBook) Tags() []string { return slices.Clone(b.inner.Meta.Tags) }
 
 // Bib holds the bibliographic data parsed from the epub.
@@ -263,13 +229,11 @@ type Bib struct {
 
 // Location identifies where a book lives on disk.
 type Location struct {
-	EpubPath string
+	EpubPath string // relative to the store root
 }
 
-// Dir returns the directory portion of the location's relative path.
 func (l Location) Dir() string { return filepath.Dir(l.EpubPath) }
 
-// Filename returns the epub's basename within its directory.
 func (l Location) Filename() string { return filepath.Base(l.EpubPath) }
 
 // Meta mirrors the meta.toml sidecar schema.

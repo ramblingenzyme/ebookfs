@@ -37,8 +37,8 @@ func newBookListDir(stat *proto.Stat) *bookListDir {
 //
 // Known gap: Add tests the plain title for collisions but not the name it mints,
 // so a book literally titled "Foo (2)" and the minted name for book 2 titled
-// "Foo" are the same key. It only bites in one order — literal title added
-// first, then the collision that mints over it: the minted entry replaces the
+// "Foo" are the same key. It bites in one order only, with the literal title
+// added first and the collision minting over it. The minted entry replaces the
 // literal one, so a registered book vanishes from the listing, and because
 // entries then maps both ids to that name, removing either deletes the other's
 // entry too. Added the other way round it is fine, since by then the plain
@@ -55,7 +55,7 @@ func (d *bookListDir) Add(dir *book.BookDir) {
 	// entries would name a child that cannot be deleted.
 	name := naming.PathSafe(b.Title())
 	if child, ok := d.Children()[name]; ok && child != dir {
-		// Plain title is taken by a different book — disambiguate with the id.
+		// Plain title is taken by a different book, so disambiguate with the id.
 		d.AddChild(&namedBookDir{
 			BookDir:  dir,
 			baseStat: dir.Stat(),

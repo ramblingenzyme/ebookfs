@@ -54,8 +54,8 @@ func canonicalDir(authors []book.Author, title string, id int64) string {
 }
 
 // IDFromPath recovers the book id that canonicalDir encoded in a library path's
-// trailing " (id)". Every layout this project has used — canonical, legacy
-// single-author, legacy sort-name — shares that suffix, so it is readable even
+// trailing " (id)". Every layout this project has used (canonical, legacy
+// single-author, legacy sort-name) shares that suffix, so it is readable even
 // for a book whose meta.toml can't be parsed.
 //
 // A best-effort reading, reported as absent rather than as an error: a

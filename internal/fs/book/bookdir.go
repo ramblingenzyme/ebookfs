@@ -30,7 +30,7 @@ var newStat = vfile.NewStat
 // held as an atomically swapped snapshot: 9P handlers run on many goroutines
 // with no shared lock against registry commits, so they read an immutable
 // *library.Book via Book() rather than fields mutated in place. Snapshots must
-// never be modified after they are stored — an edit produces a fresh Book
+// never be modified after they are stored. An edit produces a fresh Book
 // (library.Edit already does) and the registry swaps the pointer via SetSnapshot.
 type BookDir struct {
 	fs.StaticDir
@@ -110,7 +110,7 @@ func NewBookDir(f *fs.FS, lib ContentReader, edit func(int64, library.Edits) err
 		return formatIdentifiers(d.Book().Identifiers())
 	}, nil))
 
-	// Cover image — only present when the epub declares one.
+	// Cover image, present only when the epub declares one.
 	if book.CoverPath() != "" {
 		d.StaticDir.AddChild(newCoverFile(
 			newStat(f, "cover"+filepath.Ext(book.CoverPath()), 0644),

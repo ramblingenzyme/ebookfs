@@ -18,13 +18,12 @@ type Op struct {
 	opID string
 }
 
-// BeginOp starts a new mutation operation.
 func (idx *Index) BeginOp() *Op {
 	return &Op{idx: idx}
 }
 
 // MarkPending inserts a row into pending_ops via autocommit (so it survives a
-// crash) and is idempotent — at most one row per operation. Call it before
+// crash) and is idempotent, at most one row per operation. Call it before
 // the first real disk mutation. If the operation fails after MarkPending the
 // row stays behind, forcing a healing reindex on the next startup.
 func (o *Op) MarkPending() error {
@@ -66,8 +65,8 @@ func (o *Op) Cancel() {
 	}
 }
 
-// Put writes b into the index, inserting or replacing the record for b.Meta.ID.
-// mt carries the on-disk file state used for drift detection.
+// Put writes b into the index. mt is the on-disk file state drift detection
+// compares against.
 func (o *Op) Put(b *book.Book, mt drift.PathInfo) error {
 	return o.finish(func(q *dbsqlc.Queries, tx *sql.Tx) error { return o.idx.putBook(q, b, mt) })
 }

@@ -28,7 +28,7 @@ var ErrNoCover = errors.New("no cover in epub")
 // SetCover stages a replacement cover image, written by the next Save. The
 // image replaces the entry the manifest already names, in place and in the same
 // format, so the manifest, the cover-image property and the legacy
-// <meta name="cover"> keep pointing at what they already did — which is why
+// <meta name="cover"> keep pointing at what they already did, which is why
 // there is no transcoding and no way to add a cover to a book without one.
 //
 // Staged rather than written, so that a cover change and a metadata change
@@ -62,7 +62,7 @@ func (b *Book) SetCover(img []byte) error {
 //
 // The write is atomic. A temp file beside the original is built with the
 // changed entries swapped and everything else copied byte for byte, re-opened
-// to prove it is still an epub, and only then renamed over the original — so a
+// to prove it is still an epub, and only then renamed over the original, so a
 // failure at any point leaves the original exactly as it was.
 //
 // After a successful Save the Book reads from the rewritten file, and its
@@ -166,11 +166,8 @@ func sameSeries(a, c *Series) bool {
 // handed to Apply rather than called directly so that the §5.5.5 byte compare
 // brackets every write.
 func (b *Book) write(d *opf.Doc, m moved) {
-	// The title's two halves are not independent: writing a title takes the
-	// document's other dc:title segments with it, which a sort-title edit must
-	// not do. So the title is passed only when it moved, while the sort title
-	// is restated whenever either did — restating it keeps a title-only change
-	// from dropping the sort title the book carried.
+	// opf.Doc.SetTitle says why the title is passed only when it moved while
+	// the sort title is restated whenever either did.
 	if m.title || m.sortTitle {
 		var title *string
 		if m.title {
@@ -203,7 +200,7 @@ func (b *Book) write(d *opf.Doc, m moved) {
 // refitCoverPage rewrites the page displaying the cover to the new image's
 // dimensions; package content says why that is needed. A candidate from the
 // package document is confirmed by finding the cover image inside it, so an
-// unreadable one is skipped silently — it was never confirmed to be the cover
+// unreadable one is skipped silently: it was never confirmed to be the cover
 // page.
 func (b *Book) refitCoverPage(enc *ocf.EncryptionInfo, width, height int, replace map[string][]byte) error {
 	for _, entry := range b.doc.CoverPages(path.Dir(b.PackagePath())) {
@@ -233,9 +230,9 @@ func (b *Book) refitCoverPage(enc *ocf.EncryptionInfo, width, height int, replac
 // syncNCX adds the rewritten NCX to replace, when the package declares one and
 // the edit touched a field it carries; package ncx says why.
 //
-// An NCX that cannot be read — encrypted, or malformed — is skipped rather than
-// failing the edit. The package document is the metadata of record, and
-// refusing would leave a book that arrived with an unreadable NCX permanently
+// An NCX that cannot be read, whether encrypted or malformed, is skipped
+// rather than failing the edit. The package document is the metadata of record,
+// and refusing would leave a book that arrived with an unreadable NCX permanently
 // unrenameable.
 func (b *Book) syncNCX(enc *ocf.EncryptionInfo, m moved, replace map[string][]byte) error {
 	if !m.title && !m.authors {
@@ -317,9 +314,9 @@ func (b *Book) rewrite(replace map[string][]byte) error {
 		return err
 	}
 
-	// Opened before the original is touched, so structural breakage — a zip we
-	// cannot read back, a package document we cannot parse — fails here and the
-	// original survives.
+	// Opened before the original is touched, so structural breakage fails here
+	// and the original survives: a zip that will not read back, or a package
+	// document that will not parse.
 	next, err := Open(tmpPath)
 	if err != nil {
 		return fmt.Errorf("rewritten epub failed validation: %w", err)

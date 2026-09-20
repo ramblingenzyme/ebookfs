@@ -29,8 +29,8 @@ func refinesID(m *etree.Element, id string) bool {
 // refineElements returns every meta refining id that carries the property.
 // Plural because the vocabulary allows it: role is "zero or more" (D.3.10).
 //
-// A property whose meaning depends on the scheme attribute — collection-type,
-// per D.3.4 — is filtered by its own field, not here.
+// A property whose meaning depends on the scheme attribute, such as
+// collection-type per D.3.4, is filtered by its own field.
 func (d *Doc) refineElements(id, property string) []*etree.Element {
 	var out []*etree.Element
 	for _, m := range d.md.children("meta") {
@@ -42,8 +42,9 @@ func (d *Doc) refineElements(id, property string) []*etree.Element {
 }
 
 // addRefine appends unconditionally, for properties where an existing value may
-// be one we do not own, such as a creator's second role. property and scheme are
-// spelled, since a rebound vocabulary would otherwise make them someone else's.
+// be one this package does not own, such as a creator's second role. property
+// and scheme are spelled, since a rebound vocabulary would otherwise make them
+// someone else's.
 //
 // Two choices §5.3.6 leaves open, both deliberate: appended at the end rather
 // than beside the element it refines, since the binding is by id; and refines

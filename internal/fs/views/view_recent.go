@@ -28,7 +28,7 @@ const recentLimit = 5
 // all and visible need no lock of their own: every path into Add/Remove holds
 // BookRegistry.mu, and no 9P handler reads them. The embedded StaticDir's mutex
 // guards the children listing instead, and AddChild/DeleteChild take it
-// themselves — refresh must not hold it across them or it self-deadlocks.
+// themselves, so refresh must not hold it across them or it self-deadlocks.
 type recentDir struct {
 	*bookListDir
 	all     []*book.BookDir         // every known book, newest first

@@ -9,29 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`epub`, a public package for reading and writing EPUB metadata.** `github.com/ramblingenzyme/ebookfs/pkg/epub` imports nothing of ebookfs. `Open` parses a book's package document; its metadata is exported struct fields, and `Save` writes back only what moved, so a field left alone is left alone in the file — the archive is not rebuilt and §5.5.5's `dcterms:modified` is not stamped. `OpenFile` stops at the zip and the OCF container for callers that only need entries, which is what the 9P read path takes. Everything the format carries and the package does not model is preserved: an edit rewrites the entries it must and copies the rest byte for byte, keeping namespace declarations, foreign metadata, CDATA, entry order and compression method. `pkg/library/internal/epub` is now an adapter over it and keeps every signature it had, so nothing in `pkg/library` changed.
+- **`epub`, a public package for reading and writing EPUB metadata.** `github.com/ramblingenzyme/ebookfs/pkg/epub` imports nothing of ebookfs. `Open` parses a book's package document into exported fields; `Save` writes back only what moved, leaving the rest of the archive byte for byte. `OpenFile` stops at the zip and OCF container for callers that only need entries. See DECISIONS.md #25.
 
 - **`Library.Get(id)`.** Returns one book by id, or an error wrapping `ErrBookNotFound`. `Content`, `Edit` and `Delete` were already id-addressed; reading one book was the gap.
-- **`library.Open` takes functional options.** `Open(cfg Config, opts ...Option)` replaces `Open(cfg Config, forceReindex bool)`, with `WithForceReindex()` as the first option. A bare `false` at the call site said nothing, and options are how the extension points planned for V2 — ingest hooks, subscribers, metadata handlers — are added without changing the signature again.
+- **`library.Open` takes functional options.** `Open(cfg Config, opts ...Option)` replaces `Open(cfg Config, forceReindex bool)`, with `WithForceReindex()` as the first option. A bare `false` at the call site said nothing, and options are how the planned extension points (ingest hooks, subscribers, metadata handlers) are added without changing the signature again.
 
 - **`identifiers` file in each book directory.** Read-only, one `scheme=value` line per identifier, sorted by scheme. Identifiers were parsed and indexed before but never surfaced anywhere.
 
 ### Fixed
 
-- **`ReaderConfig` is validated by the library that owns it.** The rules — a cache dir is required when converting, and it must sit outside the library root or the store walk indexes converted kepubs as books — were enforced only in `internal/config`, so a caller building the struct in Go got neither. `Library.Exporter` now checks both, and the TOML layer no longer repeats them.
+- **`ReaderConfig` is validated by the library that owns it.** The rules (a cache dir is required when converting, and it must sit outside the library root or the store walk indexes converted kepubs as books) were enforced only in `internal/config`, so a caller building the struct in Go got neither. `Library.Exporter` now checks both, and the TOML layer no longer repeats them.
 
-- **`Library.Close` no longer converts the whole kepub backlog before returning.** The warm queue was closed and its four workers drained it, so every hint still queued — up to 4096 books, which a cold start over the reader set fills — was converted on the way out, none of them cancellable: the converter ran under `context.Background()`. Close now cancels the context kepubify converts under and abandons the queue, so a conversion in flight aborts and the rest are dropped. A warm is a hint; the read path still converts on demand.
+- **`Library.Close` no longer converts the whole kepub backlog before returning.** Up to 4096 queued warm hints were converted on the way out, uncancellably. Close now cancels the converter's context and drops the queue. A warm is a hint; the read path still converts on demand.
 
-- **Identifiers are keyed by scheme, not by the XML id.** `dc:identifier` elements were keyed by the element's `id` attribute — a document-local handle chosen by whoever produced the file — so a book indexed `pub-id` and `BookId` where it should have indexed `uuid` and `isbn`. The scheme is now derived from the EPUB 2 `opf:scheme` attribute, the EPUB 3 `identifier-type` refinement (ONIX codelist 5 codes and unschemed names alike), or the URN namespace in the value, falling back to the XML id only when nothing else names it, and to a numbered `unknown` when there is not even an id to borrow. A `urn:` prefix repeating the derived scheme is stripped, so `urn:isbn:978…` stores as `978…`. Two identifiers resolving to one scheme keep the first in document order. The index schema version is bumped, so the first startup after upgrading reindexes the library and re-derives every identifier row.
+- **Identifiers are keyed by scheme rather than by the XML id.** A book indexed `pub-id` and `BookId` where it should have indexed `uuid` and `isbn`. The scheme now comes from `opf:scheme`, the `identifier-type` refinement, or the value's URN namespace, with the XML id as a last resort. The index schema version is bumped, so the first startup after upgrading reindexes and re-derives every identifier row. See DECISIONS.md #24.
 
 ### Changed
 
-- **The epub tree no longer knows what an ebookfs book is.** `opf` and `ncx` built a `book.Bib` and took an `edits.Edits` — a struct carrying `Status`, `Rating` and `Tags`, three fields no EPUB file holds. They now have their own types and report what the file says, with nothing rejected and nothing defaulted. The rules that are ebookfs's moved to the adapter: a book needs a title and authors to be filed, a malformed series position still displays as `1`, a retitled book drops its stale sort title, and a `nil` in `Edits` means the caller did not name that field. The refusal to write an unfilable book now runs before the rewrite rather than after it, so the original survives untouched instead of being replaced and then reported broken.
+- **The epub tree no longer knows what an ebookfs book is.** `opf` and `ncx` report what the file says, with nothing rejected or defaulted; ebookfs's own rules moved to the adapter. The refusal to write an unfilable book now runs before the rewrite, so the original survives untouched instead of being replaced and then reported broken. See DECISIONS.md #25.
 
+- **`library/` and `epub/` moved under `pkg/`.** Import paths change: `github.com/ramblingenzyme/ebookfs/library` becomes `.../pkg/library`, and `.../epub` becomes `.../pkg/epub`. The Dockerfile moved to `build/`, `config.example.toml` to `configs/`, and the shared test packages under `internal/testing/`.
 - **`fs/` and its subpackages moved to `internal/fs/`.** Eight packages exporting some 40 constructors and types, with `main.go` as the only caller. A `v1.0.0` tag binds every importable package in the module, and none of these were ever meant to be imported.
-- **`library.Library` is a struct, and each frontend package declares the interface it uses.** The interface had one implementation, `libraryImpl`, which is now the exported `Library` struct returned by `Open` (fields still unexported). What the frontend needs is declared where it is consumed: `book.ContentReader`, `registry.Editor`, `inbox.Ingester`, `views.StatsReader`, `ctl.SearchDeleter`, and `fs.Library` embedding the five. Adding a library method is now additive rather than a change every consumer and fake has to absorb, and `libfake.Lib` no longer implements methods no test calls.
+- **`library.Library` is a struct, and each frontend package declares the interface it uses.** The interface had one implementation, now the exported `Library` struct returned by `Open`. Adding a library method is additive rather than a change every consumer and fake absorbs.
 - **`Reindex` excludes the other mutations.** It moves book directories and rebuilds the index wholesale, neither of which addresses a single book, so the per-book lock could not cover it. `Edit`, `Delete` and ingest now hold a shared lock that `Reindex` takes exclusively.
-- **`library/config` moved to `internal/config`; the library owns its own config types.** The package held the binary's whole TOML schema — `ServerConfig`, `SearchConfig` and `LogConfig` are read only by `main.go`, and the library never looked at them — while sitting inside `library/` and importing the binary's internals to validate reading statuses. The TOML schema and `Load` now live in `internal/config`, and `library` declares what it actually takes: `library.Config` (`Root`, `InboxTemp`, `IndexPath`) and `library.ReaderConfig` (`Statuses`, `Convert`, `CacheDir`), with no serialization tags — how a caller obtains those values is its own business. `library.Open` and `Library.Exporter` take the new types; `main.go` maps one to the other. Validation is unmoved, still at the TOML boundary. The library package now depends on no config package at all, which is what a standalone `library` module needs.
+- **The library owns its config types; the binary's TOML schema moved to `internal/config`.** `library.Config` and `library.ReaderConfig` carry only what the library takes, with no serialization tags. `main.go` maps one to the other, and validation stays at the TOML boundary. The library now depends on no config package, which is what a standalone module needs.
 - **`library/model` package removed.** Types previously in `library/model` are now either part of the `library` package or internal:
   - **Public API (now in `library`):** `Book`, `Author`, `Series`, `Edits`, `ValidationError`, `FieldError`, `Query`, `Order`, `Stats`, `EpubReader`
   - **Internal:** `PathSafe` (now in `internal/naming`), status constants, `JoinAuthors`, `UnknownAuthor`, `Validate`
@@ -43,13 +44,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- **`ctl reindex`.** A rebuild is a startup operation: the binary takes `--reindex`, and startup rebuilds on its own whenever drift detection finds the index disagreeing with the store. Run live it was worse than redundant — it moved book directories to their canonical paths and rebuilt the index while the 9P tree kept serving the names it had, so the registry and the store disagreed until the next restart, and a rebuild outlasting the 10s shutdown deadline could have the index closed underneath it. `Library.Reindex` stays as the startup entry point.
+- **`ctl reindex`.** Use `--reindex`, or let startup rebuild when drift detection finds the index and store disagreeing. Run live it moved book directories while the 9P tree kept serving the old names, leaving registry and store disagreeing until restart.
 
 ## [1.0.0-beta4] - 2026-08-29
 
 ### Added
 
-- **ctl id-specs accept search query syntax.** Every id-spec — the first argument to `add-tag`, `remove-tag`, `set-status`, `set-rating`, and `delete` — now takes the same `prefix:value` query language as the search view:
+- **ctl id-specs accept search query syntax.** Every id-spec, the first argument to `add-tag`, `remove-tag`, `set-status`, `set-rating` and `delete`, now takes the same `prefix:value` query language as the search view:
   ```
   add-tag classic author:"Isaac Asimov"+status:read
   set-status reading tag:favorites
@@ -84,10 +85,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **sql.ErrNoRows no longer leaks out of the library package.** Internal lookup misses are handled before crossing the library boundary, so callers see clean errors.
 - **Removed unneeded in-memory filters from renameTag and renameSeries.** These commands now rely on the database query to return only matching books, avoiding redundant filtering.
-- **Cover image detection fixed.** Cover images are now correctly detected and handled during edits.
-- **DC prefix for title ensured.** Title elements now properly use the Dublin Core prefix.
-- **Duplicate dc:title elements removed.** When setting a title, any other `<dc:title>` elements in the OPF are now removed, preventing duplicate titles.
-- **Spec compliance fixes.** Fixed various spec gaps and incorrect/lossy sanitize handling in epub parsing.
-- **Encoded rootfile paths.** Fixed handling of URL-encoded rootfile paths in the epub container.
-- **File lookup consistency.** Parse and zip operations now handle file lookups the same way, eliminating inconsistencies.
-- **Mimetype as first zip entry.** Added validation that mimetype is the first entry in the zip archive, as required by the EPUB spec.
+- **EPUB spec compliance.** Cover detection during edits, the Dublin Core prefix on title elements, removal of duplicate `<dc:title>` when setting a title, URL-encoded rootfile paths in the container, consistent file lookup between parse and zip, and validation that `mimetype` is the first zip entry.

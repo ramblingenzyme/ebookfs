@@ -1,4 +1,4 @@
-// Package textfmt parses the textual formats the 9p surface exposes to users —
+// Package textfmt parses the textual formats the 9p surface exposes to users:
 // the line formats of writable field files and the argument formats of ctl
 // commands. They are frontend syntax: the library never reads or writes them,
 // so they do not belong in the library package alongside the types they produce.

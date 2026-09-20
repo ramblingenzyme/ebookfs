@@ -32,7 +32,7 @@ func (o *Doc) NCXPath(base string) string {
 // CoverPages returns the documents the package points at as displaying the
 // cover, best pointer first: the legacy <guide> reference (OPF 2.0 §2.6, kept
 // by §5.9.4), then the first spine item. Both are candidates rather than
-// answers — the caller confirms one by finding the cover image inside it.
+// answers. The caller confirms one by finding the cover image inside it.
 //
 // ponytail: the landmarks nav (§7.4.4) is not consulted, which would mean
 // finding and parsing the navigation document. Add it if a book turns up whose
@@ -49,8 +49,8 @@ func (o *Doc) CoverPages(base string) []string {
 	}
 
 	for _, r := range o.d.Guide() {
-		// §2.6 fixes the type as "cover" case-sensitively, but producers
-		// disagree often enough that matching exactly would only miss it.
+		// §2.6 fixes the type as "cover" case-sensitively. Producers disagree on
+		// case, so an exact match would miss them.
 		if strings.EqualFold(r.Type, "cover") {
 			add(r.Href)
 		}

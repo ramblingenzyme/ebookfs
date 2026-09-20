@@ -44,7 +44,6 @@ func dsn(path string, pragmas ...string) string {
 	return path + "?" + q.Encode()
 }
 
-// writerPragmas are applied to every writer connection.
 func writerPragmas() []string {
 	return []string{
 		"journal_mode(WAL)",
@@ -59,7 +58,6 @@ func writerPragmas() []string {
 	}
 }
 
-// readerPragmas are applied to every reader connection.
 func readerPragmas() []string {
 	return []string{
 		"journal_mode(WAL)",
@@ -153,7 +151,7 @@ func (idx *Index) dropAllTables() error {
 
 func (idx *Index) Close() error {
 	// Let SQLite analyze schema usage and update planner statistics before
-	// closing — an inexpensive operation that improves long-term query plans.
+	// closing, which improves long-term query plans.
 	_, _ = idx.db.ExecContext(idx.ctx, "PRAGMA optimize")
 	idx.readDB.Close()
 	return idx.db.Close()
@@ -165,7 +163,6 @@ func (idx *Index) NextID() (int64, error) {
 	return idx.wq.NextBookID(idx.ctx)
 }
 
-// newOpID returns a random hex string used as a unique pending-op identifier.
 func newOpID() string {
 	var b [16]byte
 	_, _ = rand.Read(b[:])

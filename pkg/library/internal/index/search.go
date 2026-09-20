@@ -38,7 +38,7 @@ func (idx *Index) Search(q Query) ([]*book.Book, error) {
 // orderClause maps an Order to its ORDER BY. Every ordering is total, so a
 // Limit cannot slice an arbitrary subset of tied rows: id breaks the last tie,
 // since sort_title is nullable and not unique. Ties resolve the way the primary
-// column intends — the date orders fall back to id descending, because the
+// column intends. The date orders fall back to id descending, because the
 // dates are RFC3339 to the second and two books added in the same second should
 // still read newest first, while rating and pubdate fall back alphabetically.
 // An unrecognised Order sorts by title rather than failing, since ordering is
@@ -63,7 +63,6 @@ func orderClause(o Order) string {
 	}
 }
 
-// escapeSQLLike escapes the special LIKE characters % and _ in s.
 func escapeSQLLike(s string) string {
 	s = strings.ReplaceAll(s, "\\", "\\\\")
 	s = strings.ReplaceAll(s, "%", "\\%")
@@ -72,7 +71,7 @@ func escapeSQLLike(s string) string {
 }
 
 // Exists reports whether the index holds a book with exactly this title and
-// exactly this set of author display names — the ingest duplicate rule. The set
+// exactly this set of author display names, the ingest duplicate rule. The set
 // comparison is in SQL: the book must have len(names) authors and none outside
 // names. See BookExists in queries.sql. names must be distinct.
 func (idx *Index) Exists(title string, names []string) (bool, error) {

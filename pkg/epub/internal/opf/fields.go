@@ -9,7 +9,7 @@ import (
 )
 
 // The fields whose whole encoding fits in a few lines. The four with more to
-// say — authors, series, cover, identifiers — keep a file each.
+// say (authors, series, cover, identifiers) keep a file each.
 
 type titleField struct{ d *pkgdoc.Doc }
 
@@ -19,7 +19,7 @@ func (f titleField) element() *pkgdoc.Element { return f.d.DC("title") }
 
 // The sort title has the same shape as the series: a standard EPUB 3 mechanism,
 // and for EPUB 2, which has none, the proprietary meta calibre writes. Checked
-// against calibre itself — `ebook-meta --title-sort` writes a file-as refinement
+// against calibre itself: `ebook-meta --title-sort` writes a file-as refinement
 // into a v3 package and calibre:title_sort into a v2 one.
 
 func (f titleField) calibreSort() *pkgdoc.Named { return f.d.Named("calibre:title_sort") }
@@ -47,7 +47,6 @@ func (f titleField) set(title, sort *string) {
 		f.dropSegments(el)
 	}
 
-	// A title written without one drops the sort title it used to carry.
 	value := ""
 	if sort != nil {
 		value = xml.Collapse(*sort)
@@ -76,10 +75,10 @@ func (f titleField) set(title, sort *string) {
 //
 // It also stops the edit silently not taking: a reader honouring the deprecated
 // title-type refinement, as calibre does, shows the segment labelled "main",
-// which need not be the element we write.
+// which need not be the element written here.
 //
 // keep's own refinements stay. A title-type left alone on the last element is
-// harmless — both readings resolve to it.
+// harmless, since both readings resolve to it.
 func (f titleField) dropSegments(keep *pkgdoc.Element) {
 	for _, el := range f.d.DCAll("title") {
 		if !el.Same(keep) {
@@ -101,7 +100,7 @@ func (f modifiedField) set(t time.Time) {
 	f.d.UnrefinedMeta("dcterms:modified", "").Set(t.UTC().Format("2006-01-02T15:04:05Z"))
 }
 
-// description and language are repeatable (§5.5.3.2.1) but single-valued to us,
+// description and language are repeatable (§5.5.3.2.1) but single-valued here,
 // and have no encoding of their own, so they get no field type: pkgdoc's DC picks
 // the element a read and a write both mean.
 func (o *Doc) description() string { return o.d.DC("description").Get() }

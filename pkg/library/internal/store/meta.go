@@ -10,21 +10,17 @@ import (
 
 // metaFilename is the per-book sidecar the store writes alongside each epub.
 // Everything that needs the file goes through metaPath so the name is stated
-// once — a rename stays a compile-time concern rather than a silent ENOENT.
+// once, so a rename stays a compile-time concern rather than a silent ENOENT.
 const metaFilename = "meta.toml"
 
-// metaPath returns the absolute path of the meta.toml sidecar for the book at
-// loc.
 func (s *Store) metaPath(loc book.Location) string {
 	return filepath.Join(s.root, loc.Dir(), metaFilename)
 }
 
-// ReadMeta reads the meta.toml sidecar for the book at loc.
 func (s *Store) ReadMeta(loc book.Location) (*book.Meta, error) {
 	return readMeta(s.metaPath(loc))
 }
 
-// writeMeta atomically replaces the meta.toml sidecar for the book at loc.
 func (s *Store) writeMeta(loc book.Location, meta *book.Meta) error {
 	return writeMeta(s.metaPath(loc), meta)
 }
@@ -41,6 +37,9 @@ func readMeta(path string) (*book.Meta, error) {
 	return meta, nil
 }
 
+// writeMeta replaces path atomically: the sidecar is written to a temp file in
+// the same directory, synced, then renamed over. A crash mid-write leaves the
+// old sidecar intact rather than a truncated one.
 func writeMeta(path string, meta *book.Meta) error {
 	buf, err := toml.Marshal(meta)
 	if err != nil {

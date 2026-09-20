@@ -1,4 +1,7 @@
-// Package store manages filesystem operations on the library directory tree.
+// Package store owns the library's on-disk layout: where a book directory
+// lives, what it is called, and what sits inside it. The index is derived from
+// what this package reports (DECISIONS.md #2), so the two disagree only when
+// something edits the tree behind it.
 package store
 
 import (
@@ -29,7 +32,6 @@ func (s *Store) AbsPath(relPath string) string {
 	return filepath.Join(s.root, relPath)
 }
 
-// Root returns the absolute path to the library root directory.
 func (s *Store) Root() string { return s.root }
 
 // PathTaken reports whether the library already holds an epub file for these
@@ -39,7 +41,8 @@ func (s *Store) Root() string { return s.root }
 // both change the path), which is why it is a guard and not the rule.
 //
 // Each book lives in a subdirectory named "Title (id)" under the author
-// directory, so we walk those rather than glob — titles may contain [], ? and *.
+// directory, so those are walked rather than globbed; titles may contain
+// [], ? and *.
 func (s *Store) PathTaken(authors []book.Author, title string) bool {
 	authorDir := filepath.Join(s.root, authorDirName(authors))
 	entries, err := os.ReadDir(authorDir)
@@ -59,8 +62,8 @@ func (s *Store) PathTaken(authors []book.Author, title string) bool {
 	return false
 }
 
-// Stat observes the on-disk state of a book's epub and meta.toml — both sizes
-// and both modification times — for drift detection. A stat failure is returned
+// Stat observes the on-disk state of a book's epub and meta.toml, both sizes
+// and both modification times, for drift detection. A stat failure is returned
 // rather than defaulted away: a zero mtime can never match a real file, so
 // recording one would silently force a full reindex on every startup thereafter.
 // Callers that need to record a directory they could not observe store the
@@ -147,7 +150,8 @@ func removeIfEmpty(dir string) error {
 	return nil
 }
 
-// Delete removes the book directory at loc from the library.
+// Delete removes the book directory at loc, and the author directory above it
+// when that was its last book.
 func (s *Store) Delete(loc book.Location) error {
 	path := filepath.Join(s.root, loc.Dir())
 	if err := os.RemoveAll(path); err != nil {

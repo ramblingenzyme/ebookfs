@@ -26,7 +26,6 @@ type CommandLog struct {
 	full    bool
 }
 
-// NewCommandLog creates a ring buffer holding at most max entries.
 func NewCommandLog(max int) *CommandLog {
 	return &CommandLog{
 		entries: make([]LogEntry, max),
@@ -34,7 +33,6 @@ func NewCommandLog(max int) *CommandLog {
 	}
 }
 
-// Append records one command result.
 func (l *CommandLog) Append(cmd, result string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()

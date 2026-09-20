@@ -22,7 +22,7 @@ type ReaderExporter interface {
 // readerDir is the reader/ export view: the books whose status is in the
 // configured set, grouped by author, served through the injected Exporter. It
 // mirrors byAuthorDir, but its leaves are export files rather than bookDirs and
-// it files each book under a single folder named for all its authors — so a
+// it files each book under a single folder named for all its authors, so a
 // co-authored book is exported once, not duplicated under each author.
 type readerDir struct {
 	groupingDir

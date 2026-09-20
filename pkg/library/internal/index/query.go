@@ -29,7 +29,7 @@ type Query struct {
 
 // Order selects how Search orders its results. It is presentation, not
 // selection: ordering can never change which books match, only the sequence
-// they come back in. Limit is the opposite — it changes membership, which is
+// they come back in. Limit changes membership instead, which is
 // why no user-facing query syntax sets it (see ParseQuery).
 //
 // Each order carries the direction that reads as "best first" for its field:

@@ -11,9 +11,9 @@ type authorsField struct{ d *pkgdoc.Doc }
 func (o *Doc) authors() authorsField { return authorsField{o.d} }
 
 // creators returns the creator elements this package owns: those carrying the
-// "aut" MARC relator, or carrying no role at all. That second half is our
-// interpretation, not a rule either spec states. Other contributors (editors,
-// illustrators, translators) are excluded on purpose.
+// "aut" MARC relator, or carrying no role at all. That second half is this
+// package's interpretation, not a rule either spec states. Other contributors
+// (editors, illustrators, translators) are excluded on purpose.
 func (f authorsField) creators() []*pkgdoc.Element {
 	var out []*pkgdoc.Element
 	for _, c := range f.d.DCAll("creator") {
@@ -62,7 +62,7 @@ func (f authorsField) set(authors []Author) {
 
 		// Roles are "zero or more" (D.3.10), so aut is added only when absent
 		// and any other role is left alone. D.3.10 only SHOULDs a scheme, and
-		// names no particular one; marc:relators is our choice, reserved by
+		// names no particular one; marc:relators is the choice here, reserved by
 		// D.1.5 so it needs no declaration.
 		if !slices.Contains(creatorRoles(c), "aut") {
 			c.Refine("role").Add("aut", "marc:relators")

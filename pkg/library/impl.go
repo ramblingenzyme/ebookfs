@@ -22,7 +22,7 @@ import (
 // them agreeing. Construct it with Open.
 //
 // Concurrency contract: methods are safe for concurrent use. Search returns
-// *Book values that are immutable snapshots — the library never mutates a
+// *Book values that are immutable snapshots; the library never mutates a
 // Book after returning it. Every other operation addresses a book by id and
 // resolves its current state fresh, so callers never pass stale snapshots back
 // in: Content opens the book's live on-disk file, and mutations (Edit, Delete)
@@ -37,8 +37,9 @@ type Library struct {
 	// as they are handed out; releasing them is the library's job (see Exporter).
 	closers  []io.Closer
 	closerMu sync.Mutex
-	// Dedup of exporters by config is not implemented. If needed in the
-	// future, hash/comparable-key the ReaderConfig fields and store in a map.
+	// ponytail: two readers with identical config each get their own exporter.
+	// Key a map on the ReaderConfig fields only if a deployment ever has enough
+	// readers for the duplication to cost anything.
 
 	// bookMu serializes the operations that mutate one book's on-disk state
 	// (Edit, Delete), so e.g. a cover rewrite cannot interleave with an edit
@@ -124,7 +125,7 @@ func (l *Library) Content(id int64) (EpubReader, error) {
 
 // Edit applies edits to the book with the given id, persists everything, and
 // returns the updated book. The edit base is the book's current state, fetched
-// under the per-book lock — an atomic read-modify-write, so concurrent callers
+// under the per-book lock as an atomic read-modify-write, so concurrent callers
 // cannot revert each other's changes by editing from stale snapshots. If the
 // title or authors change, the book directory is moved.
 func (l *Library) Edit(id int64, e Edits) (*Book, error) {
@@ -140,8 +141,8 @@ func (l *Library) Edit(id int64, e Edits) (*Book, error) {
 		return nil, err
 	}
 
-	// Every edit is validated here at the facade — the single enforcement
-	// point — so meta-only edits (which skip the epub rewrite) can't slip
+	// Every edit is validated here at the facade, the single enforcement
+	// point, so meta-only edits (which skip the epub rewrite) can't slip
 	// through unchecked.
 	e = e.Normalized()
 	if v := book.Validate(e, b); v != nil {
@@ -208,15 +209,13 @@ func (l *Library) Delete(id int64) error {
 }
 
 // applyMeta returns a copy of m with the meta edits in e applied and the
-// modified time stamped. Fields left nil in e are untouched. Bib fields are not
-// applied here — Edit derives them from the epub re-parse.
+// modified time stamped. Fields left nil in e are untouched. Edit derives the
+// Bib fields from the epub re-parse instead.
 //
 // The result shares nothing with its arguments. Taking m by value covers the
-// scalars, but Tags is a slice and would otherwise alias whichever of the two
-// it came from — the caller's Meta when the edit is absent, the caller's Edits
-// when it is present. Both are live objects the caller still holds, and the
-// result travels on to the sidecar write and the index, so the copy is made
-// here once rather than left as a caveat every caller has to know about.
+// scalars, but Tags is a slice and would alias the caller's Meta or the caller's
+// Edits, both of which the caller still holds. The result travels on to the
+// sidecar write and the index, so Tags is cloned here.
 func applyMeta(m book.Meta, e Edits) book.Meta {
 	if e.Status != nil {
 		m.Status = *e.Status
@@ -232,9 +231,6 @@ func applyMeta(m book.Meta, e Edits) book.Meta {
 	return m
 }
 
-// bookFromBib creates a complete Book from a bib, meta, location, and observation.
-// The Book is fully populated when returned, with EpubSize set from the observation,
-// so callers don't need to set it separately.
 func bookFromBib(bib book.Bib, meta book.Meta, loc book.Location, obs drift.PathInfo) *book.Book {
 	b := book.NewBook(bib, meta, loc)
 	b.EpubSize = obs.Size

@@ -2,10 +2,10 @@
 // finding the elements a value can be kept in, and writing values back. What a
 // value should be is the parent opf package's business.
 //
-// A slot (slot.go) is one place a value is kept — element text, a refinement,
+// A slot (slot.go) is one place a value is kept: element text, a refinement,
 // an opf: attribute, a named meta. Under them sit the finders: metadata.go for
 // the children of <metadata>, refine.go for the EPUB 3 refinement binding, and
-// the two naming systems anything new has to be spelled in — ns.go for xmlns:
+// the two naming systems anything new has to be spelled in: ns.go for xmlns:
 // prefixes, vocab.go for vocabulary ones. ns says how those two differ.
 package pkgdoc
 
@@ -51,7 +51,7 @@ func (d *Doc) Bytes() ([]byte, error) { return d.doc.WriteToBytes() }
 
 // EPUB3 decides how metadata is written: refinements for v3, opf: attributes and
 // calibre metas for v2. Through attr, since a padded version would otherwise read
-// as EPUB 2 — which costs the §5.5.5 dcterms:modified update and injects calibre
+// as EPUB 2, which costs the §5.5.5 dcterms:modified update and injects calibre
 // metas. No version attribute at all is malformed; EPUB 2 is the safer guess.
 func (d *Doc) EPUB3() bool {
 	return strings.HasPrefix(attr(d.pkg, "version"), "3")

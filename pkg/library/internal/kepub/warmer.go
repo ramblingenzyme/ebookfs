@@ -17,9 +17,8 @@ const (
 // books here so their caches are built before the next rsync. Enqueue is
 // non-blocking; a full queue drops the warm and the read path converts on demand.
 type warmer struct {
-	// ensure is Cache.Ensure, held as a function rather than the cache itself:
-	// the one call this file makes into it is the whole coupling, and stating
-	// it here keeps the queue readable without the cache open alongside.
+	// ensure is Cache.Ensure, held as a function rather than the cache itself,
+	// so this file's only coupling to the cache is visible here.
 	ensure func(*book.Book) error
 
 	// Never closed: the ctx passed to run is the only stop signal, which is

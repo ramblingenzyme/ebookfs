@@ -17,8 +17,8 @@ import (
 
 // seriesEntryName builds a book's entry name within its series. The index is
 // the string the epub carries, so it is used as written and only the first
-// level is zero-padded — that is the level entries sort on, and padding it is
-// what keeps "9" ahead of "10" in a plain lexical listing.
+// level is zero-padded. That is the level entries sort on, and the padding
+// keeps "9" ahead of "10" in a plain lexical listing.
 func seriesEntryName(b *library.Book, pad int32) string {
 	s := b.SeriesIndex()
 
@@ -45,7 +45,7 @@ func seriesLevel(s string) int {
 // seriesBookListDir lists one series' books as namedBookDir entries. Entry
 // names are computed live from the book snapshot and the current pad width
 // (StaticDir keys children by Stat().Name dynamically), so Add and Remove only
-// maintain membership and recompute the pad — a pad flip renames every entry
+// maintain membership and recompute the pad. A pad flip renames every entry
 // in place without rebuilding children, keeping Qids and open fids stable.
 type seriesBookListDir struct {
 	fs.StaticDir

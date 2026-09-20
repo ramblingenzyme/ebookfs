@@ -32,7 +32,7 @@ func detach(e *etree.Element) {
 	}
 }
 
-// qualify joins an xmlns: prefix to a local name — never a vocabulary prefix,
+// qualify joins an xmlns: prefix to a local name, never a vocabulary prefix,
 // which is vocab.go's spell.
 func qualify(prefix, tag string) string {
 	if prefix == "" {

@@ -10,7 +10,7 @@ import (
 )
 
 // toUnixNano encodes an mtime for storage. The zero time means "never observed"
-// and stores as 0 — note time.Time{}.UnixNano() is a large negative number, so
+// and stores as 0. time.Time{}.UnixNano() is a large negative number, so
 // the zero case has to be handled explicitly.
 //
 // We ignore the edge case of a file having a mtime of 0 because that would imply
@@ -31,13 +31,11 @@ func fromUnixNano(n int64) time.Time {
 	return time.Unix(0, n)
 }
 
-// toNullString converts a string to a sql.NullString, setting Valid to true
-// only when the string is non-empty.
 func toNullString(s string) sql.NullString {
 	return sql.NullString{String: s, Valid: s != ""}
 }
 
-// insertBook inserts a new book row, failing on id conflict — used by Rebuild.
+// insertBook inserts a new book row, failing on id conflict. Used by Rebuild.
 //
 // It deliberately skips cleanupOrphans: Rebuild empties every table before the
 // insert loop, so each author/series/tag is written alongside the book that
@@ -77,8 +75,7 @@ func (idx *Index) insertBook(q *dbsqlc.Queries, b *book.Book, mt drift.PathInfo)
 	return idx.finishBook(q, b)
 }
 
-// putBook inserts or replaces b, using ON CONFLICT to update an existing row.
-// Rebuild, which must surface id collisions, uses insertBook instead.
+// putBook inserts or replaces b; insertBook says why Rebuild uses that one.
 func (idx *Index) putBook(q *dbsqlc.Queries, b *book.Book, mt drift.PathInfo) error {
 	//goland:noinspection DuplicatedCode
 	sortTitle := toNullString(b.SortTitle)
@@ -118,7 +115,7 @@ func (idx *Index) putBook(q *dbsqlc.Queries, b *book.Book, mt drift.PathInfo) er
 }
 
 // finishBook writes a book's authors, tags, series, and identifiers. It does not
-// sweep orphans — callers that can strand rows (putBook, deleteBook) call
+// sweep orphans. Callers that can strand rows (putBook, deleteBook) call
 // cleanupOrphans themselves.
 func (idx *Index) finishBook(q *dbsqlc.Queries, b *book.Book) error {
 	if err := idx.upsertAuthors(q, b.Meta.ID, b.Authors); err != nil {
@@ -151,7 +148,7 @@ func (idx *Index) upsertAuthors(q *dbsqlc.Queries, bookID int64, authors []book.
 		return err
 	}
 	for i, a := range authors {
-		// Insert or update: only overwrite sort_name when we have a real value and the
+		// Insert or update: only overwrite sort_name given a real value when the
 		// stored one is empty (fills in missing file-as data without stomping corrections).
 		if err := q.InsertAuthor(idx.ctx, dbsqlc.InsertAuthorParams{
 			Name:     a.Name,
@@ -233,8 +230,6 @@ func (idx *Index) deleteBook(q *dbsqlc.Queries, id int64) error {
 	return idx.cleanupOrphans(q)
 }
 
-// cleanupOrphans removes authors, series, and tags that are no longer
-// referenced by any book.
 func (idx *Index) cleanupOrphans(q *dbsqlc.Queries) error {
 	if err := q.DeleteOrphanedAuthors(idx.ctx); err != nil {
 		return err

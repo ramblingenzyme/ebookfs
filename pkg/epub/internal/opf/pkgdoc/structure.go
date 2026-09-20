@@ -3,7 +3,7 @@ package pkgdoc
 import "strings"
 
 // The parts of the package document that hold no metadata: the manifest, and
-// the two pointers into it. Reported as the document spells them — which item
+// the two pointers into it. Reported as the document spells them, so which item
 // is the NCX, and which reference means the cover, are opf's rules.
 
 type Item struct {

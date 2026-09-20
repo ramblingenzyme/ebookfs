@@ -10,7 +10,7 @@ const (
 // ns resolves xmlns: prefixes against the package element's declarations. It is
 // vocab's twin, for the other of the two naming systems: these prefixes are
 // resolved by the XML parser, vocabulary prefixes live inside attribute values.
-// Each has a get-or-declare step — prefix here, spell there.
+// Each has a get-or-declare step: prefix here, spell there.
 type ns struct{ pkg *etree.Element }
 
 // prefix returns the xmlns: prefix bound to uri, declaring preferred if the

@@ -111,8 +111,8 @@ func (f seriesField) collections() []*pkgdoc.Element {
 func (s seriesCollection) Set(value string) {
 	s.Element.Set(value)
 	s.markSeries()
-	// Only the extra collections go; this one's refinements may hold metadata we
-	// did not write.
+	// Only the extra collections go; this one's refinements may hold metadata
+	// the package did not write.
 	s.f.dropCollections(s.Element)
 }
 

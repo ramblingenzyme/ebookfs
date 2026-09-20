@@ -14,7 +14,6 @@ type bookQuery struct {
 	limit int
 }
 
-// sql builds the SELECT statement from the query components.
 func (q *bookQuery) sql() (string, []any) {
 	qry := `
 		SELECT b.id, b.title, b.sort_title, COALESCE(b.pubdate, ''), b.description, b.language,
@@ -35,19 +34,17 @@ func (q *bookQuery) sql() (string, []any) {
 	return qry, q.args
 }
 
-// addCondition appends a WHERE clause and its bound arguments.
 func (q *bookQuery) addCondition(expr string, args ...any) {
 	q.where = append(q.where, expr)
 	q.args = append(q.args, args...)
 }
 
-// placeholders returns n SQL parameter placeholders ("?") joined by commas.
 func placeholders(n int) string {
 	return strings.TrimSuffix(strings.Repeat("?,", n), ",")
 }
 
 // addIn appends an IN-list condition to bq. Each %s verb in expr takes the
-// placeholder list, and vals are bound once per verb — so one value set can be
+// placeholder list, and vals are bound once per verb, so one value set can be
 // tested against two columns (name OR sort_name) without the caller assembling
 // the arguments twice. Empty vals is a no-op, so callers need no length check.
 func addIn[T any](bq *bookQuery, expr string, vals []T) {

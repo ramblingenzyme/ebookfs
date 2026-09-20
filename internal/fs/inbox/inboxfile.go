@@ -27,7 +27,7 @@ func NewInboxFile(f *fs.FS, lib Ingester, name string, perm uint32, onIngest fun
 
 func (i *InboxFile) Open(fid uint64, omode proto.Mode) error {
 	slog.Debug("inbox: open", "name", i.Stat().Name, "fid", fid, "omode", omode)
-	name := i.Stat().Name // cache before Lock — Stat() acquires RLock, deadlocking if already write-locked
+	name := i.Stat().Name // cache before Lock; Stat() acquires RLock, deadlocking if already write-locked
 	i.Lock()
 	defer i.Unlock()
 	if i.handle != nil {

@@ -6,14 +6,14 @@ import "time"
 
 // PathInfo carries the on-disk state of one book's files, observed with a single
 // stat per file. Size accompanies the mtimes because mtime alone cannot detect a
-// change made within the same clock tick as the recorded one — filesystems that
+// change made within the same clock tick as the recorded one. Filesystems that
 // stamp mtimes from the kernel's coarse clock (tmpfs among them) hand out
 // identical nanosecond values for writes in the same tick.
 //
 // The zero PathInfo is the "unobserved" state, recorded for a book directory
 // whose files could not be stat'd. It is a definite value rather than an absent
-// one, so both sides of drift detection can record "we looked and could not see
-// it" and agree with each other across restarts — otherwise one unreadable book
+// one, so both sides of drift detection record "looked, could not see it" and
+// agree with each other across restarts. Otherwise one unreadable book
 // means a full reindex on every startup, forever.
 type PathInfo struct {
 	Size      int64 // epub size, from the same stat as EpubMtime

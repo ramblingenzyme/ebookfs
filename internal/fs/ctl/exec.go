@@ -19,7 +19,6 @@ type SearchDeleter interface {
 	Delete(id int64) error
 }
 
-// execute parses a command line, dispatches it, and returns the result string.
 func execute(cmd string, lib SearchDeleter, reg *registry.BookRegistry, cmdLog *CommandLog) string {
 	name, args, err := parseCommand(cmd)
 	if err != nil {
@@ -164,7 +163,7 @@ func deleteBook(args []string, lib SearchDeleter, reg *registry.BookRegistry) st
 // --- entity management ---
 
 // renameTag replaces the tag old with new on every book that carries old. If a
-// book already has new, old is simply dropped rather than duplicated — so
+// book already has new, old is dropped rather than duplicated, so
 // renaming a tag onto an existing one merges the two. There is no separate
 // merge command: this is the merge.
 func renameTag(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
@@ -241,7 +240,7 @@ func renameAuthor(args []string, lib SearchDeleter, reg *registry.BookRegistry) 
 		// Renaming onto an author the book already has (or renaming two of its
 		// authors to the same person) would duplicate that author; dedupe so the
 		// rename doubles as a merge, like rename-tag. This also collapses any
-		// duplicate authors the book already carried — broader than the rename
+		// duplicate authors the book already carried, broader than the rename
 		// strictly implies, but harmless: only books the rename matched are
 		// rewritten at all.
 		updated = dedupeAuthors(updated)
@@ -363,7 +362,6 @@ func editSelection(query library.Query, lib SearchDeleter, reg *registry.BookReg
 	return formatResult("edited", affected, skipped, errs)
 }
 
-// formatResult builds a human-readable result string.
 func formatResult(op string, affected, skipped int64, errs []string) string {
 	var parts []string
 	if affected > 0 {

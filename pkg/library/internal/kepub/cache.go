@@ -1,18 +1,18 @@
 // Package kepub builds and caches Kobo-format (kepub) renditions of books,
 // layered on top of the library's epub access. It is the only package that
-// depends on kepubify; nothing kepub-shaped reaches the library, store, or epub
-// APIs — those treat it as an ordinary consumer.
+// depends on kepubify. Nothing kepub-shaped reaches the library, store, or epub
+// APIs, which treat it as an ordinary consumer.
 //
-// Nothing here calls itself: the consumer is the kepubCache wrapper in
-// library/export.go, which adapts these methods to the library.Exporter the 9P
-// reader/ view is built on. Two of its calls produce a rendition, and both
-// funnel through Ensure, which holds the freshness rule:
+// The consumer is the kepubCache wrapper in library/export.go, which adapts
+// these methods to the library.Exporter the 9P reader/ view is built on. Two of
+// its calls produce a rendition, and both funnel through Ensure, which holds the
+// freshness rule:
 //
 //	Open  → Ensure → write → kepubify   (a 9P read, converting on demand)
 //	Warm  → warmer → Ensure → …         (off the read path, see warmer.go)
 //
-// The rest — Size, Filename — answer from the cache directory without
-// converting, because 9P stats every file it lists.
+// Size and Filename answer from the cache directory without converting, because
+// 9P stats every file it lists.
 package kepub
 
 import (
@@ -35,9 +35,10 @@ type EpubSource interface {
 	Content(int64) (epub.EpubReader, error)
 }
 
-// Cache builds kepub renditions on demand and stores them on disk, so repeat
-// reads (and rsyncs) are cheap. The cache directory lives OUTSIDE the library
-// root, so the authoritative store and its reindex walk never see kepubs.
+// Cache builds kepub renditions on demand and stores them on disk, so a repeat
+// read or rsync skips the conversion. The cache directory lives outside the
+// library root, so the authoritative store and its reindex walk never see
+// kepubs.
 type Cache struct {
 	dir string
 	src EpubSource
@@ -47,7 +48,7 @@ type Cache struct {
 
 	// ctx is cancelled by Close. kepubify honours it, so an in-flight
 	// conversion aborts instead of holding shutdown open for as long as one
-	// book takes to convert — Close is called after the 9P server is already
+	// book takes to convert. Close is called after the 9P server is already
 	// down, outside main's shutdown deadline.
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -92,7 +93,7 @@ func (c *Cache) Filename(b *book.Book) string {
 }
 
 // Size reports the cached kepub's size without converting; ok is false when the
-// cache is cold. Used for the 9P stat length, so it must stay cheap.
+// cache is cold. Used for the 9P stat length, so it must not convert.
 func (c *Cache) Size(b *book.Book) (int64, bool) {
 	fi, err := os.Stat(c.path(b))
 	if err != nil {

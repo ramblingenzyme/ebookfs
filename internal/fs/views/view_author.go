@@ -16,7 +16,7 @@ func NewByAuthorDir(reg *registry.BookRegistry) *byAuthorDir {
 
 // authorEntryName maps an author to their by-author directory name. Add and
 // Remove must mint the same name or removals miss, so the mapping lives in one
-// place — the same rule tagEntryName follows.
+// place, the same rule tagEntryName follows.
 func authorEntryName(name string) string { return naming.PathSafe(name) }
 
 func (d *byAuthorDir) Add(dir *book.BookDir) {

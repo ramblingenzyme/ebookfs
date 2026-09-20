@@ -119,8 +119,8 @@ func (b *Book) take() snapshot {
 // Read-only: nothing here writes a date, so it is a method rather than a field.
 func (b *Book) Pubdate() string { return b.pubdate }
 
-// Identifiers returns the book's identifiers keyed by scheme — "isbn", "uuid",
-// "doi" — as the file states it, falling back to the element's XML id and then
+// Identifiers returns the book's identifiers keyed by scheme ("isbn", "uuid",
+// "doi") as the file states it, falling back to the element's XML id and then
 // to a numbered "unknown" when nothing names it. Read-only: an identifier is a
 // claim about the book's published identity, not a field to edit.
 //

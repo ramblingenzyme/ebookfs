@@ -40,11 +40,9 @@ func ForFAT(s string) (string, error) {
 }
 
 // PathSafe makes s usable as a single path component. Metadata values are text
-// and are stored as the file wrote them (EPUB 3.3 §5.5.2), so every place that
-// turns one into a name — a library directory, a 9P entry — has to make it safe
-// itself.
-//
-// Two rules, and both are load-bearing:
+// and are stored as the file wrote them (EPUB 3.3 §5.5.2), so each place that
+// turns one into a name, such as a library directory or a 9P entry, makes it
+// safe itself.
 //
 //   - '/' becomes '-', or one component would become two.
 //   - leading and trailing dots, spaces and tabs are trimmed, or an author

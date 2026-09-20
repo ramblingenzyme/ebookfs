@@ -46,7 +46,7 @@ func Parse(b []byte) (*Doc, error) {
 
 func (d *Doc) Bytes() ([]byte, error) { return d.doc.WriteToBytes() }
 
-// Apply writes the title and author names — the only fields the NCX copies —
+// Apply writes the title and author names, the only fields the NCX copies,
 // and reports whether that changed anything. Nothing is serialized until Bytes.
 //
 // A nil title or a nil names slice is one the caller did not touch. Names
@@ -99,15 +99,15 @@ func (f authorsField) set(names []string) {
 	}
 }
 
-// The <text> child <docTitle> and <docAuthor> wrap their value in — the only
+// The <text> child <docTitle> and <docAuthor> wrap their value in, the only
 // place the NCX records one. Write-only: nothing reads metadata out of an NCX.
 type textSlot struct{ owner *etree.Element }
 
 func slot(owner *etree.Element) textSlot { return textSlot{owner: owner} }
 
 // set is a no-op when the owner is absent, so a missing <docTitle> stays missing
-// rather than invented in a position we would have to guess. A missing <text>
-// is created: Z39.86 requires it in both elements.
+// rather than invented in a position that would have to be guessed. A missing
+// <text> is created: Z39.86 requires it in both elements.
 func (s textSlot) set(value string) {
 	if s.owner == nil {
 		return

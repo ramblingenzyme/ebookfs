@@ -43,7 +43,7 @@ var ErrDuplicate = errors.New("book already in library")
 
 // ErrDuplicateOnDisk is wrapped into the error an ingest returns when no
 // indexed book matches, but a file for these authors and this title is already
-// in the library tree — a book the indexer skipped. Ingesting anyway would
+// in the library tree, a book the indexer skipped. Ingesting anyway would
 // leave two copies on disk, one of them invisible. Reindex or remove the
 // existing file.
 var ErrDuplicateOnDisk = errors.New("book already on disk but not indexed")
@@ -53,7 +53,7 @@ var ErrDuplicateOnDisk = errors.New("book already on disk but not indexed")
 // re-ingest fails a read on an EpubReader. They are the same values, so
 // errors.Is matches whichever package a caller names them from.
 //
-// ErrNotEpub means the file is not an epub at all — not a zip, or not carrying
+// ErrNotEpub means the file is not an epub at all: not a zip, or not carrying
 // the mimetype OCF 3.3 §4.3.3 fixes. The other three are an epub whose OCF
 // container does not lead to a package document, which say where the trail
 // stops.
@@ -73,16 +73,14 @@ var ErrClosed = epub.ErrClosed
 // It is the single swap point between serving the original epub and a converted
 // kepub: the Library returns the appropriate implementation based on config.
 //
-// Includes (which books belong in the reader) and Dirname (how they group) sit
-// here alongside the rendition methods on purpose: deciding *what* syncs to the
-// reader is a library/backend policy concern, and fs/views/reader.go is only the
-// concrete 9P rendering of that data. Includes is a predicate rather than an
-// exposed status list so the policy can change (tag-based, size caps, …)
-// without touching the frontend.
+// Includes decides which books belong in the reader and Dirname decides how
+// they group. Both are policy, so they sit with the rendition methods here and
+// fs/views/reader.go only renders the result. Includes is a predicate rather
+// than an exposed status list, so the policy can change to tag-based or size
+// caps without touching the frontend.
 type Exporter interface {
-	// Open returns a handle to the book's export rendition. The handle is a
-	// snapshot — after the book is edited, call Open again for updated content.
-	// The returned reader is non-nil iff err is nil.
+	// Open returns a handle to the book's export rendition, holding a snapshot
+	// as Book does. The returned reader is non-nil iff err is nil.
 	Open(*Book) (EpubReader, error)
 	Size(*Book) (int64, bool) // cheap; 9P stat length, false when cold
 	Warm(*Book)               // non-blocking proactive warm hint

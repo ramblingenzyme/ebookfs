@@ -29,14 +29,14 @@ type encryptionXML struct {
 }
 
 // obfuscationAlgorithms are the two font-obfuscation schemes. They appear like
-// real DRM but are not encryption; calibre treats them as readable and so do we,
-// so a book with obfuscated fonts stays editable.
+// real DRM but are not encryption. Calibre treats them as readable and so does
+// this package, so a book with obfuscated fonts stays editable.
 var obfuscationAlgorithms = map[string]bool{
 	"http://ns.adobe.com/pdf/enc#RC":     true,
 	"http://www.idpf.org/2008/embedding": true,
 }
 
-// encryptionInfo records which zip entries are listed in META-INF/encryption.xml
+// EncryptionInfo records which zip entries are listed in META-INF/encryption.xml
 // and under which algorithm, so a real-DRM entry can be distinguished from a
 // merely font-obfuscated one (see obfuscationAlgorithms).
 type EncryptionInfo struct {
@@ -67,7 +67,7 @@ func NewEncryptionInfo(r io.Reader) (*EncryptionInfo, error) {
 	return info, nil
 }
 
-// isEncrypted reports whether name is protected by real encryption (as opposed
+// IsEncrypted reports whether name is protected by real encryption (as opposed
 // to font obfuscation). An entry absent from encryption.xml is not encrypted.
 func (e *EncryptionInfo) IsEncrypted(name string) bool {
 	if e == nil {

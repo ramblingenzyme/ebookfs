@@ -27,9 +27,10 @@ func (idx *Index) queryBooks(q *bookQuery) ([]*book.Book, error) {
 }
 
 // AllPathInfo returns every library path the last rebuild accounted for, mapped
-// to the file state recorded for it — both indexed books and the directories it
-// could not index. Drift detection compares a store listing against this, so a
-// path missing here is genuinely unexplained rather than merely unindexable.
+// to the file state recorded for it, covering both indexed books and the
+// directories it could not index. Drift detection compares a store listing
+// against this, so a path missing here is genuinely unexplained rather than
+// merely unindexable.
 func (idx *Index) AllPathInfo() (map[string]drift.PathInfo, error) {
 	rows, err := idx.queries.GetAllPathInfo(idx.ctx)
 	if err != nil {
@@ -42,7 +43,7 @@ func (idx *Index) AllPathInfo() (map[string]drift.PathInfo, error) {
 		// each walked directory in exactly one), but nothing in the schema
 		// enforces it across tables. A path in both would collapse in this map
 		// and silently satisfy the caller's count comparison, masking real
-		// drift — so refuse rather than return a half-truth.
+		// drift, so refuse rather than return a half-truth.
 		if _, dup := info[row.EpubPath]; dup {
 			return nil, fmt.Errorf("index inconsistency: %q recorded as both indexed and skipped", row.EpubPath)
 		}
@@ -68,7 +69,6 @@ func (idx *Index) Get(bookID int64) (*book.Book, error) {
 	return books[0], nil
 }
 
-// Stats returns aggregate library statistics.
 func (idx *Index) Stats() (*Stats, error) {
 	stats, err := idx.queries.GetStats(idx.ctx)
 	if err != nil {

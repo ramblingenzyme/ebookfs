@@ -20,7 +20,6 @@ type bookRow struct {
 	seriesIndex                                                        sql.NullString
 }
 
-// toBook converts a bookRow to a book.Book.
 func (r *bookRow) toBook() *book.Book {
 	b := &book.Book{
 		Meta: book.Meta{
@@ -55,7 +54,8 @@ func (r *bookRow) toBook() *book.Book {
 	return b
 }
 
-// parseDateField parses an RFC3339 date string, logging a warning on failure.
+// parseDateField returns the zero time on a value that is not RFC3339, having
+// logged it. A book with an unparseable date still loads.
 func parseDateField(s string, field string, bookID int64) time.Time {
 	if t, err := time.Parse(time.RFC3339, s); err != nil {
 		slog.Warn("invalid "+field, "book_id", bookID, field, s, "error", err)
@@ -65,7 +65,6 @@ func parseDateField(s string, field string, bookID int64) time.Time {
 	}
 }
 
-// scanBookRows scans the main query rows into Book records.
 func scanBookRows(rows *sql.Rows) ([]*book.Book, error) {
 	var books []*book.Book
 	for rows.Next() {

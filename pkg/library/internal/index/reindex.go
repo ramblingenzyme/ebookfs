@@ -9,7 +9,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index/dbsqlc"
 )
 
-// NeedsReindex reports whether the index must be rebuilt — true when the
+// NeedsReindex reports whether the index must be rebuilt, true when the
 // schema version is stale or there are pending operations that may not have
 // completed.
 func (idx *Index) NeedsReindex() (bool, error) {
@@ -30,14 +30,16 @@ func (idx *Index) NeedsReindex() (bool, error) {
 
 // BookPath pairs a book with its on-disk file state. Rebuild takes the two
 // together rather than as a book slice plus a lookup table so that indexing a
-// book without its drift bookkeeping is not representable — see drift.PathInfo
+// book without its drift bookkeeping is not representable; see drift.PathInfo
 // for why a zero value there is not benign.
 type BookPath struct {
 	Book *book.Book
 	Info drift.PathInfo
 }
 
-// ensureSchema checks the schema version and recreates tables if needed.
+// ensureSchema drops and recreates every table when the stored schema version
+// differs from schemaVersion, discarding the index. Safe because the index is
+// derived from the filesystem (DECISIONS.md #2); the caller rebuilds it.
 func (idx *Index) ensureSchema() error {
 	v, err := idx.getSchemaVersion()
 	if err != nil {
@@ -54,8 +56,6 @@ func (idx *Index) ensureSchema() error {
 	return nil
 }
 
-// rebuildTx executes the rebuild transaction: clears tables, inserts books and skipped entries,
-// updates the ID sequence, and removes the pending op marker.
 func (idx *Index) rebuildTx(books []BookPath, skipped map[string]drift.PathInfo, maxID int64) error {
 	opID := newOpID()
 	if err := idx.wq.InsertPendingOp(idx.ctx, opID); err != nil {
@@ -121,7 +121,7 @@ func (idx *Index) Rebuild(books []BookPath, skipped map[string]drift.PathInfo, m
 	// Build query planner statistics so JOIN-heavy queries (every listing,
 	// search, browse view) don't make catastrophically bad plan choices.
 	// Without this ANALYZE, a 4000-row query went from 0.05s → 5s in one
-	// published report (jvns.ca). It's cheap and runs only on rebuild.
+	// published report (jvns.ca). Runs only on rebuild.
 	if _, err := idx.db.ExecContext(idx.ctx, "ANALYZE"); err != nil {
 		return fmt.Errorf("analyzing: %w", err)
 	}

@@ -44,7 +44,6 @@ func (idx *Index) hydrateBooks(books []*book.Book) error {
 	return nil
 }
 
-// loadAuthors fetches authors for the given book IDs, grouped by book.
 func (idx *Index) loadAuthors(ids []int64) (map[int64][]book.Author, error) {
 	rows, err := idx.queries.GetAuthorsByBookIDs(idx.ctx, ids)
 	if err != nil {
@@ -61,7 +60,6 @@ func (idx *Index) loadAuthors(ids []int64) (map[int64][]book.Author, error) {
 	return out, nil
 }
 
-// loadTags fetches tags for the given book IDs, grouped by book.
 func (idx *Index) loadTags(ids []int64) (map[int64][]string, error) {
 	rows, err := idx.queries.GetTagsByBookIDs(idx.ctx, ids)
 	if err != nil {
@@ -74,7 +72,6 @@ func (idx *Index) loadTags(ids []int64) (map[int64][]string, error) {
 	return out, nil
 }
 
-// loadIdentifiers fetches identifiers for the given book IDs, grouped by book.
 func (idx *Index) loadIdentifiers(ids []int64) (map[int64]map[string]string, error) {
 	rows, err := idx.queries.GetIdentifiersByBookIDs(idx.ctx, ids)
 	if err != nil {

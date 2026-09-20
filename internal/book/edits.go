@@ -11,7 +11,7 @@ import (
 
 // Edits is a partial update to a Book's fields. A nil pointer leaves the field
 // untouched; a non-nil pointer (including one to a zero value) applies the
-// change. This lets a caller change exactly one field — e.g. just the title —
+// change. This lets a caller change exactly one field, just the title say,
 // without having to supply the rest.
 //
 // A non-nil Series pointing at "" removes the series. SeriesIndex applied
@@ -19,7 +19,7 @@ import (
 // current series, resolved against the live snapshot under the per-book lock.
 //
 // SortTitle follows the same nil/empty rules. As a special case, changing Title
-// without supplying a SortTitle clears any existing sort title — it was derived
+// without supplying a SortTitle clears any existing sort title, which was derived
 // from the old title, so leaving it would make the sort title disagree with the
 // title.
 type Edits struct {
@@ -60,13 +60,11 @@ func (e Edits) Normalized() Edits {
 	return e
 }
 
-// HasBibEdits reports whether any OPF-level field is non-nil.
 func (e Edits) HasBibEdits() bool {
 	return e.Title != nil || e.SortTitle != nil || e.Description != nil ||
 		e.Language != nil || e.Authors != nil || e.Series != nil || e.SeriesIndex != nil
 }
 
-// HasCoverEdit reports whether a cover image replacement is requested.
 func (e Edits) HasCoverEdit() bool { return e.Cover != nil }
 
 // FieldError pairs a field name with a human-readable validation error message,

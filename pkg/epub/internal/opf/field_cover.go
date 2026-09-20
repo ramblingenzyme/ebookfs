@@ -15,7 +15,7 @@ func isRasterCoverType(mediaType string) bool {
 
 // cover resolves the cover image: the cover-image manifest property first, then
 // the legacy <meta name="cover"> (§5.9.3 fixes that order), then a heuristic.
-// The order of the loops is the whole rule.
+// The loops run in that order.
 func (o *Doc) cover(base string) string {
 	manifest := o.d.Manifest()
 

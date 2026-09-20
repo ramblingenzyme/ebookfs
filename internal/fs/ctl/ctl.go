@@ -24,7 +24,6 @@ type CtlFile struct {
 	cmdLog *CommandLog
 }
 
-// NewCtlFile creates the root ctl file.
 func NewCtlFile(f *fs.FS, lib SearchDeleter, reg *registry.BookRegistry, cmdLog *CommandLog) *CtlFile {
 	return &CtlFile{
 		BaseFile: *fs.NewBaseFile(vfile.NewStat(f, "ctl", 0644)),

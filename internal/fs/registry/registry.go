@@ -1,10 +1,8 @@
-// Package registry holds the BookRegistry, the single authority over the served
-// tree's id → *book.BookDir mapping and the orchestrator of every change to it.
+// Package registry holds the BookRegistry.
 //
-// The registry is presentation-agnostic BY CONVENTION: it knows views only
-// through the BookView interface and must never import fs/views or otherwise
-// depend on how books are presented. Keeping this boundary lets the
-// concurrency-critical snapshot-swap logic be reasoned about in isolation.
+// The registry knows views only through the BookView interface and must never
+// import fs/views. Views therefore never see the snapshot swap, so a change to
+// presentation cannot reorder it.
 package registry
 
 import (
@@ -29,18 +27,20 @@ type Editor interface {
 
 // BookView is an FS listing that reacts to a book entering or leaving it. Add
 // and Remove read the book's CURRENT state, so the registry brackets every
-// mutation as Remove → mutate → Add: Remove sees the old grouping/name, Add
-// sees the new one. There is no "update" — temporal ordering supplies old vs new.
+// mutation as Remove → mutate → Add: Remove sees the old grouping and name,
+// Add sees the new one. There is no "update"; the ordering carries that.
 type BookView interface {
 	Add(dir *book.BookDir)
 	Remove(dir *book.BookDir)
 }
 
-// BookRegistry is the single authority on id → *book.BookDir and the orchestrator
-// of every change to the served tree. BookDirs are stable identities — the map
-// entry and any open fids survive edits — while the book state inside each is an
-// atomically swapped snapshot (see book.BookDir), because 9P handlers read it
-// from many goroutines without taking r.mu.
+// BookRegistry is the single authority on id → *book.BookDir and the
+// orchestrator of every change to the served tree.
+//
+// A BookDir is a stable identity: the map entry and any open fids survive an
+// edit. The book state inside it is an atomically swapped snapshot (see
+// book.BookDir), because 9P handlers read it from many goroutines without
+// taking r.mu.
 type BookRegistry struct {
 	mu    sync.RWMutex
 	books map[int64]*book.BookDir
@@ -69,7 +69,7 @@ func (r *BookRegistry) FS() *fs.FS { return r.f }
 // clearing v and swapping its filter), then every registered book is offered to
 // v.Add, all under the registry lock so the rebuild is serialized against
 // Add/Remove/commit notifications. v decides membership inside its Add, so a
-// view that attached after books existed — or changed its filter — converges on
+// view that attached after books existed, or changed its filter, converges on
 // the registry's current state with no window for lost or stale entries. reset
 // must not call back into the registry or the library.
 func (r *BookRegistry) ResyncView(v BookView, reset func()) {
@@ -150,7 +150,7 @@ func (r *BookRegistry) Remove(id int64) {
 // book if its grouping or name changed.
 //
 // lib.Edit can rewrite the whole epub (seconds of disk I/O), so it must not
-// run under r.mu — that would queue every unrelated mutation behind it. The
+// run under r.mu, which would queue every unrelated mutation behind it. The
 // per-book editMu keeps concurrent edits of the same book (and their commits)
 // in order; r.mu is only held for the lookup and the commit bracket.
 func (r *BookRegistry) Edit(id int64, edits library.Edits) error {

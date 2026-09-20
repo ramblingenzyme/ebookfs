@@ -11,7 +11,7 @@ var ErrClosed = errors.New("epub file is closed")
 // File is an open epub archive: the zip central directory, a validated
 // mimetype, and the package document's path resolved from the OCF container.
 // The package document itself is not parsed, so opening one costs no XML work
-// — Open does that.
+// Open does that.
 //
 // The underlying file handle stays open, so repeated reads avoid re-reading the
 // central directory. Close when done.
@@ -107,7 +107,7 @@ func (f *File) ReadAt(p []byte, off int64) (int, error) {
 }
 
 // Close releases the underlying file. The zip.Reader becomes invalid.
-// It is safe to call multiple times — subsequent calls return ErrClosed.
+// It is safe to call multiple times; subsequent calls return ErrClosed.
 func (f *File) Close() error {
 	if f.closed {
 		return ErrClosed
