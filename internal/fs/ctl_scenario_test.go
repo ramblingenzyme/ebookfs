@@ -21,7 +21,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/libtest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
-	"github.com/ramblingenzyme/ebookfs/library"
+	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
 // runCtl writes cmd to the ctl file and clunks it, which is what executes the

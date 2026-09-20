@@ -5,7 +5,7 @@ import (
 
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
-	"github.com/ramblingenzyme/ebookfs/library"
+	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
 // opfFile serves a book's raw OPF XML, loading bytes from the epub on each open.

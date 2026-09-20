@@ -17,7 +17,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/views"
-	"github.com/ramblingenzyme/ebookfs/library"
+	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
 // Server wraps a go9p.Server with lifecycle management.

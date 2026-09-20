@@ -8,7 +8,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/libtest"
 	"github.com/ramblingenzyme/ebookfs/internal/testutil"
-	"github.com/ramblingenzyme/ebookfs/library"
+	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
 // The read/open/close semantics shared by the two base file types. The concrete

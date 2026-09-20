@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ramblingenzyme/ebookfs/library"
+	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
 // The query language itself: every supported prefix, the OR-within-a-field /
