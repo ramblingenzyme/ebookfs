@@ -1,22 +1,14 @@
 package views
 
 import (
-	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
+	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-type byStatusDir struct{ groupingDir }
-
-func NewByStatusDir(reg *registry.BookRegistry) *byStatusDir {
-	d := &byStatusDir{newGroupingDir(reg.FS(), "by-status")}
-	reg.AddView(d)
-	return d
+func NewByStatusDir(reg *registry.BookRegistry) *keyedDir {
+	return newKeyedDir(reg, "by-status", statusKeys, bookListFactory)
 }
 
-func (d *byStatusDir) Add(dir *book.BookDir) {
-	d.listerDir(dir.Book().Status()).Add(dir)
-}
-
-func (d *byStatusDir) Remove(dir *book.BookDir) {
-	d.removeLister(dir.Book().Status(), dir)
-}
+// statusKeys is the one by-status entry b belongs under. Status is drawn from a
+// fixed vocabulary, so it needs no name mapping.
+func statusKeys(b *library.Book) []string { return []string{b.Status()} }

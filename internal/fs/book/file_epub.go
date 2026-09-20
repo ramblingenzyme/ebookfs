@@ -1,8 +1,6 @@
 package book
 
 import (
-	"errors"
-
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
@@ -19,23 +17,14 @@ type epubFile struct {
 func newEpubFile(stat *proto.Stat, lib ContentReader, book func() *library.Book) *epubFile {
 	return &epubFile{
 		ReadAtFile: vfile.NewReadAtFile(stat, func() (library.EpubReader, error) {
-			if lib == nil {
-				return nil, errors.New("library not available")
-			}
-			b := book()
-			if b == nil {
-				return nil, errors.New("book snapshot not available")
-			}
-			r, err := lib.Content(b.ID())
-			if err != nil {
-				return nil, err
-			}
-			return r, nil
+			return content(lib, book)
 		}),
 		book: book,
 	}
 }
 
+// Stat reports the name as well as the length, so it reads the snapshot itself
+// rather than going through statLen.
 func (e *epubFile) Stat() proto.Stat {
 	s := e.BaseFile.Stat()
 	if b := e.book(); b != nil {

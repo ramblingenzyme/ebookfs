@@ -33,7 +33,7 @@ func (n *namedBookDir) Stat() proto.Stat {
 // pointer, never a value, because fs.StaticDir embeds sync.RWMutex (via its
 // BaseFile). Copying a mutex after first use is undefined behaviour, and
 // groupingDir is returned by value and embedded by value in every view type
-// (byAuthorDir, bySeriesDir, readerDir). A pointer avoids copying the mutex.
+// (keyedDir, byIDDir, readerDir). A pointer avoids copying the mutex.
 type groupingDir struct {
 	*fs.StaticDir
 	f *fs.FS
@@ -69,17 +69,53 @@ func (g *groupingDir) childDir(name string, factory func(*proto.Stat) fs.FSNode)
 	return ad
 }
 
-// listerDir returns the registry.BookView child named name, creating it via newBookListDir
-// on first use.
-func (g *groupingDir) listerDir(name string) registry.BookView {
-	return g.childDir(name, func(s *proto.Stat) fs.FSNode { return newBookListDir(s) }).(registry.BookView)
-}
-
 // removeLister looks up the registry.BookView child named name, removes dir from it,
 // and prunes the child if empty.
 func (g *groupingDir) removeLister(name string, dir *book.BookDir) {
 	if child, ok := g.Children()[name]; ok {
 		child.(registry.BookView).Remove(dir)
 		g.pruneEmpty(name)
+	}
+}
+
+// bookListFactory is the child a by-x view builds unless it needs a listing of
+// its own, as by-series does.
+func bookListFactory(s *proto.Stat) fs.FSNode { return newBookListDir(s) }
+
+// keyedDir is a by-x view: one child per key the book yields, with the book
+// filed into each. A view supplies the keys function and the child factory and
+// has nothing else to say, which is why by-author, by-tag, by-status and
+// by-series are all this type rather than four of their own.
+//
+// Add and Remove read the same keys function, so a book leaves exactly the
+// entries it joined; a name minted on one side only makes removals miss.
+//
+// by-id and reader embed groupingDir directly instead, since neither files a
+// book under a key the book carries.
+type keyedDir struct {
+	groupingDir
+	keys    func(*library.Book) []string
+	factory func(*proto.Stat) fs.FSNode
+}
+
+func newKeyedDir(reg *registry.BookRegistry, name string, keys func(*library.Book) []string, factory func(*proto.Stat) fs.FSNode) *keyedDir {
+	d := &keyedDir{
+		groupingDir: newGroupingDir(reg.FS(), name),
+		keys:        keys,
+		factory:     factory,
+	}
+	reg.AddView(d)
+	return d
+}
+
+func (d *keyedDir) Add(dir *book.BookDir) {
+	for _, name := range d.keys(dir.Book()) {
+		d.childDir(name, d.factory).(registry.BookView).Add(dir)
+	}
+}
+
+func (d *keyedDir) Remove(dir *book.BookDir) {
+	for _, name := range d.keys(dir.Book()) {
+		d.removeLister(name, dir)
 	}
 }

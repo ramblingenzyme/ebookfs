@@ -103,36 +103,20 @@ func (s *seriesBookListDir) repad() {
 	s.pad.Store(pad)
 }
 
-type bySeriesDir struct{ groupingDir }
-
-func NewBySeriesDir(reg *registry.BookRegistry) *bySeriesDir {
-	d := &bySeriesDir{newGroupingDir(reg.FS(), "by-series")}
-	reg.AddView(d)
-	return d
+func NewBySeriesDir(reg *registry.BookRegistry) *keyedDir {
+	f := reg.FS()
+	// The child carries its own listing rather than the shared one, to zero-pad
+	// entries by series position.
+	return newKeyedDir(reg, "by-series", seriesKeys, func(s *proto.Stat) fs.FSNode {
+		return newSeriesBookListDir(s, f)
+	})
 }
 
-// seriesDir returns the subdir for a series name, creating it on first use.
-// PathSafe for the same reason as by-author and by-tag: a series name is
-// metadata read verbatim from the epub, and a '/' in one would make an entry a
-// 9P client cannot walk to. Remove must mint the same name or removals miss.
-func (d *bySeriesDir) seriesDir(name string) registry.BookView {
-	return d.childDir(naming.PathSafe(name), func(s *proto.Stat) fs.FSNode {
-		return newSeriesBookListDir(s, d.f)
-	}).(registry.BookView)
-}
-
-func (d *bySeriesDir) Add(dir *book.BookDir) {
-	b := dir.Book()
+// seriesKeys is the by-series entry b belongs under, or none when the book is
+// in no series.
+func seriesKeys(b *library.Book) []string {
 	if !b.HasSeries() {
-		return
+		return nil
 	}
-	d.seriesDir(b.SeriesName()).Add(dir)
-}
-
-func (d *bySeriesDir) Remove(dir *book.BookDir) {
-	b := dir.Book()
-	if !b.HasSeries() {
-		return
-	}
-	d.removeLister(naming.PathSafe(b.SeriesName()), dir)
+	return []string{naming.PathSafe(b.SeriesName())}
 }

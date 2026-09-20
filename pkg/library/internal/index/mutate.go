@@ -42,33 +42,7 @@ func toNullString(s string) sql.NullString {
 // references it and nothing can be orphaned. Sweeping per book would run three
 // growing anti-join scans N times for no effect.
 func (idx *Index) insertBook(q *dbsqlc.Queries, b *book.Book, mt drift.PathInfo) error {
-	//goland:noinspection DuplicatedCode
-	sortTitle := toNullString(b.SortTitle)
-	pubdate := toNullString(b.Pubdate)
-
-	err := q.InsertBook(idx.ctx, dbsqlc.InsertBookParams{
-		ID:           b.Meta.ID,
-		Title:        b.Title,
-		SortTitle:    sortTitle,
-		Pubdate:      pubdate,
-		Description:  b.Description,
-		Language:     b.Language,
-		EpubPath:     b.EpubPath,
-		CoverPath:    b.CoverPath,
-		Status:       b.Meta.Status,
-		Rating:       b.Meta.Rating,
-		DateAdded:    b.Meta.DateAdded.UTC().Format(time.RFC3339),
-		DateModified: b.Meta.DateModified.UTC().Format(time.RFC3339),
-		SeriesID:     sql.NullInt64{},  // series_id set by finishBook
-		SeriesIndex:  sql.NullString{}, // series_index set by finishBook
-		OpfSize:      b.OpfSize,
-		CoverSize:    b.CoverSize,
-		EpubSize:     mt.Size,
-		EpubMtime:    toUnixNano(mt.EpubMtime),
-		MetaMtime:    toUnixNano(mt.MetaMtime),
-		MetaSize:     mt.MetaSize,
-	})
-	if err != nil {
+	if err := q.InsertBook(idx.ctx, bookParams(b, mt)); err != nil {
 		return err
 	}
 
@@ -77,15 +51,28 @@ func (idx *Index) insertBook(q *dbsqlc.Queries, b *book.Book, mt drift.PathInfo)
 
 // putBook inserts or replaces b; insertBook says why Rebuild uses that one.
 func (idx *Index) putBook(q *dbsqlc.Queries, b *book.Book, mt drift.PathInfo) error {
-	//goland:noinspection DuplicatedCode
-	sortTitle := toNullString(b.SortTitle)
-	pubdate := toNullString(b.Pubdate)
+	// The two generated param types are field-identical, so the row is built once
+	// and converted. A regenerate that makes them diverge fails to compile here
+	// rather than letting the two writers drift apart.
+	if err := q.UpsertBook(idx.ctx, dbsqlc.UpsertBookParams(bookParams(b, mt))); err != nil {
+		return err
+	}
 
-	err := q.UpsertBook(idx.ctx, dbsqlc.UpsertBookParams{
+	if err := idx.finishBook(q, b); err != nil {
+		return err
+	}
+	// Replacing a book can strand its former author/series/tag rows.
+	return idx.cleanupOrphans(q)
+}
+
+// bookParams is the index row for b: every column except series_id and
+// series_index, which finishBook sets once the series row exists.
+func bookParams(b *book.Book, mt drift.PathInfo) dbsqlc.InsertBookParams {
+	return dbsqlc.InsertBookParams{
 		ID:           b.Meta.ID,
 		Title:        b.Title,
-		SortTitle:    sortTitle,
-		Pubdate:      pubdate,
+		SortTitle:    toNullString(b.SortTitle),
+		Pubdate:      toNullString(b.Pubdate),
 		Description:  b.Description,
 		Language:     b.Language,
 		EpubPath:     b.EpubPath,
@@ -102,16 +89,7 @@ func (idx *Index) putBook(q *dbsqlc.Queries, b *book.Book, mt drift.PathInfo) er
 		EpubMtime:    toUnixNano(mt.EpubMtime),
 		MetaMtime:    toUnixNano(mt.MetaMtime),
 		MetaSize:     mt.MetaSize,
-	})
-	if err != nil {
-		return err
 	}
-
-	if err := idx.finishBook(q, b); err != nil {
-		return err
-	}
-	// Replacing a book can strand its former author/series/tag rows.
-	return idx.cleanupOrphans(q)
 }
 
 // finishBook writes a book's authors, tags, series, and identifiers. It does not

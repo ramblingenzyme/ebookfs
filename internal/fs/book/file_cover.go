@@ -1,8 +1,6 @@
 package book
 
 import (
-	"errors"
-
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
@@ -21,35 +19,16 @@ type coverFile struct {
 }
 
 func newCoverFile(stat *proto.Stat, lib ContentReader, edit func(int64, library.Edits) error, book func() *library.Book) *coverFile {
-	//goland:noinspection DuplicatedCode
 	return &coverFile{
-		SnapshotFile: vfile.NewSnapshotFile(stat, func() ([]byte, error) {
-			if lib == nil {
-				return nil, errors.New("library not available")
-			}
-			b := book()
-			if b == nil {
-				return nil, errors.New("book snapshot not available")
-			}
-			r, err := lib.Content(b.ID())
-			if err != nil {
-				return nil, err
-			}
-			defer r.Close()
-			return r.Cover()
-		}),
-		edit:   edit,
-		book:   book,
-		writes: vfile.NewWriteBuffer(maxCoverFileSize),
+		SnapshotFile: vfile.NewSnapshotFile(stat, contentBytes(lib, book, library.EpubReader.Cover)),
+		edit:         edit,
+		book:         book,
+		writes:       vfile.NewWriteBuffer(maxCoverFileSize),
 	}
 }
 
 func (c *coverFile) Stat() proto.Stat {
-	s := c.BaseFile.Stat()
-	if b := c.book(); b != nil {
-		s.Length = uint64(b.CoverSize())
-	}
-	return s
+	return statLen(c.BaseFile.Stat(), c.book, (*library.Book).CoverSize)
 }
 
 func (c *coverFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
