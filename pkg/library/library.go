@@ -131,7 +131,7 @@ func Open(cfg Config, opts ...Option) (*Library, error) {
 		return nil, err
 	}
 	lib := &Library{
-		store:     store.New(cfg.Root, cfg.InboxTemp),
+		store:     store.New(cfg.Root),
 		index:     idx,
 		inboxTemp: cfg.InboxTemp,
 	}

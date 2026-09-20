@@ -170,7 +170,8 @@ func newOpID() string {
 }
 
 // withTx runs fn inside a SQLite transaction, committing on success and
-// rolling back on error.
+// rolling back on error. fn gets the raw transaction as well as the queries
+// handle for rebuildTx, whose table-by-table DELETE has no generated query.
 func (idx *Index) withTx(fn func(*dbsqlc.Queries, *sql.Tx) error) error {
 	tx, err := idx.db.Begin()
 	if err != nil {

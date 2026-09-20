@@ -132,9 +132,8 @@ func (b *Book) stage() (map[string][]byte, error) {
 	return replace, nil
 }
 
-// moved is which fields differ from what Open read: the one answer to that
-// question, so a field added to Book cannot be written by one half of Save and
-// ignored by the other.
+// moved is which fields differ from what Open read. write and changed are both
+// driven by it, so they cannot disagree about whether a field moved.
 type moved struct {
 	title, sortTitle, description, language, authors, series bool
 }
@@ -151,9 +150,9 @@ func (b *Book) moved() moved {
 	}
 }
 
-func (m moved) changed() bool {
-	return m.title || m.sortTitle || m.description || m.language || m.authors || m.series
-}
+// changed compares against the zero value rather than naming the fields, so a
+// field added to moved is covered without a second edit here.
+func (m moved) changed() bool { return m != moved{} }
 
 func sameSeries(a, c *Series) bool {
 	if a == nil || c == nil {
@@ -181,19 +180,19 @@ func (b *Book) write(d *opf.Doc, m moved) {
 	if m.language {
 		d.SetLanguage(b.Language)
 	}
+	// The two Author types and the two Series types are structurally identical,
+	// so these convert rather than copying field by field: a field added to one
+	// side alone stops compiling here. SetSeries reads the pointer without
+	// keeping it, so handing it the Book's own costs nothing.
 	if m.authors {
 		as := make([]opf.Author, len(b.Authors))
 		for i, a := range b.Authors {
-			as[i] = opf.Author{Name: a.Name, SortName: a.SortName}
+			as[i] = opf.Author(a)
 		}
 		d.SetAuthors(as)
 	}
 	if m.series {
-		var s *opf.Series
-		if b.Series != nil {
-			s = &opf.Series{Name: b.Series.Name, Index: b.Series.Index}
-		}
-		d.SetSeries(s)
+		d.SetSeries((*opf.Series)(b.Series))
 	}
 }
 

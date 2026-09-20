@@ -41,12 +41,12 @@ func (o *Op) MarkPending() error {
 // finish runs fn and clears the pending row in one transaction. MarkPending
 // must have been called first so a pending row protects the preceding store
 // writes; the row is atomically deleted inside the same transaction.
-func (o *Op) finish(fn func(*dbsqlc.Queries, *sql.Tx) error) error {
+func (o *Op) finish(fn func(*dbsqlc.Queries) error) error {
 	if o.opID == "" {
 		return errors.New("MarkPending must be called before commit")
 	}
-	return o.idx.withTx(func(q *dbsqlc.Queries, tx *sql.Tx) error {
-		if err := fn(q, tx); err != nil {
+	return o.idx.withTx(func(q *dbsqlc.Queries, _ *sql.Tx) error {
+		if err := fn(q); err != nil {
 			return err
 		}
 		return q.DeletePendingOp(o.idx.ctx, o.opID)
@@ -68,10 +68,10 @@ func (o *Op) Cancel() {
 // Put writes b into the index. mt is the on-disk file state drift detection
 // compares against.
 func (o *Op) Put(b *book.Book, mt drift.PathInfo) error {
-	return o.finish(func(q *dbsqlc.Queries, tx *sql.Tx) error { return o.idx.putBook(q, b, mt) })
+	return o.finish(func(q *dbsqlc.Queries) error { return o.idx.putBook(q, b, mt) })
 }
 
 // Delete removes all index rows for book.
 func (o *Op) Delete(bookID int64) error {
-	return o.finish(func(q *dbsqlc.Queries, tx *sql.Tx) error { return o.idx.deleteBook(q, bookID) })
+	return o.finish(func(q *dbsqlc.Queries) error { return o.idx.deleteBook(q, bookID) })
 }

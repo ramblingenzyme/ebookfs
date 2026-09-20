@@ -88,11 +88,9 @@ func newBook(f *File, doc *opf.Doc) *Book {
 	b.Language = m.Language
 	b.pubdate = m.Pubdate
 	for _, a := range m.Authors {
-		b.Authors = append(b.Authors, Author{Name: a.Name, SortName: a.SortName})
+		b.Authors = append(b.Authors, Author(a))
 	}
-	if m.Series != nil {
-		b.Series = &Series{Name: m.Series.Name, Index: m.Series.Index}
-	}
+	b.Series = (*Series)(m.Series)
 	b.orig = b.take()
 	return b
 }

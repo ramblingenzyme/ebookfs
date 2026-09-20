@@ -12,7 +12,7 @@ import (
 func newStore(t *testing.T) (*Store, string) {
 	t.Helper()
 	root := t.TempDir()
-	return New(root, filepath.Join(root, ".inbox-tmp")), root
+	return New(root), root
 }
 
 // writeBook materializes an on-disk book directory under root/libPath: the epub

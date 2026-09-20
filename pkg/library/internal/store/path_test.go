@@ -10,7 +10,7 @@ import (
 
 // Layout and the names under it read no Store field, so these need no root on
 // disk. newStore would create a temp directory none of them touch.
-func layoutStore() *Store { return New("", "") }
+func layoutStore() *Store { return New("") }
 
 func TestLayout(t *testing.T) {
 	s := layoutStore()

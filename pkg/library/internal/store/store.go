@@ -18,12 +18,11 @@ import (
 
 // Store manages filesystem operations on the library directory tree.
 type Store struct {
-	root      string // absolute path to the library root
-	inboxTemp string // absolute path to the inbox temp directory; must be on the same filesystem as root
+	root string // absolute path to the library root
 }
 
-func New(root, inboxTemp string) *Store {
-	return &Store{root: root, inboxTemp: inboxTemp}
+func New(root string) *Store {
+	return &Store{root: root}
 }
 
 // AbsPath resolves a relative path (the EpubPath stored in a book's Location)
