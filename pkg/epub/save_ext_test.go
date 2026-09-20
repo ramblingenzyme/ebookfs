@@ -27,8 +27,8 @@ import (
 	"time"
 
 	"github.com/beevik/etree"
-	"github.com/ramblingenzyme/ebookfs/pkg/epub"
 	"github.com/ramblingenzyme/ebookfs/internal/epubtest"
+	"github.com/ramblingenzyme/ebookfs/pkg/epub"
 )
 
 type corpus struct {
