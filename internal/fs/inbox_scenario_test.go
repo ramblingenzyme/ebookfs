@@ -18,9 +18,9 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/views"
-	"github.com/ramblingenzyme/ebookfs/internal/fstest"
-	"github.com/ramblingenzyme/ebookfs/internal/libtest"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
@@ -30,16 +30,16 @@ func inboxTree(t *testing.T, ingested *bookmodel.Book) (*fs.FS, fs.Dir, map[stri
 	t.Helper()
 	f := newTestFS(t)
 
-	ingest := libtest.Ingester{
+	ingest := mock.Ingester{
 		IngestFn: func(string) (*library.Book, error) {
 			if ingested == nil {
 				return nil, errTest
 			}
-			return testutil.WrapBook(ingested), nil
+			return util.WrapBook(ingested), nil
 		},
 	}
 
-	reg := registry.NewBookRegistry(f, libtest.Editor{})
+	reg := registry.NewBookRegistry(f, mock.Editor{})
 	dirs := map[string]fs.Dir{
 		"books":     views.NewAllBooksDir(reg),
 		"by-author": views.NewByAuthorDir(reg),

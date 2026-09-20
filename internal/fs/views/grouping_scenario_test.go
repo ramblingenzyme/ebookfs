@@ -19,12 +19,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
-	"github.com/ramblingenzyme/ebookfs/internal/fstest"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 )
 
 // groupingView describes a directory that files books into subdirectories keyed
@@ -61,7 +61,7 @@ var groupingViews = []groupingView{
 		name:   "by-author",
 		newDir: func(reg *registry.BookRegistry) fs.Dir { return NewByAuthorDir(reg) },
 		withKeys: func(id int64, title string, keys ...string) *library.Book {
-			return testutil.MakeBook(id, title, keys...)
+			return util.MakeBook(id, title, keys...)
 		},
 		keyless: func(id int64, title string) *library.Book {
 			b := makeBook(id, title)
@@ -78,7 +78,7 @@ var groupingViews = []groupingView{
 			b.Series = &library.Series{Name: keys[0], Index: strconv.FormatInt(id, 10)}
 			return wrapBook(b)
 		},
-		keyless: func(id int64, title string) *library.Book { return testutil.MakeBook(id, title, "Author") },
+		keyless: func(id int64, title string) *library.Book { return util.MakeBook(id, title, "Author") },
 		// Series entries lead with the index so a plain readdir reads in order.
 		entryName: func(id int64, title string) string { return fmt.Sprintf("%d - %s", id, title) },
 	},
@@ -148,7 +148,7 @@ func TestGroupNamesAreOneComponent(t *testing.T) {
 		{
 			name: "by-author",
 			dir:  func(reg *registry.BookRegistry) fs.Dir { return NewByAuthorDir(reg) },
-			book: func() *library.Book { return testutil.MakeBook(1, "Title", "Doe/Jane") },
+			book: func() *library.Book { return util.MakeBook(1, "Title", "Doe/Jane") },
 		},
 		{
 			name: "by-series",

@@ -3,10 +3,10 @@ package ctl
 import (
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 )
 
 // newTestCtl returns the pieces execute needs. It takes an editor rather than a
@@ -14,12 +14,12 @@ import (
 // ctl itself reads is the SearchDeleter passed to execute.
 func newTestCtl(t *testing.T, edit registry.Editor) (*registry.BookRegistry, *CommandLog) {
 	t.Helper()
-	return registry.NewBookRegistry(testutil.NewTestFS(t), edit), NewCommandLog(10)
+	return registry.NewBookRegistry(util.NewTestFS(t), edit), NewCommandLog(10)
 }
 
 // taggedBook builds a minimal book with the given tags, for bulk-edit tests.
 func taggedBook(id int64, tags ...string) *library.Book {
-	b := testutil.MakeMutableBook(id, "Title", "Author")
+	b := util.MakeMutableBook(id, "Title", "Author")
 	b.Meta.Tags = tags
-	return testutil.WrapBook(b)
+	return util.WrapBook(b)
 }

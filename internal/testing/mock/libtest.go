@@ -1,4 +1,4 @@
-// Package libtest holds the doubles for the library facade, one per interface a
+// Package mock holds the doubles for the library facade, one per interface a
 // consumer declares. A wider double embeds the narrower one it contains, so
 // fs/book gets Renderer and its two methods rather than Exporter and its six.
 // That narrowness is the point: the shared fake this replaces lacked it, which
@@ -15,7 +15,7 @@
 //
 // It imports library, which is why it is separate from internal/testutil:
 // library's own internal packages have white-box tests that import testutil.
-package libtest
+package mock
 
 import (
 	"bytes"
@@ -36,7 +36,7 @@ func (c ContentReader) Content(id int64) (library.EpubReader, error) {
 	if c.ContentFn != nil {
 		return c.ContentFn(id)
 	}
-	return nil, errors.New("libtest: no ContentFn")
+	return nil, errors.New("mock: no ContentFn")
 }
 
 // Editor is registry's Editor, which fs/ctl writes through. EditFn is direct
@@ -51,7 +51,7 @@ func (e Editor) Edit(id int64, edits library.Edits) (*library.Book, error) {
 	if e.EditFn != nil {
 		return e.EditFn(id, edits)
 	}
-	return nil, errors.New("libtest: no EditFn")
+	return nil, errors.New("mock: no EditFn")
 }
 
 // SearchDeleter is the half of the backend fs/ctl reads and deletes through.
@@ -101,7 +101,7 @@ func (r Renderer) Open(b *library.Book) (library.EpubReader, error) {
 	if r.OpenFn != nil {
 		return r.OpenFn(b)
 	}
-	return nil, errors.New("libtest: no OpenFn")
+	return nil, errors.New("mock: no OpenFn")
 }
 
 func (r Renderer) Size(b *library.Book) (int64, bool) {

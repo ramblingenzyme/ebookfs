@@ -13,7 +13,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/ramblingenzyme/ebookfs/internal/epubtest"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/epubtest"
 )
 
 // A percent-encoded cover href must resolve to the literal zip entry so the

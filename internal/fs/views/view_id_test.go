@@ -3,8 +3,8 @@ package views
 import (
 	"testing"
 
-	"github.com/ramblingenzyme/ebookfs/internal/fstest"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
@@ -17,36 +17,36 @@ func TestIDEntryName(t *testing.T) {
 	}{
 		{
 			name: "no padding for small id",
-			book: testutil.MakeBook(1, "Test", "Author"),
+			book: util.MakeBook(1, "Test", "Author"),
 			want: "1. Test",
 		},
 		{
 			name: "no padding when pad is 0",
-			book: testutil.MakeBook(42, "Test", "Author"),
+			book: util.MakeBook(42, "Test", "Author"),
 			pad:  0,
 			want: "42. Test",
 		},
 		{
 			name: "two-digit padding",
-			book: testutil.MakeBook(5, "Padded", "Author"),
+			book: util.MakeBook(5, "Padded", "Author"),
 			pad:  2,
 			want: "05. Padded",
 		},
 		{
 			name: "two-digit padding at boundary",
-			book: testutil.MakeBook(10, "Boundary", "Author"),
+			book: util.MakeBook(10, "Boundary", "Author"),
 			pad:  2,
 			want: "10. Boundary",
 		},
 		{
 			name: "three-digit padding",
-			book: testutil.MakeBook(42, "Large", "Author"),
+			book: util.MakeBook(42, "Large", "Author"),
 			pad:  3,
 			want: "042. Large",
 		},
 		{
 			name: "four-digit padding",
-			book: testutil.MakeBook(1, "Huge", "Author"),
+			book: util.MakeBook(1, "Huge", "Author"),
 			pad:  4,
 			want: "0001. Huge",
 		},
@@ -116,8 +116,8 @@ func TestByIDDirMultipleBooks(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewByIDDir(reg)
 
-	reg.Add(testutil.MakeBook(1, "Alpha", "Author"))
-	reg.Add(testutil.MakeBook(2, "Beta", "Author"))
+	reg.Add(util.MakeBook(1, "Alpha", "Author"))
+	reg.Add(util.MakeBook(2, "Beta", "Author"))
 
 	fstest.ChildCount(t, d, 2)
 }
@@ -127,7 +127,7 @@ func TestByIDDirMultipleBooks(t *testing.T) {
 func TestByIDDirRemoveUnknown(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewByIDDir(reg)
-	reg.Add(testutil.MakeBook(1, "Kept", "Author"))
+	reg.Add(util.MakeBook(1, "Kept", "Author"))
 
 	reg.Remove(999)
 

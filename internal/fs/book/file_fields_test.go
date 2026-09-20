@@ -4,12 +4,12 @@ import (
 	"testing"
 
 	"github.com/knusbaum/go9p/proto"
-	"github.com/ramblingenzyme/ebookfs/internal/fstest"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 )
 
 func testFieldFileStat(t *testing.T, mode uint32) *proto.Stat {
-	return newStat(testutil.NewTestFS(t), "test", mode)
+	return newStat(util.NewTestFS(t), "test", mode)
 }
 
 func TestFieldFileRead(t *testing.T) {

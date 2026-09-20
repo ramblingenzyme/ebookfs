@@ -4,13 +4,13 @@ package fs
 // covers the wiring instead, and the e2e build tag covers a served tree.
 
 import (
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 )
 
 // The book and FS helpers live in internal/testutil. These aliases let the
 // composition tests call them unqualified.
 var (
-	makeBook  = testutil.MakeMutableBook
-	newTestFS = testutil.NewTestFS
-	errTest   = testutil.ErrTest
+	makeBook  = util.MakeMutableBook
+	newTestFS = util.NewTestFS
+	errTest   = util.ErrTest
 )

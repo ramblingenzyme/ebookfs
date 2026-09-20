@@ -12,15 +12,15 @@ package fs
 import (
 	"testing"
 
-	"github.com/ramblingenzyme/ebookfs/internal/libtest"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/views"
-	"github.com/ramblingenzyme/ebookfs/internal/fstest"
 )
 
 // writeField drives a field edit the way a 9P client would: open the named
@@ -36,7 +36,7 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 	book.Meta.Status = "unread"
 	// The real library fetches the edit base by id; the fake closes over the
 	// test's book instead.
-	lib := libtest.Editor{
+	lib := mock.Editor{
 		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			updated := *book
 			if e.Title != nil {
@@ -46,7 +46,7 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 				updated.SortTitle = *e.SortTitle
 			}
 			updated.Meta.DateModified = book.Meta.DateModified
-			return testutil.WrapBook(&updated), nil
+			return util.WrapBook(&updated), nil
 		},
 	}
 	reg := registry.NewBookRegistry(f, lib)
@@ -55,7 +55,7 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 	byAuthor := views.NewByAuthorDir(reg)
 	byID := views.NewByIDDir(reg)
 
-	reg.Add(testutil.WrapBook(book))
+	reg.Add(util.WrapBook(book))
 
 	writeField(t, fstest.ChildAs[fs.Dir](t, allBooks, "Old Title"), "title", "New Title")
 
@@ -70,14 +70,14 @@ func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 func TestRegistryEditAuthorsRehomesInByAuthor(t *testing.T) {
 	f := newTestFS(t)
 	book := makeBook(1, "Test", "Alice")
-	lib := libtest.Editor{
+	lib := mock.Editor{
 		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			updated := *book
 			if e.Authors != nil {
 				updated.Authors = *e.Authors
 			}
 			updated.Meta.DateModified = book.Meta.DateModified
-			return testutil.WrapBook(&updated), nil
+			return util.WrapBook(&updated), nil
 		},
 	}
 	reg := registry.NewBookRegistry(f, lib)
@@ -85,7 +85,7 @@ func TestRegistryEditAuthorsRehomesInByAuthor(t *testing.T) {
 	allBooks := views.NewAllBooksDir(reg)
 	byAuthor := views.NewByAuthorDir(reg)
 
-	reg.Add(testutil.WrapBook(book))
+	reg.Add(util.WrapBook(book))
 
 	writeField(t, fstest.ChildAs[fs.Dir](t, allBooks, "Test"), "authors", "Bob")
 
@@ -98,21 +98,21 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 	book := makeBook(1, "Test", "Author1")
 	book.EpubPath = "Test.epub"
 	book.Meta.Status = "unread"
-	lib := libtest.Editor{
+	lib := mock.Editor{
 		EditFn: func(id int64, e library.Edits) (*library.Book, error) {
 			updated := *book
 			if e.Status != nil {
 				updated.Meta.Status = *e.Status
 			}
 			updated.Meta.DateModified = book.Meta.DateModified
-			return testutil.WrapBook(&updated), nil
+			return util.WrapBook(&updated), nil
 		},
 	}
 	reg := registry.NewBookRegistry(f, lib)
 	allBooks := views.NewAllBooksDir(reg)
-	readerDir := views.NewReaderDir(reg, libtest.Exporter{StatusList: []string{"reading"}})
+	readerDir := views.NewReaderDir(reg, mock.Exporter{StatusList: []string{"reading"}})
 
-	reg.Add(testutil.WrapBook(book))
+	reg.Add(util.WrapBook(book))
 
 	// Reader view should not show the book when status is "unread".
 	fstest.ChildCount(t, readerDir, 0)

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ramblingenzyme/ebookfs/internal/epubtest"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/epubtest"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
 )
 

@@ -1,4 +1,4 @@
-// Package testutil provides helpers shared by tests across the module. It is
+// Package util provides helpers shared by tests across the module. It is
 // imported only from _test.go files, so it is never linked into the binary.
 //
 // This package deliberately does NOT import library: library's own internal
@@ -6,7 +6,7 @@
 // library import here would create a test-time import cycle. A double for a
 // library interface lives in the package whose tests use it, which keeps it as
 // narrow as that package's dependency.
-package testutil
+package util
 
 import (
 	"errors"

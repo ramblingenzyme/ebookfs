@@ -13,7 +13,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
@@ -21,7 +21,7 @@ import (
 // returns it with every book in it, which is the set the Go matcher filters.
 func parityBooks(t *testing.T, books [][2]string) (*library.Library, []*library.Book) {
 	t.Helper()
-	lib, err := library.Open(library.Config(testutil.TestConfig(t)))
+	lib, err := library.Open(library.Config(util.TestConfig(t)))
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -32,7 +32,7 @@ func parityBooks(t *testing.T, books [][2]string) (*library.Library, []*library.
 		if err != nil {
 			t.Fatalf("CreateIngest: %v", err)
 		}
-		if _, err := h.WriteAt(testutil.BuildTestEpub(t, b[0], b[1]), 0); err != nil {
+		if _, err := h.WriteAt(util.BuildTestEpub(t, b[0], b[1]), 0); err != nil {
 			t.Fatalf("WriteAt: %v", err)
 		}
 		if _, err := h.Ingest(); err != nil {

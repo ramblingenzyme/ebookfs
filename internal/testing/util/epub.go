@@ -1,4 +1,4 @@
-package testutil
+package util
 
 import (
 	"archive/zip"
@@ -32,6 +32,7 @@ func BuildTestEpub(t testing.TB, title string, authors ...string) []byte {
 		creatorEls.WriteString(fmt.Sprintf("    <dc:creator id=\"c%d\">%s</dc:creator>\n", i+1, a))
 	}
 
+	//goland:noinspection HttpUrlsUsage
 	files := map[string]string{
 		"META-INF/container.xml": `<?xml version="1.0"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">

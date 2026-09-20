@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
 )
 
@@ -53,4 +53,4 @@ func newTestCache(t *testing.T, body string) (*Cache, string) {
 	return c, dir
 }
 
-var makeBook = testutil.MakeMutableBook
+var makeBook = util.MakeMutableBook

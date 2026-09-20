@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ramblingenzyme/ebookfs/internal/fstest"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 )
 
 func TestRegistryAddAndRemove(t *testing.T) {
@@ -28,7 +28,7 @@ func TestRegistryAddAndRemove(t *testing.T) {
 func TestRegistryRemoveUnknownID(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
-	reg.Add(testutil.MakeBook(1, "Kept", "Author"))
+	reg.Add(util.MakeBook(1, "Kept", "Author"))
 
 	reg.Remove(999)
 
@@ -55,8 +55,8 @@ func TestBooksDirMultipleBooks(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
 
-	reg.Add(testutil.MakeBook(1, "Alpha", "Author"))
-	reg.Add(testutil.MakeBook(2, "Beta", "Author"))
+	reg.Add(util.MakeBook(1, "Alpha", "Author"))
+	reg.Add(util.MakeBook(2, "Beta", "Author"))
 
 	fstest.ChildCount(t, d, 2)
 }
@@ -65,8 +65,8 @@ func TestBooksDirRemoveOnlyOne(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
 
-	reg.Add(testutil.MakeBook(1, "Keep", "Author"))
-	reg.Add(testutil.MakeBook(2, "Remove", "Author"))
+	reg.Add(util.MakeBook(1, "Keep", "Author"))
+	reg.Add(util.MakeBook(2, "Remove", "Author"))
 
 	reg.Remove(2)
 
@@ -82,7 +82,7 @@ func TestBooksDirSlashInTitleIsOneEntry(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
 
-	reg.Add(testutil.MakeBook(1, "Either/Or", "Author"))
+	reg.Add(util.MakeBook(1, "Either/Or", "Author"))
 
 	children := fstest.ChildNames(d)
 	if len(children) != 1 {

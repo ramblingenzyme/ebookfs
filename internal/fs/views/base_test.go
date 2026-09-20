@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/knusbaum/go9p/proto"
-	"github.com/ramblingenzyme/ebookfs/internal/fstest"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
 )
 
 func TestPruneEmptyNoOpForMissingChild(t *testing.T) {

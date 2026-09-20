@@ -4,19 +4,19 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 
 	"github.com/knusbaum/go9p/proto"
-	"github.com/ramblingenzyme/ebookfs/internal/fstest"
-	"github.com/ramblingenzyme/ebookfs/internal/libtest"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 )
 
 func testReaderFile(t *testing.T, exp Renderer) *ReaderFile {
 	t.Helper()
-	f := testutil.NewTestFS(t)
-	book := testutil.MakeBook(1, "Test", "Author")
-	return NewReaderFile(newStat(f, "test.epub", 0444), exp, testutil.Fixed(book))
+	f := util.NewTestFS(t)
+	book := util.MakeBook(1, "Test", "Author")
+	return NewReaderFile(newStat(f, "test.epub", 0444), exp, util.Fixed(book))
 }
 
 // readerFile's own surface, on top of the readAtFile semantics its base test
@@ -24,9 +24,9 @@ func testReaderFile(t *testing.T, exp Renderer) *ReaderFile {
 // Stat.
 
 func TestReaderFileOpenRead(t *testing.T) {
-	rf := testReaderFile(t, libtest.Renderer{
+	rf := testReaderFile(t, mock.Renderer{
 		OpenFn: func(b *library.Book) (library.EpubReader, error) {
-			return &libtest.EpubReader{Reader: bytes.NewReader([]byte("hello epub"))}, nil
+			return &mock.EpubReader{Reader: bytes.NewReader([]byte("hello epub"))}, nil
 		},
 	})
 
@@ -38,7 +38,7 @@ func TestReaderFileOpenRead(t *testing.T) {
 }
 
 func TestReaderFileStatReportsSize(t *testing.T) {
-	rf := testReaderFile(t, libtest.Renderer{
+	rf := testReaderFile(t, mock.Renderer{
 		SizeFn: func(b *library.Book) (int64, bool) { return 42, true },
 	})
 
@@ -49,7 +49,7 @@ func TestReaderFileStatReportsSize(t *testing.T) {
 }
 
 func TestReaderFileStatFallbackToZero(t *testing.T) {
-	rf := testReaderFile(t, libtest.Renderer{
+	rf := testReaderFile(t, mock.Renderer{
 		SizeFn: func(b *library.Book) (int64, bool) { return 0, false },
 	})
 

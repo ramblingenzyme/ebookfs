@@ -5,12 +5,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 
 	"github.com/knusbaum/go9p/proto"
-	"github.com/ramblingenzyme/ebookfs/internal/fstest"
-	"github.com/ramblingenzyme/ebookfs/internal/libtest"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 )
 
 // epubFile's own surface, on top of the readAtFile semantics its base test
@@ -19,16 +19,16 @@ import (
 
 func newTestEpubFile(t *testing.T, name string, lib ContentReader, get func() *library.Book) *epubFile {
 	t.Helper()
-	return newEpubFile(newStat(testutil.NewTestFS(t), name, 0444), lib, get)
+	return newEpubFile(newStat(util.NewTestFS(t), name, 0444), lib, get)
 }
 
 func TestEpubFileOpenRead(t *testing.T) {
-	lib := libtest.ContentReader{
+	lib := mock.ContentReader{
 		ContentFn: func(_ int64) (library.EpubReader, error) {
-			return &libtest.EpubReader{Reader: bytes.NewReader([]byte("epub content"))}, nil
+			return &mock.EpubReader{Reader: bytes.NewReader([]byte("epub content"))}, nil
 		},
 	}
-	ef := newTestEpubFile(t, "test.epub", lib, testutil.Fixed(testutil.MakeBook(1, "Test", "Author")))
+	ef := newTestEpubFile(t, "test.epub", lib, util.Fixed(util.MakeBook(1, "Test", "Author")))
 
 	fid := fstest.Fid(t, ef, 1)
 	if got := fid.Get(proto.Mode(0), 20); got != "epub content" {
@@ -38,9 +38,9 @@ func TestEpubFileOpenRead(t *testing.T) {
 }
 
 func TestEpubFileStatSize(t *testing.T) {
-	book := testutil.MakeMutableBook(1, "Test", "Author")
+	book := util.MakeMutableBook(1, "Test", "Author")
 	book.EpubPath = "/nonexistent/test.epub"
-	ef := newTestEpubFile(t, "test.epub", libtest.ContentReader{}, testutil.Fixed(testutil.WrapBook(book)))
+	ef := newTestEpubFile(t, "test.epub", mock.ContentReader{}, util.Fixed(util.WrapBook(book)))
 
 	s := ef.Stat()
 	if s.Name != "test.epub" {
@@ -53,7 +53,7 @@ func TestEpubFileStatSize(t *testing.T) {
 }
 
 func TestEpubFileStatNilBook(t *testing.T) {
-	ef := newTestEpubFile(t, "test.epub", libtest.ContentReader{}, func() *library.Book { return nil })
+	ef := newTestEpubFile(t, "test.epub", mock.ContentReader{}, func() *library.Book { return nil })
 
 	s := ef.Stat()
 	if s.Name != "test.epub" {
@@ -71,11 +71,11 @@ func TestEpubFileStatWithRealFile(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	book := testutil.MakeMutableBook(1, "Test", "Author")
+	book := util.MakeMutableBook(1, "Test", "Author")
 	book.EpubPath = path
 	book.EpubSize = int64(len(content))
 
-	ef := newTestEpubFile(t, "book.epub", libtest.ContentReader{}, testutil.Fixed(testutil.WrapBook(book)))
+	ef := newTestEpubFile(t, "book.epub", mock.ContentReader{}, util.Fixed(util.WrapBook(book)))
 
 	s := ef.Stat()
 	if s.Name != "book.epub" {

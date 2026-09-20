@@ -3,16 +3,16 @@ package views
 import (
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
 )
 
 var (
-	makeBook  = testutil.MakeMutableBook
-	newTestFS = testutil.NewTestFS
-	wrapBook  = testutil.WrapBook
+	makeBook  = util.MakeMutableBook
+	newTestFS = util.NewTestFS
+	wrapBook  = util.WrapBook
 )
 
 func makeBookWithSeries(id int64, title, author string, seriesName, seriesIndex string) *library.Book {

@@ -5,17 +5,17 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 )
 
 func buildTestEpub(t *testing.T, title string, authors ...string) []byte {
 	t.Helper()
-	return testutil.BuildTestEpub(t, title, authors...)
+	return util.BuildTestEpub(t, title, authors...)
 }
 
 func testConfig(t *testing.T) Config {
 	t.Helper()
-	return Config(testutil.TestConfig(t))
+	return Config(util.TestConfig(t))
 }
 
 func openTestLibrary(t *testing.T) *Library {

@@ -29,14 +29,14 @@ import (
 	"github.com/knusbaum/go9p"
 	"github.com/knusbaum/go9p/client"
 	"github.com/knusbaum/go9p/proto"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
 func startTestServer(t *testing.T) (addr string) {
 	t.Helper()
 
-	cfg := library.Config(testutil.TestConfig(t))
+	cfg := library.Config(util.TestConfig(t))
 	lib, err := library.Open(cfg)
 	if err != nil {
 		t.Fatalf("Open library: %v", err)
@@ -86,7 +86,7 @@ func TestE2E_CorePath(t *testing.T) {
 	addr := startTestServer(t)
 	c := connectClient(t, addr)
 
-	epubData := testutil.BuildTestEpub(t, "Test Book", "Alice Author")
+	epubData := util.BuildTestEpub(t, "Test Book", "Alice Author")
 
 	t.Run("ingest", func(t *testing.T) {
 		f, err := c.Create("/inbox/Test Book.epub", 0644)

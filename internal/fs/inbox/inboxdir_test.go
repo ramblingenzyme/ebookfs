@@ -6,13 +6,13 @@ import (
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
-	"github.com/ramblingenzyme/ebookfs/internal/libtest"
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 )
 
 func TestNewInboxDir(t *testing.T) {
-	f := testutil.NewTestFS(t)
-	d := NewInboxDir(f, libtest.Ingester{}, nil)
+	f := util.NewTestFS(t)
+	d := NewInboxDir(f, mock.Ingester{}, nil)
 
 	s := d.Stat()
 	if s.Name != "inbox" {
@@ -24,7 +24,7 @@ func TestNewInboxDir(t *testing.T) {
 }
 
 func TestInboxCreateFile_WrongParent(t *testing.T) {
-	f := testutil.NewTestFS(t)
+	f := util.NewTestFS(t)
 
 	// Pass a plain StaticDir (no Creator implementation) as the parent.
 	parent := fs.NewStaticDir(newStat(f, "wrong", 0755|proto.DMDIR))

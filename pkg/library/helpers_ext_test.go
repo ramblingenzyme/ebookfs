@@ -11,20 +11,20 @@ package library_test
 import (
 	"testing"
 
-	"github.com/ramblingenzyme/ebookfs/internal/testutil"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-var makeBook = testutil.MakeMutableBook
+var makeBook = util.MakeMutableBook
 
 func buildTestEpub(t *testing.T, title string, authors ...string) []byte {
 	t.Helper()
-	return testutil.BuildTestEpub(t, title, authors...)
+	return util.BuildTestEpub(t, title, authors...)
 }
 
 func testConfig(t *testing.T) library.Config {
 	t.Helper()
-	return library.Config(testutil.TestConfig(t))
+	return library.Config(util.TestConfig(t))
 }
 
 func openTestLibrary(t *testing.T) *library.Library {
