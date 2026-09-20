@@ -117,6 +117,7 @@ func assertSettlesClean(t *testing.T, cfg Config) {
 // rule). The white-box tests need it, since reindex_test.go reaches lib.index
 // and storeDrifted.
 func ingestTestEpub(t *testing.T, lib *Library, data []byte) *Book {
+	//goland:noinspection DuplicatedCode
 	t.Helper()
 	h, err := lib.CreateIngest()
 	if err != nil {
