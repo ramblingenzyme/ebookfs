@@ -174,14 +174,14 @@ type searchHandleDir struct {
 func newSearchHandleDir(f *fs.FS, id int64, reg *registry.BookRegistry, search *searchDir) *searchHandleDir {
 	idStr := strconv.FormatInt(id, 10)
 	d := &searchHandleDir{
-		StaticDir:     fs.NewStaticDir(newStat(f, idStr, 0555|proto.DMDIR)),
+		StaticDir:     fs.NewStaticDir(newDirStat(f, idStr)),
 		id:            id,
 		reg:           reg,
 		search:        search,
 		lastQueryTime: time.Now(),
 	}
 
-	resultsStat := newStat(f, "results", 0555|proto.DMDIR)
+	resultsStat := newDirStat(f, "results")
 	d.results = newSearchResultsDir(resultsStat)
 	d.StaticDir.AddChild(d.results)
 
@@ -293,7 +293,7 @@ type searchDir struct {
 
 func NewSearchDir(f *fs.FS, reg *registry.BookRegistry, ttl time.Duration, maxHandles int) *searchDir {
 	d := &searchDir{
-		StaticDir:   fs.NewStaticDir(newStat(f, "search", 0555|proto.DMDIR)),
+		StaticDir:   fs.NewStaticDir(newDirStat(f, "search")),
 		f:           f,
 		reg:         reg,
 		handles:     make(map[int64]*searchHandleDir),

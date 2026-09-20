@@ -3,7 +3,6 @@ package views
 import (
 	"slices"
 
-	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 )
@@ -37,7 +36,7 @@ type recentDir struct {
 
 func NewRecentDir(reg *registry.BookRegistry) *recentDir {
 	d := &recentDir{
-		bookListDir: newBookListDir(newStat(reg.FS(), "recent", 0555|proto.DMDIR)),
+		bookListDir: newBookListDir(newDirStat(reg.FS(), "recent")),
 		visible:     make(map[int64]*book.BookDir),
 	}
 	reg.AddView(d)

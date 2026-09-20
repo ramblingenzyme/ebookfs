@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"sync/atomic"
 
-	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/naming"
@@ -41,7 +40,7 @@ func (d *byIDDir) Add(dir *book.BookDir) {
 	}
 	n := &namedBookDir{
 		BookDir:  dir,
-		baseStat: *newStat(d.f, "", 0555|proto.DMDIR),
+		baseStat: *newDirStat(d.f, ""),
 		name:     func(b *library.Book) string { return idEntryName(b, int(d.pad.Load())) },
 	}
 	d.StaticDir.AddChild(n)

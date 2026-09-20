@@ -26,8 +26,10 @@ func TestNewInboxDir(t *testing.T) {
 func TestInboxCreateFile_WrongParent(t *testing.T) {
 	f := util.NewTestFS(t)
 
-	// Pass a plain StaticDir (no Creator implementation) as the parent.
-	parent := fs.NewStaticDir(newStat(f, "wrong", 0755|proto.DMDIR))
+	// A plain StaticDir implements no Creator. Built with the mode that marks a
+	// directory as accepting creates, so this also pins that DispatchCreate
+	// decides on the type and never on the permission bits.
+	parent := fs.NewStaticDir(newStat(f, "wrong", creatableDir))
 	_, err := vfile.DispatchCreate(f, parent, "glenda", "test.epub", 0644, 0)
 	if err == nil {
 		t.Fatal("expected error for non-creatable parent")

@@ -10,9 +10,10 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// newStat is the package-local shorthand for vfile.NewStat, the single
-// definition of the glenda/glenda owner convention every node uses.
-var newStat = vfile.NewStat
+var (
+	newStat    = vfile.NewStat
+	newDirStat = vfile.NewDirStat
+)
 
 // namedBookDir wraps a shared *book.BookDir to present it under a name other than its
 // title (by-id, by-series). The name is recomputed live from the book, so a
@@ -42,7 +43,7 @@ type groupingDir struct {
 
 func newGroupingDir(f *fs.FS, name string) groupingDir {
 	return groupingDir{
-		StaticDir: fs.NewStaticDir(newStat(f, name, 0555|proto.DMDIR)),
+		StaticDir: fs.NewStaticDir(newDirStat(f, name)),
 		f:         f,
 	}
 }
@@ -65,7 +66,7 @@ func (g *groupingDir) childDir(name string, factory func(*proto.Stat) fs.FSNode)
 	if child, ok := g.Children()[name]; ok {
 		return child
 	}
-	ad := factory(newStat(g.f, name, 0555|proto.DMDIR))
+	ad := factory(newDirStat(g.f, name))
 	g.StaticDir.AddChild(ad)
 	return ad
 }

@@ -22,9 +22,10 @@ type ContentReader interface {
 	Content(id int64) (library.EpubReader, error)
 }
 
-// newStat is the package-local shorthand for vfile.NewStat, the single
-// definition of the glenda/glenda owner convention every node uses.
-var newStat = vfile.NewStat
+var (
+	newStat    = vfile.NewStat
+	newDirStat = vfile.NewDirStat
+)
 
 // BookDir is the stable directory identity for one book. The book's state is
 // held as an atomically swapped snapshot: 9P handlers run on many goroutines
@@ -66,7 +67,7 @@ func (d *BookDir) Stat() proto.Stat {
 // than the registry itself, so this package stays a leaf below the registry.
 func NewBookDir(f *fs.FS, lib ContentReader, edit func(int64, library.Edits) error, book *library.Book) *BookDir {
 	d := &BookDir{
-		StaticDir: *fs.NewStaticDir(newStat(f, naming.PathSafe(book.Title()), 0755|proto.DMDIR)),
+		StaticDir: *fs.NewStaticDir(newDirStat(f, naming.PathSafe(book.Title()))),
 	}
 	d.book.Store(book)
 

@@ -67,7 +67,7 @@ func newSeriesBookListDir(stat *proto.Stat, f *fs.FS) *seriesBookListDir {
 func (s *seriesBookListDir) Add(dir *book.BookDir) {
 	n := &namedBookDir{
 		BookDir:  dir,
-		baseStat: *newStat(s.f, "", 0555|proto.DMDIR),
+		baseStat: *newDirStat(s.f, ""),
 		name:     func(b *library.Book) string { return seriesEntryName(b, s.pad.Load()) },
 	}
 	s.children[dir.Book().ID()] = n

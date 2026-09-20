@@ -9,7 +9,6 @@ import (
 	"log/slog"
 
 	"github.com/knusbaum/go9p/fs"
-	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
@@ -20,9 +19,10 @@ type Ingester interface {
 	CreateIngest() (library.IngestHandle, error)
 }
 
-// newStat is the package-local shorthand for vfile.NewStat, the single
-// definition of the glenda/glenda owner convention every node uses.
 var newStat = vfile.NewStat
+
+// creatableDir is the mode inbox alone carries; vfile says why.
+const creatableDir = vfile.CreatableDir
 
 type InboxDir struct {
 	fs.StaticDir
@@ -32,7 +32,7 @@ type InboxDir struct {
 
 func NewInboxDir(f *fs.FS, lib Ingester, onIngest func(*library.Book)) *InboxDir {
 	return &InboxDir{
-		StaticDir: *fs.NewStaticDir(newStat(f, "inbox", 0755|proto.DMDIR)),
+		StaticDir: *fs.NewStaticDir(newStat(f, "inbox", creatableDir)),
 		lib:       lib,
 		onIngest:  onIngest,
 	}
