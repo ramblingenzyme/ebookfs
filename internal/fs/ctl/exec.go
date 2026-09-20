@@ -61,14 +61,9 @@ func addTag(args []string, lib SearchDeleter, reg *registry.BookRegistry) string
 	if len(args) != 2 {
 		return "usage: add-tag <tag> <id-spec>"
 	}
-	tag, spec := args[0], args[1]
+	tag := args[0]
 
-	query, err := parseSelection(spec)
-	if err != nil {
-		return fmt.Sprintf("error: %v", err)
-	}
-
-	return editSelection(query, lib, reg, func(b *library.Book) *library.Edits {
+	return editSpec("edited", args[1], lib, reg, func(b *library.Book) *library.Edits {
 		if slices.Contains(b.Tags(), tag) {
 			return nil // already has tag
 		}
@@ -81,14 +76,9 @@ func removeTag(args []string, lib SearchDeleter, reg *registry.BookRegistry) str
 	if len(args) != 2 {
 		return "usage: remove-tag <tag> <id-spec>"
 	}
-	tag, spec := args[0], args[1]
+	tag := args[0]
 
-	query, err := parseSelection(spec)
-	if err != nil {
-		return fmt.Sprintf("error: %v", err)
-	}
-
-	return editSelection(query, lib, reg, func(b *library.Book) *library.Edits {
+	return editSpec("edited", args[1], lib, reg, func(b *library.Book) *library.Edits {
 		if !slices.Contains(b.Tags(), tag) {
 			return nil // doesn't have tag
 		}
@@ -103,14 +93,9 @@ func setStatus(args []string, lib SearchDeleter, reg *registry.BookRegistry) str
 	if len(args) != 2 {
 		return "usage: set-status <status> <id-spec>"
 	}
-	status, spec := args[0], args[1]
+	status := args[0]
 
-	query, err := parseSelection(spec)
-	if err != nil {
-		return fmt.Sprintf("error: %v", err)
-	}
-
-	return editSelection(query, lib, reg, func(b *library.Book) *library.Edits {
+	return editSpec("edited", args[1], lib, reg, func(b *library.Book) *library.Edits {
 		if b.Status() == status {
 			return nil
 		}
@@ -122,19 +107,12 @@ func setRating(args []string, lib SearchDeleter, reg *registry.BookRegistry) str
 	if len(args) != 2 {
 		return "usage: set-rating <rating> <id-spec>"
 	}
-	raw, spec := args[0], args[1]
-
-	rating, err := strconv.ParseFloat(raw, 64)
+	rating, err := strconv.ParseFloat(args[0], 64)
 	if err != nil {
-		return fmt.Sprintf("error: invalid rating %q", raw)
+		return fmt.Sprintf("error: invalid rating %q", args[0])
 	}
 
-	query, err := parseSelection(spec)
-	if err != nil {
-		return fmt.Sprintf("error: %v", err)
-	}
-
-	return editSelection(query, lib, reg, func(b *library.Book) *library.Edits {
+	return editSpec("edited", args[1], lib, reg, func(b *library.Book) *library.Edits {
 		if b.Rating() == rating {
 			return nil
 		}
@@ -172,60 +150,33 @@ func renameTag(args []string, lib SearchDeleter, reg *registry.BookRegistry) str
 	}
 	old, curr := args[0], args[1]
 
-	books, err := lib.Search(library.Query{Tags: []string{old}})
-	if err != nil {
-		return fmt.Sprintf("error: query failed: %v", err)
-	}
-
-	var affected int64
-	var errs []string
-
-	for _, b := range books {
-		var updated []string
-		if slices.Contains(b.Tags(), curr) {
-			// Book already has the new tag; just remove the old one.
-			updated = slices.DeleteFunc(slices.Clone(b.Tags()), func(t string) bool {
-				return t == old
-			})
+	return editSelection("renamed", library.Query{Tags: []string{old}}, lib, reg, func(b *library.Book) *library.Edits {
+		updated := slices.Clone(b.Tags())
+		if slices.Contains(updated, curr) {
+			updated = slices.DeleteFunc(updated, func(t string) bool { return t == old })
 		} else {
-			updated = slices.Clone(b.Tags())
 			for i, t := range updated {
 				if t == old {
 					updated[i] = curr
 				}
 			}
 		}
-		if err := reg.Edit(b.ID(), library.Edits{Tags: &updated}); err != nil {
-			errs = append(errs, fmt.Sprintf("book %d: %v", b.ID(), err))
-		} else {
-			affected++
-		}
-	}
-
-	return formatResult("renamed", affected, 0, errs)
+		return &library.Edits{Tags: &updated}
+	})
 }
 
 func renameAuthor(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
 	if len(args) != 2 {
 		return "usage: rename-author <old> <new>"
 	}
-	old, rawNew := args[0], args[1]
+	old := args[0]
 
-	// Parse new author (supports "Name | Sort" format).
-	newAuthor := textfmt.ParseAuthor(rawNew)
+	newAuthor := textfmt.ParseAuthor(args[1])
 	if newAuthor.Name == "" {
 		return "error: new author name must not be empty"
 	}
 
-	books, err := lib.Search(library.Query{Authors: []string{old}})
-	if err != nil {
-		return fmt.Sprintf("error: query failed: %v", err)
-	}
-
-	var affected int64
-	var errs []string
-
-	for _, b := range books {
+	return editSelection("renamed", library.Query{Authors: []string{old}}, lib, reg, func(b *library.Book) *library.Edits {
 		matched := false
 		updated := slices.Clone(b.Authors())
 		for i, a := range updated {
@@ -234,8 +185,11 @@ func renameAuthor(args []string, lib SearchDeleter, reg *registry.BookRegistry) 
 				matched = true
 			}
 		}
+		// The query matched on name or sort name and so does this, so a book
+		// reaching here without a match means the index disagrees with the
+		// snapshot. Counted as skipped rather than silently passed over.
 		if !matched {
-			continue
+			return nil
 		}
 		// Renaming onto an author the book already has (or renaming two of its
 		// authors to the same person) would duplicate that author; dedupe so the
@@ -244,14 +198,8 @@ func renameAuthor(args []string, lib SearchDeleter, reg *registry.BookRegistry) 
 		// strictly implies, but harmless: only books the rename matched are
 		// rewritten at all.
 		updated = dedupeAuthors(updated)
-		if err := reg.Edit(b.ID(), library.Edits{Authors: &updated}); err != nil {
-			errs = append(errs, fmt.Sprintf("book %d: %v", b.ID(), err))
-		} else {
-			affected++
-		}
-	}
-
-	return formatResult("renamed", affected, 0, errs)
+		return &library.Edits{Authors: &updated}
+	})
 }
 
 func renameSeries(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
@@ -260,23 +208,9 @@ func renameSeries(args []string, lib SearchDeleter, reg *registry.BookRegistry) 
 	}
 	old, curr := args[0], args[1]
 
-	books, err := lib.Search(library.Query{Series: []string{old}})
-	if err != nil {
-		return fmt.Sprintf("error: query failed: %v", err)
-	}
-
-	var affected int64
-	var errs []string
-
-	for _, b := range books {
-		if err := reg.Edit(b.ID(), library.Edits{Series: &curr}); err != nil {
-			errs = append(errs, fmt.Sprintf("book %d: %v", b.ID(), err))
-		} else {
-			affected++
-		}
-	}
-
-	return formatResult("renamed", affected, 0, errs)
+	return editSelection("renamed", library.Query{Series: []string{old}}, lib, reg, func(*library.Book) *library.Edits {
+		return &library.Edits{Series: &curr}
+	})
 }
 
 // --- helpers ---
@@ -304,12 +238,26 @@ func dedupeAuthors(authors []library.Author) []library.Author {
 	return out
 }
 
-// editSelection applies editFn to each book the selection addresses. It runs one
-// library.Search(query) rather than hydrating the whole library to filter it
-// down. When the query is a bare id list, an id naming no book is reported (so
-// a typo isn't counted as success) and a duplicated id is collapsed to a single
-// visit; otherwise every returned book is visited.
-func editSelection(query library.Query, lib SearchDeleter, reg *registry.BookRegistry, editFn func(*library.Book) *library.Edits) string {
+// editSpec is editSelection for a command that names its books with an id-spec
+// rather than building the query itself.
+func editSpec(op, spec string, lib SearchDeleter, reg *registry.BookRegistry, editFn func(*library.Book) *library.Edits) string {
+	query, err := parseSelection(spec)
+	if err != nil {
+		return fmt.Sprintf("error: %v", err)
+	}
+	return editSelection(op, query, lib, reg, editFn)
+}
+
+// editSelection applies editFn to each book the selection addresses, reporting
+// the result as op. An editFn returning nil leaves the book alone and counts it
+// as skipped, which is how a command says the book is already in the state it
+// asked for.
+//
+// It runs one library.Search(query) rather than hydrating the whole library to
+// filter it down. When the query is a bare id list, an id naming no book is
+// reported (so a typo isn't counted as success) and a duplicated id is
+// collapsed to a single visit; otherwise every returned book is visited.
+func editSelection(op string, query library.Query, lib SearchDeleter, reg *registry.BookRegistry, editFn func(*library.Book) *library.Edits) string {
 	books, err := lib.Search(query)
 	if err != nil {
 		return fmt.Sprintf("error: query failed: %v", err)
@@ -359,7 +307,7 @@ func editSelection(query library.Query, lib SearchDeleter, reg *registry.BookReg
 		}
 	}
 
-	return formatResult("edited", affected, skipped, errs)
+	return formatResult(op, affected, skipped, errs)
 }
 
 func formatResult(op string, affected, skipped int64, errs []string) string {

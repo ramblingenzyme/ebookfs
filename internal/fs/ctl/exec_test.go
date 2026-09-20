@@ -347,6 +347,36 @@ func TestRenameAuthorMatchSortName(t *testing.T) {
 	}
 }
 
+// rename-author re-checks the match against the snapshot the search returned,
+// so a book the index credits to old but whose snapshot does not is reported
+// rather than passed over. Routing the renames through editSelection is what
+// gives it somewhere to be reported: before, an unmatched book was skipped by a
+// bare continue and the result claimed nothing had happened at all.
+func TestRenameAuthorReportsABookTheSnapshotDoesNotMatch(t *testing.T) {
+	book := util.MakeMutableBook(1, "Foundation", "Someone Else")
+
+	search := mock.SearchDeleter{
+		SearchFn: func(library.Query) ([]*library.Book, error) {
+			return []*library.Book{util.WrapBook(book)}, nil
+		},
+	}
+	edit := mock.Editor{
+		EditFn: func(int64, library.Edits) (*library.Book, error) {
+			t.Fatal("no book matched, so none should be edited")
+			return nil, nil
+		},
+	}
+
+	reg, cmdLog := newTestCtl(t, edit)
+	reg.Add(util.WrapBook(book))
+
+	result := execute(`rename-author "Isaac Asimov" "I. Asimov"`, search, reg, cmdLog)
+	const want = "ok: no books renamed\n1 skipped"
+	if result != want {
+		t.Errorf("result = %q, want %q", result, want)
+	}
+}
+
 // Renaming an author onto one the book already carries must collapse to a
 // single author rather than duplicate it.
 func TestRenameAuthorMerge(t *testing.T) {
