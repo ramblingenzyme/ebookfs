@@ -44,6 +44,7 @@ func TestReaderClosedContract(t *testing.T) {
 		t.Fatalf("first Close: %v", err)
 	}
 
+	//goland:noinspection DuplicatedCode
 	for _, tc := range []struct {
 		name string
 		call func() error

@@ -11,8 +11,8 @@ import (
 )
 
 func (idx *Index) queryBooks(q *bookQuery) ([]*book.Book, error) {
-	sql, args := q.sql()
-	rows, err := idx.readDB.QueryContext(idx.ctx, sql, args...)
+	query, args := q.sql()
+	rows, err := idx.readDB.QueryContext(idx.ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

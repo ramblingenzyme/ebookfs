@@ -544,6 +544,7 @@ func TestEPUB3CreatorWithALegacySortNameTakesTheEdit(t *testing.T) {
 		`xmlns:dc="http://purl.org/dc/elements/1.1/"`,
 		`xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf"`, 1))
 
+	//goland:noinspection DuplicatedCode
 	path := epubtest.Build(t, opf)
 	authors := []epub.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
 	if _, err := save(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
@@ -576,6 +577,7 @@ func TestEPUB3CreatorWithALegacySortNameTakesTheEdit(t *testing.T) {
 func TestUnprefixedFileAsIsUpdatedNotDuplicated(t *testing.T) {
 	opf := epubtest.EPUB2(`    <dc:creator opf:role="aut" file-as="Stale, Name">Ann Rand</dc:creator>`)
 
+	//goland:noinspection DuplicatedCode
 	path := epubtest.Build(t, opf)
 	authors := []epub.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
 	if _, err := save(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
@@ -1316,6 +1318,7 @@ func TestSaveAllowsFontObfuscation(t *testing.T) {
 
 func TestSetCoverReplacesTheImage(t *testing.T) {
 	path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
+	//goland:noinspection DuplicatedCode
 	newCover := tinyJPEG(t)
 	if _, err := setCover(t, path, newCover); err != nil {
 		t.Fatal(err)

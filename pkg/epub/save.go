@@ -302,6 +302,8 @@ func (b *Book) rewrite(replace map[string][]byte) error {
 	defer tmp.Close()
 
 	zw := zip.NewWriter(tmp)
+	defer zw.Close()
+
 	if err := b.a.writeTo(zw, replace); err != nil {
 		return err
 	}
@@ -322,6 +324,8 @@ func (b *Book) rewrite(replace map[string][]byte) error {
 	if err != nil {
 		return fmt.Errorf("rewritten epub failed validation: %w", err)
 	}
+	defer next.Close()
+
 	if err := os.Rename(tmpPath, b.path); err != nil {
 		next.Close()
 		return err

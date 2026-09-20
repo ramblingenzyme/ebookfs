@@ -239,7 +239,7 @@ type cloneFile struct {
 	handles map[uint64]int64
 }
 
-func (f *cloneFile) Open(fid uint64, mode proto.Mode) error {
+func (f *cloneFile) Open(fid uint64, _ proto.Mode) error {
 	f.Lock()
 	if _, exists := f.handles[fid]; !exists {
 		f.handles[fid] = 0

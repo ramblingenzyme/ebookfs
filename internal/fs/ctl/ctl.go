@@ -36,7 +36,7 @@ func NewCtlFile(f *fs.FS, lib SearchDeleter, reg *registry.BookRegistry, cmdLog 
 }
 
 // Read returns a short usage hint; command results live in the log file.
-func (f *CtlFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error) {
+func (f *CtlFile) Read(_ uint64, offset uint64, count uint64) ([]byte, error) {
 	return vfile.ClampRead([]byte(ctlReadHint), offset, count), nil
 }
 

@@ -15,6 +15,7 @@ type opfFile struct {
 }
 
 func newOPFFile(stat *proto.Stat, lib ContentReader, book func() *library.Book) *opfFile {
+	//goland:noinspection DuplicatedCode
 	return &opfFile{
 		SnapshotFile: vfile.NewSnapshotFile(stat, func() ([]byte, error) {
 			if lib == nil {

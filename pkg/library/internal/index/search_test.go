@@ -490,14 +490,14 @@ func TestQueryRecentOrder(t *testing.T) {
 		book.Meta{ID: 1},
 		book.Location{EpubPath: "A/Old (1)/book.epub"},
 	)
-	new := book.NewBook(
+	curr := book.NewBook(
 		book.Bib{Title: "New", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
 		book.Meta{ID: 2},
 		book.Location{EpubPath: "A/New (2)/book.epub"},
 	)
 
 	storeInIndex(t, idx, old)
-	storeInIndex(t, idx, new)
+	storeInIndex(t, idx, curr)
 
 	got, err := idx.Search(Query{Order: OrderDateAdded})
 	if err != nil {

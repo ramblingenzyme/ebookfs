@@ -81,12 +81,12 @@ type PackageDoc string
 // With splices metadata in before </metadata>, so a test varying one <meta> on a
 // complete fixture does not restate the whole document.
 func (d PackageDoc) With(parts ...string) PackageDoc {
-	const close = "  </metadata>"
-	before, after, ok := strings.Cut(string(d), close)
+	const closeTag = "  </metadata>"
+	before, after, ok := strings.Cut(string(d), closeTag)
 	if !ok {
 		panic("package document has no </metadata>")
 	}
-	return PackageDoc(before + strings.Join(parts, "\n") + "\n" + close + after)
+	return PackageDoc(before + strings.Join(parts, "\n") + "\n" + closeTag + after)
 }
 
 // Pkg is a package document described by its parts. Every field but Meta has a

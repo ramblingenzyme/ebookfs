@@ -15,7 +15,7 @@ type Creator interface {
 
 // DispatchCreate is the fs.FS.CreateFile handler: it delegates to the parent
 // directory when it implements Creator and rejects the create otherwise.
-func DispatchCreate(f *fs.FS, parent fs.Dir, user, name string, perm uint32, mode uint8) (fs.File, error) {
+func DispatchCreate(f *fs.FS, parent fs.Dir, _, name string, perm uint32, mode uint8) (fs.File, error) {
 	c, ok := parent.(Creator)
 	if !ok {
 		return nil, errors.New("cannot create files here")

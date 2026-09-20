@@ -171,7 +171,7 @@ func renameTag(args []string, lib SearchDeleter, reg *registry.BookRegistry) str
 	if len(args) != 2 {
 		return "usage: rename-tag <old> <new>"
 	}
-	old, new := args[0], args[1]
+	old, curr := args[0], args[1]
 
 	books, err := lib.Search(library.Query{Tags: []string{old}})
 	if err != nil {
@@ -183,7 +183,7 @@ func renameTag(args []string, lib SearchDeleter, reg *registry.BookRegistry) str
 
 	for _, b := range books {
 		var updated []string
-		if slices.Contains(b.Tags(), new) {
+		if slices.Contains(b.Tags(), curr) {
 			// Book already has the new tag; just remove the old one.
 			updated = slices.DeleteFunc(slices.Clone(b.Tags()), func(t string) bool {
 				return t == old
@@ -192,7 +192,7 @@ func renameTag(args []string, lib SearchDeleter, reg *registry.BookRegistry) str
 			updated = slices.Clone(b.Tags())
 			for i, t := range updated {
 				if t == old {
-					updated[i] = new
+					updated[i] = curr
 				}
 			}
 		}
@@ -259,7 +259,7 @@ func renameSeries(args []string, lib SearchDeleter, reg *registry.BookRegistry) 
 	if len(args) != 2 {
 		return "usage: rename-series <old> <new>"
 	}
-	old, new := args[0], args[1]
+	old, curr := args[0], args[1]
 
 	books, err := lib.Search(library.Query{Series: []string{old}})
 	if err != nil {
@@ -270,7 +270,7 @@ func renameSeries(args []string, lib SearchDeleter, reg *registry.BookRegistry) 
 	var errs []string
 
 	for _, b := range books {
-		if err := reg.Edit(b.ID(), library.Edits{Series: &new}); err != nil {
+		if err := reg.Edit(b.ID(), library.Edits{Series: &curr}); err != nil {
 			errs = append(errs, fmt.Sprintf("book %d: %v", b.ID(), err))
 		} else {
 			affected++

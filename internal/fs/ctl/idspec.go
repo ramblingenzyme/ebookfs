@@ -32,6 +32,9 @@ func parseSelection(spec string) (library.Query, error) {
 		return library.Query{}, nil
 	case strings.Contains(spec, ":"):
 		q, err := textfmt.ParseQuery(spec)
+		if err != nil {
+			return q, err
+		}
 		// A ctl selection feeds a mutating command, so title: must not reach
 		// past the book the operator named the way the search view's substring
 		// match would.

@@ -27,6 +27,7 @@ func TestRecentDirOrdersNewestFirst(t *testing.T) {
 }
 
 func TestRecentDirCapsAtLimitAndBackfillsOnRemove(t *testing.T) {
+	//goland:noinspection DuplicatedCode
 	reg := newTestRegistry(t)
 	d := NewRecentDir(reg)
 
@@ -59,6 +60,7 @@ func TestRecentDirCapsAtLimitAndBackfillsOnRemove(t *testing.T) {
 }
 
 func TestRecentDirRemoveNotVisibleNoOp(t *testing.T) {
+	//goland:noinspection DuplicatedCode
 	reg := newTestRegistry(t)
 	d := NewRecentDir(reg)
 

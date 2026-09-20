@@ -35,7 +35,7 @@ func (u *AttrURL) UnmarshalXMLAttr(x xml.Attr) error {
 }
 
 // Candidates returns the entry names this could mean, conforming form first.
-func (u AttrURL) Candidates() []string {
+func (u *AttrURL) Candidates() []string {
 	if u.Decoded == u.Raw {
 		return []string{u.Raw}
 	}

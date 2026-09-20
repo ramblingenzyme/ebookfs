@@ -111,6 +111,7 @@ func assertSettlesClean(t *testing.T, cfg Config) {
 }
 
 func ingestTestEpub(t *testing.T, lib *Library, data []byte) *Book {
+	//goland:noinspection DuplicatedCode
 	t.Helper()
 	h, err := lib.CreateIngest()
 	if err != nil {

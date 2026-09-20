@@ -106,6 +106,7 @@ func TestOpenCollapsesRootfileMediaType(t *testing.T) {
 // edit computed from one copy and reported from the other, invisible until the
 // copies differ. Either rule would do; it has to be one rule.
 func TestOpenAndSaveAgreeOnADuplicateEntry(t *testing.T) {
+	//goland:noinspection DuplicatedCode
 	first := strings.Replace(string(epubtest.OPF3), "Original Title", "First Copy", 1)
 	second := strings.Replace(string(epubtest.OPF3), "Original Title", "Second Copy", 1)
 
@@ -272,6 +273,7 @@ func TestOpenToleratesMimetypeWhitespace(t *testing.T) {
 // document were overwritten. The copy nobody resolved is somebody else's data,
 // and the archive is copied verbatim.
 func TestSaveReplacesOnlyTheResolvedDuplicate(t *testing.T) {
+	//goland:noinspection DuplicatedCode
 	first := strings.Replace(string(epubtest.OPF3), "Original Title", "First Copy", 1)
 	second := strings.Replace(string(epubtest.OPF3), "Original Title", "Second Copy", 1)
 
@@ -528,6 +530,7 @@ func TestSaveWithDirectoryEntries(t *testing.T) {
 		t.Errorf("title = %q, want New Title", book.Title)
 	}
 
+	//goland:noinspection DuplicatedCode
 	zrc, err := zip.OpenReader(path)
 	if err != nil {
 		t.Fatal(err)
@@ -552,6 +555,7 @@ func TestSetCoverWithDirectoryEntries(t *testing.T) {
 		epubtest.Entry{Name: "fonts/", Data: nil},
 	)
 	path := epubtest.WriteEpub(t, entries)
+	//goland:noinspection DuplicatedCode
 	newCover := tinyJPEG(t)
 	if _, err := setCover(t, path, newCover); err != nil {
 		t.Fatal(err)
@@ -564,6 +568,7 @@ func TestSetCoverWithDirectoryEntries(t *testing.T) {
 		t.Errorf("cover = %q, want the supplied JPEG bytes", got)
 	}
 
+	//goland:noinspection DuplicatedCode
 	zrc, err := zip.OpenReader(path)
 	if err != nil {
 		t.Fatal(err)

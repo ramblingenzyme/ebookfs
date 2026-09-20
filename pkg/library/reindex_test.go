@@ -233,7 +233,7 @@ func TestStoreCleanAfterEdit(t *testing.T) {
 		name  string
 		edits Edits
 	}{
-		{"meta only", Edits{Status: new(string(book.StatusRead))}},
+		{"meta only", Edits{Status: new(book.StatusRead)}},
 		{"title change", Edits{Title: new("A Thoroughly Different Title")}},
 	}
 	for _, tc := range tests {

@@ -366,6 +366,7 @@ func TestClosedEpubReaderIsErrClosed(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
+	//goland:noinspection DuplicatedCode
 	for _, tc := range []struct {
 		name string
 		call func() error

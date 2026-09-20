@@ -21,6 +21,7 @@ type coverFile struct {
 }
 
 func newCoverFile(stat *proto.Stat, lib ContentReader, edit func(int64, library.Edits) error, book func() *library.Book) *coverFile {
+	//goland:noinspection DuplicatedCode
 	return &coverFile{
 		SnapshotFile: vfile.NewSnapshotFile(stat, func() ([]byte, error) {
 			if lib == nil {

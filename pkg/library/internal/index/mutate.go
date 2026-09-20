@@ -44,6 +44,7 @@ func toNullString(s string) sql.NullString {
 // references it and nothing can be orphaned. Sweeping per book would run three
 // growing anti-join scans N times for no effect.
 func (idx *Index) insertBook(q *dbsqlc.Queries, b *book.Book, mt drift.PathInfo) error {
+	//goland:noinspection DuplicatedCode
 	sortTitle := toNullString(b.SortTitle)
 	pubdate := toNullString(b.Pubdate)
 
@@ -79,6 +80,7 @@ func (idx *Index) insertBook(q *dbsqlc.Queries, b *book.Book, mt drift.PathInfo)
 // putBook inserts or replaces b, using ON CONFLICT to update an existing row.
 // Rebuild, which must surface id collisions, uses insertBook instead.
 func (idx *Index) putBook(q *dbsqlc.Queries, b *book.Book, mt drift.PathInfo) error {
+	//goland:noinspection DuplicatedCode
 	sortTitle := toNullString(b.SortTitle)
 	pubdate := toNullString(b.Pubdate)
 
