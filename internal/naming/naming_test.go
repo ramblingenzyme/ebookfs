@@ -74,3 +74,38 @@ func TestPathSafe(t *testing.T) {
 		})
 	}
 }
+
+// NamesNothing answers, ahead of the call, which inputs PathSafe can only give
+// its placeholder. The two must agree: an input NamesNothing accepts has to
+// come back from PathSafe as something other than "_", or a caller refusing on
+// one and filing on the other would disagree with itself.
+func TestNamesNothingAgreesWithPathSafe(t *testing.T) {
+	for _, tc := range []struct {
+		name, in string
+		want     bool
+	}{
+		{"parent directory", "..", true},
+		{"current directory", ".", true},
+		{"nothing but dots", "...", true},
+		{"nothing but spaces", "   ", true},
+		{"tab", "\t", true},
+		{"empty", "", true},
+
+		{"ordinary text", "The Hobbit", false},
+		{"leading dot leaves a name", ".hidden", false},
+		{"slashes become dashes, which are a usable name", "//", false},
+		{"underscore is an ordinary name", "_", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := NamesNothing(tc.in)
+			if got != tc.want {
+				t.Errorf("NamesNothing(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+			// "_" is the one input that is safe already and equals the
+			// placeholder, so it is excluded from the agreement check.
+			if safe := PathSafe(tc.in); tc.in != "_" && (safe == "_") != got {
+				t.Errorf("PathSafe(%q) = %q but NamesNothing = %v", tc.in, safe, got)
+			}
+		})
+	}
+}

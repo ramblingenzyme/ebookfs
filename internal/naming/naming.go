@@ -50,11 +50,22 @@ func ForFAT(s string) (string, error) {
 //     written outside it. "." is the same bug one level up.
 //
 // This cannot fail: a value that trims away entirely becomes "_" rather than an
-// error, so callers need no fallback.
+// error, so callers need no fallback. NamesNothing reports that case ahead of
+// time, for a caller that would rather refuse the value than accept the
+// placeholder.
 func PathSafe(s string) string {
-	out := strings.Trim(strings.ReplaceAll(s, "/", "-"), ". \t")
-	if out == "" {
-		return "_"
+	if out := component(s); out != "" {
+		return out
 	}
-	return out
+	return "_"
+}
+
+// NamesNothing reports whether s trims away entirely, leaving PathSafe nothing
+// to work from. Every such value collapses onto the one placeholder, so a
+// caller that owns its input, as ebookfs owns a tag, refuses them rather than
+// filing them all under the same name.
+func NamesNothing(s string) bool { return component(s) == "" }
+
+func component(s string) string {
+	return strings.Trim(strings.ReplaceAll(s, "/", "-"), ". \t")
 }

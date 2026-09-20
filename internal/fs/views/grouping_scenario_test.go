@@ -134,11 +134,10 @@ func mustGroupEntries(t *testing.T, d fs.Dir, key string) []string {
 	return names
 }
 
-// A group directory name cannot contain a path separator. Author and series
-// names are metadata read verbatim from the epub, so a '/' in one reaches these
-// views intact; an entry carrying it is one a 9P client can never walk to, which
-// hides every book filed under it. by-tag already guarded this with
-// tagEntryName; by-author and by-series did not.
+// A group directory name cannot contain a path separator. Author, series and
+// tag values reach these views verbatim, so a '/' in one arrives intact, and an
+// entry carrying it is one a 9P client can never walk to, which hides every
+// book filed under it. keyedDir.entryNames is the single place that guards it.
 func TestGroupNamesAreOneComponent(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -156,6 +155,15 @@ func TestGroupNamesAreOneComponent(t *testing.T) {
 			book: func() *library.Book {
 				b := makeBook(1, "Title", "Author")
 				b.Series = &library.Series{Name: "Either/Or", Index: "1"}
+				return wrapBook(b)
+			},
+		},
+		{
+			name: "by-tag",
+			dir:  func(reg *registry.BookRegistry) fs.Dir { return NewByTagDir(reg) },
+			book: func() *library.Book {
+				b := makeBook(1, "Title", "Author")
+				b.Meta.Tags = []string{"sci/fi"}
 				return wrapBook(b)
 			},
 		},

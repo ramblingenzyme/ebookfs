@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"golang.org/x/text/language"
+
+	"github.com/ramblingenzyme/ebookfs/internal/naming"
 )
 
 // Edits is a partial update to a Book's fields. A nil pointer leaves the field
@@ -182,6 +184,14 @@ func (e Edits) validateAuthors() string {
 	return ""
 }
 
+// validateTags rejects a tag that names no directory. A frontend groups books
+// by tag, and naming.PathSafe gives every value that trims away, "." and ".."
+// among them, the same placeholder, so accepting them would file unrelated tags
+// into one group.
+//
+// A tag is ebookfs's own field, so it is refused here rather than sanitized at
+// each naming site, the way naming.PathSafe handles an author name read
+// verbatim from an epub.
 func (e Edits) validateTags() string {
 	if e.Tags == nil {
 		return ""
@@ -189,6 +199,9 @@ func (e Edits) validateTags() string {
 	for i, t := range *e.Tags {
 		if strings.TrimSpace(t) == "" {
 			return fmt.Sprintf("tag %d is empty", i+1)
+		}
+		if naming.NamesNothing(t) {
+			return fmt.Sprintf("tag %d is %q, which cannot name a directory", i+1, t)
 		}
 	}
 	return ""

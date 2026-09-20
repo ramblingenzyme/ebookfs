@@ -2,7 +2,6 @@ package views
 
 import (
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
-	"github.com/ramblingenzyme/ebookfs/internal/naming"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
@@ -15,7 +14,7 @@ func authorKeys(b *library.Book) []string {
 	authors := b.Authors()
 	keys := make([]string, 0, len(authors))
 	for _, a := range authors {
-		keys = append(keys, naming.PathSafe(a.Name))
+		keys = append(keys, a.Name)
 	}
 	return keys
 }

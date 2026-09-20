@@ -118,5 +118,5 @@ func seriesKeys(b *library.Book) []string {
 	if !b.HasSeries() {
 		return nil
 	}
-	return []string{naming.PathSafe(b.SeriesName())}
+	return []string{b.SeriesName()}
 }

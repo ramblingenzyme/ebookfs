@@ -196,6 +196,16 @@ func TestValidateTags(t *testing.T) {
 		{"whitespace tag", &[]string{"  "}, true},
 		{"mixed valid and empty", &[]string{"good", "", "bad"}, true},
 		{"empty first", &[]string{"", "good"}, true},
+		// naming.PathSafe collapses each of these onto one placeholder, so
+		// accepting them would file unrelated tags into a single by-tag group.
+		{"dot tag", &[]string{"."}, true},
+		{"dotdot tag", &[]string{".."}, true},
+		{"all dots", &[]string{"..."}, true},
+		{"dotdot among valid", &[]string{"fiction", ".."}, true},
+		// A dot that leaves something behind is an ordinary tag.
+		{"leading dot", &[]string{".hidden", "v1.2"}, false},
+		// A '/' becomes '-' rather than trimming away, so it still names a group.
+		{"slash", &[]string{"sci/fi"}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e := Edits{Tags: tc.tags}
