@@ -110,8 +110,13 @@ func assertSettlesClean(t *testing.T, cfg Config) {
 	}
 }
 
+// ingestTestEpub has a twin in helpers_ext_test.go. Neither can move to
+// internal/testing: it would have to name *Library, so the package holding it
+// would import library, and this file is package library, which makes that a
+// test-time import cycle (internal/testing/util's package doc states the same
+// rule). The white-box tests need it, since reindex_test.go reaches lib.index
+// and storeDrifted.
 func ingestTestEpub(t *testing.T, lib *Library, data []byte) *Book {
-	//goland:noinspection DuplicatedCode
 	t.Helper()
 	h, err := lib.CreateIngest()
 	if err != nil {

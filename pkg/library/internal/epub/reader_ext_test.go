@@ -44,7 +44,8 @@ func TestReaderClosedContract(t *testing.T) {
 		t.Fatalf("first Close: %v", err)
 	}
 
-	//goland:noinspection DuplicatedCode
+	// The library facade runs this same table against library.ErrClosed;
+	// impl_ext_test.go says why both exist.
 	for _, tc := range []struct {
 		name string
 		call func() error

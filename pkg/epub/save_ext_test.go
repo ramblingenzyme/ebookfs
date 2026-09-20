@@ -544,20 +544,7 @@ func TestEPUB3CreatorWithALegacySortNameTakesTheEdit(t *testing.T) {
 		`xmlns:dc="http://purl.org/dc/elements/1.1/"`,
 		`xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf"`, 1))
 
-	//goland:noinspection DuplicatedCode
-	path := epubtest.Build(t, opf)
-	authors := []epub.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
-	if _, err := save(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
-		t.Fatal(err)
-	}
-
-	bib, err := parse(t, path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(bib.Authors) != 1 || bib.Authors[0].SortName != "Rand, Ann" {
-		t.Errorf("authors = %+v, want the sort name the edit asked for", bib.Authors)
-	}
+	path := saveSortName(t, opf)
 	// Whichever mechanism the writer picks, the file must not end up claiming
 	// both. A stale attribute left beside a fresh refinement is that failure.
 	c := epubtest.Metadata(t, path).FindElement("creator")
@@ -577,20 +564,7 @@ func TestEPUB3CreatorWithALegacySortNameTakesTheEdit(t *testing.T) {
 func TestUnprefixedFileAsIsUpdatedNotDuplicated(t *testing.T) {
 	opf := epubtest.EPUB2(`    <dc:creator opf:role="aut" file-as="Stale, Name">Ann Rand</dc:creator>`)
 
-	//goland:noinspection DuplicatedCode
-	path := epubtest.Build(t, opf)
-	authors := []epub.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
-	if _, err := save(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
-		t.Fatal(err)
-	}
-
-	bib, err := parse(t, path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(bib.Authors) != 1 || bib.Authors[0].SortName != "Rand, Ann" {
-		t.Errorf("authors = %+v, want the sort name the edit asked for", bib.Authors)
-	}
+	path := saveSortName(t, opf)
 
 	c := epubtest.Metadata(t, path).FindElement("creator")
 	if c == nil {
@@ -1318,18 +1292,7 @@ func TestSaveAllowsFontObfuscation(t *testing.T) {
 
 func TestSetCoverReplacesTheImage(t *testing.T) {
 	path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
-	//goland:noinspection DuplicatedCode
-	newCover := tinyJPEG(t)
-	if _, err := setCover(t, path, newCover); err != nil {
-		t.Fatal(err)
-	}
-	got, err := open(t, path).Cover()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(got, newCover) {
-		t.Errorf("cover = %q, want the supplied JPEG bytes", got)
-	}
+	swapCover(t, path)
 	// A cover swap leaves the chapter untouched.
 	ch, ok := epubtest.ReadEntryFromFile(t, path, "OEBPS/chapter1.xhtml")
 	if !ok || !bytes.Equal(ch, epubtest.ChapterBytes) {

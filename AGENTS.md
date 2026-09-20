@@ -19,6 +19,11 @@ Tests spanning several source files cannot pair with one, so they take
 file for a quality or a feature. `library_err_test.go` held the only tests for
 four different source files and nothing in the name said so.
 
+`helpers_test.go` and `helpers_ext_test.go` hold what a package's test files
+share and no tests of their own, so they pair with the suite rather than with a
+source file. The package rule still governs, and a package carries both when
+its white-box and black-box suites each need helpers.
+
 ## What a comment is for, and how terse
 
 The code says what it does. A comment says what the code can't: an invariant

@@ -13,7 +13,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testing/epubtest"
@@ -106,18 +105,7 @@ func TestOpenCollapsesRootfileMediaType(t *testing.T) {
 // edit computed from one copy and reported from the other, invisible until the
 // copies differ. Either rule would do; it has to be one rule.
 func TestOpenAndSaveAgreeOnADuplicateEntry(t *testing.T) {
-	//goland:noinspection DuplicatedCode
-	first := strings.Replace(string(epubtest.OPF3), "Original Title", "First Copy", 1)
-	second := strings.Replace(string(epubtest.OPF3), "Original Title", "Second Copy", 1)
-
-	path := epubtest.WriteEpub(t, []epubtest.Entry{
-		{Name: "mimetype", Data: []byte(epubtest.MimetypeValue), Store: true},
-		{Name: "META-INF/container.xml", Data: []byte(epubtest.ContainerXML)},
-		{Name: "OEBPS/content.opf", Data: []byte(first)},
-		{Name: "OEBPS/content.opf", Data: []byte(second)}, // same name, different content
-		{Name: "OEBPS/cover.jpg", Data: epubtest.CoverBytes},
-		{Name: "OEBPS/chapter1.xhtml", Data: epubtest.ChapterBytes},
-	})
+	path := duplicateOPFEpub(t)
 
 	bib, err := parse(t, path)
 	if err != nil {
@@ -273,18 +261,7 @@ func TestOpenToleratesMimetypeWhitespace(t *testing.T) {
 // document were overwritten. The copy nobody resolved is somebody else's data,
 // and the archive is copied verbatim.
 func TestSaveReplacesOnlyTheResolvedDuplicate(t *testing.T) {
-	//goland:noinspection DuplicatedCode
-	first := strings.Replace(string(epubtest.OPF3), "Original Title", "First Copy", 1)
-	second := strings.Replace(string(epubtest.OPF3), "Original Title", "Second Copy", 1)
-
-	path := epubtest.WriteEpub(t, []epubtest.Entry{
-		{Name: "mimetype", Data: []byte(epubtest.MimetypeValue), Store: true},
-		{Name: "META-INF/container.xml", Data: []byte(epubtest.ContainerXML)},
-		{Name: "OEBPS/content.opf", Data: []byte(first)},
-		{Name: "OEBPS/content.opf", Data: []byte(second)},
-		{Name: "OEBPS/cover.jpg", Data: epubtest.CoverBytes},
-		{Name: "OEBPS/chapter1.xhtml", Data: epubtest.ChapterBytes},
-	})
+	path := duplicateOPFEpub(t)
 
 	if _, err := save(t, path, func(b *epub.Book) { b.Title = "Edited Title" }); err != nil {
 		t.Fatal(err)
@@ -530,23 +507,7 @@ func TestSaveWithDirectoryEntries(t *testing.T) {
 		t.Errorf("title = %q, want New Title", book.Title)
 	}
 
-	//goland:noinspection DuplicatedCode
-	zrc, err := zip.OpenReader(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer zrc.Close()
-	dirs := make(map[string]bool)
-	for _, f := range zrc.File {
-		if len(f.Name) > 0 && f.Name[len(f.Name)-1] == '/' {
-			dirs[f.Name] = true
-		}
-	}
-	for _, dir := range []string{"OEBPS/", "fonts/", "images/", "text/"} {
-		if !dirs[dir] {
-			t.Errorf("directory entry %q missing from rewritten epub", dir)
-		}
-	}
+	wantDirEntries(t, path, "OEBPS/", "fonts/", "images/", "text/")
 }
 
 func TestSetCoverWithDirectoryEntries(t *testing.T) {
@@ -555,36 +516,9 @@ func TestSetCoverWithDirectoryEntries(t *testing.T) {
 		epubtest.Entry{Name: "fonts/", Data: nil},
 	)
 	path := epubtest.WriteEpub(t, entries)
-	//goland:noinspection DuplicatedCode
-	newCover := tinyJPEG(t)
-	if _, err := setCover(t, path, newCover); err != nil {
-		t.Fatal(err)
-	}
-	got, err := open(t, path).Cover()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(got, newCover) {
-		t.Errorf("cover = %q, want the supplied JPEG bytes", got)
-	}
+	swapCover(t, path)
 
-	//goland:noinspection DuplicatedCode
-	zrc, err := zip.OpenReader(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer zrc.Close()
-	dirs := make(map[string]bool)
-	for _, f := range zrc.File {
-		if len(f.Name) > 0 && f.Name[len(f.Name)-1] == '/' {
-			dirs[f.Name] = true
-		}
-	}
-	for _, dir := range []string{"OEBPS/", "fonts/"} {
-		if !dirs[dir] {
-			t.Errorf("directory entry %q missing from rewritten epub", dir)
-		}
-	}
+	wantDirEntries(t, path, "OEBPS/", "fonts/")
 }
 
 // --- WriteCover ---

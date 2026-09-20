@@ -46,8 +46,9 @@ func openLib(t *testing.T, cfg library.Config, opts ...library.Option) *library.
 	return lib
 }
 
+// The black-box twin of helpers_test.go's ingestTestEpub, which says why the
+// two cannot be one.
 func ingestTestEpub(t *testing.T, lib *library.Library, data []byte) *library.Book {
-	//goland:noinspection DuplicatedCode
 	t.Helper()
 	h, err := lib.CreateIngest()
 	if err != nil {
