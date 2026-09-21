@@ -8,13 +8,12 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
-	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
 func newTestReadAtFile(t *testing.T, data string) *ReadAtFile {
 	t.Helper()
 	stat := NewStat(util.NewTestFS(t), "reader", 0444)
-	raf := NewReadAtFile(stat, func() (library.EpubReader, error) {
+	raf := NewReadAtFile(stat, func() (ReaderAtCloser, error) {
 		return &mock.EpubReader{Reader: bytes.NewReader([]byte(data))}, nil
 	})
 	return &raf
@@ -40,7 +39,7 @@ func TestReadAtFileReadUnopenedErrors(t *testing.T) {
 
 func TestReadAtFileOpenPropagatesError(t *testing.T) {
 	stat := NewStat(util.NewTestFS(t), "reader", 0444)
-	raf := NewReadAtFile(stat, func() (library.EpubReader, error) { return nil, util.ErrTest })
+	raf := NewReadAtFile(stat, func() (ReaderAtCloser, error) { return nil, util.ErrTest })
 	if err := raf.Open(1, proto.Mode(0)); err != util.ErrTest {
 		t.Errorf("Open error = %v, want %v", err, util.ErrTest)
 	}
@@ -61,7 +60,7 @@ func TestReadAtFilePerFidIsolation(t *testing.T) {
 func TestReadAtFileCloseReleasesReader(t *testing.T) {
 	r := &mock.EpubReader{Reader: bytes.NewReader([]byte("data"))}
 	stat := NewStat(util.NewTestFS(t), "reader", 0444)
-	raf := NewReadAtFile(stat, func() (library.EpubReader, error) { return r, nil })
+	raf := NewReadAtFile(stat, func() (ReaderAtCloser, error) { return r, nil })
 
 	fid := fstest.Fid(t, &raf, 1)
 	fid.Open(proto.Mode(0))

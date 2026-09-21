@@ -69,7 +69,7 @@ func Open(cfg Config, opts ...Option) (*Library, error) {
 		if err := lib.reindex(onDisk); err != nil {
 			// The index was opened above and lib is never returned, so nothing
 			// else will ever close it. A duplicate book id makes this a routine
-			// path (DECISIONS.md #14).
+			// path (docs/DECISIONS.md #14).
 			idx.Close()
 			return nil, fmt.Errorf("reindexing library: %w", err)
 		}

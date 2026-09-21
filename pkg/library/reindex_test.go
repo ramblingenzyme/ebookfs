@@ -67,7 +67,7 @@ func stageLegacyLayout(t *testing.T, cfg Config, title string, authors []string,
 
 	lib := openLib(t, cfg)
 	b := ingestTestEpub(t, lib, buildTestEpub(t, title, authors...))
-	canonical := book.Unwrap(b).Location
+	canonical := book.Location{EpubPath: b.EpubPath()}
 	if err := lib.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}

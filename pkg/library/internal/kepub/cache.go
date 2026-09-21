@@ -62,16 +62,16 @@ func (c *Cache) Close() error {
 }
 
 // Warm is a non-blocking hint.
-func (c *Cache) Warm(b *book.Book) { c.warmer.warm(b) }
+func (c *Cache) Warm(b *book.ImmutableBook) { c.warmer.warm(b) }
 
 // Filename is FAT-safe because the store already sanitized the epub filename
 // it is built from.
-func (c *Cache) Filename(b *book.Book) string {
+func (c *Cache) Filename(b *book.ImmutableBook) string {
 	return strings.TrimSuffix(b.Filename(), ".epub") + ".kepub.epub"
 }
 
 // Size answers the 9P stat length, so it must not convert.
-func (c *Cache) Size(b *book.Book) (int64, bool) {
+func (c *Cache) Size(b *book.ImmutableBook) (int64, bool) {
 	fi, err := os.Stat(c.path(b))
 	if err != nil {
 		return 0, false
@@ -81,27 +81,27 @@ func (c *Cache) Size(b *book.Book) (int64, bool) {
 
 // Open is the read-path backstop for when the warmer has not run, or its
 // conversion is still in flight.
-func (c *Cache) Open(b *book.Book) (epub.EpubReader, error) {
+func (c *Cache) Open(b *book.ImmutableBook) (epub.EpubReader, error) {
 	if err := c.Ensure(b); err != nil {
 		return nil, err
 	}
-	return epub.OpenReader(c.path(b), b.CoverPath)
+	return epub.OpenReader(c.path(b), b.CoverPath())
 }
 
 // Ensure is serialized per book, so concurrent warms and reads coalesce into a
 // single conversion.
-func (c *Cache) Ensure(b *book.Book) error {
-	l := c.locks.For(b.Meta.ID)
+func (c *Cache) Ensure(b *book.ImmutableBook) error {
+	l := c.locks.For(b.ID())
 	l.Lock()
 	defer l.Unlock()
 
 	// An in-place epub rewrite updates DateModified, which is what makes a
 	// cache older than it stale.
-	if cfi, err := os.Stat(c.path(b)); err == nil && !cfi.ModTime().Before(b.Meta.DateModified) {
+	if cfi, err := os.Stat(c.path(b)); err == nil && !cfi.ModTime().Before(b.DateModified()) {
 		return nil
 	}
 
-	content, err := c.src.Content(b.Meta.ID)
+	content, err := c.src.Content(b.ID())
 	if err != nil {
 		return err
 	}
@@ -110,20 +110,20 @@ func (c *Cache) Ensure(b *book.Book) error {
 	return c.write(b, content)
 }
 
-func (c *Cache) path(b *book.Book) string {
-	return filepath.Join(c.dir, fmt.Sprintf("%d.kepub.epub", b.Meta.ID))
+func (c *Cache) path(b *book.ImmutableBook) string {
+	return filepath.Join(c.dir, fmt.Sprintf("%d.kepub.epub", b.ID()))
 }
 
 // write renames into place, so a reader never observes a partial kepub.
-func (c *Cache) write(b *book.Book, src epub.EpubReader) error {
-	tmp, err := os.CreateTemp(c.dir, fmt.Sprintf(".%d-*.tmp", b.Meta.ID))
+func (c *Cache) write(b *book.ImmutableBook, src epub.EpubReader) error {
+	tmp, err := os.CreateTemp(c.dir, fmt.Sprintf(".%d-*.tmp", b.ID()))
 	if err != nil {
 		return err
 	}
 	tmpName := tmp.Name()
 	defer os.Remove(tmpName) // no-op once renamed; cleans up on any error path
 
-	if err := c.convertFn(c.ctx, tmp, src, b.EpubSize); err != nil {
+	if err := c.convertFn(c.ctx, tmp, src, b.EpubSize()); err != nil {
 		tmp.Close()
 		return err
 	}

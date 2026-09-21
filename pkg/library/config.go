@@ -13,7 +13,7 @@ type Config struct {
 	// InboxTemp holds in-flight uploads until they are laid down under Root.
 	InboxTemp string
 	// IndexPath is the SQLite index file. The index is a derived cache of Root
-	// (DECISIONS.md #2), so it may be deleted; it is rebuilt on the next open.
+	// (docs/DECISIONS.md #2), so it may be deleted; it is rebuilt on the next open.
 	IndexPath string
 }
 

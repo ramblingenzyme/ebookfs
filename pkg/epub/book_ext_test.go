@@ -162,7 +162,7 @@ func TestCoverHeuristicTakesTheLastMatch(t *testing.T) {
 // --- duplicate refinements ---
 
 // The scheme keys a dc:identifier because that is what the value is. The XML id
-// is a document-local handle and only the last resort (DECISIONS.md #24).
+// is a document-local handle and only the last resort (docs/DECISIONS.md #24).
 func TestIdentifierKeying(t *testing.T) {
 	tests := []struct {
 		name string

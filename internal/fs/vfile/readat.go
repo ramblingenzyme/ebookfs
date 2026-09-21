@@ -6,23 +6,27 @@ import (
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/knusbaum/go9p/proto"
-	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// ReadAtFile is a base for files holding one EpubReader per fid, acquired via
-// an injected open func. Read swallows io.EOF, since the reader may return its
+type ReaderAtCloser interface {
+	io.ReaderAt
+	io.Closer
+}
+
+// ReadAtFile is a base for files holding one reader per fid, acquired via an
+// injected open func. Read swallows io.EOF, since the reader may return its
 // final bytes and EOF in one call.
 type ReadAtFile struct {
 	fs.BaseFile
-	open func() (library.EpubReader, error)
-	fids map[uint64]library.EpubReader
+	open func() (ReaderAtCloser, error)
+	fids map[uint64]ReaderAtCloser
 }
 
-func NewReadAtFile(stat *proto.Stat, open func() (library.EpubReader, error)) ReadAtFile {
+func NewReadAtFile(stat *proto.Stat, open func() (ReaderAtCloser, error)) ReadAtFile {
 	return ReadAtFile{
 		BaseFile: *fs.NewBaseFile(stat),
 		open:     open,
-		fids:     make(map[uint64]library.EpubReader),
+		fids:     make(map[uint64]ReaderAtCloser),
 	}
 }
 

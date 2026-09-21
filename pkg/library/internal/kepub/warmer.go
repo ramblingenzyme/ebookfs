@@ -19,25 +19,25 @@ const (
 type warmer struct {
 	// ensure is Cache.Ensure, held as a function rather than the cache itself,
 	// so this file's only coupling to the cache is visible here.
-	ensure func(*book.Book) error
+	ensure func(*book.ImmutableBook) error
 
 	// Never closed. The ctx passed to run is the only stop signal, which lets
 	// warm send from any goroutine without coordinating with shutdown. Closing
 	// would panic those senders and buy only a drained backlog, which Close
 	// does not want.
-	ch chan *book.Book
+	ch chan *book.ImmutableBook
 	wg sync.WaitGroup
 }
 
-func newWarmer(ctx context.Context, ensure func(*book.Book) error) *warmer {
-	w := &warmer{ensure: ensure, ch: make(chan *book.Book, warmerQueueSize)}
+func newWarmer(ctx context.Context, ensure func(*book.ImmutableBook) error) *warmer {
+	w := &warmer{ensure: ensure, ch: make(chan *book.ImmutableBook, warmerQueueSize)}
 	for range warmerGoroutines {
 		w.wg.Go(func() { w.run(ctx) })
 	}
 	return w
 }
 
-func (w *warmer) warm(b *book.Book) {
+func (w *warmer) warm(b *book.ImmutableBook) {
 	select {
 	case w.ch <- b:
 	default: // full, or nobody left to receive; drop the hint
@@ -57,7 +57,7 @@ func (w *warmer) run(ctx context.Context) {
 				if ctx.Err() != nil {
 					return
 				}
-				slog.Warn("kepub: warm book failed", "book_id", b.Meta.ID, "error", err)
+				slog.Warn("kepub: warm book failed", "book_id", b.ID(), "error", err)
 			}
 		}
 	}

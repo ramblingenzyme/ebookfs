@@ -50,4 +50,9 @@ func newTestCache(t *testing.T, body string) (*Cache, string) {
 	return c, dir
 }
 
-var makeBook = util.MakeMutableBook
+// The cache takes an immutable snapshot, so a test sets its fields on the
+// mutable book and wraps it at the handoff, as the views tests do.
+var (
+	makeBook = util.MakeMutableBook
+	wrapBook = util.WrapBook
+)

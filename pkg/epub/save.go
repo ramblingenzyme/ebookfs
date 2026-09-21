@@ -85,7 +85,8 @@ func (b *Book) Save() error {
 // anything is written.
 func (b *Book) stage() (map[string][]byte, error) {
 	// Before any other refusal: it does not depend on which entries the edit
-	// turns out to touch. DECISIONS.md #23 says why it is not narrowed to them.
+	// turns out to touch. docs/DECISIONS.md #23 says why it is not narrowed to
+	// them.
 	if b.has(ocf.SignaturesPath) {
 		return nil, fmt.Errorf("refusing to edit: the epub is signed (%s) and an edit would invalidate the signature", ocf.SignaturesPath)
 	}

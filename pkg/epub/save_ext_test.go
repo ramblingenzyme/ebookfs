@@ -1700,7 +1700,7 @@ func TestCoverPageImgAttributesAreRefitted(t *testing.T) {
 // --- signed containers ---
 
 // Every entry an edit replaces may be one a signature covers, and we cannot
-// re-sign. DECISIONS.md #23 says why the check is not narrower than this.
+// re-sign. docs/DECISIONS.md #23 says why the check is not narrower than this.
 func TestRefusesToEditASignedEpub(t *testing.T) {
 	const signatures = `<?xml version="1.0"?>
 <signatures xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><Signature/></signatures>`

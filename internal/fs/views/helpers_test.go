@@ -24,6 +24,14 @@ func makeBookWithSeries(id int64, title, author string, seriesName, seriesIndex 
 	return wrapBook(b)
 }
 
+// padAt builds a padWidth of exactly n digits, so a table states the width it
+// means rather than a maximum that happens to produce it.
+func padAt(n int) *padWidth {
+	var p padWidth
+	p.n.Store(int32(n))
+	return &p
+}
+
 func newTestRegistry(t *testing.T) *registry.BookRegistry {
 	t.Helper()
 	return registry.NewBookRegistry(newTestFS(t), nil)

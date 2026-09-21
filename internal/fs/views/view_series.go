@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync/atomic"
 
 	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
@@ -19,12 +18,12 @@ import (
 // the string the epub carries, so it is used as written and only the first
 // level is zero-padded. That is the level entries sort on, and the padding
 // keeps "9" ahead of "10" in a plain lexical listing.
-func seriesEntryName(b *library.Book, pad int32) string {
+func seriesEntryName(b *library.Book, pad *padWidth) string {
 	s := b.SeriesIndex()
 
-	if pad > 0 {
+	if pad.padded() {
 		head, rest, _ := strings.Cut(s, ".")
-		s = fmt.Sprintf("%02d", seriesLevel(head))
+		s = pad.format(int64(seriesLevel(head)))
 		if rest != "" {
 			s += "." + rest
 		}
@@ -51,7 +50,7 @@ type seriesBookListDir struct {
 	fs.StaticDir
 	f        *fs.FS
 	children map[int64]*namedBookDir
-	pad      atomic.Int32
+	pad      padWidth
 }
 
 // newSeriesBookListDir takes a prepared stat, matching newBookListDir, so
@@ -66,7 +65,7 @@ func newSeriesBookListDir(stat *proto.Stat, f *fs.FS) *seriesBookListDir {
 
 func (s *seriesBookListDir) Add(dir *book.BookDir) {
 	n := newNamedBookDir(s.f, dir, func(b *library.Book) string {
-		return seriesEntryName(b, s.pad.Load())
+		return seriesEntryName(b, &s.pad)
 	})
 	s.children[dir.Book().ID()] = n
 	s.StaticDir.AddChild(n)
@@ -85,20 +84,20 @@ func (s *seriesBookListDir) Remove(dir *book.BookDir) {
 	s.repad()
 }
 
-// repad recomputes the zero-pad width from the current members: two digits
-// once any series index reaches 10.
+// repad recomputes the width from the members still present, so a series that
+// loses its highest-numbered volume narrows again.
 func (s *seriesBookListDir) repad() {
 	var maxIdx int
 	for _, n := range s.children {
-		if b := n.Book(); b.HasSeries() && seriesLevel(b.SeriesIndex()) > maxIdx {
-			maxIdx = seriesLevel(b.SeriesIndex())
+		b := n.Book()
+		if !b.HasSeries() {
+			continue
+		}
+		if level := seriesLevel(b.SeriesIndex()); level > maxIdx {
+			maxIdx = level
 		}
 	}
-	var pad int32
-	if maxIdx >= 10 {
-		pad = 2
-	}
-	s.pad.Store(pad)
+	s.pad.set(int64(maxIdx))
 }
 
 func NewBySeriesDir(reg *registry.BookRegistry) *keyedDir {

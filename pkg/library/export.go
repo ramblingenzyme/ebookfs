@@ -62,27 +62,11 @@ func (p readerPolicy) Dirname(b *Book) string {
 	return naming.ForFAT(book.JoinAuthors(b.Authors(), book.AuthorSep))
 }
 
-// kepubCache unwraps the Book for each method the cache takes a *book.Book
-// for. Close is the embedded cache's own.
+// kepubCache satisfies Exporter by promotion alone. kepub.Cache carries the
+// rendition methods and Close, readerPolicy the rest.
 type kepubCache struct {
 	readerPolicy
 	*kepub.Cache
-}
-
-func (k *kepubCache) Open(b *Book) (EpubReader, error) {
-	return k.Cache.Open(book.Unwrap(b))
-}
-
-func (k *kepubCache) Size(b *Book) (int64, bool) {
-	return k.Cache.Size(book.Unwrap(b))
-}
-
-func (k *kepubCache) Warm(b *Book) {
-	k.Cache.Warm(book.Unwrap(b))
-}
-
-func (k *kepubCache) Filename(b *Book) string {
-	return k.Cache.Filename(book.Unwrap(b))
 }
 
 type epubExporter struct {

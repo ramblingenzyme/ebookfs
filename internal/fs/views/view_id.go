@@ -2,7 +2,6 @@ package views
 
 import (
 	"fmt"
-	"strconv"
 	"sync/atomic"
 
 	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
@@ -11,17 +10,14 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-func idEntryName(b *library.Book, pad int) string {
-	if pad > 0 {
-		return fmt.Sprintf("%0*d. %s", pad, b.ID(), naming.PathSafe(b.Title()))
-	}
-	return fmt.Sprintf("%d. %s", b.ID(), naming.PathSafe(b.Title()))
+func idEntryName(b *library.Book, pad *padWidth) string {
+	return fmt.Sprintf("%s. %s", pad.format(b.ID()), naming.PathSafe(b.Title()))
 }
 
 type byIDDir struct {
 	groupingDir
 	maxID atomic.Int64
-	pad   atomic.Int32
+	pad   padWidth
 }
 
 func NewByIDDir(reg *registry.BookRegistry) *byIDDir {
@@ -36,23 +32,13 @@ func (d *byIDDir) Add(dir *book.BookDir) {
 	id := dir.Book().ID()
 	if id > d.maxID.Load() {
 		d.maxID.Store(id)
-		d.updatePad(id)
+		d.pad.set(id)
 	}
 	d.StaticDir.AddChild(newNamedBookDir(d.f, dir, func(b *library.Book) string {
-		return idEntryName(b, int(d.pad.Load()))
+		return idEntryName(b, &d.pad)
 	}))
 }
 
 func (d *byIDDir) Remove(dir *book.BookDir) {
-	d.StaticDir.DeleteChild(idEntryName(dir.Book(), int(d.pad.Load())))
-}
-
-// updatePad widens the zero-padding to the digit count of maxID, so by-id
-// entries sort lexically. A single-digit library needs no padding at all.
-func (d *byIDDir) updatePad(maxID int64) {
-	var pad int32
-	if maxID >= 10 {
-		pad = int32(len(strconv.FormatInt(maxID, 10)))
-	}
-	d.pad.Store(pad)
+	d.StaticDir.DeleteChild(idEntryName(dir.Book(), &d.pad))
 }

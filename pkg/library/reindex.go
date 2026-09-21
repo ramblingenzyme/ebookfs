@@ -262,7 +262,7 @@ func (s *scanState) reserveID(id int64) {
 // checkDuplicateIDs fails the rebuild when two directories claim one id: a
 // copied book directory or a restored backup beside the original.
 //
-// Fatal by design (DECISIONS.md #14), since renumbering breaks external
+// Fatal by design (docs/DECISIONS.md #14), since renumbering breaks external
 // references keyed on the id and dropping one hides a library quietly missing
 // a book.
 //

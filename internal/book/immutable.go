@@ -19,12 +19,6 @@ func NewImmutableBook(b *Book) *ImmutableBook {
 	return &ImmutableBook{inner: b}
 }
 
-// Unwrap escapes the read-only wrapper. Only this module's packages may call
-// it; everything else goes through the getters.
-func Unwrap(b *ImmutableBook) *Book {
-	return b.inner
-}
-
 func (b *ImmutableBook) ID() int64 { return b.inner.Meta.ID }
 
 func (b *ImmutableBook) Title() string { return b.inner.Title }

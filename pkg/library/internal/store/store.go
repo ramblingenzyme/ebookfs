@@ -1,7 +1,7 @@
 // Package store owns the library's on-disk layout: where a book directory
 // lives, what it is called, and what sits inside it. The index is derived from
-// what this package reports (DECISIONS.md #2), so the two disagree only when
-// something edits the tree behind it.
+// what this package reports (docs/DECISIONS.md #2), so the two disagree only
+// when something edits the tree behind it.
 package store
 
 import (

@@ -15,7 +15,7 @@ type epubFile struct {
 
 func newEpubFile(stat *proto.Stat, lib ContentReader, book func() *library.Book) *epubFile {
 	return &epubFile{
-		ReadAtFile: vfile.NewReadAtFile(stat, func() (library.EpubReader, error) {
+		ReadAtFile: vfile.NewReadAtFile(stat, func() (vfile.ReaderAtCloser, error) {
 			return content(lib, book)
 		}),
 		book: book,

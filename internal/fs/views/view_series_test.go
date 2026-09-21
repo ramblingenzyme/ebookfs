@@ -14,7 +14,7 @@ func TestSeriesEntryName(t *testing.T) {
 	tests := []struct {
 		name string
 		book *library.Book
-		pad  int32
+		pad  int
 		want string
 	}{
 		{
@@ -66,10 +66,17 @@ func TestSeriesEntryName(t *testing.T) {
 			pad:  2,
 			want: "02.2.1 - Multi",
 		},
+		{
+			// A pad fixed at two digits left "100" sorting ahead of "99".
+			name: "three-digit index",
+			book: makeBookWithSeries(1, "Hundred", "Author", "", "100"),
+			pad:  3,
+			want: "100 - Hundred",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := seriesEntryName(tc.book, tc.pad)
+			got := seriesEntryName(tc.book, padAt(tc.pad))
 			if got != tc.want {
 				t.Errorf("seriesEntryName = %q, want %q", got, tc.want)
 			}
@@ -95,6 +102,25 @@ func TestSeriesEntryName_PadTriggeredByMaxIndex(t *testing.T) {
 	fstest.ChildCount(t, sd, 2)
 	fstest.HasChild(t, sd, "01 - First")
 	fstest.HasChild(t, sd, "10 - Tenth")
+}
+
+// A series past 99 volumes widens to three digits. Two was a fixed ceiling, so
+// "100" listed ahead of "99".
+func TestSeriesEntryName_PadWidensPast99(t *testing.T) {
+	reg := newTestRegistry(t)
+	d := NewBySeriesDir(reg)
+
+	for i, index := range []string{"9", "99", "100"} {
+		b := makeBook(int64(i+1), "Vol"+index, "Author")
+		b.Series = &library.Series{Name: "S", Index: index}
+		reg.Add(wrapBook(b))
+	}
+
+	sd := fstest.ChildAs[*seriesBookListDir](t, d, "S")
+	fstest.ChildCount(t, sd, 3)
+	fstest.HasChild(t, sd, "009 - Vol9")
+	fstest.HasChild(t, sd, "099 - Vol99")
+	fstest.HasChild(t, sd, "100 - Vol100")
 }
 
 func TestBySeriesDirRemoveNilSeriesNoOp(t *testing.T) {

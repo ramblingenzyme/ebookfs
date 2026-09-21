@@ -34,7 +34,7 @@ type BookPath struct {
 }
 
 // ensureSchema discards the index, which is safe because it is derived from
-// the filesystem (DECISIONS.md #2) and the caller rebuilds it.
+// the filesystem (docs/DECISIONS.md #2) and the caller rebuilds it.
 func (idx *Index) ensureSchema() error {
 	v, err := idx.getSchemaVersion()
 	if err != nil {

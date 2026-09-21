@@ -20,7 +20,7 @@ func TestCacheWarmProducesFile(t *testing.T) {
 	b := makeBook(1, "Warm", "Author")
 	b.EpubSize = 9
 
-	c.Warm(b)
+	c.Warm(wrapBook(b))
 
 	cachePath := filepath.Join(dir, "1.kepub.epub")
 	if !waitForWarm(t, func() bool {
@@ -39,8 +39,8 @@ func TestWarmerWarmsMultipleBooks(t *testing.T) {
 	a.EpubSize = 9
 	b := makeBook(2, "B", "Author")
 	b.EpubSize = 9
-	c.Warm(a)
-	c.Warm(b)
+	c.Warm(wrapBook(a))
+	c.Warm(wrapBook(b))
 
 	if !waitForWarm(t, func() bool {
 		_, err1 := os.Stat(filepath.Join(dir, "1.kepub.epub"))
@@ -61,7 +61,7 @@ func TestWarmerErrorDoesNotPanic(t *testing.T) {
 
 	b := makeBook(1, "Test", "Author")
 	b.EpubSize = 9
-	c.Warm(b)
+	c.Warm(wrapBook(b))
 
 	select {
 	case <-done:
@@ -84,7 +84,7 @@ func TestWarmAfterCloseDoesNotConvert(t *testing.T) {
 	}
 	b := makeBook(1, "Test", "Author")
 	b.EpubSize = 9
-	c.Warm(b)
+	c.Warm(wrapBook(b))
 
 	// A negative with nothing to wait on, so give the stopped pool a window.
 	time.Sleep(50 * time.Millisecond)
@@ -105,7 +105,7 @@ func TestWarmConcurrentWithCloseNoPanic(t *testing.T) {
 		wg.Go(func() {
 			b := makeBook(1, "Test", "Author")
 			for range 1000 {
-				c.Warm(b)
+				c.Warm(wrapBook(b))
 			}
 		})
 	}
