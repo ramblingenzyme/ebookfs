@@ -90,7 +90,7 @@ func (f modifiedField) set(t time.Time) {
 	if !f.d.EPUB3() {
 		return
 	}
-	f.d.UnrefinedMeta("dcterms:modified", "").Set(t.UTC().Format("2006-01-02T15:04:05Z"))
+	f.d.UnrefinedMeta("dcterms:modified").Set(t.UTC().Format("2006-01-02T15:04:05Z"))
 }
 
 // description and language are repeatable (§5.5.3.2.1) but single-valued here,

@@ -82,6 +82,12 @@ func (f seriesField) set(s *Series) {
 // a pkgdoc.Element with two extra duties: a write marks the collection as a
 // series, and both a write and a clear drop the other series collections, so the
 // document is left recording exactly one.
+//
+// Those duties are why it shadows Set and Clear rather than calling the Element
+// through. A pkgdoc slot writes one value and knows nothing about a field's
+// invariants, so the invariant is held here; Exists, Get and Refine are still
+// the embedded Element's. Widening pkgdoc to carry an after-write hook would
+// grow the package to serve this one field.
 type seriesCollection struct {
 	*pkgdoc.Element
 	f seriesField

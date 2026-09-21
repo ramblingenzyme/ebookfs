@@ -322,13 +322,16 @@ func (d *Doc) metaSlot(property, idPrefix string, el *etree.Element) *Element {
 
 // UnrefinedMeta is a <meta property="..."> carrying a value for the package
 // itself rather than for another element in it.
-func (d *Doc) UnrefinedMeta(property, idPrefix string) *Element {
+//
+// It takes no id stem, unlike the other metaSlot constructors: an id is minted
+// only to bind a refinement, and nothing refines a meta that refines nothing.
+func (d *Doc) UnrefinedMeta(property string) *Element {
 	for _, m := range d.md.children("meta") {
 		if d.vocab.Same(attr(m, "property"), property) && attr(m, "refines") == "" {
-			return d.metaSlot(property, idPrefix, m)
+			return d.metaSlot(property, "", m)
 		}
 	}
-	return d.metaSlot(property, idPrefix, nil)
+	return d.metaSlot(property, "", nil)
 }
 
 // PropertyMetas is every meta carrying the property, refining or not, for a

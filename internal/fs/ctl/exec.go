@@ -32,35 +32,53 @@ func execute(cmd string, lib SearchDeleter, reg *registry.BookRegistry, cmdLog *
 	return r
 }
 
+// command is one ctl verb. params spells its arguments the way the usage line
+// and the help file both show them, and doubles as the arity: every parameter
+// is required, so their count is how many args the handler needs.
+//
+// The verb's name is the slice entry's Name and nothing else, so dispatch, the
+// usage line and the help file cannot disagree about it.
+type command struct {
+	Name   string
+	params string
+	desc   string
+	run    func([]string, SearchDeleter, *registry.BookRegistry) string
+}
+
+// commands is ordered, since the help file lists them in this order. Lookup is
+// a scan of eight entries against one admin typing.
+var commands = []command{
+	{"add-tag", "<tag> <id-spec>", "Add a tag to matching books.", addTag},
+	{"remove-tag", "<tag> <id-spec>", "Remove a tag from matching books.", removeTag},
+	{"set-status", "<status> <id-spec>", "Set reading status for matching books.\nStatus: unread, reading, read, abandoned.", setStatus},
+	{"set-rating", "<rating> <id-spec>", "Set rating (0-5) for matching books.", setRating},
+	{"delete", "<id>", "Delete a single book by id.", deleteBook},
+	{"rename-tag", "<old> <new>", "Rename a tag across every book. Renaming <old> onto a\ntag that already exists merges the two: books that had\nonly <old> now have <new>; books that had both drop the\nduplicate <old>.", renameTag},
+	{"rename-author", "<old> <new>", "Rename an author across every book.\n<old> is matched against display name OR sort name.\n<new> uses the \"Name | Sort\" format (same as the\nauthors field file).", renameAuthor},
+	{"rename-series", "<old> <new>", "Rename a series across every book.", renameSeries},
+}
+
+// usage is the line a command answers with when its arguments do not fit.
+func (c command) usage() string { return "usage: " + c.Name + " " + c.params }
+
+func (c command) arity() int { return len(strings.Fields(c.params)) }
+
 func dispatch(name string, args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
-	switch name {
-	case "add-tag":
-		return addTag(args, lib, reg)
-	case "remove-tag":
-		return removeTag(args, lib, reg)
-	case "set-status":
-		return setStatus(args, lib, reg)
-	case "set-rating":
-		return setRating(args, lib, reg)
-	case "delete":
-		return deleteBook(args, lib, reg)
-	case "rename-tag":
-		return renameTag(args, lib, reg)
-	case "rename-author":
-		return renameAuthor(args, lib, reg)
-	case "rename-series":
-		return renameSeries(args, lib, reg)
-	default:
-		return fmt.Sprintf("error: unknown command %q", name)
+	for _, c := range commands {
+		if c.Name != name {
+			continue
+		}
+		if len(args) != c.arity() {
+			return c.usage()
+		}
+		return c.run(args, lib, reg)
 	}
+	return fmt.Sprintf("error: unknown command %q", name)
 }
 
 // --- id-spec commands ---
 
 func addTag(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
-	if len(args) != 2 {
-		return "usage: add-tag <tag> <id-spec>"
-	}
 	tag := args[0]
 
 	return editSpec("edited", args[1], lib, reg, func(b *library.Book) *library.Edits {
@@ -73,9 +91,6 @@ func addTag(args []string, lib SearchDeleter, reg *registry.BookRegistry) string
 }
 
 func removeTag(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
-	if len(args) != 2 {
-		return "usage: remove-tag <tag> <id-spec>"
-	}
 	tag := args[0]
 
 	return editSpec("edited", args[1], lib, reg, func(b *library.Book) *library.Edits {
@@ -90,9 +105,6 @@ func removeTag(args []string, lib SearchDeleter, reg *registry.BookRegistry) str
 }
 
 func setStatus(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
-	if len(args) != 2 {
-		return "usage: set-status <status> <id-spec>"
-	}
 	status := args[0]
 
 	return editSpec("edited", args[1], lib, reg, func(b *library.Book) *library.Edits {
@@ -104,9 +116,6 @@ func setStatus(args []string, lib SearchDeleter, reg *registry.BookRegistry) str
 }
 
 func setRating(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
-	if len(args) != 2 {
-		return "usage: set-rating <rating> <id-spec>"
-	}
 	rating, err := strconv.ParseFloat(args[0], 64)
 	if err != nil {
 		return fmt.Sprintf("error: invalid rating %q", args[0])
@@ -123,9 +132,6 @@ func setRating(args []string, lib SearchDeleter, reg *registry.BookRegistry) str
 // --- single-book commands ---
 
 func deleteBook(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
-	if len(args) != 1 {
-		return "usage: delete <id>"
-	}
 	id64, err := strconv.ParseInt(args[0], 10, 64)
 	if err != nil {
 		return fmt.Sprintf("error: invalid id %q", args[0])
@@ -145,9 +151,6 @@ func deleteBook(args []string, lib SearchDeleter, reg *registry.BookRegistry) st
 // renaming a tag onto an existing one merges the two. There is no separate
 // merge command: this is the merge.
 func renameTag(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
-	if len(args) != 2 {
-		return "usage: rename-tag <old> <new>"
-	}
 	old, curr := args[0], args[1]
 
 	return editSelection("renamed", library.Query{Tags: []string{old}}, lib, reg, func(b *library.Book) *library.Edits {
@@ -166,9 +169,6 @@ func renameTag(args []string, lib SearchDeleter, reg *registry.BookRegistry) str
 }
 
 func renameAuthor(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
-	if len(args) != 2 {
-		return "usage: rename-author <old> <new>"
-	}
 	old := args[0]
 
 	newAuthor := textfmt.ParseAuthor(args[1])
@@ -203,9 +203,6 @@ func renameAuthor(args []string, lib SearchDeleter, reg *registry.BookRegistry) 
 }
 
 func renameSeries(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
-	if len(args) != 2 {
-		return "usage: rename-series <old> <new>"
-	}
 	old, curr := args[0], args[1]
 
 	return editSelection("renamed", library.Query{Series: []string{old}}, lib, reg, func(*library.Book) *library.Edits {
