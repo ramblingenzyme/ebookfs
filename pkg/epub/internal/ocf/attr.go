@@ -1,20 +1,25 @@
-package xml
+package ocf
 
 import (
 	"encoding/xml"
 	"net/url"
-	"strings"
+
+	epubxml "github.com/ramblingenzyme/ebookfs/pkg/epub/internal/xml"
 )
 
-// Collapse is the whitespace normalization XML 1.0 §3.3.3 requires of a reader.
-// Neither encoding/xml nor etree applies it.
-func Collapse(s string) string { return strings.Join(strings.Fields(s), " ") }
+// The attribute types the container's documents declare their fields with.
+// Types rather than helpers, so declaring a field is what applies the rule and
+// nothing has to be remembered at each read.
+//
+// They live here rather than in internal/xml because they only work through
+// encoding/xml, and this is the only package that uses it: every other document
+// in an epub is edited as well as read, which is etree's job.
 
 // AttrText is an attribute value, collapsed.
 type AttrText string
 
 func (a *AttrText) UnmarshalXMLAttr(x xml.Attr) error {
-	*a = AttrText(Collapse(x.Value))
+	*a = AttrText(epubxml.Collapse(x.Value))
 	return nil
 }
 
@@ -25,7 +30,7 @@ func (a *AttrText) UnmarshalXMLAttr(x xml.Attr) error {
 type AttrURL struct{ Raw, Decoded string }
 
 func (u *AttrURL) UnmarshalXMLAttr(x xml.Attr) error {
-	u.Raw = Collapse(x.Value)
+	u.Raw = epubxml.Collapse(x.Value)
 	u.Decoded = unescapePath(u.Raw)
 	return nil
 }

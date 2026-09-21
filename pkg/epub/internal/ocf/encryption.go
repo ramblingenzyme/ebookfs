@@ -4,8 +4,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-
-	epubxml "github.com/ramblingenzyme/ebookfs/pkg/epub/internal/xml"
 )
 
 // Reading META-INF/encryption.xml, which covers two unrelated things spelled
@@ -18,12 +16,12 @@ const EncryptionPath = "META-INF/encryption.xml"
 type encryptionXML struct {
 	Data []struct {
 		Method struct {
-			Algorithm epubxml.AttrText `xml:"Algorithm,attr"`
+			Algorithm AttrText `xml:"Algorithm,attr"`
 		} `xml:"EncryptionMethod"`
 		// Keep the nesting: > works on an element field, but an attr-mode tag
 		// containing it is read as a literal attribute name and matches nothing.
 		Ref struct {
-			URI epubxml.AttrURL `xml:"URI,attr"`
+			URI AttrURL `xml:"URI,attr"`
 		} `xml:"CipherData>CipherReference"`
 	} `xml:"EncryptedData"`
 }

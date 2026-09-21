@@ -3,8 +3,6 @@ package ocf
 import (
 	"encoding/xml"
 	"io"
-
-	epubxml "github.com/ramblingenzyme/ebookfs/pkg/epub/internal/xml"
 )
 
 // Reading META-INF/container.xml, which says where the package document is.
@@ -23,8 +21,8 @@ type Container struct {
 }
 
 type rootfile struct {
-	FullPath  epubxml.AttrURL  `xml:"full-path,attr"`
-	MediaType epubxml.AttrText `xml:"media-type,attr"`
+	FullPath  AttrURL  `xml:"full-path,attr"`
+	MediaType AttrText `xml:"media-type,attr"`
 }
 
 func NewContainer(r io.Reader) (*Container, error) {

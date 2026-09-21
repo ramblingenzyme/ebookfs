@@ -3,10 +3,12 @@
 // value should be is the parent opf package's business.
 //
 // A slot (slot.go) is one place a value is kept: element text, a refinement,
-// an opf: attribute, a named meta. Under them sit the finders: metadata.go for
-// the children of <metadata>, refine.go for the EPUB 3 refinement binding, and
-// the two naming systems anything new has to be spelled in: ns.go for xmlns:
-// prefixes, vocab.go for vocabulary ones. ns says how those two differ.
+// an opf: attribute, a named meta. docslots.go is where opf asks for one.
+//
+// Under them sit the finders: metadata.go for the children of <metadata>,
+// refine.go for the EPUB 3 refinement binding, and the two naming systems
+// anything new has to be spelled in: ns.go for xmlns: prefixes, vocab.go for
+// vocabulary ones. ns says how those two differ.
 package pkgdoc
 
 import (

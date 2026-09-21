@@ -1,9 +1,9 @@
-// Package xml holds the rules that apply to an epub's XML wherever it is read
-// or written: the whitespace and percent-decoding normalizations every
-// attribute goes through, the resolution of an href against the document
-// carrying it, and the namespace prefix a created element takes.
+// Package xml holds the three rules an epub's XML obeys wherever it appears:
+// the whitespace collapse a reader owes every value, the resolution of an href
+// against the document carrying it, and the namespace prefix a created element
+// takes.
 //
-// The normalizations are types rather than helpers so that declaring a field is
-// what applies the rule, leaving nothing to remember at each site. Href
-// resolution has no field to hang off, so it stays a function.
+// Each crosses a package boundary, which is what puts it here. A rule only one
+// document format needs belongs with that format, as the container's attribute
+// types do (internal/ocf).
 package xml
