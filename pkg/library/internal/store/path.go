@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-	"github.com/ramblingenzyme/ebookfs/internal/naming"
+	"github.com/ramblingenzyme/ebookfs/internal/util/naming"
 )
 
 // Layout is the single source of the naming convention, and ingest and move

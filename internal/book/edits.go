@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/text/language"
 
-	"github.com/ramblingenzyme/ebookfs/internal/naming"
+	"github.com/ramblingenzyme/ebookfs/internal/util/naming"
 )
 
 // Edits is a partial update to a Book's fields. A nil pointer leaves the field
