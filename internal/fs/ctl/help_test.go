@@ -36,7 +36,7 @@ func TestHelpRendersEveryCommand(t *testing.T) {
 func TestUsageMatchesTheDocumentedSignature(t *testing.T) {
 	for _, c := range commands {
 		t.Run(c.name, func(t *testing.T) {
-			got := dispatch(c.name, make([]string, c.arity()+1), nil, nil)
+			got := ctlFor(t).dispatch(c.name, make([]string, c.arity()+1))
 			if want := c.usage(); got != want {
 				t.Errorf("wrong-arity result = %q, want %q", got, want)
 			}

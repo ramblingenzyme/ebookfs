@@ -11,11 +11,14 @@ import (
 // here, so there is nothing per-command to read.
 const ctlReadHint = "write a command line here to run it; read log for results and help for usage.\n"
 
+var newStat = vfile.NewStat
+
 // CtlFile is the root-level "ctl" file. Writing a command line executes it on
 // close; the outcome is recorded in the command log (read via the log file)
 // rather than echoed back. Reading ctl returns a short usage hint.
-var newStat = vfile.NewStat
-
+//
+// It owns the two halves a command acts through, so exec.go's handlers are
+// methods here rather than functions threading the pair between them.
 type CtlFile struct {
 	fs.BaseFile
 	writes vfile.WriteBuffer
@@ -51,6 +54,6 @@ func (f *CtlFile) Close(fid uint64) error {
 	if s == "" {
 		return nil
 	}
-	execute(s, f.lib, f.reg, f.cmdLog)
+	f.execute(s)
 	return nil
 }

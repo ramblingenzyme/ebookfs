@@ -28,28 +28,33 @@ type File struct {
 // OpenFile opens the epub at path and reads the zip central directory. The
 // returned File keeps the handle open; the caller must Close it. It is non-nil
 // iff err is nil.
-func OpenFile(path string) (*File, error) {
+func OpenFile(path string) (_ *File, err error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
+	// Every failure below closes the handle. Stated once rather than at each
+	// return, since a handle escaping a failed open is one no caller can reach
+	// to release.
+	defer func() {
+		if err != nil {
+			f.Close()
+		}
+	}()
+
 	fi, err := f.Stat()
 	if err != nil {
-		f.Close()
 		return nil, err
 	}
 	zr, err := zip.NewReader(f, fi.Size())
 	if err != nil {
-		f.Close()
 		return nil, notEpub(path, err)
 	}
 	a, err := openArchive(zr)
 	if err != nil {
-		f.Close()
 		return nil, err
 	}
 	if err := a.validate(); err != nil {
-		f.Close()
 		return nil, err
 	}
 	return &File{path: path, f: f, a: a}, nil

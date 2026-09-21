@@ -60,19 +60,24 @@ type snapshot struct {
 // Nothing is rejected for its contents. A book with no title, no authors or a
 // series position the spec does not allow opens successfully and reports what
 // it carries, because whether that is usable is the caller's question.
-func Open(p string) (*Book, error) {
+func Open(p string) (_ *Book, err error) {
 	f, err := OpenFile(p)
 	if err != nil {
 		return nil, err
 	}
+	// OpenFile says why the close is deferred rather than written at each exit.
+	defer func() {
+		if err != nil {
+			f.Close()
+		}
+	}()
+
 	raw, err := f.ReadEntry(f.PackagePath())
 	if err != nil {
-		f.Close()
 		return nil, err
 	}
 	doc, err := opf.Parse(raw)
 	if err != nil {
-		f.Close()
 		return nil, err
 	}
 	return newBook(f, doc), nil

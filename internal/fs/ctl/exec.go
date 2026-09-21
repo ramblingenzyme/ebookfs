@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/textfmt"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
@@ -19,16 +18,16 @@ type SearchDeleter interface {
 	Delete(id int64) error
 }
 
-func execute(cmd string, lib SearchDeleter, reg *registry.BookRegistry, cmdLog *CommandLog) string {
+func (f *CtlFile) execute(cmd string) string {
 	name, args, err := parseCommand(cmd)
 	if err != nil {
 		r := fmt.Sprintf("error: %v", err)
-		cmdLog.Append(cmd, r)
+		f.cmdLog.Append(cmd, r)
 		return r
 	}
 
-	r := dispatch(name, args, lib, reg)
-	cmdLog.Append(cmd, r)
+	r := f.dispatch(name, args)
+	f.cmdLog.Append(cmd, r)
 	return r
 }
 
@@ -36,13 +35,18 @@ func execute(cmd string, lib SearchDeleter, reg *registry.BookRegistry, cmdLog *
 // and the help file both show them, and doubles as the arity: every parameter
 // is required, so their count is how many args the handler needs.
 //
+// A handler takes the file rather than hanging off it: a command acts through
+// ctl but is not behaviour of the ctl file, which answers reads and writes.
+// Keeping them out of the method set leaves that surface the four 9P methods
+// and the machinery below.
+//
 // The verb's name is the slice entry's Name and nothing else, so dispatch, the
 // usage line and the help file cannot disagree about it.
 type command struct {
 	name   string
 	params string
 	desc   string
-	run    func([]string, SearchDeleter, *registry.BookRegistry) string
+	run    func(*CtlFile, []string) string
 }
 
 // The descriptions long enough that escaping them into the table would make
@@ -81,7 +85,7 @@ func (c command) usage() string { return "usage: " + c.name + " " + c.params }
 
 func (c command) arity() int { return len(strings.Fields(c.params)) }
 
-func dispatch(name string, args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
+func (f *CtlFile) dispatch(name string, args []string) string {
 	for _, c := range commands {
 		if c.name != name {
 			continue
@@ -89,17 +93,17 @@ func dispatch(name string, args []string, lib SearchDeleter, reg *registry.BookR
 		if len(args) != c.arity() {
 			return c.usage()
 		}
-		return c.run(args, lib, reg)
+		return c.run(f, args)
 	}
 	return fmt.Sprintf("error: unknown command %q", name)
 }
 
 // --- id-spec commands ---
 
-func addTag(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
+func addTag(f *CtlFile, args []string) string {
 	tag := args[0]
 
-	return editSpec("edited", args[1], lib, reg, func(b *library.Book) *library.Edits {
+	return f.editSpec("edited", args[1], func(b *library.Book) *library.Edits {
 		if slices.Contains(b.Tags(), tag) {
 			return nil // already has tag
 		}
@@ -108,10 +112,10 @@ func addTag(args []string, lib SearchDeleter, reg *registry.BookRegistry) string
 	})
 }
 
-func removeTag(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
+func removeTag(f *CtlFile, args []string) string {
 	tag := args[0]
 
-	return editSpec("edited", args[1], lib, reg, func(b *library.Book) *library.Edits {
+	return f.editSpec("edited", args[1], func(b *library.Book) *library.Edits {
 		if !slices.Contains(b.Tags(), tag) {
 			return nil // doesn't have tag
 		}
@@ -122,10 +126,10 @@ func removeTag(args []string, lib SearchDeleter, reg *registry.BookRegistry) str
 	})
 }
 
-func setStatus(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
+func setStatus(f *CtlFile, args []string) string {
 	status := args[0]
 
-	return editSpec("edited", args[1], lib, reg, func(b *library.Book) *library.Edits {
+	return f.editSpec("edited", args[1], func(b *library.Book) *library.Edits {
 		if b.Status() == status {
 			return nil
 		}
@@ -133,13 +137,13 @@ func setStatus(args []string, lib SearchDeleter, reg *registry.BookRegistry) str
 	})
 }
 
-func setRating(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
+func setRating(f *CtlFile, args []string) string {
 	rating, err := strconv.ParseFloat(args[0], 64)
 	if err != nil {
 		return fmt.Sprintf("error: invalid rating %q", args[0])
 	}
 
-	return editSpec("edited", args[1], lib, reg, func(b *library.Book) *library.Edits {
+	return f.editSpec("edited", args[1], func(b *library.Book) *library.Edits {
 		if b.Rating() == rating {
 			return nil
 		}
@@ -149,16 +153,16 @@ func setRating(args []string, lib SearchDeleter, reg *registry.BookRegistry) str
 
 // --- single-book commands ---
 
-func deleteBook(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
+func deleteBook(f *CtlFile, args []string) string {
 	id64, err := strconv.ParseInt(args[0], 10, 64)
 	if err != nil {
 		return fmt.Sprintf("error: invalid id %q", args[0])
 	}
 
-	if err := lib.Delete(id64); err != nil {
+	if err := f.lib.Delete(id64); err != nil {
 		return fmt.Sprintf("error: book %d: %v", id64, err)
 	}
-	reg.Remove(id64)
+	f.reg.Remove(id64)
 	return fmt.Sprintf("ok: book %d deleted", id64)
 }
 
@@ -168,10 +172,10 @@ func deleteBook(args []string, lib SearchDeleter, reg *registry.BookRegistry) st
 // book already has new, old is dropped rather than duplicated, so
 // renaming a tag onto an existing one merges the two. There is no separate
 // merge command: this is the merge.
-func renameTag(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
+func renameTag(f *CtlFile, args []string) string {
 	old, curr := args[0], args[1]
 
-	return editSelection("renamed", library.Query{Tags: []string{old}}, lib, reg, func(b *library.Book) *library.Edits {
+	return f.editSelection("renamed", library.Query{Tags: []string{old}}, func(b *library.Book) *library.Edits {
 		updated := slices.Clone(b.Tags())
 		if slices.Contains(updated, curr) {
 			updated = slices.DeleteFunc(updated, func(t string) bool { return t == old })
@@ -186,7 +190,7 @@ func renameTag(args []string, lib SearchDeleter, reg *registry.BookRegistry) str
 	})
 }
 
-func renameAuthor(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
+func renameAuthor(f *CtlFile, args []string) string {
 	old := args[0]
 
 	newAuthor := textfmt.ParseAuthor(args[1])
@@ -194,7 +198,7 @@ func renameAuthor(args []string, lib SearchDeleter, reg *registry.BookRegistry) 
 		return "error: new author name must not be empty"
 	}
 
-	return editSelection("renamed", library.Query{Authors: []string{old}}, lib, reg, func(b *library.Book) *library.Edits {
+	return f.editSelection("renamed", library.Query{Authors: []string{old}}, func(b *library.Book) *library.Edits {
 		matched := false
 		updated := slices.Clone(b.Authors())
 		for i, a := range updated {
@@ -220,10 +224,10 @@ func renameAuthor(args []string, lib SearchDeleter, reg *registry.BookRegistry) 
 	})
 }
 
-func renameSeries(args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
+func renameSeries(f *CtlFile, args []string) string {
 	old, curr := args[0], args[1]
 
-	return editSelection("renamed", library.Query{Series: []string{old}}, lib, reg, func(*library.Book) *library.Edits {
+	return f.editSelection("renamed", library.Query{Series: []string{old}}, func(*library.Book) *library.Edits {
 		return &library.Edits{Series: &curr}
 	})
 }
@@ -255,12 +259,12 @@ func dedupeAuthors(authors []library.Author) []library.Author {
 
 // editSpec is editSelection for a command that names its books with an id-spec
 // rather than building the query itself.
-func editSpec(op, spec string, lib SearchDeleter, reg *registry.BookRegistry, editFn func(*library.Book) *library.Edits) string {
+func (f *CtlFile) editSpec(op, spec string, editFn func(*library.Book) *library.Edits) string {
 	query, err := parseSelection(spec)
 	if err != nil {
 		return fmt.Sprintf("error: %v", err)
 	}
-	return editSelection(op, query, lib, reg, editFn)
+	return f.editSelection(op, query, editFn)
 }
 
 // editSelection applies editFn to each book the selection addresses, reporting
@@ -272,8 +276,8 @@ func editSpec(op, spec string, lib SearchDeleter, reg *registry.BookRegistry, ed
 // filter it down. When the query is a bare id list, an id naming no book is
 // reported (so a typo isn't counted as success) and a duplicated id is
 // collapsed to a single visit; otherwise every returned book is visited.
-func editSelection(op string, query library.Query, lib SearchDeleter, reg *registry.BookRegistry, editFn func(*library.Book) *library.Edits) string {
-	books, err := lib.Search(query)
+func (f *CtlFile) editSelection(op string, query library.Query, editFn func(*library.Book) *library.Edits) string {
+	books, err := f.lib.Search(query)
 	if err != nil {
 		return fmt.Sprintf("error: query failed: %v", err)
 	}
@@ -315,7 +319,7 @@ func editSelection(op string, query library.Query, lib SearchDeleter, reg *regis
 			skipped++ // already in the requested state
 			continue
 		}
-		if err := reg.Edit(id, *edits); err != nil {
+		if err := f.reg.Edit(id, *edits); err != nil {
 			errs = append(errs, fmt.Sprintf("book %d: %v", id, err))
 		} else {
 			affected++
