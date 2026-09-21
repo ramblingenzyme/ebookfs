@@ -88,6 +88,40 @@ func JoinAuthors(authors []Author, sep string) string {
 	return strings.Join(names, sep)
 }
 
+// Bib holds the bibliographic data parsed from the epub.
+type Bib struct {
+	Title       string
+	SortTitle   string
+	Authors     []Author
+	Series      *SeriesRef
+	Language    string
+	Pubdate     string
+	Description string
+	Identifiers map[string]string
+	CoverPath   string // zip-relative path to cover image; empty if none
+	OpfSize     int64  // OPF uncompressed size from zip central directory; 0 if unavailable
+	CoverSize   int64  // cover uncompressed size from zip central directory; 0 if unavailable
+}
+
+// Location identifies where a book lives on disk.
+type Location struct {
+	EpubPath string // relative to the store root
+}
+
+func (l Location) Dir() string { return filepath.Dir(l.EpubPath) }
+
+func (l Location) Filename() string { return filepath.Base(l.EpubPath) }
+
+// Meta mirrors the meta.toml sidecar schema.
+type Meta struct {
+	ID           int64     `toml:"id"`
+	DateAdded    time.Time `toml:"date_added"`
+	DateModified time.Time `toml:"date_modified"`
+	Status       string    `toml:"status"` // unread | reading | read | abandoned
+	Rating       float64   `toml:"rating"`
+	Tags         []string  `toml:"custom_tags"` // toml key preserved for file compatibility
+}
+
 // Book is the complete record for a book in the library: where it lives
 // (Location), what it is (Bib), and its mutable sidecar state (Meta). Location
 // and Bib are embedded so their fields read flat (b.Title, b.EpubPath); Meta
@@ -137,117 +171,4 @@ func (b *Book) SeriesName() string {
 		return ""
 	}
 	return b.Series.Name
-}
-
-// ImmutableBook wraps a Book in read-only getters, so a caller outside this
-// package cannot mutate library state. It is a snapshot; pkg/library.Library
-// says when to fetch a fresh one.
-type ImmutableBook struct {
-	inner *Book
-}
-
-// NewImmutableBook wraps a Book. The caller must not retain or mutate b after
-// passing it to this function.
-func NewImmutableBook(b *Book) *ImmutableBook {
-	return &ImmutableBook{inner: b}
-}
-
-// Unwrap escapes the read-only wrapper. Only this module's packages may call
-// it; everything else goes through the getters.
-func Unwrap(b *ImmutableBook) *Book {
-	return b.inner
-}
-
-func (b *ImmutableBook) ID() int64 { return b.inner.Meta.ID }
-
-func (b *ImmutableBook) Title() string { return b.inner.Title }
-
-func (b *ImmutableBook) SortTitle() string { return b.inner.SortTitle }
-
-func (b *ImmutableBook) Authors() []Author { return slices.Clone(b.inner.Authors) }
-
-func (b *ImmutableBook) Series() *SeriesRef {
-	if b.inner.Series == nil {
-		return nil
-	}
-	s := *b.inner.Series
-	return &s
-}
-
-func (b *ImmutableBook) HasSeries() bool { return b.inner.HasSeries() }
-
-func (b *ImmutableBook) SeriesName() string { return b.inner.SeriesName() }
-
-func (b *ImmutableBook) SeriesIndex() string {
-	if b.inner.Series == nil {
-		return ""
-	}
-	return b.inner.Series.Index
-}
-
-// Language is a BCP 47 / ISO 639 code.
-func (b *ImmutableBook) Language() string { return b.inner.Language }
-
-func (b *ImmutableBook) Pubdate() string { return b.inner.Pubdate }
-
-func (b *ImmutableBook) Description() string { return b.inner.Description }
-
-func (b *ImmutableBook) Identifiers() map[string]string { return maps.Clone(b.inner.Identifiers) }
-
-func (b *ImmutableBook) CoverPath() string { return b.inner.CoverPath }
-
-func (b *ImmutableBook) OpfSize() int64 { return b.inner.OpfSize }
-
-func (b *ImmutableBook) CoverSize() int64 { return b.inner.CoverSize }
-
-func (b *ImmutableBook) EpubPath() string { return b.inner.EpubPath }
-
-func (b *ImmutableBook) Dir() string { return b.inner.Dir() }
-
-func (b *ImmutableBook) Filename() string { return b.inner.Filename() }
-
-func (b *ImmutableBook) EpubSize() int64 { return b.inner.EpubSize }
-
-func (b *ImmutableBook) DateAdded() time.Time { return b.inner.Meta.DateAdded }
-
-func (b *ImmutableBook) DateModified() time.Time { return b.inner.Meta.DateModified }
-
-func (b *ImmutableBook) Status() string { return b.inner.Meta.Status }
-
-func (b *ImmutableBook) Rating() float64 { return b.inner.Meta.Rating }
-
-func (b *ImmutableBook) Tags() []string { return slices.Clone(b.inner.Meta.Tags) }
-
-// Bib holds the bibliographic data parsed from the epub.
-type Bib struct {
-	Title       string
-	SortTitle   string
-	Authors     []Author
-	Series      *SeriesRef
-	Language    string
-	Pubdate     string
-	Description string
-	Identifiers map[string]string
-	CoverPath   string // zip-relative path to cover image; empty if none
-	OpfSize     int64  // OPF uncompressed size from zip central directory; 0 if unavailable
-	CoverSize   int64  // cover uncompressed size from zip central directory; 0 if unavailable
-}
-
-// Location identifies where a book lives on disk.
-type Location struct {
-	EpubPath string // relative to the store root
-}
-
-func (l Location) Dir() string { return filepath.Dir(l.EpubPath) }
-
-func (l Location) Filename() string { return filepath.Base(l.EpubPath) }
-
-// Meta mirrors the meta.toml sidecar schema.
-type Meta struct {
-	ID           int64     `toml:"id"`
-	DateAdded    time.Time `toml:"date_added"`
-	DateModified time.Time `toml:"date_modified"`
-	Status       string    `toml:"status"` // unread | reading | read | abandoned
-	Rating       float64   `toml:"rating"`
-	Tags         []string  `toml:"custom_tags"` // toml key preserved for file compatibility
 }

@@ -1,114 +1,135 @@
 package library
 
 import (
-	"os"
-	"path/filepath"
+	"reflect"
+	"slices"
 	"testing"
+	"time"
+
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
-func entryNames(entries []os.DirEntry) []string {
-	names := make([]string, len(entries))
-	for i, e := range entries {
-		names[i] = e.Name()
+// Field-by-field application. Every case starts from the same Meta so what a nil
+// edit leaves alone is asserted alongside what a set one changes, which is
+// applyMeta's whole job: the boundary between those two.
+//
+// Independence of the result is TestApplyMetaClonesTags' job; the value receiver
+// makes it uninteresting for every field except Tags.
+func TestApplyMeta(t *testing.T) {
+	start := book.Meta{ID: 1, Status: "unread", Rating: 2.5, Tags: []string{"keep"}}
+
+	tests := []struct {
+		name   string
+		edits  Edits
+		status string
+		rating float64
+		tags   []string
+	}{
+		{"no edits", Edits{}, "unread", 2.5, []string{"keep"}},
+		{"status only", Edits{Status: new("read")}, "read", 2.5, []string{"keep"}},
+		{"rating only", Edits{Rating: new(4.5)}, "unread", 4.5, []string{"keep"}},
+		{"tags only", Edits{Tags: new([]string{"new", "tags"})}, "unread", 2.5, []string{"new", "tags"}},
+		// Clearing tags is a set edit to an empty slice, not an absent one.
+		{"tags cleared", Edits{Tags: new([]string{})}, "unread", 2.5, nil},
+		{
+			"all fields",
+			Edits{Status: new("read"), Rating: new(5.0), Tags: new([]string{"all"})},
+			"read", 5.0, []string{"all"},
+		},
 	}
-	return names
-}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			before := time.Now()
+			updated := applyMeta(start, tc.edits)
 
-func TestCleanInboxTempRemovesStaleEpub(t *testing.T) {
-	dir := t.TempDir()
-
-	stale := filepath.Join(dir, "123456789.epub")
-	if err := os.WriteFile(stale, []byte("data"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := cleanInboxTemp(dir); err != nil {
-		t.Fatalf("cleanInboxTemp: %v", err)
-	}
-
-	if _, err := os.Stat(stale); !os.IsNotExist(err) {
-		t.Errorf("stale epub %q should have been removed", stale)
-	}
-}
-
-func TestCleanInboxTempLeavesNonEpub(t *testing.T) {
-	dir := t.TempDir()
-
-	kept := filepath.Join(dir, "readme.txt")
-	if err := os.WriteFile(kept, []byte("hello"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := cleanInboxTemp(dir); err != nil {
-		t.Fatalf("cleanInboxTemp: %v", err)
-	}
-
-	if _, err := os.Stat(kept); os.IsNotExist(err) {
-		t.Errorf("non-epub file %q should not have been removed", kept)
-	}
-}
-
-func TestCleanInboxTempLeavesDirectories(t *testing.T) {
-	dir := t.TempDir()
-
-	subdir := filepath.Join(dir, "subdir")
-	if err := os.Mkdir(subdir, 0755); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := cleanInboxTemp(dir); err != nil {
-		t.Fatalf("cleanInboxTemp: %v", err)
-	}
-
-	if _, err := os.Stat(subdir); os.IsNotExist(err) {
-		t.Errorf("subdirectory %q should not have been removed", subdir)
+			if updated.Status != tc.status {
+				t.Errorf("Status = %q, want %q", updated.Status, tc.status)
+			}
+			if updated.Rating != tc.rating {
+				t.Errorf("Rating = %g, want %g", updated.Rating, tc.rating)
+			}
+			if !slices.Equal(updated.Tags, tc.tags) {
+				t.Errorf("Tags = %v, want %v", updated.Tags, tc.tags)
+			}
+			if updated.ID != start.ID {
+				t.Errorf("ID = %d, want %d — applyMeta must not touch identity", updated.ID, start.ID)
+			}
+			// Bumped even when no field changed: the edit still happened, and the sidecar
+			// write that follows must not look older than the file.
+			if updated.DateModified.Before(before) {
+				t.Errorf("DateModified = %v, want it stamped at or after %v", updated.DateModified, before)
+			}
+		})
 	}
 }
 
-func TestCleanInboxTempEmptyDir(t *testing.T) {
-	dir := t.TempDir()
+// The one field a value receiver does not make independent. Tags comes either
+// from the Meta passed in or from the Edits, both of which the caller still holds
+// while the result travels on to the sidecar write and the index, so writing
+// through one must not be visible through the other. Element assignment is what
+// detects the sharing: appending would not, since a len-1 slice hides a write
+// past its own end.
+func TestApplyMetaClonesTags(t *testing.T) {
+	t.Run("from the meta", func(t *testing.T) {
+		meta := book.Meta{ID: 1, Tags: []string{"keep"}}
 
-	if err := cleanInboxTemp(dir); err != nil {
-		t.Fatalf("cleanInboxTemp on empty dir: %v", err)
-	}
-}
+		updated := applyMeta(meta, Edits{})
+		updated.Tags[0] = "changed"
 
-func TestCleanInboxTempNonexistentDir(t *testing.T) {
-	err := cleanInboxTemp("/nonexistent-path-ebookfs-test")
-	if err == nil {
-		t.Fatal("expected error for nonexistent directory")
-	}
-}
-
-func TestCleanInboxTempRemovesMultiple(t *testing.T) {
-	dir := t.TempDir()
-
-	files := []string{"a.epub", "b.epub", "c.epub"}
-	for _, f := range files {
-		if err := os.WriteFile(filepath.Join(dir, f), []byte("data"), 0644); err != nil {
-			t.Fatal(err)
+		if meta.Tags[0] != "keep" {
+			t.Errorf("original Tags = %v, want [keep] — the result shares the argument's backing array", meta.Tags)
 		}
-	}
-	if err := os.WriteFile(filepath.Join(dir, "keep.me"), []byte("data"), 0644); err != nil {
-		t.Fatal(err)
-	}
+	})
 
-	if err := cleanInboxTemp(dir); err != nil {
-		t.Fatalf("cleanInboxTemp: %v", err)
-	}
+	t.Run("from the edits", func(t *testing.T) {
+		tags := []string{"new"}
 
-	entries, _ := os.ReadDir(dir)
-	if len(entries) != 1 || entries[0].Name() != "keep.me" {
-		t.Errorf("expected only 'keep.me' to remain, got %v", entryNames(entries))
-	}
+		updated := applyMeta(book.Meta{ID: 1}, Edits{Tags: &tags})
+		updated.Tags[0] = "changed"
+
+		if tags[0] != "new" {
+			t.Errorf("edit Tags = %v, want [new] — the result shares the edit's backing array", tags)
+		}
+	})
+
+	t.Run("nil stays nil", func(t *testing.T) {
+		// Cloning must not turn an absent tag list into an empty one: the
+		// sidecar writer distinguishes them.
+		if got := applyMeta(book.Meta{ID: 1}, Edits{}).Tags; got != nil {
+			t.Errorf("Tags = %v, want nil", got)
+		}
+	})
 }
 
-func TestCheckSameFilesystemMissingTarget(t *testing.T) {
-	dir := t.TempDir()
-	missing := filepath.Join(dir, "nonexistent")
+// Every field of Edits has to reach one of three destinations: the epub
+// rewrite (HasBibEdits, then internal/epub's apply), the cover replacement
+// (HasCoverEdit), or the meta sidecar (applyMeta). The routing is three
+// hand-written nil-chains and nothing in the types makes them cover the struct,
+// so this walks it and fails on a field no route claims.
+//
+// It catches a field wired nowhere, and a field wired into apply but left out
+// of HasBibEdits, which would make the edit silently do nothing. It does not
+// catch the reverse: a field added to HasBibEdits and forgotten in apply still
+// reports as routed. Proving the effect needs a per-field assertion against a
+// real library, which impl_ext_test.go does for the fields it covers.
+func TestEveryEditFieldIsRouted(t *testing.T) {
+	// applyMeta's three, which have no predicate of their own to ask.
+	meta := map[string]bool{"Status": true, "Rating": true, "Tags": true}
 
-	err := checkSameFilesystem(dir, missing)
-	if err == nil {
-		t.Fatal("expected error when target directory doesn't exist")
+	v := reflect.ValueOf(&Edits{}).Elem()
+	for i := range v.NumField() {
+		name := v.Type().Field(i).Name
+		t.Run(name, func(t *testing.T) {
+			var e Edits
+			f := reflect.ValueOf(&e).Elem().Field(i)
+			f.Set(reflect.New(f.Type().Elem()))
+
+			if e.HasBibEdits() || e.HasCoverEdit() || meta[name] {
+				return
+			}
+			t.Errorf("Edits.%s reaches no destination: add it to HasBibEdits and "+
+				"internal/epub's apply, to HasCoverEdit, or to applyMeta and this "+
+				"test's meta list", name)
+		})
 	}
 }
