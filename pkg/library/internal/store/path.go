@@ -24,29 +24,18 @@ func (s *Store) Layout(authors []book.Author, title string, id int64) book.Locat
 }
 
 func epubFilename(authors []book.Author, title string) string {
-	// Epub files may be copied directly to FAT filesystems (e.g. Kobo), so
-	// sanitize components for FAT; fall back to the raw value if sanitization
-	// produces an empty string (pathological titles/authors).
-	fatTitle, err := naming.ForFAT(title)
-	if err != nil {
-		fatTitle = title
-	}
+	fatTitle := naming.ForFAT(title)
 	if len(authors) == 0 {
 		return fmt.Sprintf("%s.epub", fatTitle)
 	}
-	joined := book.JoinAuthors(authors, " & ")
-	fatAuthor, err := naming.ForFAT(joined)
-	if err != nil {
-		fatAuthor = joined
-	}
-	return fmt.Sprintf("%s - %s.epub", fatTitle, fatAuthor)
+	return fmt.Sprintf("%s - %s.epub", fatTitle, naming.ForFAT(book.JoinAuthors(authors, book.AuthorSep)))
 }
 
 // Both components are made path-safe: a '/' in a title or an author name would
 // otherwise split one directory into two. epubFilename does its own, stricter
 // pass for the file itself.
 func authorDirName(authors []book.Author) string {
-	return naming.PathSafe(book.JoinAuthors(authors, " & "))
+	return naming.PathSafe(book.JoinAuthors(authors, book.AuthorSep))
 }
 
 func canonicalDir(authors []book.Author, title string, id int64) string {

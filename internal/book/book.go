@@ -65,6 +65,12 @@ func StatusList() string {
 	return strings.Join(Statuses[:len(Statuses)-1], ", ") + ", or " + Statuses[len(Statuses)-1]
 }
 
+// AuthorSep joins co-authors in every name derived for filing: the library
+// directory, the epub filename, and the reader export's folder. All three must
+// agree or a book is written under one name and looked up under another, so
+// they read the separator from here rather than spelling it.
+const AuthorSep = " & "
+
 // JoinAuthors renders authors as a display string joined by sep, skipping empty
 // names and falling back to UnknownAuthor when none remain. Callers differ only
 // in sep (" & " for directory names, ", " for log lines), so the filter and

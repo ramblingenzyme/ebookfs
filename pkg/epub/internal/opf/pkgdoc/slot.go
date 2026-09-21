@@ -1,6 +1,9 @@
 package pkgdoc
 
-import "github.com/beevik/etree"
+import (
+	"github.com/beevik/etree"
+	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/xml"
+)
 
 // A Slot is one string value together with the place in the document that
 // records it. The opf package decides what a value should be; a slot knows how
@@ -221,7 +224,7 @@ func (a *OPFAttr) Set(value string) {
 		existing.Value = value
 		return
 	}
-	el.CreateAttr(qualify(a.d.ns.opf(), a.name), value)
+	el.CreateAttr(xml.Qualify(a.d.ns.opf(), a.name), value)
 }
 
 func (a *OPFAttr) Clear() {
@@ -274,7 +277,7 @@ func (d *Doc) dcSlot(tag string, el *etree.Element) *Element {
 		d:        d,
 		el:       el,
 		idPrefix: "ebookfs-" + tag,
-		newEl:    func() *etree.Element { return etree.NewElement(qualify(d.dcPrefix(), tag)) },
+		newEl:    func() *etree.Element { return etree.NewElement(xml.Qualify(d.dcPrefix(), tag)) },
 		parent:   d.md.dcParent,
 	}
 }

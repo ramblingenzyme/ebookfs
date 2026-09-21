@@ -17,6 +17,7 @@ import (
 	"errors"
 
 	"github.com/beevik/etree"
+	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/xml"
 )
 
 type Doc struct {
@@ -88,7 +89,7 @@ func (f authorsField) set(names []string) {
 			slot(existing[i]).set(name)
 			continue
 		}
-		el := etree.NewElement(qualify(last.Space, "docAuthor"))
+		el := etree.NewElement(xml.Qualify(last.Space, "docAuthor"))
 		f.d.ncx.InsertChildAt(last.Index()+1, el)
 		slot(el).set(name)
 		last = el
@@ -114,16 +115,7 @@ func (s textSlot) set(value string) {
 	}
 	t := s.owner.SelectElement("text")
 	if t == nil {
-		t = s.owner.CreateElement(qualify(s.owner.Space, "text"))
+		t = s.owner.CreateElement(xml.Qualify(s.owner.Space, "text"))
 	}
 	t.SetText(value)
-}
-
-// qualify puts a created element in its sibling's namespace prefix, normally
-// the empty default, so a file using an explicit prefix keeps it.
-func qualify(space, tag string) string {
-	if space == "" {
-		return tag
-	}
-	return space + ":" + tag
 }

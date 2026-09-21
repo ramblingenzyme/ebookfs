@@ -14,7 +14,7 @@ import (
 const metaFilename = "meta.toml"
 
 func (s *Store) metaPath(loc book.Location) string {
-	return filepath.Join(s.root, loc.Dir(), metaFilename)
+	return filepath.Join(s.AbsPath(loc.Dir()), metaFilename)
 }
 
 func (s *Store) ReadMeta(loc book.Location) (*book.Meta, error) {
@@ -25,6 +25,10 @@ func (s *Store) writeMeta(loc book.Location, meta *book.Meta) error {
 	return writeMeta(s.metaPath(loc), meta)
 }
 
+// readMeta and writeMeta take a path rather than a Location, so the file
+// handling stays separable from the layout metaPath owns. Tests reach them
+// directly for a missing file, a malformed sidecar and an unwritable
+// directory, none of which is reachable through a Store worth building.
 func readMeta(path string) (*book.Meta, error) {
 	buf, err := os.ReadFile(path)
 	if err != nil {

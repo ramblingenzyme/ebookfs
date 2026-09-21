@@ -38,12 +38,9 @@ func (d *byIDDir) Add(dir *book.BookDir) {
 		d.maxID.Store(id)
 		d.updatePad(id)
 	}
-	n := &namedBookDir{
-		BookDir:  dir,
-		baseStat: *newDirStat(d.f, ""),
-		name:     func(b *library.Book) string { return idEntryName(b, int(d.pad.Load())) },
-	}
-	d.StaticDir.AddChild(n)
+	d.StaticDir.AddChild(newNamedBookDir(d.f, dir, func(b *library.Book) string {
+		return idEntryName(b, int(d.pad.Load()))
+	}))
 }
 
 func (d *byIDDir) Remove(dir *book.BookDir) {

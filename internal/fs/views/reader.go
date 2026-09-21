@@ -8,17 +8,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// ReaderExporter is what the reader view needs of an exporter. Four of the six
-// are its own; book.Renderer covers the two it hands to the ReaderFile it
-// constructs, which is why this one cannot narrow further.
-type ReaderExporter interface {
-	book.Renderer
-	Includes(*library.Book) bool  // whether the book appears in this view
-	Dirname(*library.Book) string // FAT-safe export directory name
-	Filename(*library.Book) string
-	Warm(*library.Book) // non-blocking proactive warm hint
-}
-
 // readerDir is the reader/ export view: the books whose status is in the
 // configured set, grouped by author, served through the injected Exporter. It
 // mirrors byAuthorDir, but its leaves are export files rather than bookDirs and
@@ -26,10 +15,13 @@ type ReaderExporter interface {
 // co-authored book is exported once, not duplicated under each author.
 type readerDir struct {
 	groupingDir
-	exp ReaderExporter
+	// library.Exporter rather than a narrowed interface: the view uses four of
+	// its six methods and hands the other two to the ReaderFile it builds, so a
+	// declaration here would restate the whole contract under a second name.
+	exp library.Exporter
 }
 
-func NewReaderDir(reg *registry.BookRegistry, exp ReaderExporter) *readerDir {
+func NewReaderDir(reg *registry.BookRegistry, exp library.Exporter) *readerDir {
 	d := &readerDir{
 		groupingDir: newGroupingDir(reg.FS(), "reader"),
 		exp:         exp,

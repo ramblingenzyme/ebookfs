@@ -32,15 +32,6 @@ func detach(e *etree.Element) {
 	}
 }
 
-// qualify joins an xmlns: prefix to a local name, never a vocabulary prefix,
-// which is vocab.go's spell.
-func qualify(prefix, tag string) string {
-	if prefix == "" {
-		return tag
-	}
-	return prefix + ":" + tag
-}
-
 // ensureID returns the element's id, minting "stem", "stem-2", … if it has
 // none. Uniqueness is checked against every id in the document, not just those
 // of the same kind: XML 1.0 §3.3.1 makes ID values unique document-wide.

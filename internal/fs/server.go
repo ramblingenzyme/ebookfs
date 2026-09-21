@@ -57,7 +57,7 @@ type Library interface {
 
 // SetupServer wires the FS, registry, and views without starting the 9P
 // listener, so the wiring can be tested without blocking.
-func SetupServer(lib Library, exp views.ReaderExporter, searchTTL time.Duration, searchMaxHandles int) (*Server, error) {
+func SetupServer(lib Library, exp library.Exporter, searchTTL time.Duration, searchMaxHandles int) (*Server, error) {
 	ebookfs, root := fs.NewFS("glenda", "glenda", 0555, fs.IgnorePermissions())
 	reg := registry.NewBookRegistry(ebookfs, lib)
 	ebookfs.CreateFile = vfile.DispatchCreate

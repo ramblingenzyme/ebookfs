@@ -3,8 +3,6 @@ package index
 import (
 	"database/sql"
 	"fmt"
-	"log/slog"
-	"time"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/drift"
@@ -83,21 +81,13 @@ func (idx *Index) Stats() (*Stats, error) {
 		TotalSize: stats.TotalSize,
 	}
 
+	// The aggregate columns come back as any, since MAX over a text column has
+	// no declared type, and are absent from an empty library.
 	if dateStr, ok := stats.LastAdded.(string); ok && dateStr != "" {
-		t, err := time.Parse(time.RFC3339, dateStr)
-		if err != nil {
-			slog.Warn("stats: invalid last_added", "last_added", dateStr, "error", err)
-		} else {
-			s.LastAdded = t
-		}
+		s.LastAdded = parseDateField(dateStr, "last_added", "source", "stats")
 	}
 	if dateStr, ok := stats.LastModified.(string); ok && dateStr != "" {
-		t, err := time.Parse(time.RFC3339, dateStr)
-		if err != nil {
-			slog.Warn("stats: invalid last_modified", "last_modified", dateStr, "error", err)
-		} else {
-			s.LastModified = t
-		}
+		s.LastModified = parseDateField(dateStr, "last_modified", "source", "stats")
 	}
 
 	return s, nil

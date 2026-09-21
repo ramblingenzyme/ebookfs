@@ -25,6 +25,18 @@ type namedBookDir struct {
 	name     func(*library.Book) string
 }
 
+// newNamedBookDir presents dir under the name fn computes. The stat carries an
+// empty name because Stat overwrites it on every call, so what it is really
+// for is the Qid: a fresh one, distinct from the bare BookDir's, so the same
+// book listed in two views is two entries.
+func newNamedBookDir(f *fs.FS, dir *book.BookDir, fn func(*library.Book) string) *namedBookDir {
+	return &namedBookDir{
+		BookDir:  dir,
+		baseStat: *newDirStat(f, ""),
+		name:     fn,
+	}
+}
+
 func (n *namedBookDir) Stat() proto.Stat {
 	s := n.baseStat
 	s.Name = n.name(n.BookDir.Book())

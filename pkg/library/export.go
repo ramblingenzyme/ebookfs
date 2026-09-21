@@ -61,11 +61,7 @@ func (p readerPolicy) Includes(b *Book) bool {
 }
 
 func (p readerPolicy) Dirname(b *Book) string {
-	name := book.JoinAuthors(b.Authors(), " & ")
-	if fat, err := naming.ForFAT(name); err == nil {
-		name = fat
-	}
-	return name
+	return naming.ForFAT(book.JoinAuthors(b.Authors(), book.AuthorSep))
 }
 
 // kepubCache serves converted kepubs. Close/Open/Size/Warm/Filename are the

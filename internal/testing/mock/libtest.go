@@ -111,8 +111,8 @@ func (r Renderer) Size(b *library.Book) (int64, bool) {
 	return 0, false
 }
 
-// Exporter is views' ReaderExporter: Renderer plus the four methods that
-// belong to the view rather than the file. Membership runs off StatusList,
+// Exporter is library.Exporter: Renderer plus the four methods that belong to
+// the view rather than the file. Membership runs off StatusList,
 // which is the only part these tests drive, so it is the direct field; the
 // naming methods have the real behaviour behind them.
 type Exporter struct {
@@ -125,7 +125,7 @@ func (e Exporter) Includes(b *library.Book) bool {
 }
 
 func (e Exporter) Dirname(b *library.Book) string {
-	return book.JoinAuthors(b.Authors(), " & ")
+	return book.JoinAuthors(b.Authors(), book.AuthorSep)
 }
 
 func (e Exporter) Filename(b *library.Book) string { return b.Filename() }

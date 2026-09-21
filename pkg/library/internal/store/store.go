@@ -152,7 +152,7 @@ func removeIfEmpty(dir string) error {
 // Delete removes the book directory at loc, and the author directory above it
 // when that was its last book.
 func (s *Store) Delete(loc book.Location) error {
-	path := filepath.Join(s.root, loc.Dir())
+	path := s.AbsPath(loc.Dir())
 	if err := os.RemoveAll(path); err != nil {
 		return err
 	}

@@ -31,12 +31,20 @@ func sanitize(s, forbidden string) (string, error) {
 	return out, nil
 }
 
-// ForFAT makes s safe for use as a filename on a FAT filesystem.
-// FAT forbids \ : * ? " < > | in addition to the characters Sanitize already
-// handles, and filenames may not end with a space or period (covered by the
-// shared trim).
-func ForFAT(s string) (string, error) {
-	return sanitize(s, `/\:*?"<>|`)
+// ForFAT makes s safe for use as a filename on a FAT filesystem, which an epub
+// is copied to directly on a Kobo. FAT forbids \ : * ? " < > | in addition to
+// the characters sanitize already handles, and filenames may not end with a
+// space or period (covered by the shared trim).
+//
+// A value that sanitizes away entirely comes back unchanged rather than as an
+// error, since every caller wants a name and none of them can do better with
+// the failure than use what they were given.
+func ForFAT(s string) string {
+	out, err := sanitize(s, `/\:*?"<>|`)
+	if err != nil {
+		return s
+	}
+	return out
 }
 
 // PathSafe makes s usable as a single path component. Metadata values are text
