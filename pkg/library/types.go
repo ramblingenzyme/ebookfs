@@ -10,6 +10,10 @@ import (
 // a frontend names one package and the value it holds is the one the internals
 // built.
 
+// Book is a read-only snapshot of a book's state. Library's concurrency
+// contract says when a caller needs a fresh one.
+type Book = book.ImmutableBook
+
 type Edits = book.Edits
 type ValidationError = book.ValidationError
 type FieldError = book.FieldError
