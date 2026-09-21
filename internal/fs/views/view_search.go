@@ -134,12 +134,8 @@ func (f *searchCtlFile) Write(fid uint64, offset uint64, data []byte) (uint32, e
 }
 
 func (f *searchCtlFile) Close(fid uint64) error {
-	buf := f.writes.Take(fid)
+	s := f.writes.TakeText(fid)
 	_ = f.SnapshotFile.Close(fid)
-	if buf == nil {
-		return nil
-	}
-	s := strings.TrimSpace(string(buf))
 	if s == "" {
 		return nil
 	}

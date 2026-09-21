@@ -3,21 +3,30 @@ package book
 import (
 	"errors"
 
-	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// content opens the book's epub through lib. Both failures are worded here
-// because every file in this package meets them: a BookDir built without a
-// library, which the benchmark does, and a book removed since the fid was
+// snapshot returns the book the file serves. present says whether the backend
+// that reads it was wired up; a BookDir built without one, as the benchmark
+// does, reports missing. Both failures are worded here because every file in
+// this package meets them, the second when a book is removed after its fid was
 // opened.
-func content(lib ContentReader, book func() *library.Book) (library.EpubReader, error) {
-	if lib == nil {
-		return nil, errors.New("library not available")
+func snapshot(present bool, missing string, book func() *library.Book) (*library.Book, error) {
+	if !present {
+		return nil, errors.New(missing)
 	}
 	b := book()
 	if b == nil {
 		return nil, errors.New("book snapshot not available")
+	}
+	return b, nil
+}
+
+// content opens the book's epub through lib.
+func content(lib ContentReader, book func() *library.Book) (library.EpubReader, error) {
+	b, err := snapshot(lib != nil, "library not available", book)
+	if err != nil {
+		return nil, err
 	}
 	return lib.Content(b.ID())
 }
@@ -34,13 +43,4 @@ func contentBytes(lib ContentReader, book func() *library.Book, pick func(librar
 		defer r.Close()
 		return pick(r)
 	}
-}
-
-// statLen reports base with Length read from the current snapshot. A book
-// removed since the fid was opened leaves the length as base carries it.
-func statLen(base proto.Stat, book func() *library.Book, size func(*library.Book) int64) proto.Stat {
-	if b := book(); b != nil {
-		base.Length = uint64(size(b))
-	}
-	return base
 }

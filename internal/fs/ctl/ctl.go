@@ -1,8 +1,6 @@
 package ctl
 
 import (
-	"strings"
-
 	"github.com/knusbaum/go9p/fs"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
@@ -47,11 +45,7 @@ func (f *CtlFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) 
 // Close commits the buffered writes from fid and executes the command. The
 // result is recorded in the command log rather than returned here.
 func (f *CtlFile) Close(fid uint64) error {
-	buf := f.writes.Take(fid)
-	if buf == nil {
-		return nil
-	}
-	s := strings.TrimSpace(string(buf))
+	s := f.writes.TakeText(fid)
 	if s == "" {
 		return nil
 	}

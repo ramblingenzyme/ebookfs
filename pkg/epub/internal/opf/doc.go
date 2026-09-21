@@ -53,6 +53,22 @@ type Metadata struct {
 
 type Doc struct{ d *pkgdoc.Doc }
 
+// Where a field is recorded twice, once the way its spec version says and once
+// as the proprietary meta calibre writes, these decide which halves a write
+// touches. Title sort and series are both encoded that way and both ask here,
+// so the rule is stated once even though each field keeps its own branch.
+
+// writeV3 reports whether the EPUB 3 slot takes the value. One already in the
+// file is rewritten whatever version the package claims, since leaving it stale
+// would outrank the calibre meta on the way back in. A v3 package without one
+// gets one; a v2 package without one stays without.
+func writeV3(d *pkgdoc.Doc, present bool) bool { return present || d.EPUB3() }
+
+// writeCalibre reports whether the calibre meta takes the value. A v2 package
+// always gets one, having no standard mechanism; a v3 package only if it
+// already carried one, kept in step rather than left contradicting the v3 slot.
+func writeCalibre(d *pkgdoc.Doc, present bool) bool { return !d.EPUB3() || present }
+
 func Parse(b []byte) (*Doc, error) {
 	d, err := pkgdoc.Parse(b)
 	if err != nil {

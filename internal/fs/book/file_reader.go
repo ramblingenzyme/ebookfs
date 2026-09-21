@@ -1,8 +1,6 @@
 package book
 
 import (
-	"errors"
-
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
@@ -29,18 +27,11 @@ type ReaderFile struct {
 func NewReaderFile(stat *proto.Stat, exp Renderer, book func() *library.Book) *ReaderFile {
 	return &ReaderFile{
 		ReadAtFile: vfile.NewReadAtFile(stat, func() (library.EpubReader, error) {
-			if exp == nil {
-				return nil, errors.New("exporter not available")
-			}
-			b := book()
-			if b == nil {
-				return nil, errors.New("book snapshot not available")
-			}
-			r, err := exp.Open(b)
+			b, err := snapshot(exp != nil, "exporter not available", book)
 			if err != nil {
 				return nil, err
 			}
-			return r, nil
+			return exp.Open(b)
 		}),
 		exp:  exp,
 		book: book,

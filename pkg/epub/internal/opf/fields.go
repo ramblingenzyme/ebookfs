@@ -52,20 +52,13 @@ func (f titleField) set(title, sort *string) {
 		value = xml.Collapse(*sort)
 	}
 
-	// Rewritten in place wherever the file has a refinement, whatever version it
-	// claims, since a stale one would outrank the calibre meta on the way back
-	// in. A v3 package with none gets one; a v2 package with none stays without.
 	refine := el.Refine("file-as")
-	if refine.Exists() || f.d.EPUB3() {
+	if writeV3(f.d, refine.Exists()) {
 		pkgdoc.Put(refine, value)
 	}
-
-	// A v2 package always gets the calibre meta; a v3 package only if it already
-	// carried one, kept in step rather than left contradicting the refinement.
-	if f.d.EPUB3() && !f.calibreSort().Exists() {
-		return
+	if writeCalibre(f.d, f.calibreSort().Exists()) {
+		pkgdoc.Put(f.calibreSort(), value)
 	}
-	pkgdoc.Put(f.calibreSort(), value)
 }
 
 // dropSegments removes every dc:title except keep, with its refinements. A

@@ -2,6 +2,7 @@ package vfile
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -59,4 +60,12 @@ func (w *WriteBuffer) Take(fid uint64) []byte {
 	buf := w.bufs[fid]
 	delete(w.bufs, fid)
 	return buf
+}
+
+// TakeText is Take for a file whose writes are a command line rather than
+// bytes: the buffer trimmed of surrounding whitespace. A fid that wrote nothing
+// and one that wrote only whitespace both come back "", so a caller checks the
+// result once instead of testing the buffer for nil and again for empty.
+func (w *WriteBuffer) TakeText(fid uint64) string {
+	return strings.TrimSpace(string(w.Take(fid)))
 }

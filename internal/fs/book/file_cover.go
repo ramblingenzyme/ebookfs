@@ -28,7 +28,11 @@ func newCoverFile(stat *proto.Stat, lib ContentReader, edit func(int64, library.
 }
 
 func (c *coverFile) Stat() proto.Stat {
-	return statLen(c.BaseFile.Stat(), c.book, (*library.Book).CoverSize)
+	s := c.BaseFile.Stat()
+	if b := c.book(); b != nil {
+		s.Length = uint64(b.CoverSize())
+	}
+	return s
 }
 
 func (c *coverFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {

@@ -63,24 +63,19 @@ func (f seriesField) set(s *Series) {
 		return
 	}
 
-	// Rewritten in place wherever the file has one, whatever version it claims,
-	// since a stale collection would outrank the calibre metas on the way back
-	// in. A v3 package with none gets one; a v2 package with none stays without
-	// one, but still loses any duplicate or empty-named collection.
-	if coll.Exists() || f.d.EPUB3() {
+	if writeV3(f.d, coll.Exists()) {
 		coll.Set(series)
 		pkgdoc.Put(coll.Refine("group-position"), position)
 	} else {
+		// A v2 package keeps no collection, and loses any duplicate or
+		// empty-named one it carried.
 		coll.Clear()
 	}
 
-	// A v2 package always gets the calibre metas; a v3 package only if it already
-	// carried them, kept in step rather than left contradicting the collection.
-	if f.d.EPUB3() && !calibreName.Exists() {
-		return
+	if writeCalibre(f.d, calibreName.Exists()) {
+		calibreName.Set(series)
+		pkgdoc.Put(calibreIdx, calibreIndex(position))
 	}
-	calibreName.Set(series)
-	pkgdoc.Put(calibreIdx, calibreIndex(position))
 }
 
 // seriesCollection is the belongs-to-collection meta recording the series. It is

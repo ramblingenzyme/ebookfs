@@ -23,8 +23,8 @@ func newEpubFile(stat *proto.Stat, lib ContentReader, book func() *library.Book)
 	}
 }
 
-// Stat reports the name as well as the length, so it reads the snapshot itself
-// rather than going through statLen.
+// Stat reports the epub's current filename as well as its length, so a retitled
+// book's entry is renamed without rebuilding the node.
 func (e *epubFile) Stat() proto.Stat {
 	s := e.BaseFile.Stat()
 	if b := e.book(); b != nil {
