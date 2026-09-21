@@ -12,6 +12,7 @@ import (
 
 	"github.com/ramblingenzyme/ebookfs/internal/config"
 	"github.com/ramblingenzyme/ebookfs/internal/fs"
+	"github.com/ramblingenzyme/ebookfs/internal/opds"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
@@ -37,6 +38,22 @@ func setupLogging(cfg config.LogConfig) {
 func fatal(msg string, err error) {
 	slog.Error(msg, "error", err)
 	os.Exit(1)
+}
+
+// opdsExporter reuses the reader's exporter whenever the two want the same
+// rendition. Both convert into reader.cache_dir, so at most one kepub cache
+// exists in the process.
+//
+// Statuses is left empty. It decides reader/ membership through Includes,
+// which the catalog's Renderer does not declare and never calls.
+func opdsExporter(lib *library.Library, cfg *config.Config, readerExp library.Exporter) (library.Exporter, error) {
+	if cfg.OPDS.Convert == cfg.Reader.Convert {
+		return readerExp, nil
+	}
+	return lib.Exporter(library.ReaderConfig{
+		Convert:  cfg.OPDS.Convert,
+		CacheDir: cfg.Reader.CacheDir,
+	})
 }
 
 func main() {
@@ -76,6 +93,27 @@ func main() {
 		errCh <- srv.Start(cfg.Server.Listen)
 	}()
 
+	var opdsSrv *opds.Server
+	opdsDone := make(chan struct{})
+	if cfg.OPDS.Listen != "" {
+		opdsExp, err := opdsExporter(lib, cfg, exp)
+		if err != nil {
+			fatal("creating OPDS exporter", err)
+		}
+		opdsSrv = opds.SetupServer(lib, opdsExp, cfg.OPDS.BaseURL)
+		go func() {
+			defer close(opdsDone)
+			// Logged here rather than after the shutdown wait below: a bind
+			// failure happens at startup, and an error only read at shutdown
+			// leaves the operator staring at a port that never answers.
+			if err := opdsSrv.Start(cfg.OPDS.Listen); err != nil {
+				slog.Error("OPDS listener failed", "listen", cfg.OPDS.Listen, "error", err)
+			}
+		}()
+	} else {
+		slog.Info("OPDS catalog disabled", "reason", "opds.listen is empty")
+	}
+
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
@@ -85,6 +123,12 @@ func main() {
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Warn("9P shutdown deadline exceeded, forcing close", "error", err)
+	}
+	if opdsSrv != nil {
+		if err := opdsSrv.Shutdown(shutdownCtx); err != nil {
+			slog.Warn("OPDS shutdown deadline exceeded, forcing close", "error", err)
+		}
+		<-opdsDone // the listener has already reported its own failure
 	}
 
 	if err := <-errCh; err != nil {

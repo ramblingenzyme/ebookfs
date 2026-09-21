@@ -41,3 +41,7 @@ var (
 // from the 9P layer on a handle a client may hold across a re-ingest, so a
 // use-after-close is an ordinary end for one rather than a caller's mistake.
 var ErrClosed = epub.ErrClosed
+
+// ErrNoCover is returned by EpubReader.Cover when the book's package document
+// points at no cover image.
+var ErrNoCover = epub.ErrNoCover

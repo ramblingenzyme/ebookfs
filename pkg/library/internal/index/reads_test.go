@@ -1,6 +1,7 @@
 package index
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
@@ -93,5 +94,68 @@ func TestStatsExcludesOrphans(t *testing.T) {
 	}
 	if s.Tags != 1 {
 		t.Errorf("Tags = %d, want 1 (stale tag should be swept)", s.Tags)
+	}
+}
+
+// The sort names here are the reverse of the display names, so an authors
+// listing ordered by the wrong column fails.
+func TestFacetListings(t *testing.T) {
+	idx := openTestIndex(t)
+
+	b1 := makeAuthoredBook(1, "First", book.Author{Name: "Alice Zeta", SortName: "Zeta, Alice"})
+	b1.Series = &book.SeriesRef{Name: "EPIC", Index: "1"}
+	b1.Meta.Tags = []string{"space", "sci-fi"}
+
+	b2 := makeAuthoredBook(2, "Second",
+		book.Author{Name: "Alice Zeta", SortName: "Zeta, Alice"},
+		book.Author{Name: "Bob Alpha", SortName: "Alpha, Bob"})
+	b2.Meta.Tags = []string{"sci-fi"}
+
+	storeInIndex(t, idx, b1)
+	storeInIndex(t, idx, b2)
+
+	tests := []struct {
+		name string
+		list func() ([]Facet, error)
+		want []Facet
+	}{
+		{"authors", idx.ListAuthors, []Facet{{"Bob Alpha", 1}, {"Alice Zeta", 2}}},
+		{"series", idx.ListSeries, []Facet{{"EPIC", 1}}},
+		{"tags", idx.ListTags, []Facet{{"sci-fi", 2}, {"space", 1}}},
+	}
+	for _, tt := range tests {
+		got, err := tt.list()
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		if !slices.Equal(got, tt.want) {
+			t.Errorf("%s = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}
+
+// A value nothing points at is absent rather than a zero-count row: the
+// listings join through the book tables, and Delete prunes the orphan anyway.
+func TestFacetListingsSkipOrphans(t *testing.T) {
+	idx := openTestIndex(t)
+	storeInIndex(t, idx, makeTestBook(1, "Only", []string{"Alice"}, "sci-fi", book.StatusUnread))
+
+	op := idx.BeginOp()
+	mustMarkPending(t, op)
+	if err := op.Delete(1); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	for name, list := range map[string]func() ([]Facet, error){
+		"authors": idx.ListAuthors,
+		"tags":    idx.ListTags,
+	} {
+		got, err := list()
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if len(got) != 0 {
+			t.Errorf("%s = %v, want none", name, got)
+		}
 	}
 }

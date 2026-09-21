@@ -23,9 +23,10 @@ Unordered. Nothing here blocks anything else unless it says so.
   sidecar fields don't cover: purchase date, read count, notes, shelf location.
   Each handler declares a namespace and serializes into its own sidecar file.
   The built-in fields stay fixed.
-- **Extended query methods.** Text search, pagination, sort field and direction,
-  a count that skips hydration, and author/tag listings for browse navigation.
-  These serve query-driven frontends; the 9P frontend needs none of them.
+- **Extended query methods.** Pagination, sort direction, and a count that
+  skips hydration. The author, series and tag listings landed with the OPDS
+  catalog; the rest still serve query-driven frontends only, and the 9P
+  frontend needs none of them.
 
 ## Behaviour
 
@@ -58,12 +59,9 @@ Unordered. Nothing here blocks anything else unless it says so.
 
 ## Frontends
 
-Both sit outside the library and use only its public surface. Neither replaces
-the 9P server.
+It sits outside the library and uses only its public surface. It does not
+replace the 9P server.
 
-- **OPDS catalog.** Serve the library as an OPDS 1.2 / 2.0 feed, the protocol
-  ebook reader apps speak. The grouping views map to acquisition feeds, search
-  maps to OpenSearch, and download goes through the configured exporter.
 - **HTTP API.** A JSON API for web UIs and CLI tools: paginated list endpoints
   with search and filter, standard CRUD, and endpoints for sidecar files.
 
@@ -86,6 +84,7 @@ the 9P server.
   `rename-tag`, `rename-author` and `rename-series` commands.
 - Startup reindex, narrowed to run only when the store and index disagree.
 - Multi-author filenames joined with `" & "`.
+- OPDS 1.2 / 2.0 catalog, read-only, off unless `opds.listen` is set.
 - Interface segregation, done the other way round from the original plan: the
   library is a concrete struct and each frontend package declares the interface
   it consumes, so adding a method stays additive.

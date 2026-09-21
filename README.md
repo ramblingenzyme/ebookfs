@@ -45,11 +45,12 @@ sudo umount /mnt/ebookfs
 
 ## Features
 
-- **9P is the only protocol**
+- **9P is the only write path**: everything below is reachable by mounting the server
 - **Metadata as files**: read/write title, authors, series, tags, status, rating, cover via the filesystem
 - **Synthetic inbox**: `cp` an epub into `inbox/`; the server parses, validates, and files it atomically on close
 - **Live search**: Plan 9 clone-style API under `search/`: allocate a handle, write a query (`title:`, `author:`, `tag:`, `series:`, `status:`, `id:`, combinable with `+`), read live results back
 - **Bulk operations via `ctl`**: a root control file for renaming/merging authors, tags, and series, and for tagging or setting status/rating across many books at once, without a round-trip per book. `log` keeps a timestamped history of past commands and results; `help` documents every command
+- **OPDS catalog**: an optional read-only OPDS 1.2 / 2.0 feed at `/opds`, off by default, for ebook reader apps that browse, search and download over HTTP
 - **KEPUB conversion**: optional on-the-fly conversion for Kobo e-readers via [kepubify](https://github.com/pgaskin/kepubify)
 - **Zero runtime deps**: single static binary, clean ARM cross-compile, ~15 MB Docker image
 
@@ -60,7 +61,7 @@ sudo umount /mnt/ebookfs
 - Renaming an author does not carry third-party refinements (e.g. Calibre's alternate-script) over to the new name. Adding, removing and reordering authors keep them
 
 ### Planned
-- Encapsulated backend, so `github.com/ramblingenzyme/ebookfs/pkg/library` can be used to build other frontends, e.g. OPDS and HTTP
+- Encapsulated backend, so `github.com/ramblingenzyme/ebookfs/pkg/library` can be used to build other frontends, e.g. an HTTP API
 
 See [TODO.md](./TODO.md) for what's outstanding, and [docs/namespace.md](./docs/namespace.md) for the served tree.
 

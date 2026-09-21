@@ -32,10 +32,9 @@ would need to be carried over separately.
 
 Keeps the client/server contract small and language-agnostic: anything that can
 mount a 9P filesystem can use the library. There's no HTTP or gRPC API for
-adding, editing, or deleting books yet. *(An HTTP API frontend is planned (see
-TODO.md) that will also support adding, editing, and deleting books, ending 9P's
-exclusivity as a write path. OPDS, the other planned V2 frontend, stays
-read-only by nature of the protocol.)*
+adding, editing, or deleting books yet. *(The OPDS catalog added since serves reads
+only, by nature of the protocol, so 9P remains the only write path. An HTTP API
+frontend is planned (see TODO.md) that will end that exclusivity.)*
 
 ## 5. Go, single static binary
 

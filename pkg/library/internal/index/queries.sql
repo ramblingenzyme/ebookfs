@@ -182,3 +182,28 @@ VALUES (?, ?, ?, ?, ?);
 
 -- name: SetBookIDSequence :exec
 INSERT INTO book_id_seq(id) VALUES(?) ON CONFLICT(id) DO NOTHING;
+
+-- Facet listings
+
+-- Ordered by sort_name, so "van Gogh" files under V. Collation is the
+-- database's job, and no caller re-sorts.
+-- name: ListAuthors :many
+SELECT a.name, COUNT(ba.book_id) AS book_count
+FROM authors a
+         JOIN book_authors ba ON ba.author_id = a.id
+GROUP BY a.id
+ORDER BY a.sort_name, a.name;
+
+-- name: ListSeries :many
+SELECT s.name, COUNT(b.id) AS book_count
+FROM series s
+         JOIN books b ON b.series_id = s.id
+GROUP BY s.id
+ORDER BY s.name;
+
+-- name: ListTags :many
+SELECT t.name, COUNT(bt.book_id) AS book_count
+FROM tags t
+         JOIN book_tags bt ON bt.tag_id = t.id
+GROUP BY t.id
+ORDER BY t.name;

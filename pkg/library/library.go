@@ -89,6 +89,16 @@ func (l *Library) Stats() (*Stats, error) {
 	return l.index.Stats()
 }
 
+// Authors returns the library's authors with a book count each, ordered by
+// sort name.
+func (l *Library) Authors() ([]Facet, error) { return l.index.ListAuthors() }
+
+// Series returns the library's series with a book count each, ordered by name.
+func (l *Library) Series() ([]Facet, error) { return l.index.ListSeries() }
+
+// Tags returns the library's tags with a book count each, ordered by name.
+func (l *Library) Tags() ([]Facet, error) { return l.index.ListTags() }
+
 // Get wraps ErrBookNotFound when the index does not hold the book. The Book it
 // returns is an immutable snapshot; see the concurrency contract on Library.
 func (l *Library) Get(id int64) (*Book, error) {

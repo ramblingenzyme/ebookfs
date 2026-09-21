@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **OPDS catalog, the second frontend.** An OPDS 1.2 / 2.0 feed at `/opds`, off unless `opds.listen` is set, built on [`github.com/ophymx/opds`](https://github.com/ophymx/opds). Reader apps browse all books, recently added, authors, series, tags and reading status, search over OpenSearch, and download through the configured exporter. Covers are served from the original epub, so browsing never triggers a kepub conversion. Read-only: 9P is still the only write path (DECISIONS.md #4). See [docs/security.md](./docs/security.md) before opening the port.
+
+- **`Library.Authors`, `Library.Series` and `Library.Tags`.** Each returns the distinct values of its field with the number of books behind it, counted in SQL. A frontend building browse navigation no longer loads every book to count them.
+
 - **`epub`, a public package for reading and writing EPUB metadata.** `github.com/ramblingenzyme/ebookfs/pkg/epub` imports nothing of ebookfs. `Open` parses a book's package document into exported fields; `Save` writes back only what moved, leaving the rest of the archive byte for byte. `OpenFile` stops at the zip and OCF container for callers that only need entries. See DECISIONS.md #25.
 
 - **`Library.Get(id)`.** Returns one book by id, or an error wrapping `ErrBookNotFound`. `Content`, `Edit` and `Delete` were already id-addressed; reading one book was the gap.
