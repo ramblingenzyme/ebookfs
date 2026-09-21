@@ -3,8 +3,6 @@ package ocf
 import (
 	"encoding/xml"
 	"io"
-
-	epubxml "github.com/ramblingenzyme/ebookfs/pkg/epub/internal/xml"
 )
 
 // Reading META-INF/container.xml, which says where the package document is.
@@ -16,15 +14,15 @@ const (
 	metadataType  = "application/oebps-package+xml"
 )
 
-// Container's rootfile elements point at the package documents; an epub may
-// declare more than one. Never written, so a struct is shape enough.
+// Container holds the rootfile elements pointing at the package documents; an
+// epub may declare more than one. Never written, so a struct is shape enough.
 type Container struct {
 	Rootfiles []*rootfile `xml:"rootfiles>rootfile"`
 }
 
 type rootfile struct {
-	FullPath  epubxml.AttrURL  `xml:"full-path,attr"`
-	MediaType epubxml.AttrText `xml:"media-type,attr"`
+	FullPath  AttrURL  `xml:"full-path,attr"`
+	MediaType AttrText `xml:"media-type,attr"`
 }
 
 func NewContainer(r io.Reader) (*Container, error) {

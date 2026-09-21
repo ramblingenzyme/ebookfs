@@ -6,21 +6,29 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
+	"github.com/ramblingenzyme/ebookfs/internal/naming"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// newStat is the package-local shorthand for vfile.NewStat, the single
-// definition of the glenda/glenda owner convention every node uses.
-var newStat = vfile.NewStat
+var (
+	newStat    = vfile.NewStat
+	newDirStat = vfile.NewDirStat
+)
 
-// namedBookDir wraps a shared *book.BookDir to present it under a name other than its
-// title (by-id, by-series). The name is recomputed live from the book, so a
-// title or series-index edit is reflected without rebuilding the entry; baseStat
-// carries a stable Qid distinct from the bare bookDir's listing.
 type namedBookDir struct {
 	*book.BookDir
 	baseStat proto.Stat
 	name     func(*library.Book) string
+}
+
+// newNamedBookDir gives dir a Qid distinct from the bare BookDir's, so one book
+// listed in two views is two entries. Stat overwrites the name on every call.
+func newNamedBookDir(f *fs.FS, dir *book.BookDir, fn func(*library.Book) string) *namedBookDir {
+	return &namedBookDir{
+		BookDir:  dir,
+		baseStat: *newDirStat(f, ""),
+		name:     fn,
+	}
 }
 
 func (n *namedBookDir) Stat() proto.Stat {
@@ -33,7 +41,7 @@ func (n *namedBookDir) Stat() proto.Stat {
 // pointer, never a value, because fs.StaticDir embeds sync.RWMutex (via its
 // BaseFile). Copying a mutex after first use is undefined behaviour, and
 // groupingDir is returned by value and embedded by value in every view type
-// (byAuthorDir, bySeriesDir, readerDir). A pointer avoids copying the mutex.
+// (keyedDir, byIDDir, readerDir). A pointer avoids copying the mutex.
 type groupingDir struct {
 	*fs.StaticDir
 	f *fs.FS
@@ -41,13 +49,12 @@ type groupingDir struct {
 
 func newGroupingDir(f *fs.FS, name string) groupingDir {
 	return groupingDir{
-		StaticDir: fs.NewStaticDir(newStat(f, name, 0555|proto.DMDIR)),
+		StaticDir: fs.NewStaticDir(newDirStat(f, name)),
 		f:         f,
 	}
 }
 
-// pruneEmpty removes a child subdirectory if it exists and has no children of
-// its own. Safe to call unconditionally after removing an entry from a subdir.
+// pruneEmpty is safe to call unconditionally after removing an entry.
 func (g *groupingDir) pruneEmpty(name string) {
 	child, ok := g.Children()[name]
 	if !ok {
@@ -58,28 +65,70 @@ func (g *groupingDir) pruneEmpty(name string) {
 	}
 }
 
-// childDir returns the existing child with name, or creates one via factory and
-// adds it. The factory receives a stat whose name is already set.
+// childDir builds the named child on first use. factory receives a stat whose
+// name is already set.
 func (g *groupingDir) childDir(name string, factory func(*proto.Stat) fs.FSNode) fs.FSNode {
 	if child, ok := g.Children()[name]; ok {
 		return child
 	}
-	ad := factory(newStat(g.f, name, 0555|proto.DMDIR))
+	ad := factory(newDirStat(g.f, name))
 	g.StaticDir.AddChild(ad)
 	return ad
 }
 
-// listerDir returns the registry.BookView child named name, creating it via newBookListDir
-// on first use.
-func (g *groupingDir) listerDir(name string) registry.BookView {
-	return g.childDir(name, func(s *proto.Stat) fs.FSNode { return newBookListDir(s) }).(registry.BookView)
-}
-
-// removeLister looks up the registry.BookView child named name, removes dir from it,
-// and prunes the child if empty.
-func (g *groupingDir) removeLister(name string, dir *book.BookDir) {
+func (g *groupingDir) removeFromChild(name string, dir *book.BookDir) {
 	if child, ok := g.Children()[name]; ok {
 		child.(registry.BookView).Remove(dir)
 		g.pruneEmpty(name)
+	}
+}
+
+// bookListFactory is the child a by-x view builds unless it needs its own
+// listing, as by-series does.
+func bookListFactory(s *proto.Stat) fs.FSNode { return newBookListDir(s) }
+
+// keyedDir is a by-x view: one child per key the book yields. by-author,
+// by-tag, by-status and by-series are all this type.
+//
+// by-id and reader embed groupingDir directly, since neither files a book
+// under a key the book carries.
+type keyedDir struct {
+	groupingDir
+	// keys returns values verbatim. entryNames makes them safe, so a keys
+	// function never sanitizes.
+	keys    func(*library.Book) []string
+	factory func(*proto.Stat) fs.FSNode
+}
+
+func newKeyedDir(reg *registry.BookRegistry, name string, keys func(*library.Book) []string, factory func(*proto.Stat) fs.FSNode) *keyedDir {
+	d := &keyedDir{
+		groupingDir: newGroupingDir(reg.FS(), name),
+		keys:        keys,
+		factory:     factory,
+	}
+	reg.AddView(d)
+	return d
+}
+
+// entryNames mints every group name in every by-x view, so a key read verbatim
+// from an epub cannot reach a listing as a name no 9P client can walk to.
+func (d *keyedDir) entryNames(b *library.Book) []string {
+	keys := d.keys(b)
+	names := make([]string, len(keys))
+	for i, key := range keys {
+		names[i] = naming.PathSafe(key)
+	}
+	return names
+}
+
+func (d *keyedDir) Add(dir *book.BookDir) {
+	for _, name := range d.entryNames(dir.Book()) {
+		d.childDir(name, d.factory).(registry.BookView).Add(dir)
+	}
+}
+
+func (d *keyedDir) Remove(dir *book.BookDir) {
+	for _, name := range d.entryNames(dir.Book()) {
+		d.removeFromChild(name, dir)
 	}
 }

@@ -13,10 +13,6 @@ import (
 	"github.com/knusbaum/go9p/proto"
 )
 
-// epubFile's own surface, on top of the readAtFile semantics its base test
-// owns: it wires lib.OpenEpub for reads and reports name/size from the book
-// snapshot in Stat.
-
 func newTestEpubFile(t *testing.T, name string, lib ContentReader, get func() *library.Book) *epubFile {
 	t.Helper()
 	return newEpubFile(newStat(util.NewTestFS(t), name, 0444), lib, get)

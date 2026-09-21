@@ -53,7 +53,7 @@ func TestIDEntryName(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := idEntryName(tc.book, tc.pad)
+			got := idEntryName(tc.book, padAt(tc.pad))
 			if got != tc.want {
 				t.Errorf("idEntryName = %q, want %q", got, tc.want)
 			}

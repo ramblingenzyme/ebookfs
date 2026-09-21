@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
 )
 
@@ -27,15 +28,7 @@ func TestRecentDirOrdersNewestFirst(t *testing.T) {
 }
 
 func TestRecentDirCapsAtLimitAndBackfillsOnRemove(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewRecentDir(reg)
-
-	base := time.Now()
-	for i := int64(1); i <= int64(recentLimit)+1; i++ {
-		b := makeBook(i, fmt.Sprintf("Title %d", i), "Author")
-		b.Meta.DateAdded = base.Add(time.Duration(i) * time.Minute)
-		reg.Add(wrapBook(b))
-	}
+	reg, d := overfilledRecentDir(t)
 
 	if len(d.visible) != recentLimit {
 		t.Fatalf("expected %d visible books, got %d: %v", recentLimit, len(d.visible), d.visible)
@@ -59,15 +52,7 @@ func TestRecentDirCapsAtLimitAndBackfillsOnRemove(t *testing.T) {
 }
 
 func TestRecentDirRemoveNotVisibleNoOp(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewRecentDir(reg)
-
-	base := time.Now()
-	for i := int64(1); i <= int64(recentLimit)+1; i++ {
-		b := makeBook(i, fmt.Sprintf("Title %d", i), "Author")
-		b.Meta.DateAdded = base.Add(time.Duration(i) * time.Minute)
-		reg.Add(wrapBook(b))
-	}
+	reg, d := overfilledRecentDir(t)
 
 	before := fstest.ChildNames(d)
 
@@ -113,4 +98,21 @@ func TestRecentDirOutOfOrderArrival(t *testing.T) {
 			t.Fatalf("all out of order at %d: %s before %s", i, prev.Title(), cur.Title())
 		}
 	}
+}
+
+// overfilledRecentDir files one book more than recentLimit, staggered a minute
+// apart so "Title 1" is the oldest and the only one evicted. The registry comes
+// back too, since these tests drive the view through it rather than directly.
+func overfilledRecentDir(t *testing.T) (*registry.BookRegistry, *recentDir) {
+	t.Helper()
+	reg := newTestRegistry(t)
+	d := NewRecentDir(reg)
+
+	base := time.Now()
+	for i := int64(1); i <= int64(recentLimit)+1; i++ {
+		b := makeBook(i, fmt.Sprintf("Title %d", i), "Author")
+		b.Meta.DateAdded = base.Add(time.Duration(i) * time.Minute)
+		reg.Add(wrapBook(b))
+	}
+	return reg, d
 }

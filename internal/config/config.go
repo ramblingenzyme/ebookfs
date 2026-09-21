@@ -22,16 +22,14 @@ type LibraryConfig struct {
 	IndexPath string `toml:"index_path"`
 }
 
-// SearchConfig configures the search/ directory in the 9P namespace.
 type SearchConfig struct {
 	HandleTTL  time.Duration `toml:"handle_ttl"`  // e.g. "30m"
 	MaxHandles int           `toml:"max_handles"` // e.g. 100
 }
 
-// ReaderConfig configures the reader/ rsync export. Statuses selects which books
-// appear; Convert toggles kepub conversion (false serves the original epub);
-// CacheDir holds converted kepubs and MUST live outside Library.Root so the
-// store walk never treats cached files as books.
+// ReaderConfig is library.ReaderConfig with the toml tags, and must stay
+// field-identical to it since main converts between the two.
+// library.ReaderConfig documents what each field means.
 type ReaderConfig struct {
 	Statuses []string `toml:"statuses"`
 	Convert  bool     `toml:"convert"`
@@ -95,8 +93,7 @@ func (c *Config) validateAuth() error {
 	case "none":
 		// OK
 	case "shared-secret":
-		// Reserved in the schema but not wired into the 9P server yet. Accepting
-		// it would silently serve unauthenticated, so refuse to start instead.
+		// Accepting this would serve unauthenticated, so refuse to start.
 		return fmt.Errorf(`server.auth = "shared-secret" is not implemented yet; use "none"`)
 	default:
 		return fmt.Errorf(`server.auth must be "none" or "shared-secret", got %q`, c.Server.Auth)

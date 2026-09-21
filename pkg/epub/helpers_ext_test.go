@@ -5,9 +5,11 @@
 package epub_test
 
 import (
+	"archive/zip"
 	"bytes"
 	"image"
 	"image/jpeg"
+	"strings"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testing/epubtest"
@@ -162,3 +164,86 @@ var opfSpecStyleWhitespace = epubtest.EPUB3(`    <dc:identifier id="pub-id">
     <meta refines="#c01" property="group-position">
       2
     </meta>`)
+
+// wantDirEntries asserts the rewritten archive still carries a zip entry for
+// each named directory. Save copies entries across rather than rebuilding the
+// archive, so a dropped directory entry is a regression a reader would not see
+// in the book's metadata.
+func wantDirEntries(t *testing.T, path string, want ...string) {
+	t.Helper()
+	zrc, err := zip.OpenReader(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer zrc.Close()
+
+	dirs := make(map[string]bool)
+	for _, f := range zrc.File {
+		if strings.HasSuffix(f.Name, "/") {
+			dirs[f.Name] = true
+		}
+	}
+	for _, dir := range want {
+		if !dirs[dir] {
+			t.Errorf("directory entry %q missing from rewritten epub", dir)
+		}
+	}
+}
+
+// swapCover replaces the cover with a fresh JPEG and returns the bytes it
+// wrote, having checked they read back.
+func swapCover(t *testing.T, path string) []byte {
+	t.Helper()
+	newCover := tinyJPEG(t)
+	if _, err := setCover(t, path, newCover); err != nil {
+		t.Fatal(err)
+	}
+	got, err := open(t, path).Cover()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, newCover) {
+		t.Errorf("cover = %q, want the supplied JPEG bytes", got)
+	}
+	return newCover
+}
+
+// saveSortName puts one author with a sort name through Save and asserts the
+// parse reads that sort name back. The callers differ only in the package
+// document they start from, which is the whole point of each: a stale v2
+// attribute, a bare file-as, and so on.
+func saveSortName(t *testing.T, opf epubtest.PackageDoc) string {
+	t.Helper()
+	path := epubtest.Build(t, opf)
+	authors := []epub.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
+	if _, err := save(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
+		t.Fatal(err)
+	}
+
+	bib, err := parse(t, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bib.Authors) != 1 || bib.Authors[0].SortName != "Rand, Ann" {
+		t.Errorf("authors = %+v, want the sort name the edit asked for", bib.Authors)
+	}
+	return path
+}
+
+// duplicateOPFEpub writes an archive carrying two OEBPS/content.opf entries
+// under that one name, titled "First Copy" and "Second Copy" so a test can say
+// which copy a read resolved to. Badly repacked epubs look like this.
+func duplicateOPFEpub(t *testing.T) string {
+	t.Helper()
+	first := strings.Replace(string(epubtest.OPF3), "Original Title", "First Copy", 1)
+	second := strings.Replace(string(epubtest.OPF3), "Original Title", "Second Copy", 1)
+
+	return epubtest.WriteEpub(t, []epubtest.Entry{
+		{Name: "mimetype", Data: []byte(epubtest.MimetypeValue), Store: true},
+		{Name: "META-INF/container.xml", Data: []byte(epubtest.ContainerXML)},
+		{Name: "OEBPS/content.opf", Data: []byte(first)},
+		{Name: "OEBPS/content.opf", Data: []byte(second)},
+		{Name: "OEBPS/cover.jpg", Data: epubtest.CoverBytes},
+		{Name: "OEBPS/chapter1.xhtml", Data: epubtest.ChapterBytes},
+	})
+}

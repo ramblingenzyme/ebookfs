@@ -1,8 +1,5 @@
 package inbox
 
-// Untested:
-//   - inboxFile.Close small edge-case branches (parent not a ModDir, etc.)
-
 import (
 	"errors"
 	"testing"
@@ -100,9 +97,9 @@ func TestInboxFileReopenAfterClose(t *testing.T) {
 	}
 }
 
-// Regression test: Close deadlocked when the inboxFile had a real parent
-// directory. Close held the file's lock while calling DeleteChild, which in turn
-// called SetParent on the removed child, trying to acquire the same lock.
+// Close deadlocked when an InboxFile had a real parent: it held the file's
+// lock through DeleteChild, which called SetParent on the removed child and
+// tried to take the same lock.
 func TestInboxFileCloseWithParentDeadlockRegression(t *testing.T) {
 	ingested := make(chan *library.Book, 1)
 	f := util.NewTestFS(t)

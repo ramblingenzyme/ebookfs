@@ -18,7 +18,7 @@ type StatsReader interface {
 }
 
 // statsFile is a read-only root file reporting aggregate library statistics.
-// It has no state of its own — every Open (and Stat, for an accurate length)
+// It has no state of its own. Every Open (and Stat, for an accurate length)
 // re-derives content from lib.Stats, a live SQL aggregate over the index, so
 // the file is always current.
 type statsFile struct {
@@ -40,12 +40,11 @@ func (f *statsFile) content() ([]byte, error) {
 	return []byte(formatStats(s)), nil
 }
 
-// Stat runs the same SQL aggregate as content to report an accurate length —
-// simple and always correct, but it means a bare `ls -l stats` costs a query,
-// and a `stat` immediately followed by `open` (as most clients do) runs it
-// twice. If stats becomes hot enough to matter or the performance overhead matters, cache the formatted bytes for
-// a short TTL (or invalidate via BookRegistry Add/Remove, at the cost of this
-// file needing to register as a BookView) instead of querying on every call.
+// Stat runs the same SQL aggregate as content to report an accurate length,
+// which is simple and always correct. It also means a bare `ls -l stats` costs
+// a query, and a `stat` followed by `open`, as most clients do, runs it twice. If that ever shows up in a profile, cache the formatted bytes for a
+// short TTL, or invalidate via BookRegistry Add/Remove at the cost of this file
+// registering as a BookView.
 func (f *statsFile) Stat() proto.Stat {
 	s := f.BaseFile.Stat()
 	if data, err := f.content(); err == nil {

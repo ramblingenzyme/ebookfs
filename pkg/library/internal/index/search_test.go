@@ -159,9 +159,8 @@ func TestSearchOrders(t *testing.T) {
 	tied := newBook(3, "Charlie")
 	untied := newBook(4, "Delta")
 
-	// sort_title is NULL unless the epub carried a file-as refine, so leave it
-	// unset on some books: the title ordering has to fall back to the title,
-	// not lump them into one NULL tie ordered by id.
+	// Leave sort_title unset on some books, so the title ordering has to fall
+	// back to the title rather than lump them into one NULL tie.
 	mid.SortTitle = "Bravo"
 	top.SortTitle = "Alpha"
 	for _, b := range []*book.Book{mid, top, tied, untied} {
@@ -490,14 +489,14 @@ func TestQueryRecentOrder(t *testing.T) {
 		book.Meta{ID: 1},
 		book.Location{EpubPath: "A/Old (1)/book.epub"},
 	)
-	new := book.NewBook(
+	curr := book.NewBook(
 		book.Bib{Title: "New", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
 		book.Meta{ID: 2},
 		book.Location{EpubPath: "A/New (2)/book.epub"},
 	)
 
 	storeInIndex(t, idx, old)
-	storeInIndex(t, idx, new)
+	storeInIndex(t, idx, curr)
 
 	got, err := idx.Search(Query{Order: OrderDateAdded})
 	if err != nil {

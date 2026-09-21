@@ -17,45 +17,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// parityBooks opens a library holding one book per title/author pair and
-// returns it with every book in it, which is the set the Go matcher filters.
-func parityBooks(t *testing.T, books [][2]string) (*library.Library, []*library.Book) {
-	t.Helper()
-	lib, err := library.Open(library.Config(util.TestConfig(t)))
-	if err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-	t.Cleanup(func() { lib.Close() })
-
-	for _, b := range books {
-		h, err := lib.CreateIngest()
-		if err != nil {
-			t.Fatalf("CreateIngest: %v", err)
-		}
-		if _, err := h.WriteAt(util.BuildTestEpub(t, b[0], b[1]), 0); err != nil {
-			t.Fatalf("WriteAt: %v", err)
-		}
-		if _, err := h.Ingest(); err != nil {
-			t.Fatalf("Ingest %q: %v", b[0], err)
-		}
-	}
-
-	all, err := lib.Search(library.Query{})
-	if err != nil {
-		t.Fatalf("Search(all): %v", err)
-	}
-	return lib, all
-}
-
-func titlesOf(books []*library.Book) []string {
-	out := make([]string, 0, len(books))
-	for _, b := range books {
-		out = append(out, b.Title())
-	}
-	slices.Sort(out)
-	return out
-}
-
 func TestSearchMatcherAgreesWithSQL(t *testing.T) {
 	lib, all := parityBooks(t, [][2]string{
 		{"Findable", "Alice"},
@@ -113,4 +74,43 @@ func TestSearchMatcherAgreesWithSQL(t *testing.T) {
 			}
 		})
 	}
+}
+
+// parityBooks opens a library holding one book per title/author pair and
+// returns it with every book in it, which is the set the Go matcher filters.
+func parityBooks(t *testing.T, books [][2]string) (*library.Library, []*library.Book) {
+	t.Helper()
+	lib, err := library.Open(library.Config(util.TestConfig(t)))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	t.Cleanup(func() { lib.Close() })
+
+	for _, b := range books {
+		h, err := lib.CreateIngest()
+		if err != nil {
+			t.Fatalf("CreateIngest: %v", err)
+		}
+		if _, err := h.WriteAt(util.BuildTestEpub(t, b[0], b[1]), 0); err != nil {
+			t.Fatalf("WriteAt: %v", err)
+		}
+		if _, err := h.Ingest(); err != nil {
+			t.Fatalf("Ingest %q: %v", b[0], err)
+		}
+	}
+
+	all, err := lib.Search(library.Query{})
+	if err != nil {
+		t.Fatalf("Search(all): %v", err)
+	}
+	return lib, all
+}
+
+func titlesOf(books []*library.Book) []string {
+	out := make([]string, 0, len(books))
+	for _, b := range books {
+		out = append(out, b.Title())
+	}
+	slices.Sort(out)
+	return out
 }

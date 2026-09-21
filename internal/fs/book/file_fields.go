@@ -13,14 +13,6 @@ const maxFieldFileSize = 1 << 20 // 1 MiB
 // fieldFile is a readable/writable file backed by a single string-valued field.
 // Content is snapshotted per fid on Open; writes are buffered per fid and
 // committed (trimmed of trailing newline) when the fid is closed.
-//
-// When the client opens with Otrunc (shell >), the write buffer starts empty —
-// the first write completely replaces the field value. Without Otrunc (>> or
-// in-place edit), the write buffer starts as a copy of the current value so
-// the client can append, edit a middle offset, etc. A first write at offset 0
-// that is shorter than the current value replaces it entirely (no trailing
-// bytes from the old value leak through). On Close the result is sent through
-// set → edits → Validate; an error aborts the commit.
 type fieldFile struct {
 	vfile.SnapshotFile
 	get       func() string
@@ -49,8 +41,7 @@ func (f *fieldFile) Stat() proto.Stat {
 }
 
 func (f *fieldFile) Open(fid uint64, omode proto.Mode) error {
-	// The base loads and caches the per-fid snapshot (and self-locks); we then
-	// record whether the client asked for truncation.
+	// The base loads and caches the per-fid snapshot, and self-locks.
 	if err := f.SnapshotFile.Open(fid, omode); err != nil {
 		return err
 	}
@@ -61,10 +52,6 @@ func (f *fieldFile) Open(fid uint64, omode proto.Mode) error {
 }
 
 func (f *fieldFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
-	// Otrunc (or a missing snapshot) starts the buffer empty; otherwise the
-	// first write seeds it from the current value so the client can append or
-	// edit at a middle offset. The buffer's replace-on-shorter-first-write rule
-	// handles clients like Linux v9fs on 9P2000 that don't send Otrunc.
 	var seed func() []byte
 	f.RLock()
 	truncated := f.truncated[fid]
@@ -74,6 +61,10 @@ func (f *fieldFile) Write(fid uint64, offset uint64, data []byte) (uint32, error
 			seed = func() []byte { return snapshot }
 		}
 	}
+
+	// Linux v9fs on 9P2000 never sends Otrunc, so seed is set above even when
+	// the client means to replace. WriteBuffer covers that: a first write at
+	// offset 0 shorter than the seed truncates rather than merging.
 	return f.writes.Write(fid, offset, data, seed)
 }
 

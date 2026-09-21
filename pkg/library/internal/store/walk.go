@@ -9,9 +9,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
-// Walk enumerates every book directory in the library, returning each book's
-// location. A directory is treated as a book if it holds a meta.toml sidecar;
-// the walk does not descend into a book directory once found.
+// Walk treats a directory as a book if it holds a meta.toml sidecar.
 func (s *Store) Walk() ([]book.Location, error) {
 	var entries []book.Location
 	err := filepath.WalkDir(s.root, func(path string, d os.DirEntry, err error) error {

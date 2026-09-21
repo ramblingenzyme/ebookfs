@@ -1,33 +1,224 @@
 # Decisions log
 
-A record of the bigger design choices behind ebookfs, including alternatives
-that were considered and rejected — so the reasoning behind them isn't lost
-later.
+The bigger design choices behind ebookfs, with the alternatives that were
+rejected and why. Numbers are cited from code comments and never change: a
+superseded decision is struck through and kept, not removed.
 
-| # | Decision | Reasoning |
-|---|---|---|
-| 1 | No Calibre app, no Calibre-Web | Calibre-Web still needs Calibre's own runtime and database underneath, so it doesn't remove the dependency — it just hides it behind a web UI. ebookfs doesn't use any Calibre tooling at runtime. |
-| 2 | Filesystem as source of truth, SQLite as a derived index | Keeps memory and disk I/O low on small hardware — nothing needs to be rebuilt in memory on a cold start. It also means the library survives ebookfs being retired: the files are the real data, the index is just a cache. |
-| 3 | Directory layout — group by author display name | Books live under `Author/Title (id)/` (or `Alice & Bob/Title (id)/` for co-authored books), using the author's display name rather than a "sort name." This differs from Calibre, which sorts folders by `Author, Sort/Title (id)/`. Epubs rarely carry the extra "sort name" metadata Calibre needs for that, and there's no reliable way to guess it. The `by-author/` view groups by display name too, for the same reason. Every epub stays self-describing — any tool, including Calibre, can re-import the files with full metadata intact; only the extra bits ebookfs tracks (status, rating, tags, ids) live outside the epub and would need to be carried over separately. |
-| 4 | 9P is the only protocol for reading and writing the library (V1) | Keeps the client/server contract small and language-agnostic — anything that can mount a 9P filesystem can use the library. There's no HTTP or gRPC API for adding, editing, or deleting books yet. *(V2 plans an HTTP API frontend — see ROADMAP §11 — that will also support adding, editing, and deleting books, ending 9P's exclusivity as a write path. OPDS, the other planned V2 frontend, stays read-only by nature of the protocol.)* |
-| 5 | Go, single static binary | Go has solid 9P libraries and cross-compiles cleanly to ARM with `CGO_ENABLED=0`, which matters for running on small home-server hardware. |
-| 6 | Sync to e-readers via USB/rsync, not cloud sync | Keeps every part of the pipeline self-hosted, with no dependency on a third-party sync service. The `reader/` view is just a folder to rsync or copy from — getting the files onto the device is up to the client. |
-| 7 | No built-in "browse and download from the device" feature for Kobo | This solves a problem ("I'm out and want a book on my e-reader") that doesn't come up often enough to justify a second, always-on network interface running on the device itself. |
-| 8 | Parse and write epub files directly, without shelling out to Calibre | Reading and editing an epub's internal metadata (a small XML file inside a zip) is a well-understood, self-contained problem, so ebookfs implements it directly rather than depending on Calibre's `ebook-meta` tool. This keeps the binary self-contained with no external tools required at runtime, and the edits are done carefully enough to preserve the epub's original structure. |
-| 9 | `modernc.org/sqlite` instead of `mattn/go-sqlite3` | A pure-Go SQLite driver, so no C compiler is needed and cross-compiling to ARM stays simple. |
-| 10 | Forked `knusbaum/go9p` for the 9P server | Its API is simpler to build a synthetic filesystem on top of than the alternatives. The fork (`ramblingenzyme/go9p`, referenced in `go.mod`) carries a couple of small fixes on top of upstream. |
-| 11 | Each book gets its own directory of individual files | Matches how Plan 9 filesystems are usually designed, and makes editing "first class" — any text editor can open `title` or `rating` and save changes, no special client needed. |
-| 12 | A `ctl` file at the root handles bulk operations (rename an author everywhere, merge tags, etc.) | Avoids needing dozens of round-trips over 9P for operations that touch many books at once. Write a command, read back the result — a common Plan 9 pattern. |
-| 13 | The epub's own internal metadata is the source of truth; `meta.toml` only stores what doesn't belong there | Every e-reader, including the Kobo, reads metadata from inside the epub — so an edit has to update the real file, not a sidecar next to it. Calibre instead keeps a separate `metadata.opf` file and only writes it into the epub on export, so the epub itself can go stale between edits and exports. ebookfs accepts the extra cost of rewriting the epub on every metadata edit so that the file you'd get from `cp` or `rsync` is always accurate. `meta.toml` only holds what genuinely has nowhere else to live: the internal id, reading status, rating, and custom tags. |
-| 14 | Duplicate ids found during a reindex are a hard error, never auto-renumbered | A duplicate id almost always means something went wrong outside ebookfs (a restored backup, a manual copy). Silently renaming it out of the way could break anything that already refers to that book by id — better to stop and let the user sort it out. |
-| 15 | `inbox/` only exists as a virtual 9P folder, not a real directory on disk | Closing the file you wrote is the clear moment the write is considered finished, so there's no need to watch the filesystem for changes or worry about half-written files being picked up early. Any error ingesting the book is reported straight back to whoever wrote the file. |
-| 16 | The server also mounts its own 9P share back onto itself | Lets local tools and scripts drop a file straight into `inbox/` like any other folder, without needing to speak 9P themselves — while everything still goes through the same 9P code path underneath. See `docs/deployment.md`. |
-| 17 | ~~Rebuild the index from disk on every startup~~ — **superseded by #22** | Simple and safe: since the index is just a cache of the filesystem, throwing it away and rebuilding it every time guarantees it can never drift. Fine at realistic library sizes, but doesn't scale indefinitely. |
-| 18 | One file per metadata field, instead of a single combined file | Fits the "one file, one value" convention the rest of the filesystem follows, avoids parsing a config file format on every write, and each field only needs a few lines of setup. An earlier design used one combined file for all fields; it added complexity without a real benefit. |
-| 19 | Built-in conversion to Kobo's KEPUB format | Native KEPUB avoids doing the conversion on the device itself and fixes some formatting quirks Kobo devices have with plain epub. Conversions are cached on disk so the same book isn't re-converted on every sync. The `reader/` view can serve either the original epub or the converted version, depending on config. |
-| 20 | Structured logging via Go's `log/slog` | Started with the basic `log` package since logging wasn't a priority early on; moved to `slog` once configurable log levels and JSON output were needed. The switch was mechanical, as expected. |
-| 21 | Editing a list field (authors, tags) respects how the client opened the file | Some 9P clients signal "truncate on open" (like a shell's `>` redirect) and some don't. ebookfs honours that signal when it's given, and falls back to starting from the current value otherwise — so both "replace the whole list" and "append to it" behave the way you'd expect from a normal file. |
-| 22 | Only reindex on startup when the disk and the index actually disagree | Supersedes #17. A full reindex re-parses every epub, so its cost grows with the size of the library — but the situation it protects against (something changing the files outside of ebookfs) is rare. Startup now just checks each book's size, modified time, and filename against what the index has on record; if everything matches, nothing is re-parsed. Anything that doesn't match still triggers the same full rebuild as before, so the safety guarantee from #17 is unchanged — it's just cheaper to confirm nothing needs to happen. |
-| 23 | Refuse to edit a signed epub, without checking what the signature covers | `META-INF/signatures.xml` (§4.2.6.3.6) holds signatures naming by URL the files they cover, and we hold no key to re-sign with — so any rewrite of the OPF, the NCX, the cover image or the cover page may silently invalidate one. The precise check parses the `Signature` elements and refuses only when a replaced entry is covered, but that means committing to xmldsig detail this codebase would otherwise never have an opinion about: references live in both `SignedInfo` and `Object/Manifest`, and transforms change what is covered. Refusing on the file's mere presence over-refuses rather than under-detects, and costs an edit only on a book that will not turn up — a signed epub comes from institutional distribution, where it is DRM-encrypted too and already refused. Reading a signed book is unaffected. Revisit if a real book is ever refused for nothing. |
-| 24 | Identifiers are keyed by scheme, with the XML id only as a fallback | A `dc:identifier`'s XML id is a document-local handle chosen by whoever produced the file (`pub-id`, `BookId`, `uuid_id`) and says nothing about what the value is, so keying by it left the index's `scheme` column meaningless — books filed under `pub-id` where they belonged under `isbn`. The scheme is derived instead from wherever the file states it: each EPUB version has its own place to say it, and failing those the value's own `urn:` namespace, which is as explicit as any attribute. The id stays the last resort because dropping an identifier we cannot name would lose data, and an id at least tells two unnamed ones apart where a shared bucket would not; an element carrying no id either is keyed `unknown`, numbered `unknown-2` onwards so the second is not lost to the first. Only one value fits per scheme (`UNIQUE (book_id, scheme)`), and the first in document order wins. No migration was needed: the index is derived from the filesystem (#2), so bumping the schema version re-derives every row from the epubs themselves. |
-| 25 | The epub file format is a public package; the library's model stays out of it | Reading and writing an epub's metadata is general-purpose work — it round-trips foreign metadata, honours the §5.5.5 modification stamp, handles the EPUB 2/3 split, and refuses signed and encrypted files — and none of it needs to know what a reading status is. It had come to anyway: `opf` and `ncx` built a `book.Bib` and took an `edits.Edits`, a struct carrying `Status`, `Rating` and `Tags`, three fields no EPUB file holds. `epub/` now imports nothing of ebookfs and reports what the file says, with nothing rejected and nothing defaulted; `library/internal/epub` translates, and holds the rules that are ebookfs's rather than the format's — a book needs a title and authors to be filed, a malformed series position still displays as `1`, a retitled book drops its stale sort title. The public API is exported struct fields and a `Save` that writes only what moved, rather than the bulk `Edits` the library uses: "not mentioned" becomes "unchanged since Open", which deletes the pointer-per-field encoding and computes the NCX sync flag instead of tracking it. The alternative was to leave it internal and merely swap the type names, which would have fixed the imports without answering ROADMAP §8's question about what should be importable. Two costs were taken deliberately: a `v1.0.0` tag would bind a second package (pre-1.0 checklist item 13), and re-asserting a value the file already carries no longer repairs the document, so an edit that changes nothing now changes nothing at all. |
+## 1. No Calibre app, no Calibre-Web
+
+Calibre-Web still needs Calibre's own runtime and database underneath, so it
+doesn't remove the dependency, it only hides it behind a web UI. ebookfs
+doesn't use any Calibre tooling at runtime.
+
+## 2. Filesystem as source of truth, SQLite as a derived index
+
+Keeps memory and disk I/O low on small hardware: nothing needs to be rebuilt in
+memory on a cold start. It also means the library survives ebookfs being
+retired: the files are the real data, the index is just a cache.
+
+## 3. Directory layout: group by author display name
+
+Books live under `Author/Title (id)/` (or `Alice & Bob/Title (id)/` for
+co-authored books), using the author's display name rather than a "sort name."
+This differs from Calibre, which sorts folders by `Author, Sort/Title (id)/`.
+Epubs rarely carry the extra "sort name" metadata Calibre needs for that, and
+there's no reliable way to guess it. The `by-author/` view groups by display
+name too, for the same reason. Every epub stays self-describing, so any tool,
+including Calibre, can re-import the files with full metadata intact; only the
+extra bits ebookfs tracks (status, rating, tags, ids) live outside the epub and
+would need to be carried over separately.
+
+## 4. 9P is the only protocol for reading and writing the library (V1)
+
+Keeps the client/server contract small and language-agnostic: anything that can
+mount a 9P filesystem can use the library. There's no HTTP or gRPC API for
+adding, editing, or deleting books yet. *(An HTTP API frontend is planned (see
+TODO.md) that will also support adding, editing, and deleting books, ending 9P's
+exclusivity as a write path. OPDS, the other planned V2 frontend, stays
+read-only by nature of the protocol.)*
+
+## 5. Go, single static binary
+
+Go has solid 9P libraries and cross-compiles cleanly to ARM with
+`CGO_ENABLED=0`, which matters for running on small home-server hardware.
+
+## 6. Sync to e-readers via USB/rsync, not cloud sync
+
+Keeps every part of the pipeline self-hosted, with no dependency on a
+third-party sync service. The `reader/` view is just a folder to rsync or copy
+from. Getting the files onto the device is up to the client.
+
+## 7. No built-in "browse and download from the device" feature for Kobo
+
+This solves a problem ("I'm out and want a book on my e-reader") that doesn't
+come up often enough to justify a second, always-on network interface running on
+the device itself.
+
+## 8. Parse and write epub files directly, without shelling out to Calibre
+
+Reading and editing an epub's internal metadata (a small XML file inside a zip)
+is a well-understood, self-contained problem, so ebookfs implements it directly
+rather than depending on Calibre's `ebook-meta` tool. This keeps the binary
+self-contained with no external tools required at runtime, and the edits are
+done carefully enough to preserve the epub's original structure.
+
+## 9. `modernc.org/sqlite` instead of `mattn/go-sqlite3`
+
+A pure-Go SQLite driver, so no C compiler is needed and cross-compiling to ARM
+stays simple.
+
+## 10. Forked `knusbaum/go9p` for the 9P server
+
+Its API is simpler to build a synthetic filesystem on top of than the
+alternatives. The fork (`ramblingenzyme/go9p`, referenced in `go.mod`) carries a
+couple of small fixes on top of upstream.
+
+## 11. Each book gets its own directory of individual files
+
+Matches how Plan 9 filesystems are usually designed, and makes editing "first
+class". Any text editor can open `title` or `rating` and save changes, no
+special client needed.
+
+## 12. A `ctl` file at the root handles bulk operations (rename an author everywhere, merge tags, etc.)
+
+Avoids needing dozens of round-trips over 9P for operations that touch many
+books at once. Write a command, read back the result, a common Plan 9 pattern.
+
+## 13. The epub's own internal metadata is the source of truth; `meta.toml` only stores what doesn't belong there
+
+Every e-reader, including the Kobo, reads metadata from inside the epub, so an
+edit has to update the real file, not a sidecar next to it. Calibre instead
+keeps a separate `metadata.opf` file and only writes it into the epub on export,
+so the epub itself can go stale between edits and exports. ebookfs accepts the
+extra cost of rewriting the epub on every metadata edit so that the file you'd
+get from `cp` or `rsync` is always accurate. `meta.toml` only holds what
+genuinely has nowhere else to live: the internal id, reading status, rating, and
+custom tags.
+
+## 14. Duplicate ids found during a reindex are a hard error, never auto-renumbered
+
+A duplicate id almost always means something went wrong outside ebookfs (a
+restored backup, a manual copy). Silently renaming it out of the way could break
+anything that already refers to that book by id. Better to stop and let the
+user sort it out.
+
+## 15. `inbox/` only exists as a virtual 9P folder, not a real directory on disk
+
+Closing the file you wrote is the clear moment the write is considered finished,
+so there's no need to watch the filesystem for changes or worry about
+half-written files being picked up early. Any error ingesting the book is
+reported straight back to whoever wrote the file.
+
+## 16. The server also mounts its own 9P share back onto itself
+
+Lets local tools and scripts drop a file straight into `inbox/` like any other
+folder, without needing to speak 9P themselves, while everything still goes
+through the same 9P code path underneath. See `docs/deployment.md`.
+
+## 17. ~~Rebuild the index from disk on every startup~~ (superseded by #22)
+
+Simple and safe: since the index is just a cache of the filesystem, throwing it
+away and rebuilding it every time guarantees it can never drift. Fine at
+realistic library sizes, but doesn't scale indefinitely.
+
+## 18. One file per metadata field, instead of a single combined file
+
+Fits the "one file, one value" convention the rest of the filesystem follows,
+avoids parsing a config file format on every write, and each field only needs a
+few lines of setup. An earlier design used one combined file for all fields; it
+added complexity without a real benefit.
+
+## 19. Built-in conversion to Kobo's KEPUB format
+
+Native KEPUB avoids doing the conversion on the device itself and fixes some
+formatting quirks Kobo devices have with plain epub. Conversions are cached on
+disk so the same book isn't re-converted on every sync. The `reader/` view can
+serve either the original epub or the converted version, depending on config.
+
+## 20. Structured logging via Go's `log/slog`
+
+Started with the basic `log` package since logging wasn't a priority early on;
+moved to `slog` once configurable log levels and JSON output were needed. The
+switch was mechanical, as expected.
+
+## 21. Editing a list field (authors, tags) respects how the client opened the file
+
+Some 9P clients signal "truncate on open" (like a shell's `>` redirect) and some
+don't. ebookfs honours that signal when it's given, and falls back to starting
+from the current value otherwise, so both "replace the whole list" and "append
+to it" behave the way you'd expect from a normal file.
+
+## 22. Only reindex on startup when the disk and the index actually disagree
+
+Supersedes #17. A full reindex re-parses every epub, so its cost grows with the
+size of the library, though the situation it protects against (something changing
+the files outside of ebookfs) is rare. Startup now just checks each book's size,
+modified time, and filename against what the index has on record; if everything
+matches, nothing is re-parsed. Anything that doesn't match still triggers the
+same full rebuild as before, so the safety guarantee from #17 is unchanged;
+it's just cheaper to confirm nothing needs to happen.
+
+## 23. Refuse to edit a signed epub, without checking what the signature covers
+
+`META-INF/signatures.xml` (§4.2.6.3.6) holds signatures naming by URL the files
+they cover, and there is no key here to re-sign with, so any rewrite of the OPF,
+the NCX, the cover image or the cover page may silently invalidate one.
+
+The precise check parses the `Signature` elements and refuses only when a
+replaced entry is covered. That means committing to xmldsig detail this codebase
+would otherwise never have an opinion about: references live in both
+`SignedInfo` and `Object/Manifest`, and transforms change what is covered.
+
+Refusing on the file's mere presence over-refuses rather than under-detects, and
+costs an edit only on a book that will not turn up. A signed epub comes from
+institutional distribution, where it is DRM-encrypted too and already refused.
+Reading a signed book is unaffected. Revisit if a real book is ever refused for
+nothing.
+
+## 24. Identifiers are keyed by scheme, with the XML id only as a fallback
+
+A `dc:identifier`'s XML id is a document-local handle chosen by whoever produced
+the file (`pub-id`, `BookId`, `uuid_id`) and says nothing about what the value
+is. Keying by it left the index's `scheme` column meaningless, with books filed
+under `pub-id` where they belonged under `isbn`.
+
+The scheme is derived instead from wherever the file states it. Each EPUB
+version has its own place to say it, and failing those the value's own `urn:`
+namespace, which is as explicit as any attribute.
+
+The id stays the last resort because dropping an identifier nothing can name
+would lose data, and an id at least tells two unnamed ones apart where a shared
+bucket would not. An element carrying no id either is keyed `unknown`, numbered
+`unknown-2` onwards so the second is not lost to the first. Only one value fits
+per scheme (`UNIQUE (book_id, scheme)`), and the first in document order wins.
+
+No migration was needed: the index is derived from the filesystem (#2), so
+bumping the schema version re-derives every row from the epubs themselves.
+
+## 25. The epub file format is a public package; the library's model stays out of it
+
+Reading and writing an epub's metadata is general-purpose work. It round-trips
+foreign metadata, honours the §5.5.5 modification stamp, handles the EPUB 2/3
+split, and refuses signed and encrypted files. None of that needs to know what a
+reading status is, though it had come to anyway: `opf` and `ncx` built a
+`book.Bib` and took an `edits.Edits`, a struct carrying `Status`, `Rating` and
+`Tags`, three fields no EPUB file holds.
+
+`pkg/epub` now imports nothing of ebookfs and reports what the file says, with
+nothing rejected and nothing defaulted. `pkg/library/internal/epub` translates,
+and holds the rules that are ebookfs's rather than the format's: a book needs a
+title and authors to be filed, a malformed series position still displays as
+`1`, a retitled book drops its stale sort title.
+
+The public API is exported struct fields and a `Save` that writes only what
+moved, rather than the bulk `Edits` the library uses. "Not mentioned" becomes
+"unchanged since Open", which deletes the pointer-per-field encoding and
+computes the NCX sync flag instead of tracking it.
+
+The alternative was to leave it internal and merely swap the type names, which
+would have fixed the imports without answering the module-extraction question
+about what should be importable (see TODO.md).
+
+Two costs were taken deliberately. A `v1.0.0` tag binds a second package, and
+re-asserting a value the file already carries no longer repairs the document, so
+an edit that changes nothing now changes nothing at all.

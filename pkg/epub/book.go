@@ -60,19 +60,24 @@ type snapshot struct {
 // Nothing is rejected for its contents. A book with no title, no authors or a
 // series position the spec does not allow opens successfully and reports what
 // it carries, because whether that is usable is the caller's question.
-func Open(p string) (*Book, error) {
+func Open(p string) (_ *Book, err error) {
 	f, err := OpenFile(p)
 	if err != nil {
 		return nil, err
 	}
+	// OpenFile says why the close is deferred rather than written at each exit.
+	defer func() {
+		if err != nil {
+			f.Close()
+		}
+	}()
+
 	raw, err := f.ReadEntry(f.PackagePath())
 	if err != nil {
-		f.Close()
 		return nil, err
 	}
 	doc, err := opf.Parse(raw)
 	if err != nil {
-		f.Close()
 		return nil, err
 	}
 	return newBook(f, doc), nil
@@ -88,11 +93,9 @@ func newBook(f *File, doc *opf.Doc) *Book {
 	b.Language = m.Language
 	b.pubdate = m.Pubdate
 	for _, a := range m.Authors {
-		b.Authors = append(b.Authors, Author{Name: a.Name, SortName: a.SortName})
+		b.Authors = append(b.Authors, Author(a))
 	}
-	if m.Series != nil {
-		b.Series = &Series{Name: m.Series.Name, Index: m.Series.Index}
-	}
+	b.Series = (*Series)(m.Series)
 	b.orig = b.take()
 	return b
 }
@@ -119,8 +122,8 @@ func (b *Book) take() snapshot {
 // Read-only: nothing here writes a date, so it is a method rather than a field.
 func (b *Book) Pubdate() string { return b.pubdate }
 
-// Identifiers returns the book's identifiers keyed by scheme — "isbn", "uuid",
-// "doi" — as the file states it, falling back to the element's XML id and then
+// Identifiers returns the book's identifiers keyed by scheme ("isbn", "uuid",
+// "doi") as the file states it, falling back to the element's XML id and then
 // to a numbered "unknown" when nothing names it. Read-only: an identifier is a
 // claim about the book's published identity, not a field to edit.
 //

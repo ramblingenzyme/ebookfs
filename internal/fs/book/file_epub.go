@@ -1,16 +1,13 @@
 package book
 
 import (
-	"errors"
-
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
 // epubFile serves a book's epub through the library, holding one reader per fid.
-// The 9P layer never sees a filesystem path. Size and name are read from the
-// book snapshot (set during parse), so Stat never touches the disk.
+// The 9P layer never sees a filesystem path.
 type epubFile struct {
 	vfile.ReadAtFile
 	book func() *library.Book
@@ -18,24 +15,15 @@ type epubFile struct {
 
 func newEpubFile(stat *proto.Stat, lib ContentReader, book func() *library.Book) *epubFile {
 	return &epubFile{
-		ReadAtFile: vfile.NewReadAtFile(stat, func() (library.EpubReader, error) {
-			if lib == nil {
-				return nil, errors.New("library not available")
-			}
-			b := book()
-			if b == nil {
-				return nil, errors.New("book snapshot not available")
-			}
-			r, err := lib.Content(b.ID())
-			if err != nil {
-				return nil, err
-			}
-			return r, nil
+		ReadAtFile: vfile.NewReadAtFile(stat, func() (vfile.ReaderAtCloser, error) {
+			return content(lib, book)
 		}),
 		book: book,
 	}
 }
 
+// Stat reports the epub's current filename as well as its length, so a retitled
+// book's entry is renamed without rebuilding the node.
 func (e *epubFile) Stat() proto.Stat {
 	s := e.BaseFile.Stat()
 	if b := e.book(); b != nil {

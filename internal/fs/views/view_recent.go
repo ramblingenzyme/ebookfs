@@ -3,7 +3,6 @@ package views
 import (
 	"slices"
 
-	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 )
@@ -28,7 +27,7 @@ const recentLimit = 5
 // all and visible need no lock of their own: every path into Add/Remove holds
 // BookRegistry.mu, and no 9P handler reads them. The embedded StaticDir's mutex
 // guards the children listing instead, and AddChild/DeleteChild take it
-// themselves — refresh must not hold it across them or it self-deadlocks.
+// themselves, so refresh must not hold it across them or it self-deadlocks.
 type recentDir struct {
 	*bookListDir
 	all     []*book.BookDir         // every known book, newest first
@@ -37,7 +36,7 @@ type recentDir struct {
 
 func NewRecentDir(reg *registry.BookRegistry) *recentDir {
 	d := &recentDir{
-		bookListDir: newBookListDir(newStat(reg.FS(), "recent", 0555|proto.DMDIR)),
+		bookListDir: newBookListDir(newDirStat(reg.FS(), "recent")),
 		visible:     make(map[int64]*book.BookDir),
 	}
 	reg.AddView(d)

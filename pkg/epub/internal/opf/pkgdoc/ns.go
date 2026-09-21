@@ -10,15 +10,15 @@ const (
 // ns resolves xmlns: prefixes against the package element's declarations. It is
 // vocab's twin, for the other of the two naming systems: these prefixes are
 // resolved by the XML parser, vocabulary prefixes live inside attribute values.
-// Each has a get-or-declare step — prefix here, spell there.
+// Each has a get-or-declare step: prefix here, spell there.
 type ns struct{ pkg *etree.Element }
 
 // prefix returns the xmlns: prefix bound to uri, declaring preferred if the
 // document binds none.
 //
 // Only <package>'s attributes are scanned, so a declaration further down (OPF
-// 2.0 §2.2's example puts xmlns:opf on <metadata>) gets a redundant second one
-// at the top. Harmless: both bind the same URI.
+// 2.0 §2.2 puts xmlns:opf on <metadata>) gets a redundant second one at the
+// top, harmless since both bind the same URI.
 func (n ns) prefix(uri, preferred string) string {
 	for i := range n.pkg.Attr {
 		a := n.pkg.Attr[i]

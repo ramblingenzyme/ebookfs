@@ -14,8 +14,7 @@ import (
 func TestCtlFileWriteExecutes(t *testing.T) {
 	called := false
 	search := mock.SearchDeleter{DeleteFn: func(int64) error { called = true; return nil }}
-	reg, cmdLog := newTestCtl(t, mock.Editor{})
-	cf := NewCtlFile(reg.FS(), search, reg, cmdLog)
+	cf, _ := newTestCtl(t, search, mock.Editor{})
 
 	// Reading returns a usage hint, not command output.
 	fid := fstest.Fid(t, cf, 1)
@@ -31,7 +30,7 @@ func TestCtlFileWriteExecutes(t *testing.T) {
 	}
 
 	// ...and the outcome is recorded in the command log.
-	entries := cmdLog.Entries()
+	entries := cf.cmdLog.Entries()
 	if len(entries) != 1 {
 		t.Fatalf("log entries = %d, want 1", len(entries))
 	}

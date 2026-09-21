@@ -4,7 +4,7 @@ How to run `ebookfs` as a long-lived service and mount it, locally and over the 
 
 ## Prerequisites
 
-`ebookfs` has no runtime dependencies. The binary is statically compiled with `CGO_ENABLED=0` and runs on any Linux system regardless of installed packages. KEPUB conversion is linked in at build time (`kepubify/v4`) — no external tools are needed at runtime.
+`ebookfs` has no runtime dependencies. The binary is statically compiled with `CGO_ENABLED=0` and runs on any Linux system regardless of installed packages. KEPUB conversion is linked in at build time (`kepubify/v4`), so no external tools are needed at runtime.
 
 ```bash
 # Native build
@@ -14,9 +14,9 @@ CGO_ENABLED=0 go build -trimpath -o ebookfs .
 CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o ebookfs .
 ```
 
-Config lives at `/etc/ebookfs/config.toml` (or wherever `--config` points). See `config.example.toml` for all options. `library.inbox_temp` must be on the same filesystem as `library.root` so ingestion can finalize with `rename(2)`.
+Config lives at `/etc/ebookfs/config.toml` (or wherever `--config` points). See `configs/config.example.toml` for all options. `library.inbox_temp` must be on the same filesystem as `library.root` so ingestion can finalize with `rename(2)`.
 
-Before deciding what `server.listen` should bind to and whether to publish the port, read [security.md](./security.md) — the server has no authentication or transport encryption today.
+Before deciding what `server.listen` should bind to and whether to publish the port, read [security.md](./security.md). The server has no authentication or transport encryption today.
 
 ## Mounting from a client
 
@@ -52,4 +52,4 @@ See the README for the Docker build and run commands. The container listens on 5
 
 ## Backups
 
-The library is plain files and the SQLite index is a derived cache, rebuilt from the filesystem on every start. Any file-based backup tool pointed at `library.root` captures everything; `.index.db` and `.inbox-tmp/` can be excluded.
+The library is plain files and the SQLite index is a derived cache, rebuilt from the filesystem whenever startup finds the two disagree (DECISIONS.md #22). Any file-based backup tool pointed at `library.root` captures everything; `.index.db` and `.inbox-tmp/` can be excluded.

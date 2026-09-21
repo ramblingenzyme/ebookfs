@@ -147,7 +147,7 @@ func TestWriteBufferEmptyWrite(t *testing.T) {
 // term separately: offset+len can wrap past the limit and admit an allocation
 // the cap exists to prevent.
 func TestWriteBufferEnforcesLimit(t *testing.T) {
-	const max = 16
+	const maxSize = 16
 
 	tests := []struct {
 		name    string
@@ -155,22 +155,22 @@ func TestWriteBufferEnforcesLimit(t *testing.T) {
 		size    int
 		wantErr bool
 	}{
-		{"exactly at the limit", 0, max, false},
-		{"one past the limit", 0, max + 1, true},
+		{"exactly at the limit", 0, maxSize, false},
+		{"one past the limit", 0, maxSize + 1, true},
 		{"offset plus length at the limit", 8, 8, false},
 		{"offset plus length past the limit", 8, 9, true},
-		{"offset past the limit", max + 1, 1, true},
+		{"offset past the limit", maxSize + 1, 1, true},
 		// offset + len wraps to a small number; a naive sum check would pass it.
 		{"offset that overflows on addition", math.MaxUint64, 8, true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			w := NewWriteBuffer(max)
+			w := NewWriteBuffer(maxSize)
 
 			_, err := w.Write(1, tc.offset, make([]byte, tc.size), nil)
 
 			if tc.wantErr && err == nil {
-				t.Errorf("Write(offset=%d, len=%d) succeeded, want it refused by the %d-byte cap", tc.offset, tc.size, max)
+				t.Errorf("Write(offset=%d, len=%d) succeeded, want it refused by the %d-byte cap", tc.offset, tc.size, maxSize)
 			}
 			if !tc.wantErr && err != nil {
 				t.Errorf("Write(offset=%d, len=%d): %v", tc.offset, tc.size, err)

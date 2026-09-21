@@ -8,7 +8,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
-// bookRow holds the raw scan targets for a book query row.
 type bookRow struct {
 	id, opfSize, coverSize, epubSize                                   int64
 	title, pubdate, description, language, epubPath, coverPath, status string
@@ -20,15 +19,14 @@ type bookRow struct {
 	seriesIndex                                                        sql.NullString
 }
 
-// toBook converts a bookRow to a book.Book.
 func (r *bookRow) toBook() *book.Book {
 	b := &book.Book{
 		Meta: book.Meta{
 			ID:           r.id,
 			Status:       r.status,
 			Rating:       r.rating,
-			DateAdded:    parseDateField(r.dateAdded, "date_added", r.id),
-			DateModified: parseDateField(r.dateModified, "date_modified", r.id),
+			DateAdded:    parseDateField(r.dateAdded, "date_added", "book_id", r.id),
+			DateModified: parseDateField(r.dateModified, "date_modified", "book_id", r.id),
 		},
 		Bib: book.Bib{
 			Title:       r.title,
@@ -55,17 +53,20 @@ func (r *bookRow) toBook() *book.Book {
 	return b
 }
 
-// parseDateField parses an RFC3339 date string, logging a warning on failure.
-func parseDateField(s string, field string, bookID int64) time.Time {
-	if t, err := time.Parse(time.RFC3339, s); err != nil {
-		slog.Warn("invalid "+field, "book_id", bookID, field, s, "error", err)
+// parseDateField logs anything that is not RFC3339 and returns the zero time,
+// since a book with an unreadable date is still a book. Every row this package
+// writes holds one, so a failure means something else wrote the column.
+//
+// where names the caller's context in the warning.
+func parseDateField(s, field string, where ...any) time.Time {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		slog.Warn("invalid "+field, append(where, field, s, "error", err)...)
 		return time.Time{}
-	} else {
-		return t
 	}
+	return t
 }
 
-// scanBookRows scans the main query rows into Book records.
 func scanBookRows(rows *sql.Rows) ([]*book.Book, error) {
 	var books []*book.Book
 	for rows.Next() {

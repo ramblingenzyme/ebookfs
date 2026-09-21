@@ -22,12 +22,9 @@ const (
 	mimetypeValue = "application/epub+zip"
 )
 
-// notEpub classifies a failure to open the archive. A malformed zip is not an
-// epub; anything else — a missing file, a permission problem, a disk error — is
-// the caller's to see verbatim, since it says nothing about the file's contents.
-//
-// Shared by every entry point, so one broken file is one error however the
-// caller got here.
+// notEpub classifies a failure to open the archive: a malformed zip is not an
+// epub, while a missing file, a permission problem or a disk error passes
+// through verbatim, saying nothing about the contents.
 func notEpub(path string, err error) error {
 	if errors.Is(err, zip.ErrFormat) {
 		return fmt.Errorf("%w: %s: %w", ErrNotEpub, path, err)
@@ -104,7 +101,7 @@ func (a *archive) read(name string) ([]byte, error) {
 	return io.ReadAll(rc)
 }
 
-// validate enforces the OCF mimetype declaration. Unlike calibre we reject
+// validate enforces the OCF mimetype declaration. Unlike calibre, this rejects
 // rather than warn: a wrong mimetype usually means a non-epub zip, such as a
 // mis-added .cbz.
 func (a *archive) validate() error {
@@ -122,7 +119,7 @@ func (a *archive) validate() error {
 }
 
 // metadataPath returns the package document's path, and guarantees the archive
-// holds an entry under it — callers rely on that rather than re-checking.
+// holds an entry under it, which callers rely on rather than re-checking.
 //
 // Some Kobo epubs declare several <rootfile> entries where only one exists, so
 // missing ones are skipped and the first present one wins.

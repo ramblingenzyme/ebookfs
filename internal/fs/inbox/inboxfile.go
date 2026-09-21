@@ -27,7 +27,7 @@ func NewInboxFile(f *fs.FS, lib Ingester, name string, perm uint32, onIngest fun
 
 func (i *InboxFile) Open(fid uint64, omode proto.Mode) error {
 	slog.Debug("inbox: open", "name", i.Stat().Name, "fid", fid, "omode", omode)
-	name := i.Stat().Name // cache before Lock — Stat() acquires RLock, deadlocking if already write-locked
+	name := i.Stat().Name // Stat takes RLock, so read it before the write lock
 	i.Lock()
 	defer i.Unlock()
 	if i.handle != nil {
@@ -59,9 +59,8 @@ func (i *InboxFile) Write(fid uint64, offset uint64, data []byte) (uint32, error
 	return uint32(n), err
 }
 
-// teardown releases the ingest handle under the lock. The caller must not
-// hold the lock when calling DeleteChild or Ingest, since those re-enter
-// the mutex via SetParent.
+// teardown releases the ingest handle. The caller must not hold the lock
+// through DeleteChild or Ingest, which re-enter the mutex via SetParent.
 func (i *InboxFile) teardown() library.IngestHandle {
 	i.Lock()
 	defer i.Unlock()

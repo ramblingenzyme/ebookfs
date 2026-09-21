@@ -9,37 +9,35 @@ import (
 )
 
 const (
-	warmerGoroutines = 4    // concurrent conversions
-	warmerQueueSize  = 4096 // max backlog before drops
+	warmerGoroutines = 4
+	warmerQueueSize  = 4096
 )
 
-// warmer converts kepubs off the read path. The exporter's Warm method enqueues
-// books here so their caches are built before the next rsync. Enqueue is
-// non-blocking; a full queue drops the warm and the read path converts on demand.
+// warmer converts kepubs off the read path, so a cache is built before the
+// next rsync. Enqueue is non-blocking, and a full queue drops the warm, which
+// costs nothing because the read path converts on demand.
 type warmer struct {
-	// ensure is Cache.Ensure, held as a function rather than the cache itself:
-	// the one call this file makes into it is the whole coupling, and stating
-	// it here keeps the queue readable without the cache open alongside.
-	ensure func(*book.Book) error
+	// ensure is Cache.Ensure, held as a function rather than the cache itself,
+	// so this file's only coupling to the cache is visible here.
+	ensure func(*book.ImmutableBook) error
 
-	// Never closed: the ctx passed to run is the only stop signal, which is
-	// what lets warm send from any goroutine at any time without coordinating
-	// with shutdown. Closing would panic those senders, and buys only the
-	// drain-the-backlog semantics Close deliberately does not want. Nothing is
-	// leaked by leaving it open; a channel is collected like any other value.
-	ch chan *book.Book
+	// Never closed. The ctx passed to run is the only stop signal, which lets
+	// warm send from any goroutine without coordinating with shutdown. Closing
+	// would panic those senders and buy only a drained backlog, which Close
+	// does not want.
+	ch chan *book.ImmutableBook
 	wg sync.WaitGroup
 }
 
-func newWarmer(ctx context.Context, ensure func(*book.Book) error) *warmer {
-	w := &warmer{ensure: ensure, ch: make(chan *book.Book, warmerQueueSize)}
+func newWarmer(ctx context.Context, ensure func(*book.ImmutableBook) error) *warmer {
+	w := &warmer{ensure: ensure, ch: make(chan *book.ImmutableBook, warmerQueueSize)}
 	for range warmerGoroutines {
 		w.wg.Go(func() { w.run(ctx) })
 	}
 	return w
 }
 
-func (w *warmer) warm(b *book.Book) {
+func (w *warmer) warm(b *book.ImmutableBook) {
 	select {
 	case w.ch <- b:
 	default: // full, or nobody left to receive; drop the hint
@@ -53,18 +51,17 @@ func (w *warmer) run(ctx context.Context) {
 			return
 		case b := <-w.ch:
 			if err := w.ensure(b); err != nil {
-				// Read from the ctx rather than the error: cancellation reaches
-				// here as whatever kepubify returned, and the backlog is
-				// abandoned rather than logged a failure per queued book.
+				// Cancellation arrives as whatever kepubify returned, so the ctx
+				// is what distinguishes it from a real failure. Without this the
+				// backlog logs one warning per queued book on every shutdown.
 				if ctx.Err() != nil {
 					return
 				}
-				slog.Warn("kepub: warm book failed", "book_id", b.Meta.ID, "error", err)
+				slog.Warn("kepub: warm book failed", "book_id", b.ID(), "error", err)
 			}
 		}
 	}
 }
 
-// wait blocks until every warmer goroutine has returned. Cancelling the ctx
-// newWarmer was given is what makes them return.
+// Cancelling the ctx newWarmer was given is what makes the goroutines return.
 func (w *warmer) wait() { w.wg.Wait() }

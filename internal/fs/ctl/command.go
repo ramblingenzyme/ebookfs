@@ -6,9 +6,8 @@ import (
 	"unicode"
 )
 
-// parseCommand splits a command line into name and arguments. Double-quoted
-// strings are preserved as single arguments, letting tags and names contain
-// spaces. Returns an error for empty input or unterminated quotes.
+// parseCommand splits a command line. Double quotes keep a tag or name with
+// spaces in it as one argument.
 func parseCommand(s string) (string, []string, error) {
 	words, unterminated := splitWords(strings.TrimSpace(s))
 	if unterminated {
@@ -20,9 +19,7 @@ func parseCommand(s string) (string, []string, error) {
 	return words[0], words[1:], nil
 }
 
-// splitWords splits s into words on whitespace boundaries, respecting
-// double-quoted strings. The bool return reports whether a quote was
-// opened but never closed.
+// splitWords reports whether a quote was opened and never closed.
 func splitWords(s string) ([]string, bool) {
 	var words []string
 	var cur strings.Builder

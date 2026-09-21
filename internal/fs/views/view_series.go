@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync/atomic"
 
 	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
@@ -17,14 +16,14 @@ import (
 
 // seriesEntryName builds a book's entry name within its series. The index is
 // the string the epub carries, so it is used as written and only the first
-// level is zero-padded — that is the level entries sort on, and padding it is
-// what keeps "9" ahead of "10" in a plain lexical listing.
-func seriesEntryName(b *library.Book, pad int32) string {
+// level is zero-padded. That is the level entries sort on, and the padding
+// keeps "9" ahead of "10" in a plain lexical listing.
+func seriesEntryName(b *library.Book, pad *padWidth) string {
 	s := b.SeriesIndex()
 
-	if pad > 0 {
+	if pad.padded() {
 		head, rest, _ := strings.Cut(s, ".")
-		s = fmt.Sprintf("%02d", seriesLevel(head))
+		s = pad.format(int64(seriesLevel(head)))
 		if rest != "" {
 			s += "." + rest
 		}
@@ -45,13 +44,13 @@ func seriesLevel(s string) int {
 // seriesBookListDir lists one series' books as namedBookDir entries. Entry
 // names are computed live from the book snapshot and the current pad width
 // (StaticDir keys children by Stat().Name dynamically), so Add and Remove only
-// maintain membership and recompute the pad — a pad flip renames every entry
+// maintain membership and recompute the pad. A pad flip renames every entry
 // in place without rebuilding children, keeping Qids and open fids stable.
 type seriesBookListDir struct {
 	fs.StaticDir
 	f        *fs.FS
 	children map[int64]*namedBookDir
-	pad      atomic.Int32
+	pad      padWidth
 }
 
 // newSeriesBookListDir takes a prepared stat, matching newBookListDir, so
@@ -65,11 +64,9 @@ func newSeriesBookListDir(stat *proto.Stat, f *fs.FS) *seriesBookListDir {
 }
 
 func (s *seriesBookListDir) Add(dir *book.BookDir) {
-	n := &namedBookDir{
-		BookDir:  dir,
-		baseStat: *newStat(s.f, "", 0555|proto.DMDIR),
-		name:     func(b *library.Book) string { return seriesEntryName(b, s.pad.Load()) },
-	}
+	n := newNamedBookDir(s.f, dir, func(b *library.Book) string {
+		return seriesEntryName(b, &s.pad)
+	})
 	s.children[dir.Book().ID()] = n
 	s.StaticDir.AddChild(n)
 	s.repad()
@@ -87,52 +84,36 @@ func (s *seriesBookListDir) Remove(dir *book.BookDir) {
 	s.repad()
 }
 
-// repad recomputes the zero-pad width from the current members: two digits
-// once any series index reaches 10.
+// repad recomputes the width from the members still present, so a series that
+// loses its highest-numbered volume narrows again.
 func (s *seriesBookListDir) repad() {
 	var maxIdx int
 	for _, n := range s.children {
-		if b := n.Book(); b.HasSeries() && seriesLevel(b.SeriesIndex()) > maxIdx {
-			maxIdx = seriesLevel(b.SeriesIndex())
+		b := n.Book()
+		if !b.HasSeries() {
+			continue
+		}
+		if level := seriesLevel(b.SeriesIndex()); level > maxIdx {
+			maxIdx = level
 		}
 	}
-	var pad int32
-	if maxIdx >= 10 {
-		pad = 2
-	}
-	s.pad.Store(pad)
+	s.pad.set(int64(maxIdx))
 }
 
-type bySeriesDir struct{ groupingDir }
-
-func NewBySeriesDir(reg *registry.BookRegistry) *bySeriesDir {
-	d := &bySeriesDir{newGroupingDir(reg.FS(), "by-series")}
-	reg.AddView(d)
-	return d
+func NewBySeriesDir(reg *registry.BookRegistry) *keyedDir {
+	f := reg.FS()
+	// The child carries its own listing rather than the shared one, to zero-pad
+	// entries by series position.
+	return newKeyedDir(reg, "by-series", seriesKeys, func(s *proto.Stat) fs.FSNode {
+		return newSeriesBookListDir(s, f)
+	})
 }
 
-// seriesDir returns the subdir for a series name, creating it on first use.
-// PathSafe for the same reason as by-author and by-tag: a series name is
-// metadata read verbatim from the epub, and a '/' in one would make an entry a
-// 9P client cannot walk to. Remove must mint the same name or removals miss.
-func (d *bySeriesDir) seriesDir(name string) registry.BookView {
-	return d.childDir(naming.PathSafe(name), func(s *proto.Stat) fs.FSNode {
-		return newSeriesBookListDir(s, d.f)
-	}).(registry.BookView)
-}
-
-func (d *bySeriesDir) Add(dir *book.BookDir) {
-	b := dir.Book()
+// seriesKeys is the by-series entry b belongs under, or none when the book is
+// in no series.
+func seriesKeys(b *library.Book) []string {
 	if !b.HasSeries() {
-		return
+		return nil
 	}
-	d.seriesDir(b.SeriesName()).Add(dir)
-}
-
-func (d *bySeriesDir) Remove(dir *book.BookDir) {
-	b := dir.Book()
-	if !b.HasSeries() {
-		return
-	}
-	d.removeLister(naming.PathSafe(b.SeriesName()), dir)
+	return []string{b.SeriesName()}
 }

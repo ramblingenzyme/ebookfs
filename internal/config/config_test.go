@@ -37,18 +37,6 @@ func TestDefaults(t *testing.T) {
 	}
 }
 
-func writeConfig(t *testing.T, content string) string {
-	t.Helper()
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.toml")
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		t.Fatal(err)
-	}
-	return path
-}
-
-const reqLibSection = "[library]\nroot = \"/l\"\ninbox_temp = \"/t\"\nindex_path = \"/i\"\n\n"
-
 func TestLoad(t *testing.T) {
 	t.Run("minimal valid", func(t *testing.T) {
 		path := writeConfig(t, reqLibSection)
@@ -251,3 +239,15 @@ index_path = ""
 		}
 	})
 }
+
+func writeConfig(t *testing.T, content string) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+const reqLibSection = "[library]\nroot = \"/l\"\ninbox_temp = \"/t\"\nindex_path = \"/i\"\n\n"

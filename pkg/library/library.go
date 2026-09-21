@@ -1,202 +1,230 @@
 package library
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
-	"os"
-	"path/filepath"
-	"strings"
+	"slices"
+	"sync"
+	"time"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/internal/syncutil"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/store"
 )
 
-type Edits = book.Edits
-type ValidationError = book.ValidationError
-type FieldError = book.FieldError
-type Query = index.Query
-type Order = index.Order
-type Stats = index.Stats
-type Author = book.Author
-type Series = book.SeriesRef
-type EpubReader = epub.EpubReader
-
-const (
-	OrderSortTitle    = index.OrderSortTitle
-	OrderDateAdded    = index.OrderDateAdded
-	OrderDateModified = index.OrderDateModified
-	OrderRating       = index.OrderRating
-	OrderPubdate      = index.OrderPubdate
-)
-
-// ErrBookNotFound is wrapped into the error returned by any operation that
-// addresses a book id the index does not hold. Callers distinguish it with
-// errors.Is; anything else from the same call is an index or store failure.
-var ErrBookNotFound = errors.New("no such book")
-
-// ErrDuplicate is wrapped into the error an ingest returns when the library
-// already holds a book with the same title and the same set of authors.
-var ErrDuplicate = errors.New("book already in library")
-
-// ErrDuplicateOnDisk is wrapped into the error an ingest returns when no
-// indexed book matches, but a file for these authors and this title is already
-// in the library tree — a book the indexer skipped. Ingesting anyway would
-// leave two copies on disk, one of them invisible. Reindex or remove the
-// existing file.
-var ErrDuplicateOnDisk = errors.New("book already on disk but not indexed")
-
-// The epub package's own errors, surfaced here because they reach this
-// package's callers: a bad upload fails Ingest, and a fid held across a
-// re-ingest fails a read on an EpubReader. They are the same values, so
-// errors.Is matches whichever package a caller names them from.
+// Library is the backend facade: the store, the index, and the locks that keep
+// them agreeing. Construct it with Open.
 //
-// ErrNotEpub means the file is not an epub at all — not a zip, or not carrying
-// the mimetype OCF 3.3 §4.3.3 fixes. The other three are an epub whose OCF
-// container does not lead to a package document, which say where the trail
-// stops.
-var (
-	ErrNotEpub         = epub.ErrNotEpub
-	ErrContainer       = epub.ErrContainer
-	ErrNoRootfile      = epub.ErrNoRootfile
-	ErrRootfileMissing = epub.ErrRootfileMissing
-)
-
-// ErrClosed is returned by every EpubReader accessor after Close. Reads arrive
-// from the 9P layer on a handle a client may hold across a re-ingest, so a
-// use-after-close is an ordinary end for one rather than a caller's mistake.
-var ErrClosed = epub.ErrClosed
-
-// Exporter produces the rsync-export rendition of a book for the reader/ view.
-// It is the single swap point between serving the original epub and a converted
-// kepub: the Library returns the appropriate implementation based on config.
+// Concurrency contract: methods are safe for concurrent use. Search returns
+// *Book values that are immutable snapshots, and the library never mutates a
+// Book after returning it.
 //
-// Includes (which books belong in the reader) and Dirname (how they group) sit
-// here alongside the rendition methods on purpose: deciding *what* syncs to the
-// reader is a library/backend policy concern, and fs/views/reader.go is only the
-// concrete 9P rendering of that data. Includes is a predicate rather than an
-// exposed status list so the policy can change (tag-based, size caps, …)
-// without touching the frontend.
-type Exporter interface {
-	// Open returns a handle to the book's export rendition. The handle is a
-	// snapshot — after the book is edited, call Open again for updated content.
-	// The returned reader is non-nil iff err is nil.
-	Open(*Book) (EpubReader, error)
-	Size(*Book) (int64, bool) // cheap; 9P stat length, false when cold
-	Warm(*Book)               // non-blocking proactive warm hint
-	Filename(*Book) string    // FAT-safe export name
-	Dirname(*Book) string     // FAT-safe export directory name
-	Includes(*Book) bool      // whether the book appears in the reader view
+// Every other operation addresses a book by id and resolves its current state
+// fresh, so callers never pass stale snapshots back in. Content opens the
+// book's live on-disk file. Edit and Delete run as an atomic read-modify-write
+// per book under a per-book lock, so callers cannot revert each other.
+type Library struct {
+	store     *store.Store
+	index     *index.Index
+	inboxTemp string
+
+	// Exporters that own resources (the kepub cache and its warmer), collected
+	// as they are handed out; releasing them is the library's job (see Exporter).
+	//
+	// ponytail: two readers with identical config each get their own exporter.
+	// Key a map on the ReaderConfig fields only if a deployment ever has enough
+	// readers for the duplication to cost anything.
+	closers  []io.Closer
+	closerMu sync.Mutex
+
+	// bookMu serializes the operations that mutate one book's on-disk state
+	// (Edit, Delete), so e.g. a cover rewrite cannot interleave with an edit
+	// that is moving the book directory.
+	bookMu syncutil.KeyedMutex
+
+	// ingestMu serializes the entire ingest path (Exists → NextID → Layout →
+	// Ingest → index Put) so two simultaneous uploads of the same new book
+	// cannot both pass the Exists check before either lays the book down.
+	ingestMu sync.Mutex
+
+	// mutateMu excludes a runtime Reindex from every other mutation. Reindex
+	// moves book directories to their canonical paths and rebuilds the index
+	// wholesale, neither of which addresses a single book, so the per-book lock
+	// cannot cover it: a concurrent Edit renames the directory the move is
+	// reading. Held for reading by the per-book mutations and by ingest, for
+	// writing by Reindex. Always taken before bookMu and ingestMu.
+	mutateMu sync.RWMutex
 }
 
-// Option configures Open. Options are the extension point: an ingest hook, a
-// subscriber or a metadata handler is added as one, so none of them changes
-// Open's signature.
-type Option func(*options)
-
-type options struct {
-	forceReindex bool
+func (l *Library) Close() error {
+	l.closerMu.Lock()
+	for _, c := range l.closers {
+		if err := c.Close(); err != nil {
+			slog.Error("close: exporter failed", "error", err)
+		}
+	}
+	l.closerMu.Unlock()
+	return l.index.Close()
 }
 
-// WithForceReindex rebuilds the index from the store even when it looks clean.
-// The drift check only compares what it can observe cheaply (see storeDrifted),
-// so an operator who knows better says so this way.
-func WithForceReindex() Option {
-	return func(o *options) { o.forceReindex = true }
-}
-
-// Open opens the library rooted at cfg.Root, rebuilding the index from the
-// store when it is missing, stale, or WithForceReindex is passed.
-func Open(cfg Config, opts ...Option) (*Library, error) {
-	var o options
-	for _, opt := range opts {
-		opt(&o)
-	}
-
-	if err := os.MkdirAll(cfg.Root, 0755); err != nil {
-		return nil, fmt.Errorf("creating library root: %w", err)
-	}
-	if err := os.MkdirAll(cfg.InboxTemp, 0700); err != nil {
-		return nil, fmt.Errorf("creating inbox temp dir: %w", err)
-	}
-	if err := cleanInboxTemp(cfg.InboxTemp); err != nil {
-		return nil, fmt.Errorf("cleaning inbox temp: %w", err)
-	}
-	if err := checkSameFilesystem(cfg.Root, cfg.InboxTemp); err != nil {
-		return nil, fmt.Errorf("inbox_temp must be on the same filesystem as library.root: %w", err)
-	}
-
-	idx, err := index.Open(cfg.IndexPath)
+func (l *Library) Search(q Query) ([]*Book, error) {
+	books, err := l.index.Search(q)
 	if err != nil {
 		return nil, err
 	}
-	lib := &Library{
-		store:     store.New(cfg.Root, cfg.InboxTemp),
-		index:     idx,
-		inboxTemp: cfg.InboxTemp,
+	result := make([]*Book, len(books))
+	for i, b := range books {
+		result[i] = book.NewImmutableBook(b)
 	}
-	// Spelled out rather than as one || chain (which short-circuits the same
-	// way) so the store scan can be captured: when storeDrifted is the check
-	// that fires, its scan is handed to the rebuild, which then neither walks
-	// the store nor stats the books a second time.
-	var onDisk *storeScan
-	needs := o.forceReindex || lib.needsReindex()
-	if !needs {
-		onDisk, needs = lib.storeDrifted()
-	}
-	if needs {
-		if err := lib.reindex(onDisk); err != nil {
-			// The index was opened above and lib is never returned, so nothing
-			// else will ever close it. A duplicate book id makes this a routine
-			// path (see DECISIONS.md #14), not just a crash-adjacent one.
-			idx.Close()
-			return nil, fmt.Errorf("reindexing library: %w", err)
-		}
-	} else {
-		slog.Info("reindex: index is clean, skipping")
-	}
-	return lib, nil
+	return result, nil
 }
 
-func cleanInboxTemp(dir string) error {
-	entries, err := os.ReadDir(dir)
+func (l *Library) Stats() (*Stats, error) {
+	return l.index.Stats()
+}
+
+// Get wraps ErrBookNotFound when the index does not hold the book. The Book it
+// returns is an immutable snapshot; see the concurrency contract on Library.
+func (l *Library) Get(id int64) (*Book, error) {
+	b, err := l.get(id)
+	if err != nil {
+		return nil, err
+	}
+	return book.NewImmutableBook(b), nil
+}
+
+// get is where a mutation fetches its base, under the per-book lock, so it
+// operates on the book's authoritative current state.
+func (l *Library) get(id int64) (*book.Book, error) {
+	b, err := l.index.Get(id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("book %d: %w", id, ErrBookNotFound)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("book %d: %w", id, err)
+	}
+	return b, nil
+}
+
+// Content hands back an open handle, which the caller closes.
+func (l *Library) Content(id int64) (EpubReader, error) {
+	b, err := l.get(id)
+	if err != nil {
+		return nil, err
+	}
+	return epub.OpenReader(l.store.AbsPath(b.EpubPath), b.CoverPath)
+}
+
+// Edit persists everything and returns the updated book. A change to the title
+// or the authors moves the book directory.
+func (l *Library) Edit(id int64, e Edits) (*Book, error) {
+	l.mutateMu.RLock()
+	defer l.mutateMu.RUnlock()
+
+	mu := l.bookMu.For(id)
+	mu.Lock()
+	defer mu.Unlock()
+
+	b, err := l.get(id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Every edit is validated here at the facade, the single enforcement
+	// point, so meta-only edits (which skip the epub rewrite) can't slip
+	// through unchecked.
+	e = e.Normalized()
+	if v := book.Validate(e, b); v != nil {
+		return nil, v
+	}
+
+	op := l.index.BeginOp()
+	if err := op.MarkPending(); err != nil {
+		return nil, err
+	}
+
+	meta := applyMeta(b.Meta, e)
+	bib, err := epub.Rewrite(l.store.AbsPath(b.EpubPath), b, e)
+	if err != nil {
+		op.Cancel()
+		slog.Error("edit: rewrite failed", "book_id", b.Meta.ID, "title", b.Title, "error", err)
+		return nil, err
+	}
+
+	location := l.store.Layout(bib.Authors, bib.Title, meta.ID)
+	mt, err := l.store.Update(b.Location, location, &meta)
+	if err != nil {
+		slog.Error("edit: update failed", "book_id", b.Meta.ID, "title", b.Title, "error", err)
+		return nil, err
+	}
+
+	updated := bookFromBib(bib, meta, location, mt)
+	if err := op.Put(updated, mt); err != nil {
+		return nil, err
+	}
+	return book.NewImmutableBook(updated), nil
+}
+
+// Delete removes the book from the store and the index.
+func (l *Library) Delete(id int64) error {
+	l.mutateMu.RLock()
+	defer l.mutateMu.RUnlock()
+
+	mu := l.bookMu.For(id)
+	mu.Lock()
+	defer mu.Unlock()
+
+	b, err := l.get(id)
 	if err != nil {
 		return err
 	}
-	for _, e := range entries {
-		if !e.Type().IsRegular() || !strings.HasSuffix(e.Name(), ".epub") {
-			continue
-		}
-		path := filepath.Join(dir, e.Name())
-		if err := os.Remove(path); err != nil {
-			slog.Warn("removing stale inbox temp failed", "path", path, "error", err)
-		} else {
-			slog.Info("removed stale inbox temp", "path", path)
-		}
+	op := l.index.BeginOp()
+	if err := op.MarkPending(); err != nil {
+		return err
 	}
+	// Store is authoritative; a ghost index row is cleaned up by reindex.
+	err = l.store.Delete(b.Location)
+	if err != nil {
+		slog.Error("delete: store delete failed", "book_id", id, "title", b.Title, "error", err)
+		return err
+	}
+	if err := op.Delete(id); err != nil {
+		slog.Error("delete: index delete failed", "book_id", id, "title", b.Title, "error", err)
+		return err
+	}
+	slog.Info("delete: book removed", "book_id", id, "title", b.Title)
 	return nil
 }
 
-// checkSameFilesystem verifies that a and b are on the same mount, which ingest
-// relies on: the frontend writes to a temp file inside inboxTemp then atomically
-// renames it into the library root, and rename only works within a filesystem.
-func checkSameFilesystem(a, b string) error {
-	tmp, err := os.CreateTemp(a, ".fschk-*")
-	if err != nil {
-		return err
+// applyMeta stamps the modified time and leaves a nil field untouched. Edit
+// derives the Bib fields from the epub re-parse instead.
+//
+// The result shares nothing with its arguments. Taking m by value covers the
+// scalars, but Tags would alias the caller's Meta or Edits, both of which it
+// still holds, and the result travels on to the sidecar write and the index.
+func applyMeta(m book.Meta, e Edits) book.Meta {
+	if e.Status != nil {
+		m.Status = *e.Status
 	}
-	tmp.Close()
-	defer os.Remove(tmp.Name())
+	if e.Rating != nil {
+		m.Rating = *e.Rating
+	}
+	if e.Tags != nil {
+		m.Tags = *e.Tags
+	}
+	m.Tags = slices.Clone(m.Tags)
+	m.DateModified = time.Now()
+	return m
+}
 
-	dst := filepath.Join(b, filepath.Base(tmp.Name()))
-	if err := os.Rename(tmp.Name(), dst); err != nil {
-		os.Remove(dst)
-		return err
-	}
-	if err := os.Remove(dst); err != nil {
-		slog.Warn("checkSameFilesystem cleanup failed", "path", dst, "error", err)
-	}
-	return nil
+func bookFromBib(bib book.Bib, meta book.Meta, loc book.Location, obs drift.PathInfo) *book.Book {
+	b := book.NewBook(bib, meta, loc)
+	b.EpubSize = obs.Size
+	return b
 }

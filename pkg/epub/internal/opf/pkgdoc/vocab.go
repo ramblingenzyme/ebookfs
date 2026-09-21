@@ -18,7 +18,7 @@ import (
 // declarations, honouring even a rebound reserved prefix (D.1.5 permits it); a
 // name this package spells resolves through the reserved table only. So a
 // document that rebinds dcterms has a dcterms:modified that is somebody else's
-// property, the two sides do not match, and we leave it alone.
+// property, the two sides do not match, and it is left alone.
 type vocab struct{ pkg *etree.Element }
 
 // reservedPrefixes are the D.1.5 prefixes, which creators "MAY use ... without
@@ -63,12 +63,12 @@ func expand(name string, in map[string]string) string {
 	return url + local
 }
 
-// same reports whether a name written in the document means the property we call
-// ours. Argument order matters: the two sides resolve differently.
+// Same reports whether inDoc, as the document spells it, names the same property
+// as ours. Argument order matters: the two sides resolve differently.
 //
-// No inDoc == ours fast path, deliberately: identical spellings are the case the
-// asymmetry exists for. It follows that a name we spell must use a reserved
-// prefix or the default vocabulary; all of ours do.
+// There is deliberately no inDoc == ours fast path. Identical spellings are the
+// case the asymmetry exists for, so a name this package spells must use a
+// reserved prefix or the default vocabulary, and all of them do.
 func (v vocab) Same(inDoc, ours string) bool {
 	return expand(inDoc, v.bindings()) == expand(ours, reservedPrefixes)
 }
@@ -85,9 +85,10 @@ func (v vocab) has(list, want string) bool {
 	return false
 }
 
-// spell returns how to write one of our property names in this document: the
-// name unchanged, unless the document rebound our prefix, in which case another
-// prefix bound to the right vocabulary is used and declared if there is none.
+// spell returns how to write one of this package's property names in this
+// document: the name unchanged, unless the document rebound the prefix, in
+// which case another prefix bound to the right vocabulary is used, and declared
+// if there is none.
 func (v vocab) spell(ours string) string {
 	prefix, local, ok := strings.Cut(ours, ":")
 	if !ok {

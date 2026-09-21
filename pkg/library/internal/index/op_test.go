@@ -8,7 +8,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/drift"
 )
 
-// A completed mutation leaves no pending row and the book queryable.
+// A completed mutation leaves the book queryable.
 func TestPutSuccessLeavesClean(t *testing.T) {
 	idx := openTestIndex(t)
 
@@ -37,7 +37,6 @@ func TestPutWithoutMarkPendingErrors(t *testing.T) {
 	}
 }
 
-// Delete without MarkPending must be rejected.
 func TestDeleteWithoutMarkPendingErrors(t *testing.T) {
 	idx := openTestIndex(t)
 	op := idx.BeginOp()
@@ -46,7 +45,6 @@ func TestDeleteWithoutMarkPendingErrors(t *testing.T) {
 	}
 }
 
-// Delete clears its own pending row on success.
 func TestDeleteSuccessLeavesClean(t *testing.T) {
 	idx := openTestIndex(t)
 
@@ -71,8 +69,8 @@ func TestDeleteSuccessLeavesClean(t *testing.T) {
 	}
 }
 
-// Defect (c): a store write that fails after starting leaves a pending row so
-// the next startup reindexes and heals any partial on-disk divergence.
+// A store write that fails after starting leaves a pending row, so the next
+// startup reindexes and heals any partial on-disk divergence.
 func TestStoreFailureKeepsPending(t *testing.T) {
 	idx := openTestIndex(t)
 
@@ -86,8 +84,8 @@ func TestStoreFailureKeepsPending(t *testing.T) {
 	mustNeedReindex(t, idx, true)
 }
 
-// Defect (a): a mutation refused before it touches disk (it never calls
-// markPending) leaves no row, so it forces no needless reindex.
+// A mutation refused before it touches disk never calls MarkPending, so it
+// leaves no row and forces no needless reindex.
 func TestPreStoreRefusalKeepsNoRow(t *testing.T) {
 	idx := openTestIndex(t)
 
@@ -100,7 +98,7 @@ func TestPreStoreRefusalKeepsNoRow(t *testing.T) {
 	mustNeedReindex(t, idx, false)
 }
 
-// markPending is idempotent: calling it more than once inserts a single row.
+// More than one MarkPending inserts a single row.
 func TestMarkPendingIdempotent(t *testing.T) {
 	idx := openTestIndex(t)
 
@@ -113,9 +111,9 @@ func TestMarkPendingIdempotent(t *testing.T) {
 	}
 }
 
-// Defect (b): each operation owns its own pending row, so a concurrent success
-// deletes only its own marker and cannot clear a failed peer's row, the exact
-// clobber the old single shared dirty flag allowed.
+// Each operation owns its own pending row, so a concurrent success deletes
+// only its own marker. A single shared dirty flag would let it clear a failed
+// peer's.
 func TestPerOpIndependence(t *testing.T) {
 	idx := openTestIndex(t)
 

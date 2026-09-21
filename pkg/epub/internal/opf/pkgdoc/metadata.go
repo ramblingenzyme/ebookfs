@@ -41,7 +41,7 @@ func (m metadata) dcParent() *etree.Element {
 }
 
 // metaParent creates the x-metadata wrapper when the file uses dc-metadata
-// without one — the common shape, since a producer with no non-DC metadata has
+// without one, the common shape, since a producer with no non-DC metadata has
 // no reason to emit it. §2.2: "all other metadata elements, if any, must go
 // into x-metadata".
 func (m metadata) metaParent() *etree.Element {

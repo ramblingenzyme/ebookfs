@@ -11,7 +11,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
 )
 
-// fakeSource returns a temp file filled with the given data.
 type fakeSource struct {
 	t   *testing.T
 	dir string
@@ -26,8 +25,7 @@ func (s fakeSource) Content(_ int64) (epub.EpubReader, error) {
 	return &srcContent{f}, nil
 }
 
-// srcContent wraps an *os.File to satisfy epub.EpubReader. The kepub cache
-// only reads from the reader; OPF and Cover are never called.
+// The kepub cache only reads; OPF and Cover are never called.
 type srcContent struct {
 	*os.File
 }
@@ -35,9 +33,8 @@ type srcContent struct {
 func (c *srcContent) OPF() ([]byte, error)   { return nil, nil }
 func (c *srcContent) Cover() ([]byte, error) { return nil, nil }
 
-// newTestCache returns a cache over a source epub on disk whose conversions
-// write body, so no test here reaches kepubify. Its Close is registered, which
-// stops the warmer the cache started.
+// newTestCache writes body instead of converting, so no test here reaches
+// kepubify. The registered Close stops the warmer the cache started.
 func newTestCache(t *testing.T, body string) (*Cache, string) {
 	t.Helper()
 	dir := t.TempDir()
@@ -53,4 +50,9 @@ func newTestCache(t *testing.T, body string) (*Cache, string) {
 	return c, dir
 }
 
-var makeBook = util.MakeMutableBook
+// The cache takes an immutable snapshot, so a test sets its fields on the
+// mutable book and wraps it at the handoff, as the views tests do.
+var (
+	makeBook = util.MakeMutableBook
+	wrapBook = util.WrapBook
+)

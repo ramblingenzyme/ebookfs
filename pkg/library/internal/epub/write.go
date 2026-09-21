@@ -40,9 +40,9 @@ func Rewrite(epubPath string, b *book.Book, e book.Edits) (book.Bib, error) {
 	if e.HasBibEdits() {
 		apply(f, e)
 		// Before the write, not after it: the epub package has no opinion on a
-		// book with no title, so an edit that leaves one — a sort title written
-		// against a package carrying no dc:title mints an empty one — would
-		// otherwise be caught only once the original had been replaced.
+		// book with no title. A sort title written against a package carrying no
+		// dc:title mints an empty one, which would otherwise be caught only
+		// once the original had been replaced.
 		if err := usable(f); err != nil {
 			return book.Bib{}, err
 		}
@@ -101,7 +101,7 @@ func authors(as []book.Author) []epubfile.Author {
 // series folds a half-named series edit onto the membership the file records,
 // and returns nil for one to clear. cur is what a reader was shown, so an
 // index-only edit moves the book the reader saw rather than inventing a
-// collection — and a book in no series has no position to set, so the edit is
+// collection. A book in no series has no position to set, so the edit is
 // dropped rather than minting an empty one.
 func series(cur *epubfile.Series, e book.Edits) *epubfile.Series {
 	s := epubfile.Series{}

@@ -10,10 +10,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// coverFile's own surface, on top of the snapshotFile and size-cap semantics
-// the base tests own: Stat length from CoverSize, and the per-fid write buffer
-// committed to Edit on Close.
-
 func newTestCoverFile(t *testing.T, lib ContentReader, edit func(int64, library.Edits) error) *coverFile {
 	t.Helper()
 	book := util.MakeMutableBook(1, "Test", "Author")

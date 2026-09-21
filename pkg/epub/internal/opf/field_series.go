@@ -41,10 +41,9 @@ func (f seriesField) get() *Series {
 // EPUB 2 has no standard mechanism, so the proprietary calibre metas are used
 // instead.
 //
-// Both halves are stated. A caller changing one reads the other back from get
-// first, which is where the reader's answer comes from: an empty-named
-// collection is invisible to get, so the name it reports may be the calibre
-// meta's rather than the collection's.
+// Both halves are written. A caller changing one reads the other back from get
+// first: an empty-named collection is invisible to get, so the name it reports
+// may be the calibre meta's rather than the collection's.
 func (f seriesField) set(s *Series) {
 	series, position := "", ""
 	if s != nil {
@@ -63,30 +62,31 @@ func (f seriesField) set(s *Series) {
 		return
 	}
 
-	// Rewritten in place wherever the file has one, whatever version it claims,
-	// since a stale collection would outrank the calibre metas on the way back
-	// in. A v3 package with none gets one; a v2 package with none stays without
-	// one, but still loses any duplicate or empty-named collection.
-	if coll.Exists() || f.d.EPUB3() {
+	if writeV3(f.d, coll.Exists()) {
 		coll.Set(series)
 		pkgdoc.Put(coll.Refine("group-position"), position)
 	} else {
+		// A v2 package keeps no collection, and loses any duplicate or
+		// empty-named one it carried.
 		coll.Clear()
 	}
 
-	// A v2 package always gets the calibre metas; a v3 package only if it already
-	// carried them, kept in step rather than left contradicting the collection.
-	if f.d.EPUB3() && !calibreName.Exists() {
-		return
+	if writeCalibre(f.d, calibreName.Exists()) {
+		calibreName.Set(series)
+		pkgdoc.Put(calibreIdx, calibreIndex(position))
 	}
-	calibreName.Set(series)
-	pkgdoc.Put(calibreIdx, calibreIndex(position))
 }
 
 // seriesCollection is the belongs-to-collection meta recording the series. It is
 // a pkgdoc.Element with two extra duties: a write marks the collection as a
 // series, and both a write and a clear drop the other series collections, so the
 // document is left recording exactly one.
+//
+// Those duties are why it shadows Set and Clear rather than calling the Element
+// through. A pkgdoc slot writes one value and knows nothing about a field's
+// invariants, so the invariant is held here; Exists, Get and Refine are still
+// the embedded Element's. Widening pkgdoc to carry an after-write hook would
+// grow the package to serve this one field.
 type seriesCollection struct {
 	*pkgdoc.Element
 	f seriesField
@@ -111,8 +111,8 @@ func (f seriesField) collections() []*pkgdoc.Element {
 func (s seriesCollection) Set(value string) {
 	s.Element.Set(value)
 	s.markSeries()
-	// Only the extra collections go; this one's refinements may hold metadata we
-	// did not write.
+	// Only the extra collections go; this one's refinements may hold metadata
+	// the package did not write.
 	s.f.dropCollections(s.Element)
 }
 

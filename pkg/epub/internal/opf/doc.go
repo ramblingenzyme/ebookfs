@@ -4,23 +4,22 @@
 //
 // A field is one piece of metadata this package models. Reading (get) and
 // writing (set) both go through it so the two cannot disagree, and set(get())
-// never invents metadata the file did not carry — nothing here defaults a value
-// or rejects a document for what it says. Whether what the file states is
-// usable is the caller's question, and Metadata reports it verbatim.
+// never invents metadata the file did not carry. Nothing here defaults a value
+// or rejects a document for what it says; Doc.Metadata says what that costs the
+// caller.
 //
-// Three rules keep the fields readable:
+// Three rules shape the fields:
 //
 //   - A field with a write side is a type with get/set (title, authors, series,
 //     modified). A read-only field is a single Doc method (description,
 //     language, pubdate, identifiers, cover).
 //
 //   - A field says what a value should be, never where it is kept. The slots
-//     pkgdoc hands out know where, and nothing here touches the XML: this
-//     package does not import etree, and that is the point of the split.
+//     pkgdoc hands out know where, and this package does not import etree.
 //
-//   - The EPUB 2 / EPUB 3 branch stays visible in each field. The specs
-//     genuinely differ, and v2 has no sort-title mechanism at all; hiding that
-//     behind a common writer would hide what matters.
+//   - The EPUB 2 / EPUB 3 branch stays visible in each field. The specs differ,
+//     and v2 has no sort-title mechanism at all, which a common writer would
+//     hide.
 package opf
 
 import (
@@ -38,10 +37,8 @@ type Author struct{ Name, SortName string }
 // D.3.7 allows multi-level positions such as 2.2.1, which no number holds.
 type Series struct{ Name, Index string }
 
-// Metadata is the package document as this package reads it: every value
-// verbatim, with no defaulting and nothing rejected. A book with no title
-// reads back an empty Title, because that is what the file says. Whether that
-// is usable is the caller's question.
+// Metadata is the package document as this package reads it, every value
+// verbatim. A book with no title reads back an empty Title.
 type Metadata struct {
 	Title       string
 	SortTitle   string
@@ -90,10 +87,12 @@ func (o *Doc) Apply(edit func(*Doc)) bool {
 }
 
 // SetTitle writes the title and its sort value. A nil half is one the caller
-// did not touch, and the two are not independent: writing a title takes the
-// document's other dc:title segments with it, and a title written without a
-// sort value drops the one the book carried. Passing a nil title is therefore
-// how a caller edits the sort value alone.
+// did not touch.
+//
+// The halves are coupled. Writing a title takes the document's other dc:title
+// segments with it, and a title written without a sort value drops the one the
+// book carried. So a caller edits the sort value alone by passing a nil title,
+// and restates the sort value whenever it writes a title.
 func (o *Doc) SetTitle(title, sort *string) { o.title().set(title, sort) }
 
 func (o *Doc) SetDescription(v string) { o.d.DC("description").Set(v) }
@@ -110,10 +109,9 @@ func (o *Doc) SetSeries(s *Series) { o.series().set(s) }
 // directory, needed only to resolve the cover href.
 //
 // Nothing is rejected and nothing is defaulted. A book with no title or no
-// authors is a fact about the file, not an error here, and a series position
-// the spec disallows is reported as written. Requiring a title, or showing
-// something in place of a bad position, is a policy of whoever asked — so it
-// lives with the caller that has one.
+// authors is a fact about the file, and a series position the spec disallows is
+// reported as written. Requiring a title, or showing something in place of a bad
+// position, is a policy, so it lives with the caller that has one.
 func (o *Doc) Metadata(base string) Metadata {
 	// Reported as written. §5.5.2 licenses stripping and collapsing whitespace,
 	// which get already did, and nothing else: a value is text, not a path
@@ -135,3 +133,19 @@ func (o *Doc) Metadata(base string) Metadata {
 		CoverPath:   o.cover(base),
 	}
 }
+
+// writeV3 reports whether the EPUB 3 slot takes the value, for a field the
+// document records twice: once as its spec version says, once as the calibre
+// meta. Title sort and series both ask here, so the rule is stated once though
+// each keeps its own branch.
+//
+// A slot already in the file is rewritten whatever version the package claims,
+// since a stale one would outrank the calibre meta on the way back in. A v3
+// package without one gets one; a v2 package without one stays without.
+func writeV3(d *pkgdoc.Doc, present bool) bool { return present || d.EPUB3() }
+
+// writeCalibre reports whether the calibre meta takes the value; writeV3 says
+// which fields ask. A v2 package always gets one, having no standard
+// mechanism; a v3 package only if it already carried one, kept in step rather
+// than left contradicting the v3 slot.
+func writeCalibre(d *pkgdoc.Doc, present bool) bool { return !d.EPUB3() || present }

@@ -7,11 +7,13 @@ import (
 	"strings"
 
 	"golang.org/x/text/language"
+
+	"github.com/ramblingenzyme/ebookfs/internal/naming"
 )
 
 // Edits is a partial update to a Book's fields. A nil pointer leaves the field
 // untouched; a non-nil pointer (including one to a zero value) applies the
-// change. This lets a caller change exactly one field — e.g. just the title —
+// change. This lets a caller change exactly one field, just the title say,
 // without having to supply the rest.
 //
 // A non-nil Series pointing at "" removes the series. SeriesIndex applied
@@ -19,7 +21,7 @@ import (
 // current series, resolved against the live snapshot under the per-book lock.
 //
 // SortTitle follows the same nil/empty rules. As a special case, changing Title
-// without supplying a SortTitle clears any existing sort title — it was derived
+// without supplying a SortTitle clears any existing sort title, which was derived
 // from the old title, so leaving it would make the sort title disagree with the
 // title.
 type Edits struct {
@@ -32,11 +34,10 @@ type Edits struct {
 	Series      *string
 	SeriesIndex *string
 
-	// Cover replaces the cover image in the epub. It is applied before any bib
-	// edits so that a combined Cover + OPF edit produces a single final epub
-	// rewrite. Cover replaces the old Library.WriteCover method: all mutations
-	// now flow through Edit, keeping the registry snapshot self-consistent.
-
+	// Cover replaces the cover image in the epub, applied before any bib edits
+	// so a combined Cover + OPF edit produces one final rewrite. Every mutation
+	// reaches the epub through Edit, which is what keeps the registry snapshot
+	// consistent with the file.
 	Cover *[]byte
 
 	// Meta fields (written to the meta.toml sidecar).
@@ -60,13 +61,11 @@ func (e Edits) Normalized() Edits {
 	return e
 }
 
-// HasBibEdits reports whether any OPF-level field is non-nil.
 func (e Edits) HasBibEdits() bool {
 	return e.Title != nil || e.SortTitle != nil || e.Description != nil ||
 		e.Language != nil || e.Authors != nil || e.Series != nil || e.SeriesIndex != nil
 }
 
-// HasCoverEdit reports whether a cover image replacement is requested.
 func (e Edits) HasCoverEdit() bool { return e.Cover != nil }
 
 // FieldError pairs a field name with a human-readable validation error message,
@@ -90,7 +89,6 @@ func (ve ValidationError) Error() string {
 	case 1:
 		return ve[0].Error()
 	}
-	// Multi-field: "field1: msg; field2: msg"
 	var s strings.Builder
 	for i, fe := range ve {
 		if i > 0 {
@@ -109,8 +107,6 @@ type fieldValidator struct {
 	validate func() string // returns error message or ""
 }
 
-// Validate validates e against the book's current state and returns per-field errors.
-// A nil return means all fields are valid.
 func Validate(e Edits, b *Book) *ValidationError {
 	validators := []fieldValidator{
 		{"status", e.validateStatus},
@@ -184,6 +180,9 @@ func (e Edits) validateAuthors() string {
 	return ""
 }
 
+// validateTags rejects a tag that names no directory. A frontend groups books
+// by tag, and naming.PathSafe gives every value that trims away, "." and ".."
+// among them, one placeholder, so accepting them files unrelated tags together.
 func (e Edits) validateTags() string {
 	if e.Tags == nil {
 		return ""
@@ -191,6 +190,9 @@ func (e Edits) validateTags() string {
 	for i, t := range *e.Tags {
 		if strings.TrimSpace(t) == "" {
 			return fmt.Sprintf("tag %d is empty", i+1)
+		}
+		if naming.NamesNothing(t) {
+			return fmt.Sprintf("tag %d is %q, which cannot name a directory", i+1, t)
 		}
 	}
 	return ""

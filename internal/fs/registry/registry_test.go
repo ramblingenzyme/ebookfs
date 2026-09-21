@@ -13,14 +13,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
 )
 
-// fakeView is a minimal BookView; the registry only needs a registered view to
-// exercise the remove/add bracketing of a commit. It records nothing, since the
-// concurrency assertions read the BookDir snapshot directly.
-type fakeView struct{}
-
-func (fakeView) Add(*book.BookDir)    {}
-func (fakeView) Remove(*book.BookDir) {}
-
 func TestEditUnknownID(t *testing.T) {
 	reg := NewBookRegistry(util.NewTestFS(t), mock.Editor{})
 
@@ -89,24 +81,6 @@ func TestEditConcurrentSnapshotSwap(t *testing.T) {
 		})
 	}
 	wg.Wait()
-}
-
-// recordingView logs the Add/Remove notifications it receives, so tests can
-// assert the registry's fan-out rather than inferring it from a view's state.
-type recordingView struct {
-	added   []int64
-	removed []int64
-}
-
-func (v *recordingView) Add(d *book.BookDir)    { v.added = append(v.added, d.Book().ID()) }
-func (v *recordingView) Remove(d *book.BookDir) { v.removed = append(v.removed, d.Book().ID()) }
-
-func newTestRegistry(t *testing.T, lib Editor) (*BookRegistry, *recordingView) {
-	t.Helper()
-	reg := NewBookRegistry(util.NewTestFS(t), lib)
-	v := &recordingView{}
-	reg.AddView(v)
-	return reg, v
 }
 
 func TestFSReturnsTheServingFilesystem(t *testing.T) {
@@ -189,10 +163,8 @@ func TestRemoveViewStopsNotifications(t *testing.T) {
 	}
 }
 
-// The primitive the search directory is built on: a view that attaches after
-// books exist (or changes its filter) converges on the registry's current state.
-// reset runs first, then every registered book is offered, all under the
-// registry lock.
+// The primitive the search directory is built on. A view attaching after books
+// exist, or changing its filter, converges on the registry's current state.
 func TestResyncViewReplaysEveryBook(t *testing.T) {
 	reg, _ := newTestRegistry(t, mock.Editor{})
 	reg.Add(util.MakeBook(1, "First", "Alice"))
@@ -272,22 +244,6 @@ func TestEdit(t *testing.T) {
 	})
 }
 
-// snapshotView records the title each callback observed, not just the id. The
-// order of a commit is only one side of the contract; which snapshot each side
-// reads is the other.
-type snapshotView struct {
-	addedTitles   []string
-	removedTitles []string
-}
-
-func (v *snapshotView) Add(d *book.BookDir) {
-	v.addedTitles = append(v.addedTitles, d.Book().Title())
-}
-
-func (v *snapshotView) Remove(d *book.BookDir) {
-	v.removedTitles = append(v.removedTitles, d.Book().Title())
-}
-
 // A commit must bracket the swap as Remove, then swap, then Add, because Add
 // and Remove read the book's current state. Remove has to see the old title or
 // it deletes the wrong entry and leaves a ghost in the 9P tree; Add has to see
@@ -321,4 +277,40 @@ func TestCommitShowsOldStateToRemoveAndNewStateToAdd(t *testing.T) {
 	if !slices.Equal(v.addedTitles, []string{"Old Title", "New Title"}) {
 		t.Errorf("Add saw %v, want the re-file to carry the post-edit title", v.addedTitles)
 	}
+}
+
+type fakeView struct{}
+
+func (fakeView) Add(*book.BookDir)    {}
+func (fakeView) Remove(*book.BookDir) {}
+
+type recordingView struct {
+	added   []int64
+	removed []int64
+}
+
+func (v *recordingView) Add(d *book.BookDir)    { v.added = append(v.added, d.Book().ID()) }
+func (v *recordingView) Remove(d *book.BookDir) { v.removed = append(v.removed, d.Book().ID()) }
+
+func newTestRegistry(t *testing.T, lib Editor) (*BookRegistry, *recordingView) {
+	t.Helper()
+	reg := NewBookRegistry(util.NewTestFS(t), lib)
+	v := &recordingView{}
+	reg.AddView(v)
+	return reg, v
+}
+
+// snapshotView records the title each callback observed. Commit order is one
+// side of the contract, which snapshot each side reads is the other.
+type snapshotView struct {
+	addedTitles   []string
+	removedTitles []string
+}
+
+func (v *snapshotView) Add(d *book.BookDir) {
+	v.addedTitles = append(v.addedTitles, d.Book().Title())
+}
+
+func (v *snapshotView) Remove(d *book.BookDir) {
+	v.removedTitles = append(v.removedTitles, d.Book().Title())
 }

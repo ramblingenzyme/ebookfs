@@ -18,15 +18,13 @@ type Op struct {
 	opID string
 }
 
-// BeginOp starts a new mutation operation.
 func (idx *Index) BeginOp() *Op {
 	return &Op{idx: idx}
 }
 
-// MarkPending inserts a row into pending_ops via autocommit (so it survives a
-// crash) and is idempotent — at most one row per operation. Call it before
-// the first real disk mutation. If the operation fails after MarkPending the
-// row stays behind, forcing a healing reindex on the next startup.
+// MarkPending writes its row by autocommit, so it survives a crash, and is
+// idempotent. A row left behind by a failed operation forces a healing reindex
+// on the next startup.
 func (o *Op) MarkPending() error {
 	if o.opID != "" {
 		return nil
@@ -39,23 +37,20 @@ func (o *Op) MarkPending() error {
 	return nil
 }
 
-// finish runs fn and clears the pending row in one transaction. MarkPending
-// must have been called first so a pending row protects the preceding store
-// writes; the row is atomically deleted inside the same transaction.
-func (o *Op) finish(fn func(*dbsqlc.Queries, *sql.Tx) error) error {
+func (o *Op) finish(fn func(*dbsqlc.Queries) error) error {
 	if o.opID == "" {
 		return errors.New("MarkPending must be called before commit")
 	}
-	return o.idx.withTx(func(q *dbsqlc.Queries, tx *sql.Tx) error {
-		if err := fn(q, tx); err != nil {
+	return o.idx.withTx(func(q *dbsqlc.Queries, _ *sql.Tx) error {
+		if err := fn(q); err != nil {
 			return err
 		}
 		return q.DeletePendingOp(o.idx.ctx, o.opID)
 	})
 }
 
-// Cancel deletes the pending-op row without touching store data. Call it when
-// an operation fails after MarkPending, so the next startup skips the reindex.
+// Cancel is for an operation that failed after MarkPending, so the next
+// startup skips the reindex.
 func (o *Op) Cancel() {
 	if o.opID == "" {
 		return
@@ -66,13 +61,11 @@ func (o *Op) Cancel() {
 	}
 }
 
-// Put writes b into the index, inserting or replacing the record for b.Meta.ID.
-// mt carries the on-disk file state used for drift detection.
+// Put records mt as the file state drift detection compares against.
 func (o *Op) Put(b *book.Book, mt drift.PathInfo) error {
-	return o.finish(func(q *dbsqlc.Queries, tx *sql.Tx) error { return o.idx.putBook(q, b, mt) })
+	return o.finish(func(q *dbsqlc.Queries) error { return o.idx.putBook(q, b, mt) })
 }
 
-// Delete removes all index rows for book.
 func (o *Op) Delete(bookID int64) error {
-	return o.finish(func(q *dbsqlc.Queries, tx *sql.Tx) error { return o.idx.deleteBook(q, bookID) })
+	return o.finish(func(q *dbsqlc.Queries) error { return o.idx.deleteBook(q, bookID) })
 }

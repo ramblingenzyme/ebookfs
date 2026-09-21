@@ -17,6 +17,7 @@ import (
 	"errors"
 
 	"github.com/beevik/etree"
+	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/xml"
 )
 
 type Doc struct {
@@ -31,6 +32,7 @@ type Doc struct {
 // costs the caller the whole book.
 func Parse(b []byte) (*Doc, error) {
 	doc := etree.NewDocument()
+	// pkgdoc.Parse says why this document validates and that one does not.
 	doc.ReadSettings.ValidateInput = true
 	// opf.Parse says why CDATA is preserved.
 	doc.ReadSettings.PreserveCData = true
@@ -46,7 +48,7 @@ func Parse(b []byte) (*Doc, error) {
 
 func (d *Doc) Bytes() ([]byte, error) { return d.doc.WriteToBytes() }
 
-// Apply writes the title and author names — the only fields the NCX copies —
+// Apply writes the title and author names, the only fields the NCX copies,
 // and reports whether that changed anything. Nothing is serialized until Bytes.
 //
 // A nil title or a nil names slice is one the caller did not touch. Names
@@ -88,7 +90,7 @@ func (f authorsField) set(names []string) {
 			slot(existing[i]).set(name)
 			continue
 		}
-		el := etree.NewElement(qualify(last.Space, "docAuthor"))
+		el := etree.NewElement(xml.Qualify(last.Space, "docAuthor"))
 		f.d.ncx.InsertChildAt(last.Index()+1, el)
 		slot(el).set(name)
 		last = el
@@ -99,31 +101,22 @@ func (f authorsField) set(names []string) {
 	}
 }
 
-// The <text> child <docTitle> and <docAuthor> wrap their value in — the only
+// The <text> child <docTitle> and <docAuthor> wrap their value in, the only
 // place the NCX records one. Write-only: nothing reads metadata out of an NCX.
 type textSlot struct{ owner *etree.Element }
 
 func slot(owner *etree.Element) textSlot { return textSlot{owner: owner} }
 
 // set is a no-op when the owner is absent, so a missing <docTitle> stays missing
-// rather than invented in a position we would have to guess. A missing <text>
-// is created: Z39.86 requires it in both elements.
+// rather than invented in a position that would have to be guessed. A missing
+// <text> is created: Z39.86 requires it in both elements.
 func (s textSlot) set(value string) {
 	if s.owner == nil {
 		return
 	}
 	t := s.owner.SelectElement("text")
 	if t == nil {
-		t = s.owner.CreateElement(qualify(s.owner.Space, "text"))
+		t = s.owner.CreateElement(xml.Qualify(s.owner.Space, "text"))
 	}
 	t.SetText(value)
-}
-
-// qualify puts a created element in its sibling's namespace prefix, normally
-// the empty default, so a file using an explicit prefix keeps it.
-func qualify(space, tag string) string {
-	if space == "" {
-		return tag
-	}
-	return space + ":" + tag
 }

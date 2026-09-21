@@ -10,7 +10,7 @@ import (
 
 // Layout and the names under it read no Store field, so these need no root on
 // disk. newStore would create a temp directory none of them touch.
-func layoutStore() *Store { return New("", "") }
+func layoutStore() *Store { return New("") }
 
 func TestLayout(t *testing.T) {
 	s := layoutStore()
@@ -116,8 +116,8 @@ func TestEpubFilename(t *testing.T) {
 }
 
 func TestEpubFilenameForFFallback(t *testing.T) {
-	// A title that is only dots triggers ForFAT to return an error (trimmed to
-	// empty), exercising the fallback to the raw title.
+	// A title that sanitizes away entirely comes back from ForFAT unchanged, and
+	// epubFilename adds no handling of its own.
 	got := epubFilename([]book.Author{{Name: "Alice"}}, ".")
 	if got != ". - Alice.epub" {
 		t.Errorf("epubFilename = %q, want %q", got, ". - Alice.epub")

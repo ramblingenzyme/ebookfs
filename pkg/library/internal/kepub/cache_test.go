@@ -12,7 +12,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
 )
 
-// noopSource is for tests that never reach a conversion.
 type noopSource struct{}
 
 func (noopSource) Content(int64) (epub.EpubReader, error) {
@@ -27,9 +26,8 @@ func TestCacheClose(t *testing.T) {
 	}
 }
 
-// Close must not wait out a conversion in flight: it is called after the 9P
-// server is down, past main's shutdown deadline. Warm is only how this test
-// gets a conversion running.
+// Close must return with a conversion still in flight. Warm is only how this
+// test gets one running.
 func TestCacheCloseCancelsConversion(t *testing.T) {
 	dir := t.TempDir()
 	c := NewCache(dir, fakeSource{t: t, dir: dir})
@@ -46,7 +44,7 @@ func TestCacheCloseCancelsConversion(t *testing.T) {
 	b := makeBook(1, "Warm", "Author")
 	b.EpubSize = 9
 
-	c.Warm(b)
+	c.Warm(wrapBook(b))
 	<-started
 
 	done := make(chan struct{})
@@ -77,7 +75,7 @@ func TestCacheFilename(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			b := makeBook(1, "Test", "Alice")
 			b.EpubPath = tt.epubName
-			got := c.Filename(b)
+			got := c.Filename(wrapBook(b))
 			if got != tt.want {
 				t.Errorf("Filename = %q, want %q", got, tt.want)
 			}
@@ -90,8 +88,7 @@ func TestCacheSize(t *testing.T) {
 	c := NewCache(dir, noopSource{})
 	b := makeBook(1, "Test", "Alice")
 
-	// No cache file yet, so it reports cold.
-	_, ok := c.Size(b)
+	_, ok := c.Size(wrapBook(b))
 	if ok {
 		t.Error("Size should report cold for missing cache file")
 	}
@@ -101,7 +98,7 @@ func TestCacheSize(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	size, ok := c.Size(b)
+	size, ok := c.Size(wrapBook(b))
 	if !ok {
 		t.Fatal("Size should report hot after cache file created")
 	}
@@ -113,12 +110,12 @@ func TestCacheSize(t *testing.T) {
 func TestCacheEnsureCreatesFile(t *testing.T) {
 	c, dir := newTestCache(t, "fake-kepub")
 
-	// Set DateModified in the future so the cache will be considered stale.
+	// A future DateModified makes any cache stale.
 	b := makeBook(1, "Test", "Alice")
 	b.Meta.DateModified = time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)
 	b.EpubSize = int64(len("epub-data"))
 
-	if err := c.Ensure(b); err != nil {
+	if err := c.Ensure(wrapBook(b)); err != nil {
 		t.Fatalf("Ensure: %v", err)
 	}
 
@@ -153,12 +150,12 @@ func TestCacheEnsureFreshIsNoop(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Set DateModified in the past so the cache (just created) is clearly fresher.
+	// A past DateModified makes the just-created cache fresh.
 	b := makeBook(1, "Test", "Alice")
 	b.Meta.DateModified = time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
 	b.EpubSize = 9
 
-	if err := c.Ensure(b); err != nil {
+	if err := c.Ensure(wrapBook(b)); err != nil {
 		t.Fatalf("Ensure: %v", err)
 	}
 	if convertCalls != 0 {
@@ -176,10 +173,10 @@ func TestCacheEnsureWithZeroDateModified(t *testing.T) {
 	b := makeBook(1, "Test", "Alice")
 	b.EpubSize = 9
 
-	if err := c.Ensure(b); err != nil {
+	if err := c.Ensure(wrapBook(b)); err != nil {
 		t.Fatalf("Ensure: %v", err)
 	}
-	data, err := os.ReadFile(c.path(b))
+	data, err := os.ReadFile(c.path(wrapBook(b)))
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}

@@ -366,6 +366,10 @@ func TestClosedEpubReaderIsErrClosed(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
+	// internal/epub's reader_ext_test.go runs this same table against
+	// epub.ErrClosed. Sharing it would need a structural interface in a third
+	// package to save 13 lines, and running it at both layers is what says the
+	// facade preserves the behaviour rather than inventing its own.
 	for _, tc := range []struct {
 		name string
 		call func() error

@@ -1,10 +1,10 @@
-// Helpers for the black-box tests in package library_test. They duplicate the
-// public-API portion of helpers_test.go, which cannot be shared: a helper
-// declared in package library is invisible here, and the white-box tests that
-// stay in that package (drift, applymeta, the two error files) need the same
-// five.
-// The white-box-only helpers (drifted, breakEpub, dropIndex, metaPathOf,
-// assertSettlesClean) are not duplicated and live with drift_test.go.
+// Helpers for the black-box tests in package library_test. A helper declared
+// in package library is invisible here, and the white-box tests need the same
+// five, so the public-API portion of helpers_test.go is duplicated rather than
+// shared.
+//
+// The white-box-only helpers, drifted, breakEpub, dropIndex, metaPathOf and
+// assertSettlesClean, stay in helpers_test.go.
 
 package library_test
 
@@ -32,10 +32,7 @@ func openTestLibrary(t *testing.T) *library.Library {
 	return openLib(t, testConfig(t))
 }
 
-// openLib opens a library at cfg and registers its close, so an assertion that
-// fails mid-test cannot leave the index open. Tests that reopen across a
-// simulated restart still Close explicitly for sequencing; the second close is
-// a no-op.
+// The black-box twin of helpers_test.go's openLib, which says what it is for.
 func openLib(t *testing.T, cfg library.Config, opts ...library.Option) *library.Library {
 	t.Helper()
 	lib, err := library.Open(cfg, opts...)
@@ -46,6 +43,7 @@ func openLib(t *testing.T, cfg library.Config, opts ...library.Option) *library.
 	return lib
 }
 
+// The black-box twin of helpers_test.go's ingestTestEpub, which says why.
 func ingestTestEpub(t *testing.T, lib *library.Library, data []byte) *library.Book {
 	t.Helper()
 	h, err := lib.CreateIngest()

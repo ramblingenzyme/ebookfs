@@ -1,7 +1,6 @@
 // Package book holds the per-book 9P directory (BookDir) and the concrete files
 // it assembles from the vfile primitives (cover/opf/epub/field, and the exported
-// ReaderFile used by the reader view). It decouples from the registry via an
-// injected edit callback, so it never imports registry or views.
+// ReaderFile used by the reader view).
 package book
 
 import (
@@ -16,22 +15,19 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// ContentReader is the half of the library this package uses: the book files
-// are rendered from the epub the library opens by id.
 type ContentReader interface {
 	Content(id int64) (library.EpubReader, error)
 }
 
-// newStat is the package-local shorthand for vfile.NewStat, the single
-// definition of the glenda/glenda owner convention every node uses.
-var newStat = vfile.NewStat
+var (
+	newStat    = vfile.NewStat
+	newDirStat = vfile.NewDirStat
+)
 
-// BookDir is the stable directory identity for one book. The book's state is
-// held as an atomically swapped snapshot: 9P handlers run on many goroutines
-// with no shared lock against registry commits, so they read an immutable
-// *library.Book via Book() rather than fields mutated in place. Snapshots must
-// never be modified after they are stored — an edit produces a fresh Book
-// (library.Edit already does) and the registry swaps the pointer via SetSnapshot.
+// BookDir is the stable directory identity for one book. The book snapshot is
+// stored as an atomic.Pointer since 9P handlers run on concurrent goroutines
+// without a shared lock for registry commits. Snapshots must remain immutable.
+// Edits cause the pointer to be swapped.
 type BookDir struct {
 	fs.StaticDir
 	book atomic.Pointer[library.Book]
@@ -55,18 +51,13 @@ func (d *BookDir) SetSnapshot(b *library.Book) {
 // Qid stays fixed, so a client with the epub open keeps its handle across a rename.
 func (d *BookDir) Stat() proto.Stat {
 	s := d.StaticDir.Stat()
-	// PathSafe because a title is stored as the epub wrote it and a 9P entry
-	// name is a single component.
 	s.Name = naming.PathSafe(d.Book().Title())
 	return s
 }
 
-// NewBookDir builds the directory for a book. It takes the fs, the library
-// facade, and an edit callback (the registry passes its own edit method) rather
-// than the registry itself, so this package stays a leaf below the registry.
 func NewBookDir(f *fs.FS, lib ContentReader, edit func(int64, library.Edits) error, book *library.Book) *BookDir {
 	d := &BookDir{
-		StaticDir: *fs.NewStaticDir(newStat(f, naming.PathSafe(book.Title()), 0755|proto.DMDIR)),
+		StaticDir: *fs.NewStaticDir(newDirStat(f, naming.PathSafe(book.Title()))),
 	}
 	d.book.Store(book)
 
@@ -104,13 +95,11 @@ func NewBookDir(f *fs.FS, lib ContentReader, edit func(int64, library.Edits) err
 		d.StaticDir.AddChild(newFieldFile(newStat(f, name, 0644), get, set))
 	}
 
-	// Read-only bib fields.
 	d.StaticDir.AddChild(newFieldFile(newStat(f, "pubdate", 0444), func() string { return d.Book().Pubdate() }, nil))
 	d.StaticDir.AddChild(newFieldFile(newStat(f, "identifiers", 0444), func() string {
 		return formatIdentifiers(d.Book().Identifiers())
 	}, nil))
 
-	// Cover image — only present when the epub declares one.
 	if book.CoverPath() != "" {
 		d.StaticDir.AddChild(newCoverFile(
 			newStat(f, "cover"+filepath.Ext(book.CoverPath()), 0644),

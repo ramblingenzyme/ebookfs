@@ -1,8 +1,6 @@
 package book
 
 import (
-	"errors"
-
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
@@ -16,22 +14,8 @@ type opfFile struct {
 
 func newOPFFile(stat *proto.Stat, lib ContentReader, book func() *library.Book) *opfFile {
 	return &opfFile{
-		SnapshotFile: vfile.NewSnapshotFile(stat, func() ([]byte, error) {
-			if lib == nil {
-				return nil, errors.New("library not available")
-			}
-			b := book()
-			if b == nil {
-				return nil, errors.New("book snapshot not available")
-			}
-			r, err := lib.Content(b.ID())
-			if err != nil {
-				return nil, err
-			}
-			defer r.Close()
-			return r.OPF()
-		}),
-		book: book,
+		SnapshotFile: vfile.NewSnapshotFile(stat, contentBytes(lib, book, library.EpubReader.OPF)),
+		book:         book,
 	}
 }
 

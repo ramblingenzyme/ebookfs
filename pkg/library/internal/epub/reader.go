@@ -26,7 +26,7 @@ var (
 // Exporter.Open) must return a non-nil reader if err is nil; a nil reader with
 // a nil error is a contract violation.
 //
-// An EpubReader is a snapshot of the book at open time — it does not track
+// An EpubReader is a snapshot of the book at open time. It does not track
 // edits. After a concurrent Edit, call Library.Content again for a handle
 // that reads from the updated file.
 type EpubReader interface {
@@ -43,8 +43,7 @@ type EpubReader interface {
 // The path comes from outside because the epub package resolves it only when it
 // parses the package document, and this handle deliberately does not: it serves
 // the 9P read path, where every request would otherwise pay for an XML parse.
-// The index already recorded the path at ingest, so the parse is redundant as
-// well as expensive.
+// The index already recorded the path at ingest, so the parse is redundant.
 type reader struct {
 	*epubfile.File
 	coverPath string // zip-relative path to cover image; empty if none

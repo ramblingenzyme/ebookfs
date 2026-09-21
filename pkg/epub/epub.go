@@ -1,6 +1,6 @@
 // Package epub reads and writes the metadata inside an EPUB file: the package
 // document's title, authors, series, description, language and date, plus the
-// cover image. It is a metadata editor, not a reader — nothing here renders a
+// cover image. It is a metadata editor; nothing here renders a
 // book or walks its spine.
 //
 // Two entry points, because parsing costs more than opening:
@@ -17,7 +17,7 @@
 // Everything a file carries and this package does not model is preserved: an
 // edit rewrites the entries it must and copies the rest byte for byte, keeping
 // namespace declarations, foreign metadata, CDATA, entry order and compression
-// method as they were. Values are reported as the file states them — no
+// method as they were. Values are reported as the file states them, with no
 // defaults are invented, and a book with no title reads back an empty Title
 // rather than an error, because that is what the file says.
 package epub

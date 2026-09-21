@@ -26,9 +26,9 @@ import (
 var ErrNoCover = errors.New("no cover in epub")
 
 // SetCover stages a replacement cover image, written by the next Save. The
-// image replaces the entry the manifest already names, in place and in the same
-// format, so the manifest, the cover-image property and the legacy
-// <meta name="cover"> keep pointing at what they already did — which is why
+// image replaces the entry the manifest already names, in place and in the
+// same format. The manifest, the cover-image property and the legacy
+// <meta name="cover"> keep pointing at what they already did, which is why
 // there is no transcoding and no way to add a cover to a book without one.
 //
 // Staged rather than written, so that a cover change and a metadata change
@@ -62,7 +62,7 @@ func (b *Book) SetCover(img []byte) error {
 //
 // The write is atomic. A temp file beside the original is built with the
 // changed entries swapped and everything else copied byte for byte, re-opened
-// to prove it is still an epub, and only then renamed over the original — so a
+// to prove it is still an epub, and only then renamed over the original, so a
 // failure at any point leaves the original exactly as it was.
 //
 // After a successful Save the Book reads from the rewritten file, and its
@@ -85,7 +85,8 @@ func (b *Book) Save() error {
 // anything is written.
 func (b *Book) stage() (map[string][]byte, error) {
 	// Before any other refusal: it does not depend on which entries the edit
-	// turns out to touch. DECISIONS.md #23 says why it is not narrowed to them.
+	// turns out to touch. docs/DECISIONS.md #23 says why it is not narrowed to
+	// them.
 	if b.has(ocf.SignaturesPath) {
 		return nil, fmt.Errorf("refusing to edit: the epub is signed (%s) and an edit would invalidate the signature", ocf.SignaturesPath)
 	}
@@ -132,9 +133,8 @@ func (b *Book) stage() (map[string][]byte, error) {
 	return replace, nil
 }
 
-// moved is which fields differ from what Open read: the one answer to that
-// question, so a field added to Book cannot be written by one half of Save and
-// ignored by the other.
+// moved is which fields differ from what Open read. write and changed are both
+// driven by it, so they cannot disagree about whether a field moved.
 type moved struct {
 	title, sortTitle, description, language, authors, series bool
 }
@@ -151,9 +151,9 @@ func (b *Book) moved() moved {
 	}
 }
 
-func (m moved) changed() bool {
-	return m.title || m.sortTitle || m.description || m.language || m.authors || m.series
-}
+// changed compares against the zero value rather than naming the fields, so a
+// field added to moved is covered without a second edit here.
+func (m moved) changed() bool { return m != moved{} }
 
 func sameSeries(a, c *Series) bool {
 	if a == nil || c == nil {
@@ -166,11 +166,8 @@ func sameSeries(a, c *Series) bool {
 // handed to Apply rather than called directly so that the §5.5.5 byte compare
 // brackets every write.
 func (b *Book) write(d *opf.Doc, m moved) {
-	// The title's two halves are not independent: writing a title takes the
-	// document's other dc:title segments with it, which a sort-title edit must
-	// not do. So the title is passed only when it moved, while the sort title
-	// is restated whenever either did — restating it keeps a title-only change
-	// from dropping the sort title the book carried.
+	// opf.Doc.SetTitle says why the title is passed only when it moved while
+	// the sort title is restated whenever either did.
 	if m.title || m.sortTitle {
 		var title *string
 		if m.title {
@@ -184,26 +181,26 @@ func (b *Book) write(d *opf.Doc, m moved) {
 	if m.language {
 		d.SetLanguage(b.Language)
 	}
+	// The two Author types and the two Series types are structurally identical,
+	// so these convert rather than copying field by field: a field added to one
+	// side alone stops compiling here. SetSeries reads the pointer without
+	// keeping it, so handing it the Book's own costs nothing.
 	if m.authors {
 		as := make([]opf.Author, len(b.Authors))
 		for i, a := range b.Authors {
-			as[i] = opf.Author{Name: a.Name, SortName: a.SortName}
+			as[i] = opf.Author(a)
 		}
 		d.SetAuthors(as)
 	}
 	if m.series {
-		var s *opf.Series
-		if b.Series != nil {
-			s = &opf.Series{Name: b.Series.Name, Index: b.Series.Index}
-		}
-		d.SetSeries(s)
+		d.SetSeries((*opf.Series)(b.Series))
 	}
 }
 
 // refitCoverPage rewrites the page displaying the cover to the new image's
 // dimensions; package content says why that is needed. A candidate from the
 // package document is confirmed by finding the cover image inside it, so an
-// unreadable one is skipped silently — it was never confirmed to be the cover
+// unreadable one is skipped silently: it was never confirmed to be the cover
 // page.
 func (b *Book) refitCoverPage(enc *ocf.EncryptionInfo, width, height int, replace map[string][]byte) error {
 	for _, entry := range b.doc.CoverPages(path.Dir(b.PackagePath())) {
@@ -233,10 +230,9 @@ func (b *Book) refitCoverPage(enc *ocf.EncryptionInfo, width, height int, replac
 // syncNCX adds the rewritten NCX to replace, when the package declares one and
 // the edit touched a field it carries; package ncx says why.
 //
-// An NCX that cannot be read — encrypted, or malformed — is skipped rather than
-// failing the edit. The package document is the metadata of record, and
-// refusing would leave a book that arrived with an unreadable NCX permanently
-// unrenameable.
+// An unreadable NCX, encrypted or malformed, is skipped rather than failing the
+// edit: the package document is the metadata of record, and refusing would
+// leave a book that arrived with a broken NCX permanently unrenameable.
 func (b *Book) syncNCX(enc *ocf.EncryptionInfo, m moved, replace map[string][]byte) error {
 	if !m.title && !m.authors {
 		return nil
@@ -281,8 +277,8 @@ func (b *Book) syncNCX(enc *ocf.EncryptionInfo, m moved, replace map[string][]by
 }
 
 // rewrite writes a temp epub beside the original with the named entries
-// swapped, proves it opens, then renames it over the original and adopts it.
-// The temp file is cleaned up on any failure.
+// swapped, proves it opens, renames it over the original and adopts it. The
+// temp file is cleaned up on any failure.
 //
 // Faithfulness rules, matching what calibre's safe_replace honours:
 //   - mimetype is written first and copied byte-for-byte, keeping its STORED
@@ -302,6 +298,8 @@ func (b *Book) rewrite(replace map[string][]byte) error {
 	defer tmp.Close()
 
 	zw := zip.NewWriter(tmp)
+	defer zw.Close()
+
 	if err := b.a.writeTo(zw, replace); err != nil {
 		return err
 	}
@@ -315,13 +313,15 @@ func (b *Book) rewrite(replace map[string][]byte) error {
 		return err
 	}
 
-	// Opened before the original is touched, so structural breakage — a zip we
-	// cannot read back, a package document we cannot parse — fails here and the
-	// original survives.
+	// Opened before the original is touched, so structural breakage fails here
+	// and the original survives: a zip that will not read back, or a package
+	// document that will not parse.
 	next, err := Open(tmpPath)
 	if err != nil {
 		return fmt.Errorf("rewritten epub failed validation: %w", err)
 	}
+	defer next.Close()
+
 	if err := os.Rename(tmpPath, b.path); err != nil {
 		next.Close()
 		return err

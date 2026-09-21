@@ -12,16 +12,14 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
 )
 
-// IngestHandle is a writable handle for staging an epub upload, returned by
-// Library.CreateIngest. The frontend writes upload bytes via WriteAt, then
-// calls Ingest to finalize: the file is closed, the epub is parsed and laid
-// down in the store, and the temp file is cleaned up.
+// IngestHandle stages an epub upload. The frontend writes the bytes, then
+// calls Ingest, which closes the file, parses the epub, lays it down in the
+// store and removes the temp file.
 type IngestHandle interface {
-	io.WriterAt // WriteAt(p []byte, off int64) (int, error)
+	io.WriterAt
 	Ingest() (*Book, error)
 }
 
-// ingestHandle is the concrete file-backed implementation of IngestHandle.
 type ingestHandle struct {
 	file     *os.File
 	ingestFn func(string) (*Book, error)
@@ -41,7 +39,6 @@ func (h *ingestHandle) Ingest() (*Book, error) {
 	return b, err
 }
 
-/* Library methods */
 func (l *Library) CreateIngest() (IngestHandle, error) {
 	f, err := os.CreateTemp(l.inboxTemp, "*.epub")
 	if err != nil {
@@ -50,8 +47,6 @@ func (l *Library) CreateIngest() (IngestHandle, error) {
 	return &ingestHandle{file: f, ingestFn: l.ingestPath}, nil
 }
 
-// ingestPath parses the staged epub, lays it down in the store, and records it
-// in the index.
 func (l *Library) ingestPath(epubPath string) (*Book, error) {
 	// Parse before taking ingestMu: it touches only this upload's staged temp
 	// file, so bulk uploads overlap their parsing instead of serializing on it.
@@ -112,7 +107,7 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 
 	if err != nil {
 		if rmErr := l.store.Delete(loc); rmErr == nil {
-			// Clean up: nothing was written to disk, so there is no state to heal.
+			// The cleanup succeeded, so no on-disk state is left to heal.
 			op.Cancel()
 		} else {
 			slog.Error("ingest cleanup failed", "path", loc.Dir(), "error", rmErr)
@@ -125,12 +120,11 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 	return b, nil
 }
 
-// authorNames returns the authors' distinct display names, the set Index.Exists
-// compares against. Names are non-empty by construction — epub.Parse drops
-// creators whose name sanitizes to nothing and rejects a book left with none,
-// and Edits rejects an empty author name — so there is nothing to filter here.
-// Filtering would be wrong anyway: the set compared has to be the set written,
-// or the same book ingests twice.
+// authorNames is the set Index.Exists compares against. It filters nothing:
+// the set compared has to be the set written, or the same book ingests twice.
+// Nothing needs filtering either, since epub.Parse drops creators that
+// sanitize to nothing and rejects a book left with none, and Edits rejects an
+// empty name.
 func authorNames(authors []book.Author) []string {
 	names := make([]string, len(authors))
 	for i, a := range authors {

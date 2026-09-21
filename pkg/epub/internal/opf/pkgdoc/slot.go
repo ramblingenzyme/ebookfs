@@ -1,6 +1,9 @@
 package pkgdoc
 
-import "github.com/beevik/etree"
+import (
+	"github.com/beevik/etree"
+	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/xml"
+)
 
 // A Slot is one string value together with the place in the document that
 // records it. The opf package decides what a value should be; a slot knows how
@@ -29,7 +32,7 @@ func Put(s Slot, value string) {
 // knowing whether the file already carries one.
 //
 // newEl and parent are separate because a field may own the order its elements
-// sit in — see Place.
+// sit in; see Place.
 type Element struct {
 	d        *Doc
 	el       *etree.Element        // nil until found or created
@@ -119,10 +122,10 @@ func (r *Refine) Unschemed() *Refine {
 	return &narrowed
 }
 
-// Schemed is the other half of the same narrowing: the refinements whose value
-// is a code in the named list, such as an identifier-type from onix:codelist5.
-// The scheme is matched through the vocabulary, so a document that rebound the
-// prefix is read on its own terms.
+// Schemed narrows to the refinements whose value is a code in the named list,
+// such as an identifier-type from onix:codelist5. The scheme is matched through
+// the vocabulary, so a document that rebound the prefix is read on its own
+// terms.
 func (r *Refine) Schemed(scheme string) *Refine {
 	narrowed := *r
 	narrowed.unschemedOnly = false
@@ -160,7 +163,7 @@ func (r *Refine) Get() string {
 // keeps its position in the document.
 //
 // ponytail: duplicates of one property are left in place and only the first is
-// updated. Revisit if epubcheck rejects a file we wrote.
+// updated. Revisit if epubcheck rejects a file this package wrote.
 func (r *Refine) Set(value string) {
 	if ms := r.elements(); len(ms) > 0 {
 		ms[0].SetText(value)
@@ -190,7 +193,7 @@ func (r *Refine) Values() []string {
 }
 
 // Add appends unconditionally, for properties where an existing value may be
-// one we do not own, such as a creator's second role.
+// one this package does not own, such as a creator's second role.
 func (r *Refine) Add(value, scheme string) {
 	r.d.addRefine(r.owner.mintID(), r.property, value, scheme)
 }
@@ -221,7 +224,7 @@ func (a *OPFAttr) Set(value string) {
 		existing.Value = value
 		return
 	}
-	el.CreateAttr(qualify(a.d.ns.opf(), a.name), value)
+	el.CreateAttr(xml.Qualify(a.d.ns.opf(), a.name), value)
 }
 
 func (a *OPFAttr) Clear() {
@@ -266,83 +269,3 @@ func (n *Named) Clear() {
 		detach(m)
 	}
 }
-
-// dcSlot is the shared constructor. The id stem is derived from the tag rather
-// than passed, so the callers cannot disagree about it.
-func (d *Doc) dcSlot(tag string, el *etree.Element) *Element {
-	return &Element{
-		d:        d,
-		el:       el,
-		idPrefix: "ebookfs-" + tag,
-		newEl:    func() *etree.Element { return etree.NewElement(qualify(d.dcPrefix(), tag)) },
-		parent:   d.md.dcParent,
-	}
-}
-
-// DC is the Dublin Core element a read and a write of a field both mean,
-// created in the right parent if the file has none.
-func (d *Doc) DC(tag string) *Element { return d.dcSlot(tag, d.md.primary(tag)) }
-
-// DCAll is every one of them, for the fields that are a list (creators) or that
-// have to reconcile the extras (titles).
-func (d *Doc) DCAll(tag string) []*Element {
-	els := d.md.children(tag)
-	out := make([]*Element, len(els))
-	for i, el := range els {
-		out[i] = d.dcSlot(tag, el)
-	}
-	return out
-}
-
-// NewDC is one the file does not carry yet, whatever else it holds: a creator
-// added to the end of the author list, not the creator a read would return.
-func (d *Doc) NewDC(tag string) *Element { return d.dcSlot(tag, nil) }
-
-// metaSlot is the <meta property="..."> constructor. The id stem is passed, not
-// derived: a property name makes no sensible one.
-func (d *Doc) metaSlot(property, idPrefix string, el *etree.Element) *Element {
-	return &Element{
-		d:        d,
-		el:       el,
-		idPrefix: idPrefix,
-		newEl: func() *etree.Element {
-			m := etree.NewElement("meta")
-			// spell, not property: in a document that rebound the vocabulary
-			// our name resolves in, the literal would mean something else to
-			// every other reader.
-			m.CreateAttr("property", d.vocab.spell(property))
-			return m
-		},
-		parent: d.md.metaParent,
-	}
-}
-
-// UnrefinedMeta is a <meta property="..."> carrying a value for the package
-// itself rather than for another element in it.
-func (d *Doc) UnrefinedMeta(property, idPrefix string) *Element {
-	for _, m := range d.md.children("meta") {
-		if d.vocab.Same(attr(m, "property"), property) && attr(m, "refines") == "" {
-			return d.metaSlot(property, idPrefix, m)
-		}
-	}
-	return d.metaSlot(property, idPrefix, nil)
-}
-
-// PropertyMetas is every meta carrying the property, refining or not, for a
-// field that picks among them by some rule of its own.
-func (d *Doc) PropertyMetas(property, idPrefix string) []*Element {
-	var out []*Element
-	for _, m := range d.md.children("meta") {
-		if d.vocab.Same(attr(m, "property"), property) {
-			out = append(out, d.metaSlot(property, idPrefix, m))
-		}
-	}
-	return out
-}
-
-// NewPropertyMeta is one the file does not carry yet.
-func (d *Doc) NewPropertyMeta(property, idPrefix string) *Element {
-	return d.metaSlot(property, idPrefix, nil)
-}
-
-func (d *Doc) Named(name string) *Named { return &Named{d: d, name: name} }

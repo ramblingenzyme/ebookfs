@@ -14,7 +14,7 @@ func TestByTagDirTagWithSlash(t *testing.T) {
 	b.Meta.Tags = []string{"a/b"}
 	reg.Add(wrapBook(b))
 
-	fstest.HasChild(t, d, "a_b")
+	fstest.HasChild(t, d, "a-b")
 
 	// A '/' is not a legal 9P name character.
 	fstest.NoChild(t, d, "a/b")
@@ -29,5 +29,5 @@ func TestByTagDirRemoveWithSlashTag(t *testing.T) {
 	reg.Add(wrapBook(b))
 	reg.Remove(1)
 
-	fstest.NoChild(t, d, "x_y")
+	fstest.NoChild(t, d, "x-y")
 }

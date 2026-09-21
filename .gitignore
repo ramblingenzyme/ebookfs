@@ -3,3 +3,4 @@ config.toml
 coverage.out
 .opencode
 /testdata
+.idea
