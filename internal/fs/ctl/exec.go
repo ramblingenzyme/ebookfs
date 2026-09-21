@@ -39,33 +39,51 @@ func execute(cmd string, lib SearchDeleter, reg *registry.BookRegistry, cmdLog *
 // The verb's name is the slice entry's Name and nothing else, so dispatch, the
 // usage line and the help file cannot disagree about it.
 type command struct {
-	Name   string
+	name   string
 	params string
 	desc   string
 	run    func([]string, SearchDeleter, *registry.BookRegistry) string
 }
+
+// The descriptions long enough that escaping them into the table would make
+// both unreadable. They render as written.
+// statusDesc names the vocabulary through the library rather than spelling it,
+// since adding a status must not leave the help file describing the old set.
+var statusDesc = "Set reading status for matching books.\nStatus: " + library.StatusList() + "."
+
+const (
+	renameTagDesc = `Rename a tag across every book. Renaming <old> onto a
+tag that already exists merges the two: books that had
+only <old> now have <new>; books that had both drop the
+duplicate <old>.`
+
+	renameAuthorDesc = `Rename an author across every book.
+<old> is matched against display name OR sort name.
+<new> uses the "Name | Sort" format (same as the
+authors field file).`
+)
 
 // commands is ordered, since the help file lists them in this order. Lookup is
 // a scan of eight entries against one admin typing.
 var commands = []command{
 	{"add-tag", "<tag> <id-spec>", "Add a tag to matching books.", addTag},
 	{"remove-tag", "<tag> <id-spec>", "Remove a tag from matching books.", removeTag},
-	{"set-status", "<status> <id-spec>", "Set reading status for matching books.\nStatus: unread, reading, read, abandoned.", setStatus},
+	{"set-status", "<status> <id-spec>", statusDesc, setStatus},
 	{"set-rating", "<rating> <id-spec>", "Set rating (0-5) for matching books.", setRating},
 	{"delete", "<id>", "Delete a single book by id.", deleteBook},
-	{"rename-tag", "<old> <new>", "Rename a tag across every book. Renaming <old> onto a\ntag that already exists merges the two: books that had\nonly <old> now have <new>; books that had both drop the\nduplicate <old>.", renameTag},
-	{"rename-author", "<old> <new>", "Rename an author across every book.\n<old> is matched against display name OR sort name.\n<new> uses the \"Name | Sort\" format (same as the\nauthors field file).", renameAuthor},
+	{"rename-tag", "<old> <new>", renameTagDesc, renameTag},
+	{"rename-author", "<old> <new>", renameAuthorDesc, renameAuthor},
 	{"rename-series", "<old> <new>", "Rename a series across every book.", renameSeries},
 }
 
 // usage is the line a command answers with when its arguments do not fit.
-func (c command) usage() string { return "usage: " + c.Name + " " + c.params }
+func (c command) usage() string { return "usage: " + c.name + " " + c.params }
 
 func (c command) arity() int { return len(strings.Fields(c.params)) }
 
 func dispatch(name string, args []string, lib SearchDeleter, reg *registry.BookRegistry) string {
 	for _, c := range commands {
-		if c.Name != name {
+		if c.name != name {
 			continue
 		}
 		if len(args) != c.arity() {

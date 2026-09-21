@@ -73,8 +73,8 @@ const AuthorSep = " & "
 
 // JoinAuthors renders authors as a display string joined by sep, skipping empty
 // names and falling back to UnknownAuthor when none remain. Callers differ only
-// in sep (" & " for directory names, ", " for log lines), so the filter and
-// fallback live here rather than being re-derived at each site.
+// in sep, AuthorSep for a name being filed and ", " for a log line, so the
+// filter and fallback live here rather than being re-derived at each site.
 func JoinAuthors(authors []Author, sep string) string {
 	names := make([]string, 0, len(authors))
 	for _, a := range authors {

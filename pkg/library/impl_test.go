@@ -1,6 +1,7 @@
 package library
 
 import (
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -98,4 +99,37 @@ func TestApplyMetaClonesTags(t *testing.T) {
 			t.Errorf("Tags = %v, want nil", got)
 		}
 	})
+}
+
+// Every field of Edits has to reach one of three destinations: the epub
+// rewrite (HasBibEdits, then internal/epub's apply), the cover replacement
+// (HasCoverEdit), or the meta sidecar (applyMeta). The routing is three
+// hand-written nil-chains and nothing in the types makes them cover the struct,
+// so this walks it and fails on a field no route claims.
+//
+// It catches a field wired nowhere, and a field wired into apply but left out
+// of HasBibEdits, which would make the edit silently do nothing. It does not
+// catch the reverse: a field added to HasBibEdits and forgotten in apply still
+// reports as routed. Proving the effect needs a per-field assertion against a
+// real library, which impl_ext_test.go does for the fields it covers.
+func TestEveryEditFieldIsRouted(t *testing.T) {
+	// applyMeta's three, which have no predicate of their own to ask.
+	meta := map[string]bool{"Status": true, "Rating": true, "Tags": true}
+
+	v := reflect.ValueOf(&Edits{}).Elem()
+	for i := range v.NumField() {
+		name := v.Type().Field(i).Name
+		t.Run(name, func(t *testing.T) {
+			var e Edits
+			f := reflect.ValueOf(&e).Elem().Field(i)
+			f.Set(reflect.New(f.Type().Elem()))
+
+			if e.HasBibEdits() || e.HasCoverEdit() || meta[name] {
+				return
+			}
+			t.Errorf("Edits.%s reaches no destination: add it to HasBibEdits and "+
+				"internal/epub's apply, to HasCoverEdit, or to applyMeta and this "+
+				"test's meta list", name)
+		})
+	}
 }

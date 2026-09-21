@@ -15,8 +15,8 @@ import (
 // Only inbox accepts one. DispatchCreate answers every other parent with
 // "cannot create files here".
 const (
-	DirMode      = 0555 | proto.DMDIR
-	CreatableDir = 0755 | proto.DMDIR
+	DirMode          = 0555 | proto.DMDIR
+	CreatableDirMode = 0755 | proto.DMDIR
 )
 
 // NewStat builds a proto.Stat owned by the conventional glenda/glenda

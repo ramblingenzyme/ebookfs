@@ -16,8 +16,8 @@ import (
 func TestHelpRendersEveryCommand(t *testing.T) {
 	help := helpText()
 	for _, c := range commands {
-		t.Run(c.Name, func(t *testing.T) {
-			signature := "  " + c.Name + " " + c.params + "\n"
+		t.Run(c.name, func(t *testing.T) {
+			signature := "  " + c.name + " " + c.params + "\n"
 			if !strings.Contains(help, signature) {
 				t.Errorf("help is missing the signature line %q", signature)
 			}
@@ -35,8 +35,8 @@ func TestHelpRendersEveryCommand(t *testing.T) {
 // told the form they can read about.
 func TestUsageMatchesTheDocumentedSignature(t *testing.T) {
 	for _, c := range commands {
-		t.Run(c.Name, func(t *testing.T) {
-			got := dispatch(c.Name, make([]string, c.arity()+1), nil, nil)
+		t.Run(c.name, func(t *testing.T) {
+			got := dispatch(c.name, make([]string, c.arity()+1), nil, nil)
 			if want := c.usage(); got != want {
 				t.Errorf("wrong-arity result = %q, want %q", got, want)
 			}

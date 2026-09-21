@@ -54,6 +54,13 @@ func TestPathSafe(t *testing.T) {
 		{"empty", "", "_"},
 		{"slashes alone become dashes, which are a usable name", "//", "--"},
 
+		// POSIX forbids NUL in a filename. It forbids nothing else below 0x20,
+		// so those stay: dropping them would lose part of a name the
+		// destination would have accepted.
+		{"nul is dropped", "a\x00b", "ab"},
+		{"other control characters are kept", "a\x01b", "a\x01b"},
+		{"nul alone names nothing", "\x00", "_"},
+
 		{"trailing dot is trimmed", "Ph.D.", "Ph.D"},
 		{"leading dot is trimmed", ".hidden", "hidden"},
 		{"inner dots are kept", "R.U.R.", "R.U.R"},
@@ -83,6 +90,7 @@ func TestNamesNothingAgreesWithPathSafe(t *testing.T) {
 		{"nothing but spaces", "   ", true},
 		{"tab", "\t", true},
 		{"empty", "", true},
+		{"nul alone", "\x00", true},
 
 		{"ordinary text", "The Hobbit", false},
 		{"leading dot leaves a name", ".hidden", false},

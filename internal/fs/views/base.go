@@ -15,10 +15,9 @@ var (
 	newDirStat = vfile.NewDirStat
 )
 
-// namedBookDir wraps a shared *book.BookDir to present it under a name other than its
-// title (by-id, by-series). The name is recomputed live from the book, so a
-// title or series-index edit is reflected without rebuilding the entry; baseStat
-// carries a stable Qid distinct from the bare bookDir's listing.
+// namedBookDir wraps a shared *book.BookDir to present it under a name other
+// than its title (by-id, by-series). The name is recomputed live from the book,
+// so a title or series-index edit is reflected without rebuilding the entry.
 type namedBookDir struct {
 	*book.BookDir
 	baseStat proto.Stat
@@ -26,9 +25,9 @@ type namedBookDir struct {
 }
 
 // newNamedBookDir presents dir under the name fn computes. The stat carries an
-// empty name because Stat overwrites it on every call, so what it is really
-// for is the Qid: a fresh one, distinct from the bare BookDir's, so the same
-// book listed in two views is two entries.
+// empty name because Stat overwrites it on every call; what it is really for is
+// the Qid, a fresh one distinct from the bare BookDir's, so the same book
+// listed in two views is two entries.
 func newNamedBookDir(f *fs.FS, dir *book.BookDir, fn func(*library.Book) string) *namedBookDir {
 	return &namedBookDir{
 		BookDir:  dir,
@@ -83,9 +82,9 @@ func (g *groupingDir) childDir(name string, factory func(*proto.Stat) fs.FSNode)
 	return ad
 }
 
-// removeLister looks up the registry.BookView child named name, removes dir from it,
-// and prunes the child if empty.
-func (g *groupingDir) removeLister(name string, dir *book.BookDir) {
+// removeFromChild looks up the registry.BookView child named name, removes dir
+// from it, and prunes the child if empty. It pairs with childDir.
+func (g *groupingDir) removeFromChild(name string, dir *book.BookDir) {
 	if child, ok := g.Children()[name]; ok {
 		child.(registry.BookView).Remove(dir)
 		g.pruneEmpty(name)
@@ -145,6 +144,6 @@ func (d *keyedDir) Add(dir *book.BookDir) {
 
 func (d *keyedDir) Remove(dir *book.BookDir) {
 	for _, name := range d.entryNames(dir.Book()) {
-		d.removeLister(name, dir)
+		d.removeFromChild(name, dir)
 	}
 }

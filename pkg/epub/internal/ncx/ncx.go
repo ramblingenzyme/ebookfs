@@ -32,6 +32,7 @@ type Doc struct {
 // costs the caller the whole book.
 func Parse(b []byte) (*Doc, error) {
 	doc := etree.NewDocument()
+	// pkgdoc.Parse says why this document validates and that one does not.
 	doc.ReadSettings.ValidateInput = true
 	// opf.Parse says why CDATA is preserved.
 	doc.ReadSettings.PreserveCData = true

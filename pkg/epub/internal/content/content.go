@@ -28,6 +28,7 @@ func Parse(b []byte, entry string) (*Doc, error) {
 	// §6.1.2 makes these HTML documents in XML syntax, so any HTML named entity
 	// may appear; encoding/xml knows only the five XML ones.
 	doc.ReadSettings.Entity = stdxml.HTMLEntity
+	// pkgdoc.Parse says why this document validates and that one does not.
 	doc.ReadSettings.ValidateInput = true
 	// A <style> or <script> uses CDATA to hold < and & unescaped. Re-encoded, it
 	// means the same to an XML parser and something else to the lenient HTML

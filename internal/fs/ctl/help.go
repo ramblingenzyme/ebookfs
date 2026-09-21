@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/knusbaum/go9p/fs"
-	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 )
 
 // The help file's fixed halves. The command entries between them are rendered
@@ -69,7 +68,7 @@ func helpText() string {
 	var b strings.Builder
 	b.WriteString(helpHeader)
 	for _, c := range commands {
-		fmt.Fprintf(&b, "  %s %s\n", c.Name, c.params)
+		fmt.Fprintf(&b, "  %s %s\n", c.name, c.params)
 		for line := range strings.SplitSeq(c.desc, "\n") {
 			fmt.Fprintf(&b, "    %s\n", line)
 		}
@@ -82,5 +81,5 @@ func helpText() string {
 // NewHelpFile creates a read-only file named "help" that documents the
 // available ctl commands.
 func NewHelpFile(f *fs.FS) *fs.StaticFile {
-	return fs.NewStaticFile(vfile.NewStat(f, "help", 0444), []byte(helpText()))
+	return fs.NewStaticFile(newStat(f, "help", 0444), []byte(helpText()))
 }

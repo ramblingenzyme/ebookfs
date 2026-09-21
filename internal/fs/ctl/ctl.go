@@ -14,6 +14,8 @@ const ctlReadHint = "write a command line here to run it; read log for results a
 // CtlFile is the root-level "ctl" file. Writing a command line executes it on
 // close; the outcome is recorded in the command log (read via the log file)
 // rather than echoed back. Reading ctl returns a short usage hint.
+var newStat = vfile.NewStat
+
 type CtlFile struct {
 	fs.BaseFile
 	writes vfile.WriteBuffer
@@ -24,7 +26,7 @@ type CtlFile struct {
 
 func NewCtlFile(f *fs.FS, lib SearchDeleter, reg *registry.BookRegistry, cmdLog *CommandLog) *CtlFile {
 	return &CtlFile{
-		BaseFile: *fs.NewBaseFile(vfile.NewStat(f, "ctl", 0644)),
+		BaseFile: *fs.NewBaseFile(newStat(f, "ctl", 0644)),
 		writes:   vfile.NewWriteBuffer(4096),
 		lib:      lib,
 		reg:      reg,

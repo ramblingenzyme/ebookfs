@@ -22,7 +22,7 @@ type Ingester interface {
 var newStat = vfile.NewStat
 
 // creatableDir is the mode inbox alone carries; vfile says why.
-const creatableDir = vfile.CreatableDir
+const creatableDir = vfile.CreatableDirMode
 
 type InboxDir struct {
 	fs.StaticDir

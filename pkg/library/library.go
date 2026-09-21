@@ -24,6 +24,10 @@ type Author = book.Author
 type Series = book.SeriesRef
 type EpubReader = epub.EpubReader
 
+// StatusList renders the reading-status vocabulary for a message an operator
+// reads, so a validation error and the ctl help name the same set.
+var StatusList = book.StatusList
+
 const (
 	OrderSortTitle    = index.OrderSortTitle
 	OrderDateAdded    = index.OrderDateAdded

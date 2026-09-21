@@ -29,6 +29,12 @@ type Doc struct {
 // Parse reads the package document. etree is used rather than encoding/xml
 // because it round-trips namespace declarations, dc: prefixes, comments and
 // formatting untouched.
+// Parse reads the package document. It does not set ValidateInput, unlike
+// ncx.Parse and content.Parse, because a failure here is not recoverable: a
+// package document that will not parse fails epub.Open and the book cannot be
+// read at all. Those two skip the file they could not read and leave it as it
+// was, so detecting a malformed one beats letting etree quietly correct its
+// nesting and rewriting the correction.
 func Parse(b []byte) (*Doc, error) {
 	doc := etree.NewDocument()
 	// A CDATA section is a spelling of a value, not a different value: a
