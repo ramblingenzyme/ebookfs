@@ -41,9 +41,8 @@ func (f *statsFile) content() ([]byte, error) {
 }
 
 // Stat runs the same SQL aggregate as content to report an accurate length,
-// simple and always correct, but it means a bare `ls -l stats` costs a query,
-// and a `stat` immediately followed by `open` (as most clients do) runs it
-// twice. If that ever shows up in a profile, cache the formatted bytes for a
+// which is simple and always correct. It also means a bare `ls -l stats` costs
+// a query, and a `stat` followed by `open`, as most clients do, runs it twice. If that ever shows up in a profile, cache the formatted bytes for a
 // short TTL, or invalidate via BookRegistry Add/Remove at the cost of this file
 // registering as a BookView.
 func (f *statsFile) Stat() proto.Stat {

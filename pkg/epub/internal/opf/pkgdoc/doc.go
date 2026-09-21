@@ -65,7 +65,6 @@ func (d *Doc) EPUB3() bool {
 	return strings.HasPrefix(attr(d.pkg, "version"), "3")
 }
 
-// HasProperty reports whether a property list contains one. §5.9.1 makes it "a
-// space-separated list of property values", so membership is a token comparison:
-// a substring test would match my-cover-image, someone else's property.
+// HasProperty reports whether a property list contains one; vocab.has says why
+// membership is a token comparison.
 func (d *Doc) HasProperty(list, want string) bool { return d.vocab.has(list, want) }

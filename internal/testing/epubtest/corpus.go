@@ -4,13 +4,8 @@
 // tests the translation to the library's model. Both need the same fixtures, and
 // neither can reach the other's test files.
 //
-// A document assembled from named parts is built here. A complete one kept as a
-// file is in fixtures.go, so it reads as XML and diffs as XML.
-//
-// Nothing here imports either epub package. These helpers describe what an epub
-// looks like, which is the spec's business rather than any implementation's, and
-// a fixture that reached into the code under test would assert that code against
-// itself.
+// A document assembled from named parts is built here; a complete one kept as
+// a file is in fixtures.go.
 package epubtest
 
 import (
@@ -22,26 +17,19 @@ import (
 )
 
 const (
-	// OPFPath is where these fixtures put the package document.
 	OPFPath = "OEBPS/content.opf"
 
-	// The OCF names, redeclared here rather than reached for in the package
-	// under test: these tests drive epub from the outside, and the spec fixes
-	// both values (§4.3.3), so a test asserting them is asserting the spec
-	// rather than whatever the implementation happens to call them.
+	// The OCF names, both defined by §4.3.3.
 	MimetypePath  = "mimetype"
 	MimetypeValue = "application/epub+zip"
 )
 
-// Entry is one zip entry of a fixture archive.
 type Entry struct {
 	Name  string
 	Data  []byte
 	Store bool // stored (uncompressed) rather than deflated
 }
 
-// WriteEpub writes entries to a zip in a temp dir and returns its path. It is
-// the only thing in these suites that writes a zip.
 func WriteEpub(t *testing.T, entries []Entry) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "book.epub")
@@ -70,16 +58,12 @@ func WriteEpub(t *testing.T, entries []Entry) string {
 	return path
 }
 
-// ChapterOnlyManifest is a manifest with no cover item, for the tests about a
-// package that declares its own cover — or declares none at all.
 const ChapterOnlyManifest = `<item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`
 
-// PackageDoc is an OPF package document. It stays a string, so a raw literal is
-// still one and a fixture can drop out to XML wherever it needs to.
 type PackageDoc string
 
-// With splices metadata in before </metadata>, so a test varying one <meta> on a
-// complete fixture does not restate the whole document.
+// With lets a test vary one <meta> on a complete fixture without restating the
+// whole document.
 func (d PackageDoc) With(parts ...string) PackageDoc {
 	const closeTag = "  </metadata>"
 	before, after, ok := strings.Cut(string(d), closeTag)
@@ -90,8 +74,7 @@ func (d PackageDoc) With(parts ...string) PackageDoc {
 }
 
 // Pkg is a package document described by its parts. Every field but Meta has a
-// default, so a test writes only what it is about, and the document is built
-// once rather than built and then patched.
+// default, so the document is built once rather than built and then patched.
 type Pkg struct {
 	Meta     string // the <metadata> body; required elements are filled in
 	Manifest string // default: the cover image and one chapter
@@ -144,16 +127,11 @@ func (p Pkg) build(version, opfNS, defaultManifest, spineAttr string) PackageDoc
 </package>`)
 }
 
-// The bytes the fixture archive's two content entries carry. CoverBytes is
-// asserted against wherever a test proves a cover was left alone.
 var (
 	ChapterBytes = []byte("<html><body><p>chapter one</p></body></html>")
 	CoverBytes   = []byte("ORIGINAL-COVER-BYTES")
 )
 
-// BaseEntries is the standard five-entry archive around a package document,
-// plus whatever extra a test needs. One definition of what a fixture epub looks
-// like.
 func BaseEntries(opf PackageDoc, extra ...Entry) []Entry {
 	es := []Entry{
 		{Name: MimetypePath, Data: []byte(MimetypeValue), Store: true},
@@ -165,9 +143,9 @@ func BaseEntries(opf PackageDoc, extra ...Entry) []Entry {
 	return append(es, extra...)
 }
 
-// A package must carry an identifier, a title and a language (EPUB 3.3 §3.4.3),
-// and only four tests in these suites are about any of them. These values are
-// deliberately uninteresting: seeing one in a failure message means the test
+// A package must carry an identifier, a title and a language (EPUB 3.3 §3.4.3);
+// a creator rides along because most fixtures want one. These values are
+// deliberately uninteresting, so seeing one in a failure message means the test
 // was not about it.
 const (
 	fillIdentifier = `    <dc:identifier id="pub-id">urn:uuid:1234</dc:identifier>`
@@ -176,14 +154,6 @@ const (
 	fillLanguage   = `    <dc:language>en</dc:language>`
 )
 
-// required returns the elements above that meta does not already declare, so a
-// fixture shows only the metadata its test is about. A test that cares about one
-// of them writes it, and its own version wins. Detection is by element name,
-// which is enough for hand-written fixtures.
-//
-// A package deliberately missing one of these needs a full literal instead. No
-// test needs that today: the parse tests reject a bad archive through a layer
-// below this one.
 func required(meta string) string {
 	var out []string
 	for _, f := range []struct{ tag, line string }{
@@ -207,8 +177,6 @@ func required(meta string) string {
 func EPUB3(meta string) PackageDoc { return Pkg{Meta: meta}.EPUB3() }
 func EPUB2(meta string) PackageDoc { return Pkg{Meta: meta}.EPUB2() }
 
-// Build writes the standard five-entry archive around a package document and
-// returns its path.
 func Build(t *testing.T, opf PackageDoc) string {
 	t.Helper()
 	return WriteEpub(t, BaseEntries(opf))

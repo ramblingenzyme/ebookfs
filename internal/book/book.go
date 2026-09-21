@@ -1,7 +1,5 @@
 // Package book defines the internal book record types used by store, index,
-// and library, and Edits, the partial update to one. These types are not
-// exposed to external consumers; the public library.Book wrapper provides
-// read-only access.
+// and library, and Edits, the partial update to one.
 //
 // Edits spans the whole record as Book does: seven fields the epub carries,
 // plus Status, Rating and Tags, which live in the meta.toml sidecar.
@@ -21,7 +19,6 @@ type Author struct {
 	SortName string
 }
 
-// SeriesRef identifies a book's series membership and position.
 type SeriesRef struct {
 	ID   int64
 	Name string
@@ -34,14 +31,9 @@ type SeriesRef struct {
 	Index string
 }
 
-// UnknownAuthor is the fallback author name used when a book has no author
-// metadata. It is injected by ingest and may appear defensively in store path
-// and export directory computations.
 const UnknownAuthor = "Unknown"
 
-// Reading-status vocabulary. Validate and config's reader.statuses validation
-// consult Statuses, so adding a status requires updating both the const block
-// and the Statuses slice.
+// Referenced in Validate, reader.statuses & Statuses, so adding a new status requires updating all.
 const (
 	StatusUnread    = "unread"
 	StatusReading   = "reading"
@@ -123,9 +115,7 @@ type Meta struct {
 }
 
 // Book is the complete record for a book in the library: where it lives
-// (Location), what it is (Bib), and its mutable sidecar state (Meta). Location
-// and Bib are embedded so their fields read flat (b.Title, b.EpubPath); Meta
-// stays named so sidecar state is explicitly addressed as b.Meta.
+// (Location), what it is (Bib), and its mutable sidecar state (Meta).
 type Book struct {
 	Location
 	Bib
@@ -161,7 +151,6 @@ func NewBook(bib Bib, meta Meta, loc Location) *Book {
 	return &Book{Location: loc, Bib: bib, Meta: meta}
 }
 
-// HasSeries is safe on a nil Book, so callers resolving a series need no guard.
 func (b *Book) HasSeries() bool {
 	return b != nil && b.Series != nil
 }

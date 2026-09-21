@@ -7,8 +7,7 @@ import (
 )
 
 // epubFile serves a book's epub through the library, holding one reader per fid.
-// The 9P layer never sees a filesystem path. Size and name are read from the
-// book snapshot (set during parse), so Stat never touches the disk.
+// The 9P layer never sees a filesystem path.
 type epubFile struct {
 	vfile.ReadAtFile
 	book func() *library.Book

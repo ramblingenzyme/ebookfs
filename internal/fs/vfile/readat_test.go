@@ -11,10 +11,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// The read/open/close semantics ReadAtFile gives its embedders. The concrete
-// files (epub, reader) embed it and are tested only for their own surface,
-// rather than re-checking this behaviour at each site.
-
 func newTestReadAtFile(t *testing.T, data string) *ReadAtFile {
 	t.Helper()
 	stat := NewStat(util.NewTestFS(t), "reader", 0444)

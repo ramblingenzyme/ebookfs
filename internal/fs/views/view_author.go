@@ -9,7 +9,6 @@ func NewByAuthorDir(reg *registry.BookRegistry) *keyedDir {
 	return newKeyedDir(reg, "by-author", authorKeys, bookListFactory)
 }
 
-// authorKeys is every by-author entry b belongs under, one per credited author.
 func authorKeys(b *library.Book) []string {
 	authors := b.Authors()
 	keys := make([]string, 0, len(authors))

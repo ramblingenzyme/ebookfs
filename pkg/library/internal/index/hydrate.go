@@ -4,8 +4,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
-// hydrateBooks loads authors, tags, and identifiers for the given books via
-// batch queries, assigning them in place.
 func (idx *Index) hydrateBooks(books []*book.Book) error {
 	ids := make([]int64, len(books))
 	for i, b := range books {

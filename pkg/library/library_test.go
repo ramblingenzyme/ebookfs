@@ -111,7 +111,7 @@ func TestApplyMetaClonesTags(t *testing.T) {
 // of HasBibEdits, which would make the edit silently do nothing. It does not
 // catch the reverse: a field added to HasBibEdits and forgotten in apply still
 // reports as routed. Proving the effect needs a per-field assertion against a
-// real library, which impl_ext_test.go does for the fields it covers.
+// real library, which library_ext_test.go does for the fields it covers.
 func TestEveryEditFieldIsRouted(t *testing.T) {
 	// applyMeta's three, which have no predicate of their own to ask.
 	meta := map[string]bool{"Status": true, "Rating": true, "Tags": true}

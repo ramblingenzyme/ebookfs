@@ -9,10 +9,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 )
 
-// The read/open/close semantics SnapshotFile gives its embedders. The concrete
-// files (cover/opf, field) embed it and are tested only for their own surface,
-// rather than re-checking this behaviour at each site.
-
 func newTestSnapshotFile(t *testing.T, data []byte) *SnapshotFile {
 	t.Helper()
 	stat := NewStat(util.NewTestFS(t), "snap", 0444)

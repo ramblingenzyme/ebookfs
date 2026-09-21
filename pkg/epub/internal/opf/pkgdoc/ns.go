@@ -17,8 +17,8 @@ type ns struct{ pkg *etree.Element }
 // document binds none.
 //
 // Only <package>'s attributes are scanned, so a declaration further down (OPF
-// 2.0 §2.2's example puts xmlns:opf on <metadata>) gets a redundant second one
-// at the top. Harmless: both bind the same URI.
+// 2.0 §2.2 puts xmlns:opf on <metadata>) gets a redundant second one at the
+// top, harmless since both bind the same URI.
 func (n ns) prefix(uri, preferred string) string {
 	for i := range n.pkg.Attr {
 		a := n.pkg.Attr[i]

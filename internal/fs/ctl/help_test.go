@@ -5,14 +5,6 @@ import (
 	"testing"
 )
 
-// The help file is rendered from the commands table dispatch reads, so the two
-// can no longer document different verbs. What is still worth pinning is the
-// renderer: every command reaching the page, with the signature the operator
-// will type and the description indented under it.
-//
-// This replaces a pair of tests that compared the help text against the
-// dispatch switch and against a hand-kept list. Both were checking that three
-// parallel lists agreed, and there is one list now.
 func TestHelpRendersEveryCommand(t *testing.T) {
 	help := helpText()
 	for _, c := range commands {

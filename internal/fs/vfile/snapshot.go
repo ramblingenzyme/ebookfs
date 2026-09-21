@@ -8,11 +8,7 @@ import (
 )
 
 // SnapshotFile is a base for files whose content is loaded once on Open via an
-// injected load func and served per-fid as a []byte slice. Open loads the data
-// and caches it per fid; Read returns clamped sub-slices of the cached bytes;
-// Close cleans up the per-fid entry. Embedders that override Open/Close manage
-// the per-fid snapshot through the exported methods (Snapshot, and Open/Close
-// themselves) rather than the private map.
+// injected load func and served per-fid.
 type SnapshotFile struct {
 	fs.BaseFile
 	load  func() ([]byte, error)
@@ -48,10 +44,8 @@ func (f *SnapshotFile) Read(fid uint64, offset uint64, count uint64) ([]byte, er
 	return ClampRead(data, offset, count), nil
 }
 
-// ClampRead returns the sub-slice of data a 9P Tread at offset/count should
-// yield, clamped to data's bounds: empty at or past the end, truncated when
-// count overruns. Files that serve a static byte slice per fid share this
-// instead of re-deriving the boundary checks.
+// ClampRead is the sub-slice a 9P Tread at offset/count yields: empty at or
+// past the end, truncated when count overruns.
 func ClampRead(data []byte, offset, count uint64) []byte {
 	if offset >= uint64(len(data)) {
 		return []byte{}
@@ -62,9 +56,9 @@ func ClampRead(data []byte, offset, count uint64) []byte {
 	return data[offset : offset+count]
 }
 
-// Snapshot returns the per-fid bytes cached at Open, for embedders (e.g. a
-// writable field file) that seed a write buffer from the current value. It is
-// self-locking; callers must not hold the file's lock.
+// Snapshot returns the per-fid bytes cached at Open, for an embedder seeding a
+// write buffer from the current value. Self-locking, so a caller must not hold
+// the file's lock.
 func (f *SnapshotFile) Snapshot(fid uint64) ([]byte, bool) {
 	f.RLock()
 	defer f.RUnlock()

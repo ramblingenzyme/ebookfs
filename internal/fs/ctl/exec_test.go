@@ -12,10 +12,9 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// Every command name routes to its handler rather than falling through to the
-// unknown-command default. Against an empty library the results are determinate,
-// so each row asserts the string its handler produces; a name that silently
-// stopped being routed would otherwise still look fine.
+// Every command name routes to its handler rather than the unknown-command
+// default. Against an empty library each result is determinate, so a name that
+// silently stopped being routed would otherwise still look fine.
 func TestDispatch(t *testing.T) {
 	const notFound = "ok: no books edited\nerrors: 1 book(s)\n  book 1: not found"
 
@@ -347,9 +346,7 @@ func TestRenameAuthorMatchSortName(t *testing.T) {
 
 // rename-author re-checks the match against the snapshot the search returned,
 // so a book the index credits to old but whose snapshot does not is reported
-// rather than passed over. Routing the renames through editSelection is what
-// gives it somewhere to be reported: before, an unmatched book was skipped by a
-// bare continue and the result claimed nothing had happened at all.
+// rather than passed over.
 func TestRenameAuthorReportsABookTheSnapshotDoesNotMatch(t *testing.T) {
 	book := util.MakeMutableBook(1, "Foundation", "Someone Else")
 

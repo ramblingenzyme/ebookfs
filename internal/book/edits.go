@@ -34,11 +34,10 @@ type Edits struct {
 	Series      *string
 	SeriesIndex *string
 
-	// Cover replaces the cover image in the epub. It is applied before any bib
-	// edits so that a combined Cover + OPF edit produces a single final epub
-	// rewrite. Cover replaces the old Library.WriteCover method: all mutations
-	// now flow through Edit, keeping the registry snapshot self-consistent.
-
+	// Cover replaces the cover image in the epub, applied before any bib edits
+	// so a combined Cover + OPF edit produces one final rewrite. Every mutation
+	// reaches the epub through Edit, which is what keeps the registry snapshot
+	// consistent with the file.
 	Cover *[]byte
 
 	// Meta fields (written to the meta.toml sidecar).
@@ -90,7 +89,6 @@ func (ve ValidationError) Error() string {
 	case 1:
 		return ve[0].Error()
 	}
-	// Multi-field: "field1: msg; field2: msg"
 	var s strings.Builder
 	for i, fe := range ve {
 		if i > 0 {
@@ -109,8 +107,6 @@ type fieldValidator struct {
 	validate func() string // returns error message or ""
 }
 
-// Validate validates e against the book's current state and returns per-field errors.
-// A nil return means all fields are valid.
 func Validate(e Edits, b *Book) *ValidationError {
 	validators := []fieldValidator{
 		{"status", e.validateStatus},
@@ -186,12 +182,7 @@ func (e Edits) validateAuthors() string {
 
 // validateTags rejects a tag that names no directory. A frontend groups books
 // by tag, and naming.PathSafe gives every value that trims away, "." and ".."
-// among them, the same placeholder, so accepting them would file unrelated tags
-// into one group.
-//
-// A tag is ebookfs's own field, so it is refused here rather than sanitized at
-// each naming site, the way naming.PathSafe handles an author name read
-// verbatim from an epub.
+// among them, one placeholder, so accepting them files unrelated tags together.
 func (e Edits) validateTags() string {
 	if e.Tags == nil {
 		return ""

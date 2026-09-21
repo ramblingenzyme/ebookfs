@@ -11,9 +11,8 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/store"
 )
 
-// Option configures Open. Options are the extension point: an ingest hook, a
-// subscriber or a metadata handler is added as one, so none of them changes
-// Open's signature.
+// Option is the extension point, so a new one does not change Open's
+// signature.
 type Option func(*options)
 
 type options struct {
@@ -57,8 +56,8 @@ func Open(cfg Config, opts ...Option) (*Library, error) {
 		index:     idx,
 		inboxTemp: cfg.InboxTemp,
 	}
-	// Spelled out rather than as one || chain (which short-circuits the same
-	// way) so the store scan can be captured: when storeDrifted is the check
+	// Spelled out rather than as one || chain, which short-circuits the same
+	// way, so the store scan can be captured. When storeDrifted is the check
 	// that fires, its scan is handed to the rebuild, which then neither walks
 	// the store nor stats the books a second time.
 	var onDisk *storeScan
@@ -70,7 +69,7 @@ func Open(cfg Config, opts ...Option) (*Library, error) {
 		if err := lib.reindex(onDisk); err != nil {
 			// The index was opened above and lib is never returned, so nothing
 			// else will ever close it. A duplicate book id makes this a routine
-			// path (see DECISIONS.md #14), not just a crash-adjacent one.
+			// path (DECISIONS.md #14).
 			idx.Close()
 			return nil, fmt.Errorf("reindexing library: %w", err)
 		}
@@ -99,9 +98,8 @@ func cleanInboxTemp(dir string) error {
 	return nil
 }
 
-// checkSameFilesystem verifies that a and b are on the same mount, which ingest
-// relies on: the frontend writes to a temp file inside inboxTemp then atomically
-// renames it into the library root, and rename only works within a filesystem.
+// checkSameFilesystem tries a real rename, which is the only way to answer the
+// question ingest turns on. Config says why the two must share a filesystem.
 func checkSameFilesystem(a, b string) error {
 	tmp, err := os.CreateTemp(a, ".fschk-*")
 	if err != nil {

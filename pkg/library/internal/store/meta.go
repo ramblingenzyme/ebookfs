@@ -8,9 +8,8 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
-// metaFilename is the per-book sidecar the store writes alongside each epub.
-// Everything that needs the file goes through metaPath so the name is stated
-// once, so a rename stays a compile-time concern rather than a silent ENOENT.
+// metaFilename reaches the filesystem only through metaPath, so a rename is a
+// compile-time concern rather than a silent ENOENT.
 const metaFilename = "meta.toml"
 
 func (s *Store) metaPath(loc book.Location) string {
@@ -25,10 +24,10 @@ func (s *Store) writeMeta(loc book.Location, meta *book.Meta) error {
 	return writeMeta(s.metaPath(loc), meta)
 }
 
-// readMeta and writeMeta take a path rather than a Location, so the file
-// handling stays separable from the layout metaPath owns. Tests reach them
-// directly for a missing file, a malformed sidecar and an unwritable
-// directory, none of which is reachable through a Store worth building.
+// readMeta and writeMeta take a path rather than a Location, which keeps the
+// file handling separable from the layout metaPath owns. Tests reach them
+// directly for a missing file, a malformed sidecar and an unwritable directory,
+// none of which is reachable through a Store worth building.
 func readMeta(path string) (*book.Meta, error) {
 	buf, err := os.ReadFile(path)
 	if err != nil {
@@ -41,9 +40,8 @@ func readMeta(path string) (*book.Meta, error) {
 	return meta, nil
 }
 
-// writeMeta replaces path atomically: the sidecar is written to a temp file in
-// the same directory, synced, then renamed over. A crash mid-write leaves the
-// old sidecar intact rather than a truncated one.
+// writeMeta renames over path, so a crash mid-write leaves the old sidecar
+// intact rather than a truncated one.
 func writeMeta(path string, meta *book.Meta) error {
 	buf, err := toml.Marshal(meta)
 	if err != nil {

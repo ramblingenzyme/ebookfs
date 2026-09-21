@@ -6,19 +6,14 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 )
 
-// ctlReadHint is what reading the ctl file returns. ctl is a command sink; a
-// command's result (and any error) is recorded in the log file, not echoed back
-// here, so there is nothing per-command to read.
+// ctlReadHint is all a read returns. A command's result goes to the log file,
+// so there is nothing per-command here.
 const ctlReadHint = "write a command line here to run it; read log for results and help for usage.\n"
 
 var newStat = vfile.NewStat
 
-// CtlFile is the root-level "ctl" file. Writing a command line executes it on
-// close; the outcome is recorded in the command log (read via the log file)
-// rather than echoed back. Reading ctl returns a short usage hint.
-//
-// It owns the two halves a command acts through, so exec.go's handlers are
-// methods here rather than functions threading the pair between them.
+// CtlFile is the root-level "ctl" file. A command line written to it runs on
+// close and its outcome goes to the command log.
 type CtlFile struct {
 	fs.BaseFile
 	writes vfile.WriteBuffer
@@ -37,18 +32,15 @@ func NewCtlFile(f *fs.FS, lib SearchDeleter, reg *registry.BookRegistry, cmdLog 
 	}
 }
 
-// Read returns a short usage hint; command results live in the log file.
 func (f *CtlFile) Read(_ uint64, offset uint64, count uint64) ([]byte, error) {
 	return vfile.ClampRead([]byte(ctlReadHint), offset, count), nil
 }
 
-// Write buffers incoming data. The command is processed on Close.
 func (f *CtlFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
 	return f.writes.Write(fid, offset, data, nil)
 }
 
-// Close commits the buffered writes from fid and executes the command. The
-// result is recorded in the command log rather than returned here.
+// Close runs what fid wrote. The result goes to the command log.
 func (f *CtlFile) Close(fid uint64) error {
 	s := f.writes.TakeText(fid)
 	if s == "" {

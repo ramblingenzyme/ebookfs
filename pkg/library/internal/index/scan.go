@@ -8,7 +8,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
-// bookRow holds the raw scan targets for a book query row.
 type bookRow struct {
 	id, opfSize, coverSize, epubSize                                   int64
 	title, pubdate, description, language, epubPath, coverPath, status string
@@ -54,13 +53,11 @@ func (r *bookRow) toBook() *book.Book {
 	return b
 }
 
-// parseDateField returns the zero time on a value that is not RFC3339, having
-// logged it. A book with an unparseable date still loads.
-// parseDateField reads a stored RFC3339 timestamp. Every row this package
-// writes holds one, so a failure means the column was written by something
-// else; the zero time is reported rather than the read being failed, since a
-// book with an unreadable date is still a book. where names the caller's
-// context in the warning.
+// parseDateField logs anything that is not RFC3339 and returns the zero time,
+// since a book with an unreadable date is still a book. Every row this package
+// writes holds one, so a failure means something else wrote the column.
+//
+// where names the caller's context in the warning.
 func parseDateField(s, field string, where ...any) time.Time {
 	t, err := time.Parse(time.RFC3339, s)
 	if err != nil {

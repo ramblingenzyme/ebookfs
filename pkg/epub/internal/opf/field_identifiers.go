@@ -8,14 +8,12 @@ import (
 )
 
 // identifiers keys each dc:identifier by its scheme (isbn, uuid, doi), which is
-// what a caller filing it wants. The element's XML id is a document-local handle
-// chosen by whoever produced the file and says nothing about the kind of
-// identifier, so it is the last resort. An identifier the file names in no way
-// at all still lands under a key of its own. Read-only.
+// what a caller filing it wants. The XML id is a document-local handle saying
+// nothing about the kind, so it is the last resort, and an identifier named no
+// way at all still gets a key. Read-only.
 //
-// Two identifiers can resolve to one scheme (ISBN-10 and ISBN-13 both being
-// isbn), and a map keyed by scheme cannot hold both: the first in document
-// order wins.
+// Two identifiers can resolve to one scheme, ISBN-10 and ISBN-13 both being
+// isbn, and a map cannot hold both: the first in document order wins.
 func (o *Doc) identifiers() map[string]string {
 	out := map[string]string{}
 	for _, el := range o.d.DCAll("identifier") {

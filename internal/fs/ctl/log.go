@@ -9,15 +9,14 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 )
 
-// LogEntry records one command execution in the log.
 type LogEntry struct {
 	Timestamp time.Time
 	Command   string
 	Result    string
 }
 
-// CommandLog is an in-memory ring buffer of the last N command results. It is
-// server-lifetime state shared across all 9P connections.
+// CommandLog is an in-memory ring buffer of the last N command results, shared
+// across every 9P connection for the server's lifetime.
 type CommandLog struct {
 	mu      sync.Mutex
 	entries []LogEntry
@@ -47,7 +46,7 @@ func (l *CommandLog) Append(cmd, result string) {
 	}
 }
 
-// Entries returns a copy of all stored entries, oldest first.
+// Entries returns a copy, oldest first.
 func (l *CommandLog) Entries() []LogEntry {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -64,13 +63,10 @@ func (l *CommandLog) Entries() []LogEntry {
 	return out
 }
 
-// LogFile is a read-only 9P file that returns the command log contents.
 type LogFile struct {
 	vfile.SnapshotFile
 }
 
-// NewLogFile creates a read-only file named "log" that returns the command
-// history on read.
 func NewLogFile(f *fs.FS, cmdLog *CommandLog) *LogFile {
 	return &LogFile{
 		SnapshotFile: vfile.NewSnapshotFile(

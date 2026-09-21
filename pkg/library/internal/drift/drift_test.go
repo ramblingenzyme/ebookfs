@@ -42,10 +42,9 @@ func TestEqualComparesEveryField(t *testing.T) {
 	}
 }
 
-// Why Equal exists rather than ==. A time carries a location and, when it comes
-// from time.Now, a monotonic reading; == compares those too, so a value that
-// survived a round trip through the index would differ from the identical
-// instant freshly stat'd and every startup would reindex.
+// Without Equal's Time.Equal, a value that survived a round trip through the
+// index would differ from the identical instant freshly stat'd, and every
+// startup would reindex.
 func TestEqualComparesInstantsNotRepresentations(t *testing.T) {
 	utc := observed()
 
@@ -65,9 +64,9 @@ func TestEqualComparesInstantsNotRepresentations(t *testing.T) {
 	}
 }
 
-// A failed observation is recognised only when *both* files went unseen. A
-// half-filled value is not a marker: treating one as such would index a book
-// against file state that was never read.
+// A failed observation is recognised only when both files went unseen.
+// Treating a half-filled value as a marker would index a book against file
+// state that was never read.
 func TestIsUnobserved(t *testing.T) {
 	tests := []struct {
 		name string

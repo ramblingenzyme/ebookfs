@@ -135,14 +135,13 @@ func (o *Doc) Metadata(base string) Metadata {
 }
 
 // writeV3 reports whether the EPUB 3 slot takes the value, for a field the
-// document records twice: once the way its spec version says, once as the
-// proprietary meta calibre writes. Title sort and series are both encoded that
-// way and both ask here, so the rule is stated once even though each keeps its
-// own branch.
+// document records twice: once as its spec version says, once as the calibre
+// meta. Title sort and series both ask here, so the rule is stated once though
+// each keeps its own branch.
 //
 // A slot already in the file is rewritten whatever version the package claims,
-// since leaving it stale would outrank the calibre meta on the way back in. A
-// v3 package without one gets one; a v2 package without one stays without.
+// since a stale one would outrank the calibre meta on the way back in. A v3
+// package without one gets one; a v2 package without one stays without.
 func writeV3(d *pkgdoc.Doc, present bool) bool { return present || d.EPUB3() }
 
 // writeCalibre reports whether the calibre meta takes the value; writeV3 says

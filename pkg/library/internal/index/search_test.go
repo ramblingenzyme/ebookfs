@@ -159,9 +159,8 @@ func TestSearchOrders(t *testing.T) {
 	tied := newBook(3, "Charlie")
 	untied := newBook(4, "Delta")
 
-	// sort_title is NULL unless the epub carried a file-as refine, so leave it
-	// unset on some books: the title ordering has to fall back to the title,
-	// not lump them into one NULL tie ordered by id.
+	// Leave sort_title unset on some books, so the title ordering has to fall
+	// back to the title rather than lump them into one NULL tie.
 	mid.SortTitle = "Bravo"
 	top.SortTitle = "Alpha"
 	for _, b := range []*book.Book{mid, top, tied, untied} {

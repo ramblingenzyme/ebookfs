@@ -15,19 +15,14 @@ var (
 	newDirStat = vfile.NewDirStat
 )
 
-// namedBookDir wraps a shared *book.BookDir to present it under a name other
-// than its title (by-id, by-series). The name is recomputed live from the book,
-// so a title or series-index edit is reflected without rebuilding the entry.
 type namedBookDir struct {
 	*book.BookDir
 	baseStat proto.Stat
 	name     func(*library.Book) string
 }
 
-// newNamedBookDir presents dir under the name fn computes. The stat carries an
-// empty name because Stat overwrites it on every call; what it is really for is
-// the Qid, a fresh one distinct from the bare BookDir's, so the same book
-// listed in two views is two entries.
+// newNamedBookDir gives dir a Qid distinct from the bare BookDir's, so one book
+// listed in two views is two entries. Stat overwrites the name on every call.
 func newNamedBookDir(f *fs.FS, dir *book.BookDir, fn func(*library.Book) string) *namedBookDir {
 	return &namedBookDir{
 		BookDir:  dir,
@@ -59,8 +54,7 @@ func newGroupingDir(f *fs.FS, name string) groupingDir {
 	}
 }
 
-// pruneEmpty removes a child subdirectory if it exists and has no children of
-// its own. Safe to call unconditionally after removing an entry from a subdir.
+// pruneEmpty is safe to call unconditionally after removing an entry.
 func (g *groupingDir) pruneEmpty(name string) {
 	child, ok := g.Children()[name]
 	if !ok {
@@ -71,8 +65,8 @@ func (g *groupingDir) pruneEmpty(name string) {
 	}
 }
 
-// childDir returns the existing child with name, or creates one via factory and
-// adds it. The factory receives a stat whose name is already set.
+// childDir builds the named child on first use. factory receives a stat whose
+// name is already set.
 func (g *groupingDir) childDir(name string, factory func(*proto.Stat) fs.FSNode) fs.FSNode {
 	if child, ok := g.Children()[name]; ok {
 		return child
@@ -82,8 +76,6 @@ func (g *groupingDir) childDir(name string, factory func(*proto.Stat) fs.FSNode)
 	return ad
 }
 
-// removeFromChild looks up the registry.BookView child named name, removes dir
-// from it, and prunes the child if empty. It pairs with childDir.
 func (g *groupingDir) removeFromChild(name string, dir *book.BookDir) {
 	if child, ok := g.Children()[name]; ok {
 		child.(registry.BookView).Remove(dir)
@@ -91,25 +83,19 @@ func (g *groupingDir) removeFromChild(name string, dir *book.BookDir) {
 	}
 }
 
-// bookListFactory is the child a by-x view builds unless it needs a listing of
-// its own, as by-series does.
+// bookListFactory is the child a by-x view builds unless it needs its own
+// listing, as by-series does.
 func bookListFactory(s *proto.Stat) fs.FSNode { return newBookListDir(s) }
 
-// keyedDir is a by-x view: one child per key the book yields, with the book
-// filed into each. A view supplies the keys function and the child factory and
-// has nothing else to say, which is why by-author, by-tag, by-status and
-// by-series are all this type rather than four of their own.
+// keyedDir is a by-x view: one child per key the book yields. by-author,
+// by-tag, by-status and by-series are all this type.
 //
-// Add and Remove read the same keys through entryNames, so a book leaves
-// exactly the entries it joined; a name minted on one side only makes removals
-// miss.
-//
-// by-id and reader embed groupingDir directly instead, since neither files a
-// book under a key the book carries.
+// by-id and reader embed groupingDir directly, since neither files a book
+// under a key the book carries.
 type keyedDir struct {
 	groupingDir
-	// keys selects the values b belongs under, verbatim. entryNames turns them
-	// into directory names, so a keys function never sanitizes.
+	// keys returns values verbatim. entryNames makes them safe, so a keys
+	// function never sanitizes.
 	keys    func(*library.Book) []string
 	factory func(*proto.Stat) fs.FSNode
 }
@@ -124,9 +110,8 @@ func newKeyedDir(reg *registry.BookRegistry, name string, keys func(*library.Boo
 	return d
 }
 
-// entryNames is the child directories b belongs under. Every group name in
-// every by-x view is minted here, so a key that is metadata read verbatim from
-// an epub cannot reach a listing as a name a 9P client is unable to walk to.
+// entryNames mints every group name in every by-x view, so a key read verbatim
+// from an epub cannot reach a listing as a name no 9P client can walk to.
 func (d *keyedDir) entryNames(b *library.Book) []string {
 	keys := d.keys(b)
 	names := make([]string, len(keys))

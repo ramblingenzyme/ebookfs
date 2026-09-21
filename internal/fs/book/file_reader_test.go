@@ -19,10 +19,6 @@ func testReaderFile(t *testing.T, exp Renderer) *ReaderFile {
 	return NewReaderFile(newStat(f, "test.epub", 0444), exp, util.Fixed(book))
 }
 
-// readerFile's own surface, on top of the readAtFile semantics its base test
-// owns: it wires the Renderer for reads and reports the export size live from
-// Stat.
-
 func TestReaderFileOpenRead(t *testing.T) {
 	rf := testReaderFile(t, mock.Renderer{
 		OpenFn: func(b *library.Book) (library.EpubReader, error) {

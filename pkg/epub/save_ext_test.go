@@ -1790,7 +1790,7 @@ func TestAuthorRenameDropsRefinements(t *testing.T) {
 		t.Error("an alternate-script written about the old name survived the rename")
 	}
 	// The sort name the edit supplied is written, so the new creator is not
-	// simply bare.
+	// bare.
 	if !bytes.Contains(opfBytes, []byte("Smith, Jane")) {
 		t.Error("the supplied sort name was not written")
 	}

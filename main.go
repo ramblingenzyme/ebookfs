@@ -15,9 +15,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// setupLogging installs a slog handler built from cfg as the default logger.
-// Every slog call in the codebase goes through it, so log.level filters by
-// severity and log.format = "json" applies uniformly.
 func setupLogging(cfg config.LogConfig) {
 	levels := map[string]slog.Level{
 		"debug": slog.LevelDebug,
@@ -35,8 +32,8 @@ func setupLogging(cfg config.LogConfig) {
 	slog.SetDefault(slog.New(h))
 }
 
-// fatal logs at error level — never filtered by any valid log.level — and
-// exits. log.Fatalf would be bridged at info level and could be silenced.
+// fatal logs at error level, which no valid log.level filters, and exits.
+// log.Fatalf bridges at info level and could be silenced.
 func fatal(msg string, err error) {
 	slog.Error(msg, "error", err)
 	os.Exit(1)
@@ -73,16 +70,12 @@ func main() {
 		fatal("setting up server", err)
 	}
 
-	// Start the 9P listener in a background goroutine so the main
-	// goroutine can receive signals. Serve returns without error
-	// when Shutdown is called.
+	// Start returns without error once Shutdown is called.
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- srv.Start(cfg.Server.Listen)
 	}()
 
-	// Main goroutine: wait for a signal, then initiate graceful
-	// shutdown with a deadline.
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
@@ -94,12 +87,10 @@ func main() {
 		slog.Warn("9P shutdown deadline exceeded, forcing close", "error", err)
 	}
 
-	// Wait for Serve to return (confirming the listener is fully down).
 	if err := <-errCh; err != nil {
 		slog.Error("9P server exited with error", "error", err)
 	}
 
-	// Close the library after the server is fully down.
 	if err := lib.Close(); err != nil {
 		slog.Error("closing library", "error", err)
 	}

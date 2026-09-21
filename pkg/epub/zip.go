@@ -22,13 +22,9 @@ const (
 	mimetypeValue = "application/epub+zip"
 )
 
-// notEpub classifies a failure to open the archive. A malformed zip is not an
-// epub. Anything else, such as a missing file, a permission problem or a disk
-// error, is the caller's to see verbatim, since it says nothing about the
-// file's contents.
-//
-// Shared by every entry point, so one broken file is one error however the
-// caller got here.
+// notEpub classifies a failure to open the archive: a malformed zip is not an
+// epub, while a missing file, a permission problem or a disk error passes
+// through verbatim, saying nothing about the contents.
 func notEpub(path string, err error) error {
 	if errors.Is(err, zip.ErrFormat) {
 		return fmt.Errorf("%w: %s: %w", ErrNotEpub, path, err)

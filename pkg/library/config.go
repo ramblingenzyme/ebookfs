@@ -18,12 +18,13 @@ type Config struct {
 }
 
 // ReaderConfig configures the export rendition served by Library.Exporter:
-// the reader/ view an e-reader is synced from. Statuses selects which books
-// appear; Convert toggles kepub conversion (false serves the original epub);
-// CacheDir holds converted kepubs and MUST live outside Config.Root so the
-// store walk never treats a cached file as a book.
+// the reader/ view an e-reader is synced from.
 type ReaderConfig struct {
+	// Statuses selects which books appear.
 	Statuses []string
-	Convert  bool
+	// Convert toggles kepub conversion. False serves the original epub.
+	Convert bool
+	// CacheDir holds converted kepubs and MUST live outside Config.Root, so
+	// the store walk never treats a cached file as a book.
 	CacheDir string
 }

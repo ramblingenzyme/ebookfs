@@ -9,9 +9,9 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// ReadAtFile is a base for files that hold one EpubReader per fid, acquired
-// via an injected open func. Read delegates to ReadAt and swallows io.EOF
-// (the reader may return its final bytes and EOF in a single call).
+// ReadAtFile is a base for files holding one EpubReader per fid, acquired via
+// an injected open func. Read swallows io.EOF, since the reader may return its
+// final bytes and EOF in one call.
 type ReadAtFile struct {
 	fs.BaseFile
 	open func() (library.EpubReader, error)

@@ -3,9 +3,8 @@
 // served tree is the production one; only the library is faked, since the tree
 // is what these assert on.
 //
-// The unit tests in fs/ctl drive dispatch with a fake and assert on the string
-// it returns. Nothing there proves a command reaches the tree, which is the
-// half that has historically broken.
+// The unit tests in fs/ctl assert on the string dispatch returns. Nothing
+// there proves a command reaches the tree.
 
 package fs
 
@@ -23,71 +22,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
-
-// runCtl writes cmd to the ctl file and clunks it, which is what executes the
-// command. It returns the line the command log recorded.
-func runCtl(t *testing.T, cf *ctl.CtlFile, log *ctl.CommandLog, cmd string) string {
-	t.Helper()
-	fid := fstest.Fid(t, cf, 1)
-	fid.Write(0, cmd)
-	fid.Close()
-	entries := log.Entries()
-	if len(entries) == 0 {
-		t.Fatalf("%q recorded nothing in the log", cmd)
-	}
-	return entries[len(entries)-1].Result
-}
-
-// ctlTree wires ctl onto a registry serving the views a command can move a book
-// between, with the library's Edit applying the edits to the test's own book.
-func ctlTree(t *testing.T, cur *bookmodel.Book) (*ctl.CtlFile, *ctl.CommandLog, map[string]fs.Dir) {
-	t.Helper()
-	f := newTestFS(t)
-
-	search := mock.SearchDeleter{
-		SearchFn: func(library.Query) ([]*library.Book, error) {
-			return []*library.Book{util.WrapBook(cur)}, nil
-		},
-	}
-	edit := mock.Editor{
-		EditFn: func(_ int64, e library.Edits) (*library.Book, error) {
-			next := *cur
-			if e.Status != nil {
-				next.Meta.Status = *e.Status
-			}
-			if e.Tags != nil {
-				next.Meta.Tags = *e.Tags
-			}
-			if e.Authors != nil {
-				next.Authors = *e.Authors
-			}
-			cur = &next
-			return util.WrapBook(cur), nil
-		},
-	}
-
-	reg := registry.NewBookRegistry(f, edit)
-	dirs := map[string]fs.Dir{
-		"books":     views.NewAllBooksDir(reg),
-		"by-author": views.NewByAuthorDir(reg),
-		"by-tag":    views.NewByTagDir(reg),
-		"by-status": views.NewByStatusDir(reg),
-	}
-	reg.Add(util.WrapBook(cur))
-
-	log := ctl.NewCommandLog(16)
-	return ctl.NewCtlFile(f, search, reg, log), log, dirs
-}
-
-// group reports the entries under dirs[view]/key, and whether that group exists.
-func group(t *testing.T, dirs map[string]fs.Dir, view, key string) ([]string, bool) {
-	t.Helper()
-	child, ok := dirs[view].Children()[key]
-	if !ok {
-		return nil, false
-	}
-	return fstest.ChildNames(child.(fs.Dir)), true
-}
 
 func TestCtlSetStatusMovesTheBookInByStatus(t *testing.T) {
 	b := makeBook(1, "Test", "Alice")
@@ -155,4 +89,66 @@ func TestCtlUnknownCommandLeavesTheTreeAlone(t *testing.T) {
 		t.Errorf("log recorded %q, want an unknown-command error", got)
 	}
 	fstest.ChildCount(t, dirs["books"], len(before))
+}
+
+// The clunk is what executes the command; the return is the logged line.
+func runCtl(t *testing.T, cf *ctl.CtlFile, log *ctl.CommandLog, cmd string) string {
+	t.Helper()
+	fid := fstest.Fid(t, cf, 1)
+	fid.Write(0, cmd)
+	fid.Close()
+	entries := log.Entries()
+	if len(entries) == 0 {
+		t.Fatalf("%q recorded nothing in the log", cmd)
+	}
+	return entries[len(entries)-1].Result
+}
+
+// The library's Edit applies to the test's own book.
+func ctlTree(t *testing.T, cur *bookmodel.Book) (*ctl.CtlFile, *ctl.CommandLog, map[string]fs.Dir) {
+	t.Helper()
+	f := newTestFS(t)
+
+	search := mock.SearchDeleter{
+		SearchFn: func(library.Query) ([]*library.Book, error) {
+			return []*library.Book{util.WrapBook(cur)}, nil
+		},
+	}
+	edit := mock.Editor{
+		EditFn: func(_ int64, e library.Edits) (*library.Book, error) {
+			next := *cur
+			if e.Status != nil {
+				next.Meta.Status = *e.Status
+			}
+			if e.Tags != nil {
+				next.Meta.Tags = *e.Tags
+			}
+			if e.Authors != nil {
+				next.Authors = *e.Authors
+			}
+			cur = &next
+			return util.WrapBook(cur), nil
+		},
+	}
+
+	reg := registry.NewBookRegistry(f, edit)
+	dirs := map[string]fs.Dir{
+		"books":     views.NewAllBooksDir(reg),
+		"by-author": views.NewByAuthorDir(reg),
+		"by-tag":    views.NewByTagDir(reg),
+		"by-status": views.NewByStatusDir(reg),
+	}
+	reg.Add(util.WrapBook(cur))
+
+	log := ctl.NewCommandLog(16)
+	return ctl.NewCtlFile(f, search, reg, log), log, dirs
+}
+
+func group(t *testing.T, dirs map[string]fs.Dir, view, key string) ([]string, bool) {
+	t.Helper()
+	child, ok := dirs[view].Children()[key]
+	if !ok {
+		return nil, false
+	}
+	return fstest.ChildNames(child.(fs.Dir)), true
 }

@@ -24,43 +24,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// inboxTree wires a real inbox onto a real registry and views. ingested is what
-// the library hands back, or nil to make the ingest fail.
-func inboxTree(t *testing.T, ingested *bookmodel.Book) (*fs.FS, fs.Dir, map[string]fs.Dir) {
-	t.Helper()
-	f := newTestFS(t)
-
-	ingest := mock.Ingester{
-		IngestFn: func(string) (*library.Book, error) {
-			if ingested == nil {
-				return nil, errTest
-			}
-			return util.WrapBook(ingested), nil
-		},
-	}
-
-	reg := registry.NewBookRegistry(f, mock.Editor{})
-	dirs := map[string]fs.Dir{
-		"books":     views.NewAllBooksDir(reg),
-		"by-author": views.NewByAuthorDir(reg),
-	}
-	return f, inbox.NewInboxDir(f, ingest, reg.Add), dirs
-}
-
-// upload copies data into inbox/name the way a client would: dispatch a create,
-// open, write, clunk. The clunk is the transaction boundary.
-func upload(t *testing.T, f *fs.FS, inboxDir fs.Dir, name string, data []byte) error {
-	t.Helper()
-	file, err := vfile.DispatchCreate(f, inboxDir, "glenda", name, 0644, 0)
-	if err != nil {
-		t.Fatalf("create %s: %v", name, err)
-	}
-	fid := fstest.Fid(t, file, 1)
-	fid.Open(proto.Mode(0))
-	fid.Write(0, string(data))
-	return fid.CloseErr()
-}
-
 func TestInboxUploadReachesTheViews(t *testing.T) {
 	f, inboxDir, dirs := inboxTree(t, makeBook(1, "Ingested", "Alice"))
 
@@ -94,4 +57,39 @@ func TestCreateOutsideTheInboxIsRefused(t *testing.T) {
 	if _, err := vfile.DispatchCreate(f, dirs["books"], "glenda", "x.epub", 0644, 0); err == nil {
 		t.Error("a create under books/ was accepted")
 	}
+}
+
+// A nil ingested makes the ingest fail.
+func inboxTree(t *testing.T, ingested *bookmodel.Book) (*fs.FS, fs.Dir, map[string]fs.Dir) {
+	t.Helper()
+	f := newTestFS(t)
+
+	ingest := mock.Ingester{
+		IngestFn: func(string) (*library.Book, error) {
+			if ingested == nil {
+				return nil, errTest
+			}
+			return util.WrapBook(ingested), nil
+		},
+	}
+
+	reg := registry.NewBookRegistry(f, mock.Editor{})
+	dirs := map[string]fs.Dir{
+		"books":     views.NewAllBooksDir(reg),
+		"by-author": views.NewByAuthorDir(reg),
+	}
+	return f, inbox.NewInboxDir(f, ingest, reg.Add), dirs
+}
+
+// The clunk is the transaction boundary.
+func upload(t *testing.T, f *fs.FS, inboxDir fs.Dir, name string, data []byte) error {
+	t.Helper()
+	file, err := vfile.DispatchCreate(f, inboxDir, "glenda", name, 0644, 0)
+	if err != nil {
+		t.Fatalf("create %s: %v", name, err)
+	}
+	fid := fstest.Fid(t, file, 1)
+	fid.Open(proto.Mode(0))
+	fid.Write(0, string(data))
+	return fid.CloseErr()
 }

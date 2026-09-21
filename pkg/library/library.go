@@ -22,12 +22,13 @@ import (
 // them agreeing. Construct it with Open.
 //
 // Concurrency contract: methods are safe for concurrent use. Search returns
-// *Book values that are immutable snapshots; the library never mutates a
-// Book after returning it. Every other operation addresses a book by id and
-// resolves its current state fresh, so callers never pass stale snapshots back
-// in: Content opens the book's live on-disk file, and mutations (Edit, Delete)
-// run as an atomic read-modify-write per book under a per-book lock, so callers
-// cannot revert other callers' changes.
+// *Book values that are immutable snapshots, and the library never mutates a
+// Book after returning it.
+//
+// Every other operation addresses a book by id and resolves its current state
+// fresh, so callers never pass stale snapshots back in. Content opens the
+// book's live on-disk file. Edit and Delete run as an atomic read-modify-write
+// per book under a per-book lock, so callers cannot revert each other.
 type Library struct {
 	store     *store.Store
 	index     *index.Index
@@ -35,11 +36,12 @@ type Library struct {
 
 	// Exporters that own resources (the kepub cache and its warmer), collected
 	// as they are handed out; releasing them is the library's job (see Exporter).
-	closers  []io.Closer
-	closerMu sync.Mutex
+	//
 	// ponytail: two readers with identical config each get their own exporter.
 	// Key a map on the ReaderConfig fields only if a deployment ever has enough
 	// readers for the duplication to cost anything.
+	closers  []io.Closer
+	closerMu sync.Mutex
 
 	// bookMu serializes the operations that mutate one book's on-disk state
 	// (Edit, Delete), so e.g. a cover rewrite cannot interleave with an edit
@@ -83,14 +85,12 @@ func (l *Library) Search(q Query) ([]*Book, error) {
 	return result, nil
 }
 
-// Stats returns aggregate library statistics.
 func (l *Library) Stats() (*Stats, error) {
 	return l.index.Stats()
 }
 
-// Get returns the book with the given id, or an error wrapping ErrBookNotFound
-// when the index does not hold it. The returned Book is an immutable snapshot;
-// see the concurrency contract on Library.
+// Get wraps ErrBookNotFound when the index does not hold the book. The Book it
+// returns is an immutable snapshot; see the concurrency contract on Library.
 func (l *Library) Get(id int64) (*Book, error) {
 	b, err := l.get(id)
 	if err != nil {
@@ -99,9 +99,8 @@ func (l *Library) Get(id int64) (*Book, error) {
 	return book.NewImmutableBook(b), nil
 }
 
-// get returns the current state of book id from the index, hydrated with its
-// absolute epub path. Mutations fetch their base through it under the per-book
-// lock, so they always operate on the book's authoritative current state.
+// get is where a mutation fetches its base, under the per-book lock, so it
+// operates on the book's authoritative current state.
 func (l *Library) get(id int64) (*book.Book, error) {
 	b, err := l.index.Get(id)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -113,8 +112,7 @@ func (l *Library) get(id int64) (*book.Book, error) {
 	return b, nil
 }
 
-// Content returns an open handle to the book's epub content. The caller must
-// close it.
+// Content hands back an open handle, which the caller closes.
 func (l *Library) Content(id int64) (EpubReader, error) {
 	b, err := l.get(id)
 	if err != nil {
@@ -123,11 +121,8 @@ func (l *Library) Content(id int64) (EpubReader, error) {
 	return epub.OpenReader(l.store.AbsPath(b.EpubPath), b.CoverPath)
 }
 
-// Edit applies edits to the book with the given id, persists everything, and
-// returns the updated book. The edit base is the book's current state, fetched
-// under the per-book lock as an atomic read-modify-write, so concurrent callers
-// cannot revert each other's changes by editing from stale snapshots. If the
-// title or authors change, the book directory is moved.
+// Edit persists everything and returns the updated book. A change to the title
+// or the authors moves the book directory.
 func (l *Library) Edit(id int64, e Edits) (*Book, error) {
 	l.mutateMu.RLock()
 	defer l.mutateMu.RUnlock()
@@ -176,8 +171,7 @@ func (l *Library) Edit(id int64, e Edits) (*Book, error) {
 	return book.NewImmutableBook(updated), nil
 }
 
-// Delete removes the book with the given id from the store and the index,
-// resolving its current location under the per-book lock.
+// Delete removes the book from the store and the index.
 func (l *Library) Delete(id int64) error {
 	l.mutateMu.RLock()
 	defer l.mutateMu.RUnlock()
@@ -208,14 +202,12 @@ func (l *Library) Delete(id int64) error {
 	return nil
 }
 
-// applyMeta returns a copy of m with the meta edits in e applied and the
-// modified time stamped. Fields left nil in e are untouched. Edit derives the
-// Bib fields from the epub re-parse instead.
+// applyMeta stamps the modified time and leaves a nil field untouched. Edit
+// derives the Bib fields from the epub re-parse instead.
 //
 // The result shares nothing with its arguments. Taking m by value covers the
-// scalars, but Tags is a slice and would alias the caller's Meta or the caller's
-// Edits, both of which the caller still holds. The result travels on to the
-// sidecar write and the index, so Tags is cloned here.
+// scalars, but Tags would alias the caller's Meta or Edits, both of which it
+// still holds, and the result travels on to the sidecar write and the index.
 func applyMeta(m book.Meta, e Edits) book.Meta {
 	if e.Status != nil {
 		m.Status = *e.Status

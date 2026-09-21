@@ -110,13 +110,9 @@ var fields = map[string]field{
 	},
 }
 
-// formatIdentifiers renders the identifier map as "scheme=value" lines, sorted
-// by scheme because a map has no order and a file that shuffles between reads is
-// no use to a diff or a script. Read-only, so nothing parses this back.
-//
-// The schemes are sorted, not the rendered lines: "=" sorts after "-", so a line
-// sort puts isbn-a before isbn and orders the file by something no reader would
-// guess. Both schemes come out of one ONIX code list, so the pair is reachable.
+// formatIdentifiers renders the identifier map as sorted "scheme=value" lines.
+// Read-only, so nothing parses this back.
+// Sorted by scheme: sorting lines puts the ONIX scheme isbn-a before isbn.
 func formatIdentifiers(ids map[string]string) string {
 	schemes := make([]string, 0, len(ids))
 	for scheme := range ids {

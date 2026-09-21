@@ -1,4 +1,4 @@
-// Concurrency, which spans impl.go's Edit and ingest.go's ingest path and so
+// Concurrency, which spans library.go's Edit and ingest.go's ingest path and so
 // pairs with neither. Two races are pinned: a cover write racing a metadata
 // edit on one book, and two simultaneous ingests of the same new book, where
 // exactly one must win and the other must see ErrDuplicate.

@@ -1,7 +1,6 @@
-// Package textfmt parses the textual formats the 9p surface exposes to users:
-// the line formats of writable field files and the argument formats of ctl
-// commands. They are frontend syntax: the library never reads or writes them,
-// so they do not belong in the library package alongside the types they produce.
+// Package textfmt parses the textual formats the 9P surface exposes: the line
+// formats of writable field files and the argument formats of ctl commands.
+// Frontend syntax, which is why it does not live beside the types it produces.
 package textfmt
 
 import (
@@ -10,11 +9,9 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// ParseAuthor parses a single author spec in "Name | Sort" form, the format
-// used by the authors field file and the ctl rename-author command. The sort
-// name is optional; when the "|" or its right side is absent or blank, SortName
-// is left empty. Both halves are trimmed. A blank Name (empty or "| Sort") is
-// returned as-is for the caller to reject, so this stays a pure parse.
+// ParseAuthor parses an author spec in "Name | Sort" form, used by the authors
+// field file and by ctl rename-author. A blank Name comes back as-is for the
+// caller to reject, so this stays a pure parse.
 func ParseAuthor(spec string) library.Author {
 	name, sortName, _ := strings.Cut(spec, "|")
 	return library.Author{Name: strings.TrimSpace(name), SortName: strings.TrimSpace(sortName)}

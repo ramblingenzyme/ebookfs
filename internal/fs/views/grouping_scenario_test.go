@@ -27,33 +27,19 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 )
 
-// groupingView describes a directory that files books into subdirectories keyed
-// by some property of the book (author, series, tag, status). The four differ
-// only in which property they read and how many values it can hold, so the
-// behaviour they share (a group appears with its first book, is pruned with its
-// last, and follows the book when the property changes) is asserted once here.
+// groupingView is one by-x view, described well enough to drive the table
+// above against it.
 type groupingView struct {
 	name   string
 	newDir func(*registry.BookRegistry) fs.Dir
-	// withKeys returns a book this view files under each of keys. A view whose
-	// property holds a single value is never handed more than one.
+	// withKeys is never handed more than one key for a single-valued property.
 	withKeys func(id int64, title string, keys ...string) *library.Book
-	// keyless returns a book the view files nowhere, or nil for a property
-	// every book carries.
+	// keyless is nil for a property every book carries.
 	keyless func(id int64, title string) *library.Book
-	// entryName is the name a book appears under inside its group; nil means
-	// the title unchanged.
+	// entryName is nil when a book appears under its title unchanged.
 	entryName func(id int64, title string) string
 	// multiKey reports whether the property can hold more than one value.
 	multiKey bool
-}
-
-// entry is the name title appears under inside one of v's groups.
-func (v groupingView) entry(id int64, title string) string {
-	if v.entryName == nil {
-		return title
-	}
-	return v.entryName(id, title)
 }
 
 var groupingViews = []groupingView{
@@ -107,31 +93,6 @@ var groupingViews = []groupingView{
 		},
 		// Every book carries a status, so there is no keyless case.
 	},
-}
-
-// groupEntries returns the entries filed under the group directory named key,
-// and whether that group exists at all.
-func groupEntries(t *testing.T, d fs.Dir, key string) ([]string, bool) {
-	t.Helper()
-	child, ok := d.Children()[key]
-	if !ok {
-		return nil, false
-	}
-	group, ok := child.(fs.Dir)
-	if !ok {
-		t.Fatalf("group %q is a %T, want a directory", key, child)
-	}
-	return fstest.ChildNames(group), true
-}
-
-// mustGroupEntries is groupEntries where a missing group fails the test.
-func mustGroupEntries(t *testing.T, d fs.Dir, key string) []string {
-	t.Helper()
-	names, ok := groupEntries(t, d, key)
-	if !ok {
-		t.Fatalf("no %q group; view holds %v", key, fstest.ChildNames(d))
-	}
-	return names
 }
 
 // A group directory name cannot contain a path separator. Author, series and
@@ -302,4 +263,33 @@ func TestGroupingViews(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (v groupingView) entry(id int64, title string) string {
+	if v.entryName == nil {
+		return title
+	}
+	return v.entryName(id, title)
+}
+
+func groupEntries(t *testing.T, d fs.Dir, key string) ([]string, bool) {
+	t.Helper()
+	child, ok := d.Children()[key]
+	if !ok {
+		return nil, false
+	}
+	group, ok := child.(fs.Dir)
+	if !ok {
+		t.Fatalf("group %q is a %T, want a directory", key, child)
+	}
+	return fstest.ChildNames(group), true
+}
+
+func mustGroupEntries(t *testing.T, d fs.Dir, key string) []string {
+	t.Helper()
+	names, ok := groupEntries(t, d, key)
+	if !ok {
+		t.Fatalf("no %q group; view holds %v", key, fstest.ChildNames(d))
+	}
+	return names
 }

@@ -36,8 +36,8 @@ func detach(e *etree.Element) {
 // none. Uniqueness is checked against every id in the document, not just those
 // of the same kind: XML 1.0 §3.3.1 makes ID values unique document-wide.
 //
-// stem is a name to build an id from, not a prefix in either sense the rest of
-// this package uses the word: not an xmlns: prefix, not a vocabulary prefix.
+// stem is a name to build an id from, in neither sense this package uses the
+// word prefix: not xmlns:, not vocabulary.
 //
 // ponytail: rescans per call, O(n²) over a document holding tens of elements.
 // Thread a set through the callers only if a profile ever says to.

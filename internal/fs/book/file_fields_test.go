@@ -20,10 +20,6 @@ func TestFieldFileRead(t *testing.T) {
 	}
 }
 
-// Read clamping, past-end, and unopened-fid behavior come from the embedded
-// snapshotFile, whose base test owns them. The reads kept here exercise
-// fieldFile's own load wrapping (the trailing "\n").
-
 func TestFieldFileReadEmpty(t *testing.T) {
 	ff := newFieldFile(testFieldFileStat(t, 0444), func() string { return "" }, nil)
 

@@ -15,9 +15,9 @@ import (
 
 var makeBook = util.MakeMutableBook
 
-// The status filter runs over both renditions. They carry separate copies of the
-// same one-line rule, and it decides what a reader mount can see, so a
-// divergence between them is a mount quietly serving the wrong set of books.
+// The status filter runs over both renditions, which reach it by embedding
+// readerPolicy. An exporter that grew its own Includes instead would serve a
+// reader mount the wrong set of books.
 func TestExporterIncludes(t *testing.T) {
 	tests := []struct {
 		name     string

@@ -6,7 +6,6 @@ import (
 	"strings"
 )
 
-// bookQuery represents a parameterized book query. WHERE clauses are AND'd together.
 type bookQuery struct {
 	where []string
 	args  []any
@@ -43,10 +42,9 @@ func placeholders(n int) string {
 	return strings.TrimSuffix(strings.Repeat("?,", n), ",")
 }
 
-// addIn appends an IN-list condition to bq. Each %s verb in expr takes the
-// placeholder list, and vals are bound once per verb, so one value set can be
-// tested against two columns (name OR sort_name) without the caller assembling
-// the arguments twice. Empty vals is a no-op, so callers need no length check.
+// addIn binds vals once per %s verb in expr, so one value set can be tested
+// against two columns (name OR sort_name) without the caller assembling the
+// arguments twice. Empty vals is a no-op, so callers need no length check.
 func addIn[T any](bq *bookQuery, expr string, vals []T) {
 	if len(vals) == 0 {
 		return

@@ -4,17 +4,12 @@ package drift
 
 import "time"
 
-// PathInfo carries the on-disk state of one book's files, observed with a single
-// stat per file. Size accompanies the mtimes because mtime alone cannot detect a
-// change made within the same clock tick as the recorded one. Filesystems that
-// stamp mtimes from the kernel's coarse clock (tmpfs among them) hand out
-// identical nanosecond values for writes in the same tick.
+// Size is there because two writes in one clock tick share an mtime, as they
+// do on tmpfs.
 //
-// The zero PathInfo is the "unobserved" state, recorded for a book directory
-// whose files could not be stat'd. It is a definite value rather than an absent
-// one, so both sides of drift detection record "looked, could not see it" and
-// agree with each other across restarts. Otherwise one unreadable book
-// means a full reindex on every startup, forever.
+// The zero PathInfo means "stat'd, could not see it", recorded for a book
+// directory whose files did not stat. Without a definite value for that, one
+// unreadable book means a full reindex on every startup.
 type PathInfo struct {
 	Size      int64 // epub size, from the same stat as EpubMtime
 	EpubMtime time.Time
@@ -22,14 +17,12 @@ type PathInfo struct {
 	MetaMtime time.Time
 }
 
-// IsUnobserved reports whether p records a failed observation rather than a
-// real one. No stat of an existing file yields two zero mtimes.
+// No stat of an existing file yields two zero mtimes.
 func (p PathInfo) IsUnobserved() bool {
 	return p.EpubMtime.IsZero() && p.MetaMtime.IsZero()
 }
 
-// Equal reports whether two observations describe the same on-disk state. The
-// times need Time.Equal rather than ==, which also compares location and
+// Equal uses Time.Equal rather than ==, which also compares location and
 // monotonic reading.
 func (p PathInfo) Equal(o PathInfo) bool {
 	return p.Size == o.Size && p.MetaSize == o.MetaSize &&

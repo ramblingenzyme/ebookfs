@@ -21,8 +21,6 @@ func newFS(t *testing.T) *fs.FS {
 	return f
 }
 
-// staticFile returns a file holding data, addressed the way the served tree
-// addresses one.
 func staticFile(t *testing.T, name, data string) *fs.StaticFile {
 	t.Helper()
 	f := newFS(t)
@@ -49,8 +47,7 @@ func TestReadReturnsTheContent(t *testing.T) {
 	}
 }
 
-// Two handles on one file address it independently. Tests that exist to prove
-// per-fid isolation depend on this.
+// Tests that exist to prove per-fid isolation depend on this.
 func TestTwoFidsAreIndependent(t *testing.T) {
 	f := staticFile(t, "x", "hello")
 
@@ -64,8 +61,8 @@ func TestTwoFidsAreIndependent(t *testing.T) {
 	}
 }
 
-// fidFile reads only on a fid that is open, which is how every file in this
-// tree behaves and how go9p's StaticFile does not.
+// fidFile reads only on a fid that is open, as every file in the served tree
+// does. go9p's StaticFile reads on any fid, so it cannot stand in here.
 type fidFile struct {
 	fs.File
 	open     map[uint64]bool
@@ -89,8 +86,6 @@ func (f *fidFile) Close(fid uint64) error {
 	return f.closeErr
 }
 
-// CloseErr hands the clunk error back rather than failing the test, which is
-// what a pass-through helper and a goroutine both need.
 func TestCloseErrReturnsTheError(t *testing.T) {
 	want := errors.New("commit rejected")
 	f := &fidFile{File: staticFile(t, "x", "hello"), open: map[uint64]bool{}, closeErr: want}
@@ -131,9 +126,8 @@ func TestChildAssertions(t *testing.T) {
 	fstest.ChildCount(t, d, 1)
 }
 
-// The type argument resolves in the calling package, which is how this reaches
-// types fstest cannot name. Here it is an exported one; the views tests use it
-// on their own unexported directory types.
+// Here the type argument is an exported one. The views tests use it on their
+// own unexported directory types.
 func TestChildAsAssertsTheType(t *testing.T) {
 	d := staticDir(t, "leaf")
 

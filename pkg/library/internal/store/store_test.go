@@ -9,13 +9,11 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
-// Regression test for a production bug: a book ingested before FAT sanitization
-// was consistently applied can have an on-disk epub filename containing
-// FAT-illegal characters (e.g. ':'), while its directory path (built from the
-// raw, unsanitized title) still matches what Layout() recomputes. Move must
-// treat this as an in-place filename rename, not a directory move: the
-// "destination" directory is the book's own current one, so the old
-// "destination already exists" check falsely tripped on every such edit.
+// A book ingested before FAT sanitization was applied consistently carries an
+// epub filename with FAT-illegal characters such as ':', while its directory
+// still matches what Layout recomputes. Move then has a destination directory
+// that is the book's own, so a check for an existing destination trips on
+// every edit to such a book.
 func TestMoveSameDirectoryRenamesFilename(t *testing.T) {
 	s, root := newStore(t)
 
@@ -42,10 +40,8 @@ func TestMoveSameDirectoryRenamesFilename(t *testing.T) {
 	}
 }
 
-// Regression test for a live production issue: after moving a book to a new
-// author directory (e.g. a title/author edit), the old author directory was left
-// behind once it held no other books. Move must clean it up the same way Delete
-// already does for its parent.
+// An author edit moves the book to a new author directory. Move removes the
+// old one once it holds no other books, as Delete does for its parent.
 func TestMoveCleansUpEmptyOldAuthorDir(t *testing.T) {
 	s, root := newStore(t)
 
@@ -67,8 +63,8 @@ func TestMoveCleansUpEmptyOldAuthorDir(t *testing.T) {
 	}
 }
 
-// Move's cleanup only removes the old author directory when it is actually
-// empty: sibling books by the same author must survive.
+// Move's cleanup removes the old author directory only when it is empty, so
+// sibling books by the same author survive.
 func TestMoveKeepsOldAuthorDirWithRemainingBooks(t *testing.T) {
 	s, root := newStore(t)
 
@@ -208,10 +204,10 @@ func TestDeleteWithReadOnlyDirError(t *testing.T) {
 
 // What Library.Edit gets from one Update call: the book lands at the new
 // location, the sidecar there carries the meta handed in, and the returned
-// observation describes the file at the new path. That last part is load-bearing,
-// since the observation goes straight into the index as the book's drift record;
-// one describing the pre-move file would make the next startup see drift that
-// is not there and rebuild the whole library.
+// observation describes the file at the new path. That observation goes
+// straight into the index as the book's drift record, so one describing the
+// pre-move file makes the next startup see drift that is not there and rebuild
+// the whole library.
 func TestUpdateMovesWritesAndObserves(t *testing.T) {
 	s, root := newStore(t)
 

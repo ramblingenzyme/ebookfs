@@ -16,9 +16,9 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/kepub"
 )
 
-// validateReaderConfig enforces ReaderConfig's invariants here rather than at
-// whatever boundary the caller read the values from, because the struct is
-// public and a caller may build one in Go.
+// validateReaderConfig runs here rather than at whatever boundary the caller
+// read the values from, since the struct is public and a caller may build one
+// in Go.
 func (l *Library) validateReaderConfig(cfg ReaderConfig) error {
 	if !cfg.Convert {
 		return nil
@@ -26,8 +26,7 @@ func (l *Library) validateReaderConfig(cfg ReaderConfig) error {
 	if cfg.CacheDir == "" {
 		return errors.New("reader config: cache dir is required when converting")
 	}
-	// A cache inside the library root is walked as if it held books, so the
-	// store would try to index converted kepubs.
+	// The store walk would otherwise index the converted kepubs as books.
 	root := filepath.Clean(l.store.Root())
 	dir := filepath.Clean(cfg.CacheDir)
 	if dir == root || strings.HasPrefix(dir, root+string(filepath.Separator)) {
@@ -49,9 +48,8 @@ func newExporter(cfg ReaderConfig, lib *Library) (Exporter, error) {
 	return epubExporter{readerPolicy: readerPolicy{statuses: cfg.Statuses}, lib: lib}, nil
 }
 
-// readerPolicy is the half of Exporter that decides *what* the reader view
-// shows and how it groups, independent of the rendition served. Both exporters
-// embed it so the rule has one definition rather than a copy each.
+// readerPolicy is the half of Exporter that decides what the reader view shows
+// and how it groups, independent of the rendition served.
 type readerPolicy struct {
 	statuses []string
 }
@@ -64,8 +62,8 @@ func (p readerPolicy) Dirname(b *Book) string {
 	return naming.ForFAT(book.JoinAuthors(b.Authors(), book.AuthorSep))
 }
 
-// kepubCache serves converted kepubs. Close/Open/Size/Warm/Filename are the
-// embedded cache's own methods.
+// kepubCache unwraps the Book for each method the cache takes a *book.Book
+// for. Close is the embedded cache's own.
 type kepubCache struct {
 	readerPolicy
 	*kepub.Cache

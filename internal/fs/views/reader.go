@@ -8,16 +8,14 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// readerDir is the reader/ export view: the books whose status is in the
-// configured set, grouped by author, served through the injected Exporter. It
-// mirrors byAuthorDir, but its leaves are export files rather than bookDirs and
-// it files each book under a single folder named for all its authors, so a
-// co-authored book is exported once, not duplicated under each author.
+// readerDir is the reader/ export view: books whose status is in the configured
+// set, served through the Exporter. Its leaves are export files rather than
+// bookDirs, and each book sits under one folder named for all its authors, so a
+// co-authored book is exported once.
 type readerDir struct {
 	groupingDir
-	// library.Exporter rather than a narrowed interface: the view uses four of
-	// its six methods and hands the other two to the ReaderFile it builds, so a
-	// declaration here would restate the whole contract under a second name.
+	// Not narrowed: the view uses four of the six and hands the rest to the
+	// ReaderFile it builds, so a local interface would restate the contract.
 	exp library.Exporter
 }
 
@@ -30,7 +28,6 @@ func NewReaderDir(reg *registry.BookRegistry, exp library.Exporter) *readerDir {
 	return d
 }
 
-// authorDir returns the subdir for an author name, creating it on first use.
 func (d *readerDir) authorDir(name string) fs.ModDir {
 	return d.childDir(name, func(s *proto.Stat) fs.FSNode { return fs.NewStaticDir(s) }).(fs.ModDir)
 }

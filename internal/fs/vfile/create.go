@@ -13,8 +13,6 @@ type Creator interface {
 	Create(f *fs.FS, name string, perm uint32, mode uint8) (fs.File, error)
 }
 
-// DispatchCreate is the fs.FS.CreateFile handler: it delegates to the parent
-// directory when it implements Creator and rejects the create otherwise.
 func DispatchCreate(f *fs.FS, parent fs.Dir, _, name string, perm uint32, mode uint8) (fs.File, error) {
 	c, ok := parent.(Creator)
 	if !ok {

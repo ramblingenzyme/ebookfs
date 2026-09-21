@@ -16,26 +16,20 @@ import (
 //go:embed schema.sql
 var schema string
 
-// Index is a SQLite-backed cache of the library. It is derived from the
-// filesystem and can be fully rebuilt via Reindex.
-//
-// Two database connections are held in WAL mode: one writer (db) and one
-// reader (readDB). Reads are routed through the reader connection so they
-// never block each other or contend with the single writer slot.
+// Index holds two connections in WAL mode, so a read neither blocks another
+// read nor contends for the single writer slot.
 type Index struct {
-	db      *sql.DB         // writer connection (single writer with SetMaxOpenConns(1))
-	wq      *dbsqlc.Queries // writer queries wrapping db (used by NextID, pending_ops)
-	readDB  *sql.DB         // reader connection (up to 4 concurrent readers)
-	queries *dbsqlc.Queries // reader queries wrapping readDB (used for all read-only queries)
+	db      *sql.DB         // writer, SetMaxOpenConns(1)
+	wq      *dbsqlc.Queries // writer queries; NextID and pending_ops
+	readDB  *sql.DB         // reader, up to 4 concurrent
+	queries *dbsqlc.Queries // reader queries; everything read-only
 	ctx     context.Context
 }
 
 const schemaVersion = 13
 
-// dsn returns a sqlite DSN for path with the given per-connection PRAGMAs
-// applied via _pragma query parameters.  Each pragma uses key(value) syntax
-// which modernc.org/sqlite translates to "PRAGMA key=value" on every new
-// connection the pool creates.
+// dsn spells each pragma as key(value), which modernc.org/sqlite turns into
+// "PRAGMA key=value" on every new connection the pool creates.
 func dsn(path string, pragmas ...string) string {
 	q := url.Values{}
 	for _, p := range pragmas {
@@ -69,7 +63,6 @@ func readerPragmas() []string {
 	}
 }
 
-// Open opens or creates the index at path.
 func Open(path string) (*Index, error) {
 	db, err := sql.Open("sqlite", dsn(path, writerPragmas()...))
 	if err != nil {
@@ -78,9 +71,6 @@ func Open(path string) (*Index, error) {
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 
-	// Open a second connection pool for reads.  WAL mode allows concurrent
-	// readers without blocking writers, so read queries never contend with
-	// each other or stall behind a write in progress.
 	readDB, err := sql.Open("sqlite", dsn(path, readerPragmas()...))
 	if err != nil {
 		db.Close()
@@ -150,15 +140,13 @@ func (idx *Index) dropAllTables() error {
 }
 
 func (idx *Index) Close() error {
-	// Let SQLite analyze schema usage and update planner statistics before
-	// closing, which improves long-term query plans.
+	// Updates the planner statistics, which improves long-term query plans.
 	_, _ = idx.db.ExecContext(idx.ctx, "PRAGMA optimize")
 	idx.readDB.Close()
 	return idx.db.Close()
 }
 
-// NextID reserves and returns a new unique book ID. Must be called before
-// Put so the id is available for canonical path construction.
+// NextID runs before Put, which needs the id to build the canonical path.
 func (idx *Index) NextID() (int64, error) {
 	return idx.wq.NextBookID(idx.ctx)
 }
@@ -169,9 +157,8 @@ func newOpID() string {
 	return hex.EncodeToString(b[:])
 }
 
-// withTx runs fn inside a SQLite transaction, committing on success and
-// rolling back on error. fn gets the raw transaction as well as the queries
-// handle for rebuildTx, whose table-by-table DELETE has no generated query.
+// withTx hands fn the raw transaction as well as the queries handle, for
+// rebuildTx, whose table-by-table DELETE has no generated query.
 func (idx *Index) withTx(fn func(*dbsqlc.Queries, *sql.Tx) error) error {
 	tx, err := idx.db.Begin()
 	if err != nil {

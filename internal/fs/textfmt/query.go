@@ -8,16 +8,13 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// ParseQuery parses a Plan 9 clone-style query string into a library.Query. It
-// backs both the search view's clone-file queries and ctl's id-spec argument,
-// so the two surfaces share one syntax. The grammar is:
+// ParseQuery parses "term1+term2+..." where each term is prefix:value. It
+// backs both the search view's clone file and ctl's id-spec, so the two
+// surfaces share one syntax.
 //
-//	term1+term2+...
-//
-// where each term is prefix:value. Supported prefixes: author, tag, series,
-// status, id, title. Values sharing a prefix are OR'd within the field;
-// different prefixes are AND'd across fields. author matches an author's
-// display name or sort name, as Index.Search does.
+// Values sharing a prefix are OR'd within the field, different prefixes AND'd
+// across fields. author matches a display name or a sort name, as
+// Index.Search does.
 func ParseQuery(query string) (library.Query, error) {
 	parts := strings.Split(query, "+")
 	var q library.Query

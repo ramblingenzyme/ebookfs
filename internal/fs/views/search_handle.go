@@ -19,7 +19,6 @@ import (
 // are allocated and reclaimed; a handle reaches back there once, to remove
 // itself on close.
 
-// searchHandleDir is a per-handle directory containing ctl and results/.
 type searchHandleDir struct {
 	*fs.StaticDir
 	id      int64
@@ -59,15 +58,14 @@ func (h *searchHandleDir) close() {
 	h.search.removeHandle(h.id)
 }
 
-// currentQueryText returns the last committed query string, for ctl reads.
 func (h *searchHandleDir) currentQueryText() string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.queryText
 }
 
-// lastQuery returns when the handle last executed a query (or was created),
-// for the cleanup worker's TTL and eviction ordering.
+// lastQuery feeds the cleanup worker's TTL and eviction ordering. A handle
+// that has run no query reports when it was created.
 func (h *searchHandleDir) lastQuery() time.Time {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -75,10 +73,9 @@ func (h *searchHandleDir) lastQuery() time.Time {
 }
 
 // executeSearch swaps the handle's predicate and rebuilds results/ through the
-// registry's ResyncView, so the filter swap, the clear, and the repopulation
-// are one atomic step serialized against registry Add/Remove/commit, with no
-// membership window where events are evaluated against the wrong query, and no
-// unlocked mutation of the results listing.
+// registry's ResyncView. The swap, the clear and the repopulation are one step,
+// serialized against registry Add/Remove/commit. No window leaves an event
+// evaluated against the wrong query, and nothing mutates the listing unlocked.
 func (h *searchHandleDir) executeSearch(q library.Query, queryText string) {
 	h.mu.Lock()
 	h.queryText = queryText
@@ -94,9 +91,7 @@ func (h *searchHandleDir) executeSearch(q library.Query, queryText string) {
 	})
 }
 
-// searchCtlFile accepts query writes and the "close" command. Writing a query
-// executes the search and populates the results directory. Writing "close"
-// tears down the handle.
+// searchCtlFile takes a query, or "close" to tear the handle down.
 type searchCtlFile struct {
 	vfile.SnapshotFile
 	writes vfile.WriteBuffer
@@ -135,9 +130,8 @@ func (f *searchCtlFile) Close(fid uint64) error {
 	return nil
 }
 
-// searchResultsDir is a live book listing that evaluates membership against a
-// query. It implements registry.BookView so books added/edited/deleted through
-// the registry are reflected in real time.
+// searchResultsDir is a bookListDir filtered by a predicate. It is a
+// registry.BookView, so a book edited or deleted anywhere shows here at once.
 type searchResultsDir struct {
 	*bookListDir
 	mu        sync.RWMutex

@@ -9,9 +9,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index/dbsqlc"
 )
 
-// NeedsReindex reports whether the index must be rebuilt, true when the
-// schema version is stale or there are pending operations that may not have
-// completed.
 func (idx *Index) NeedsReindex() (bool, error) {
 	v, err := idx.getSchemaVersion()
 	if err != nil {
@@ -28,18 +25,16 @@ func (idx *Index) NeedsReindex() (bool, error) {
 	return count > 0, nil
 }
 
-// BookPath pairs a book with its on-disk file state. Rebuild takes the two
-// together rather than as a book slice plus a lookup table so that indexing a
-// book without its drift bookkeeping is not representable; see drift.PathInfo
-// for why a zero value there is not benign.
+// BookPath keeps the two together rather than letting Rebuild take a book
+// slice plus a lookup table, so indexing a book without its drift bookkeeping
+// is not representable. drift.PathInfo says what a zero value costs.
 type BookPath struct {
 	Book *book.Book
 	Info drift.PathInfo
 }
 
-// ensureSchema drops and recreates every table when the stored schema version
-// differs from schemaVersion, discarding the index. Safe because the index is
-// derived from the filesystem (DECISIONS.md #2); the caller rebuilds it.
+// ensureSchema discards the index, which is safe because it is derived from
+// the filesystem (DECISIONS.md #2) and the caller rebuilds it.
 func (idx *Index) ensureSchema() error {
 	v, err := idx.getSchemaVersion()
 	if err != nil {
@@ -100,11 +95,9 @@ func (idx *Index) rebuildTx(books []BookPath, skipped map[string]drift.PathInfo,
 	})
 }
 
-// Rebuild replaces the entire index with books, dropping and recreating tables
-// if the schema is stale. maxID advances the id sequence past all reindexed ids.
-// skipped maps the library path of each directory that could not be indexed to
-// the file state it had; they are recorded rather than forgotten so AllPathInfo
-// can report every path the rebuild accounted for.
+// Rebuild records each directory it could not index in skipped, rather than
+// forgetting it, so AllPathInfo can report every path the rebuild accounted
+// for. maxID advances the id sequence past every reindexed id.
 func (idx *Index) Rebuild(books []BookPath, skipped map[string]drift.PathInfo, maxID int64) error {
 	if err := idx.ensureSchema(); err != nil {
 		return err
@@ -118,10 +111,9 @@ func (idx *Index) Rebuild(books []BookPath, skipped map[string]drift.PathInfo, m
 		return err
 	}
 
-	// Build query planner statistics so JOIN-heavy queries (every listing,
-	// search, browse view) don't make catastrophically bad plan choices.
-	// Without this ANALYZE, a 4000-row query went from 0.05s → 5s in one
-	// published report (jvns.ca). Runs only on rebuild.
+	// Every listing, search and browse view is JOIN-heavy, and without these
+	// planner statistics one published report (jvns.ca) had a 4000-row query
+	// go from 0.05s to 5s.
 	if _, err := idx.db.ExecContext(idx.ctx, "ANALYZE"); err != nil {
 		return fmt.Errorf("analyzing: %w", err)
 	}

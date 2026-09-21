@@ -8,15 +8,13 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
-// newStore returns a Store rooted at a fresh temp dir, plus that root.
 func newStore(t *testing.T) (*Store, string) {
 	t.Helper()
 	root := t.TempDir()
 	return New(root), root
 }
 
-// writeBook materializes an on-disk book directory under root/libPath: the epub
-// (skipped when epubName is empty) and a meta.toml (skipped when meta is nil).
+// writeBook skips the epub on an empty epubName and the sidecar on a nil meta.
 func writeBook(t *testing.T, root, libPath, epubName, content string, meta *book.Meta) {
 	t.Helper()
 	dir := filepath.Join(root, libPath)

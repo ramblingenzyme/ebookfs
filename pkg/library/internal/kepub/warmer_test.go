@@ -13,8 +13,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 )
 
-// The hint reaches a conversion at all. Cache.Warm is the whole public surface
-// of this file.
+// The hint reaches a conversion at all.
 func TestCacheWarmProducesFile(t *testing.T) {
 	c, dir := newTestCache(t, "warm-content")
 
@@ -32,8 +31,7 @@ func TestCacheWarmProducesFile(t *testing.T) {
 	}
 }
 
-// The pool warms more than one queued book. Driven through the cache, since
-// the warmer's only conversion path is Cache.Ensure.
+// Driven through the cache, since the warmer's only conversion path is Ensure.
 func TestWarmerWarmsMultipleBooks(t *testing.T) {
 	c, dir := newTestCache(t, "warm-content")
 
@@ -53,7 +51,6 @@ func TestWarmerWarmsMultipleBooks(t *testing.T) {
 	}
 }
 
-// A failed conversion must not take the warmer goroutine down with it.
 func TestWarmerErrorDoesNotPanic(t *testing.T) {
 	c, _ := newTestCache(t, "unused")
 	done := make(chan struct{})
@@ -73,9 +70,7 @@ func TestWarmerErrorDoesNotPanic(t *testing.T) {
 	}
 }
 
-// Warm after Close must be a no-op rather than a panic: the 9P server can call
-// it while the cache is being torn down. Nothing closes the queue, so the hint
-// is sent and simply never received.
+// The 9P server can call Warm while the cache is being torn down.
 func TestWarmAfterCloseDoesNotConvert(t *testing.T) {
 	c, dir := newTestCache(t, "warm-content")
 	var converted atomic.Bool
@@ -91,8 +86,7 @@ func TestWarmAfterCloseDoesNotConvert(t *testing.T) {
 	b.EpubSize = 9
 	c.Warm(b)
 
-	// A negative with nothing to wait on: give the stopped pool a window in
-	// which it would have converted.
+	// A negative with nothing to wait on, so give the stopped pool a window.
 	time.Sleep(50 * time.Millisecond)
 	if converted.Load() {
 		t.Error("Warm after Close reached the converter")
@@ -102,9 +96,7 @@ func TestWarmAfterCloseDoesNotConvert(t *testing.T) {
 	}
 }
 
-// Warm called concurrently with Close must never panic. This is the regression
-// guard on the queue's never-closed contract: closing it would panic these
-// senders. Run under -race.
+// The regression guard on warmer.ch never being closed. Run under -race.
 func TestWarmConcurrentWithCloseNoPanic(t *testing.T) {
 	c, _ := newTestCache(t, "warm-content")
 
@@ -122,8 +114,7 @@ func TestWarmConcurrentWithCloseNoPanic(t *testing.T) {
 	wg.Wait()
 }
 
-// waitForWarm polls f, since a warm completes on a goroutine with nothing to
-// join: Close is not a drain point.
+// waitForWarm polls because a warm completes on a goroutine with nothing to join.
 func waitForWarm(t *testing.T, f func() bool) bool {
 	t.Helper()
 	deadline := time.After(3 * time.Second)

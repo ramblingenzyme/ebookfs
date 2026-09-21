@@ -24,8 +24,8 @@ type Author = book.Author
 type Series = book.SeriesRef
 type EpubReader = epub.EpubReader
 
-// StatusList renders the reading-status vocabulary for a message an operator
-// reads, so a validation error and the ctl help name the same set.
+// StatusList renders the reading-status vocabulary, so a validation error and
+// the ctl help name the same set.
 var StatusList = book.StatusList
 
 const (
@@ -40,11 +40,10 @@ const (
 // It is the single swap point between serving the original epub and a converted
 // kepub: the Library returns the appropriate implementation based on config.
 //
-// Includes decides which books belong in the reader and Dirname decides how
-// they group. Both are policy, so they sit with the rendition methods here and
-// fs/views/reader.go only renders the result. Includes is a predicate rather
-// than an exposed status list, so the policy can change to tag-based or size
-// caps without touching the frontend.
+// Membership and grouping are policy, so they sit with the rendition methods
+// here and fs/views/reader.go only renders the result. Includes is a predicate
+// rather than an exposed status list, so the policy can change to tag-based or
+// size caps without touching the frontend.
 type Exporter interface {
 	// Open returns a handle to the book's export rendition, holding a snapshot
 	// as Book does. The returned reader is non-nil iff err is nil.

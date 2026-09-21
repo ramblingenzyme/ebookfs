@@ -62,15 +62,15 @@ func (f titleField) set(title, sort *string) {
 }
 
 // dropSegments removes every dc:title except keep, with its refinements. A
-// further dc:title is another segment of the same title (§5.5.3.1.2's multipart
-// example), so once the title is replaced they describe one the book no longer
-// has; §5.5.3.1.2 asks for "only a single dc:title element" regardless.
+// further dc:title is another segment of the same title (§5.5.3.1.2's
+// multipart example), describing one the book no longer has once the title is
+// replaced; §5.5.3.1.2 asks for "only a single dc:title element" regardless.
 //
 // It also stops the edit silently not taking: a reader honouring the deprecated
 // title-type refinement, as calibre does, shows the segment labelled "main",
 // which need not be the element written here.
 //
-// keep's own refinements stay. A title-type left alone on the last element is
+// keep's own refinements stay. A title-type left on the last element is
 // harmless, since both readings resolve to it.
 func (f titleField) dropSegments(keep *pkgdoc.Element) {
 	for _, el := range f.d.DCAll("title") {

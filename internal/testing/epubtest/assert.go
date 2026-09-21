@@ -1,7 +1,6 @@
 // Reading a result back: the entries of a written epub, and the elements of its
 // package document. Every helper here fails the test on a lookup that finds
-// nothing, and names what was there instead, since a failed lookup is most
-// often an element written under the wrong parent rather than one that vanished.
+// nothing, and names what was there instead.
 
 package epubtest
 
@@ -14,7 +13,6 @@ import (
 	"github.com/beevik/etree"
 )
 
-// Metadata returns the <metadata> element of the epub's package document.
 func Metadata(t *testing.T, path string) *etree.Element {
 	t.Helper()
 	doc := etree.NewDocument()
@@ -28,9 +26,7 @@ func Metadata(t *testing.T, path string) *etree.Element {
 	return md
 }
 
-// ReadEntryFromFile returns the entry's bytes and whether it was present.
-// ReadEntry is the same lookup for the common case where absence should fail
-// the test.
+// ReadEntryFromFile reports absence; ReadEntry fails the test on it.
 func ReadEntryFromFile(t *testing.T, path, name string) ([]byte, bool) {
 	t.Helper()
 	zrc, err := zip.OpenReader(path)
@@ -55,8 +51,6 @@ func ReadEntryFromFile(t *testing.T, path, name string) ([]byte, bool) {
 	return nil, false
 }
 
-// ReadEntry returns the entry's bytes, failing the test when it is absent.
-// ReadEntryFromFile is the same lookup for tests that need to assert on absence.
 func ReadEntry(t *testing.T, path, name string) []byte {
 	t.Helper()
 	b, ok := ReadEntryFromFile(t, path, name)
@@ -72,9 +66,9 @@ func ReadEntry(t *testing.T, path, name string) []byte {
 // half these tests turn on, so the difference is named here instead of respelled
 // at every assertion.
 //
-// Both fail when nothing matches, and both return a value rather than comparing
-// it: the caller's own message names the spec consequence, and "%v" on an
-// *etree.Element prints etree's struct rather than the value in question.
+// Both return a value rather than comparing it. The caller's own message names
+// the spec consequence, and "%v" on an *etree.Element prints etree's struct
+// rather than the value in question.
 func LegacyMeta(t *testing.T, root *etree.Element, path string) string {
 	t.Helper()
 	return AttrOf(t, root, path, "content")
@@ -85,8 +79,7 @@ func Property(t *testing.T, root *etree.Element, path string) string {
 	return elemAt(t, root, path).Text()
 }
 
-// AttrOf and TextOf are the same lookup for the elements that are not <meta>:
-// a dc element's text, or an attribute the spec puts somewhere else.
+// AttrOf and TextOf are the same lookup for the elements other than <meta>.
 func AttrOf(t *testing.T, root *etree.Element, path, attr string) string {
 	t.Helper()
 	return elemAt(t, root, path).SelectAttrValue(attr, "")
@@ -97,8 +90,6 @@ func TextOf(t *testing.T, root *etree.Element, path string) string {
 	return elemAt(t, root, path).Text()
 }
 
-// elemAt returns the one element path matches, failing the test when nothing
-// does.
 func elemAt(t *testing.T, root *etree.Element, path string) *etree.Element {
 	t.Helper()
 	el := root.FindElement(path)

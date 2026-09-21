@@ -1,7 +1,5 @@
-// Package registry holds the BookRegistry.
-//
-// The registry knows views only through the BookView interface and must never
-// import fs/views. Views therefore never see the snapshot swap, so a change to
+// Package registry holds the BookRegistry. It knows views only through the
+// BookView interface, so a view never sees the snapshot swap and a change to
 // presentation cannot reorder it.
 package registry
 
@@ -16,19 +14,17 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// Editor is the half of the library this package uses: the registry mutates a
-// book and re-renders its node from the result. The node it renders reads the
-// book's epub itself, which is why ContentReader is embedded rather than
-// declared separately here.
+// Editor is the half of the library this package uses. ContentReader is
+// embedded because the node it re-renders reads the book's epub itself.
 type Editor interface {
 	book.ContentReader
 	Edit(id int64, e library.Edits) (*library.Book, error)
 }
 
 // BookView is an FS listing that reacts to a book entering or leaving it. Add
-// and Remove read the book's CURRENT state, so the registry brackets every
-// mutation as Remove → mutate → Add: Remove sees the old grouping and name,
-// Add sees the new one. There is no "update"; the ordering carries that.
+// and Remove read the book's current state, so the registry brackets every
+// mutation as Remove, mutate, Add. There is no "update"; the ordering carries
+// it.
 type BookView interface {
 	Add(dir *book.BookDir)
 	Remove(dir *book.BookDir)
@@ -37,10 +33,9 @@ type BookView interface {
 // BookRegistry is the single authority on id → *book.BookDir and the
 // orchestrator of every change to the served tree.
 //
-// A BookDir is a stable identity: the map entry and any open fids survive an
-// edit. The book state inside it is an atomically swapped snapshot (see
-// book.BookDir), because 9P handlers read it from many goroutines without
-// taking r.mu.
+// A BookDir is a stable identity, so the map entry and any open fids survive
+// an edit. Its book is an atomically swapped snapshot, since 9P handlers read
+// it from many goroutines without taking r.mu.
 type BookRegistry struct {
 	mu    sync.RWMutex
 	books map[int64]*book.BookDir
@@ -61,17 +56,13 @@ func NewBookRegistry(f *fs.FS, lib Editor) *BookRegistry {
 	}
 }
 
-// FS returns the filesystem the tree is served from, so views can build stats
-// for the directories they create.
 func (r *BookRegistry) FS() *fs.FS { return r.f }
 
-// ResyncView atomically rebuilds v's membership: reset runs first (typically
-// clearing v and swapping its filter), then every registered book is offered to
-// v.Add, all under the registry lock so the rebuild is serialized against
-// Add/Remove/commit notifications. v decides membership inside its Add, so a
-// view that attached after books existed, or changed its filter, converges on
-// the registry's current state with no window for lost or stale entries. reset
-// must not call back into the registry or the library.
+// ResyncView rebuilds v's membership under the registry lock, so the rebuild
+// is serialized against Add/Remove/commit and leaves no window for a lost or
+// stale entry. v decides membership inside its own Add.
+//
+// reset must not call back into the registry or the library.
 func (r *BookRegistry) ResyncView(v BookView, reset func()) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -81,7 +72,6 @@ func (r *BookRegistry) ResyncView(v BookView, reset func()) {
 	}
 }
 
-// RemoveView unregisters v from receiving Add/Remove for every book.
 func (r *BookRegistry) RemoveView(v BookView) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -90,8 +80,7 @@ func (r *BookRegistry) RemoveView(v BookView) {
 	}
 }
 
-// AddView registers v to receive Add/Remove for every book. Register all views
-// before adding books.
+// AddView registers v. Register every view before adding any book.
 func (r *BookRegistry) AddView(v BookView) {
 	r.mu.Lock()
 	r.views = append(r.views, v)
@@ -107,11 +96,10 @@ func (r *BookRegistry) dirLocked(bk *library.Book) *book.BookDir {
 	return d
 }
 
-// commit brackets a snapshot swap with view removal and re-addition, so every
-// view drops the book from its old slot (reading the old snapshot) and re-files
-// it under the new one (reading the new snapshot). Callers hold r.mu and must
-// persist before calling, so a failed write never reaches the tree. This is the
-// shared primitive for meta and bib edits.
+// commit brackets a snapshot swap with view removal and re-addition, so a view
+// drops the book reading the old snapshot and re-files it reading the new one.
+// Callers hold r.mu and must have persisted first, so a failed write never
+// reaches the tree.
 func (r *BookRegistry) commit(dir *book.BookDir, updated *library.Book) {
 	for _, v := range r.views {
 		v.Remove(dir)
@@ -122,7 +110,6 @@ func (r *BookRegistry) commit(dir *book.BookDir, updated *library.Book) {
 	}
 }
 
-// Add registers a newly ingested book and files it into every view.
 func (r *BookRegistry) Add(book *library.Book) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -132,7 +119,6 @@ func (r *BookRegistry) Add(book *library.Book) {
 	}
 }
 
-// Remove drops a book from every view and forgets it.
 func (r *BookRegistry) Remove(id int64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -146,13 +132,12 @@ func (r *BookRegistry) Remove(id int64) {
 	delete(r.books, id)
 }
 
-// Edit persists edits to a book and commits the change so views rehome the
-// book if its grouping or name changed.
+// Edit persists edits and commits them, so a view rehomes the book when its
+// grouping or name changed.
 //
-// lib.Edit can rewrite the whole epub (seconds of disk I/O), so it must not
-// run under r.mu, which would queue every unrelated mutation behind it. The
-// per-book editMu keeps concurrent edits of the same book (and their commits)
-// in order; r.mu is only held for the lookup and the commit bracket.
+// lib.Edit can rewrite the whole epub, seconds of disk I/O, so it must not run
+// under r.mu. The per-book editMu keeps concurrent edits of one book and their
+// commits in order; r.mu is held only for the lookup and the commit bracket.
 func (r *BookRegistry) Edit(id int64, edits library.Edits) error {
 	mu := r.editMu.For(id)
 	mu.Lock()

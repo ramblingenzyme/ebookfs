@@ -1,7 +1,5 @@
-// Package fs is the composition root of the 9P frontend: it wires the registry,
-// views, and inbox subpackages onto a go9p filesystem and serves it. The
-// building blocks live in fs/vfile, fs/book, fs/registry, fs/views, and
-// fs/inbox; this package only assembles and starts them.
+// Package fs is the composition root of the 9P frontend. It assembles the
+// subpackages onto a go9p filesystem and serves it, and does nothing else.
 package fs
 
 import (
@@ -20,7 +18,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// Server wraps a go9p.Server with lifecycle management.
 type Server struct {
 	ebookfs  *fs.FS
 	root     *fs.StaticDir
@@ -28,26 +25,22 @@ type Server struct {
 	shutdown func() // closes frontend resources (search cleanup)
 }
 
-// Start begins serving the 9P filesystem on listen and blocks until
-// Shutdown is called or the listener fails. It should be called from
-// a background goroutine; the main goroutine handles signals.
+// Start blocks, so it runs in a goroutine and the main one takes signals.
 func (s *Server) Start(listen string) error {
 	slog.Info("serving 9P", "listen", listen)
 	return s.go9pSrv.Serve(listen)
 }
 
-// Shutdown triggers graceful shutdown: frontend resources are closed first,
-// then the 9P listener is closed and active connections are waited on with
-// a deadline from ctx.
+// Shutdown closes the listener and waits out active connections against ctx's
+// deadline, then releases the frontend's own resources.
 func (s *Server) Shutdown(ctx context.Context) error {
 	err := s.go9pSrv.Shutdown(ctx)
 	s.shutdown()
 	return err
 }
 
-// Library is what the frontend as a whole needs of the backend: the union of
-// what its parts declare, plus the one Search the root listing does. Nothing
-// here names *library.Library, so a test drives the tree with a fake.
+// Library is the union of what the frontend's parts declare. Nothing here
+// names *library.Library, so a test drives the tree with a fake.
 type Library interface {
 	registry.Editor
 	ctl.SearchDeleter
@@ -55,8 +48,8 @@ type Library interface {
 	views.StatsReader
 }
 
-// SetupServer wires the FS, registry, and views without starting the 9P
-// listener, so the wiring can be tested without blocking.
+// SetupServer wires everything without starting the listener, so the wiring
+// can be tested without blocking.
 func SetupServer(lib Library, exp library.Exporter, searchTTL time.Duration, searchMaxHandles int) (*Server, error) {
 	ebookfs, root := fs.NewFS("glenda", "glenda", 0555, fs.IgnorePermissions())
 	reg := registry.NewBookRegistry(ebookfs, lib)

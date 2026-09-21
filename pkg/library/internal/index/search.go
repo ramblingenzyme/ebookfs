@@ -7,13 +7,10 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index/dbsqlc"
 )
 
-// Search returns the books matching q, using SQL-level filtering for all fields
-// including title (LIKE, or "=" when q.ExactTitles). Within each field values
-// are OR'd; across fields they're AND'd. Empty fields are ignored, so Query{} returns every book.
 func (idx *Index) Search(q Query) ([]*book.Book, error) {
 	bq := &bookQuery{order: orderClause(q.Order), limit: q.Limit}
 
-	// Either column: a sort-name search must find the book filed under its display name.
+	// Either column, so a sort-name search finds the book filed under its display name.
 	addIn(bq, "b.id IN (SELECT ba.book_id FROM book_authors ba JOIN authors a ON a.id = ba.author_id WHERE a.name IN (%s) OR a.sort_name IN (%s))", q.Authors)
 	addIn(bq, "b.id IN (SELECT bt.book_id FROM book_tags bt JOIN tags t ON t.id = bt.tag_id WHERE t.name IN (%s))", q.Tags)
 	addIn(bq, "b.series_id IN (SELECT id FROM series WHERE name IN (%s))", q.Series)
@@ -35,19 +32,17 @@ func (idx *Index) Search(q Query) ([]*book.Book, error) {
 	return idx.queryBooks(bq)
 }
 
-// orderClause maps an Order to its ORDER BY. Every ordering is total, so a
-// Limit cannot slice an arbitrary subset of tied rows: id breaks the last tie,
-// since sort_title is nullable and not unique. Ties resolve the way the primary
-// column intends. The date orders fall back to id descending, because the
-// dates are RFC3339 to the second and two books added in the same second should
-// still read newest first, while rating and pubdate fall back alphabetically.
-// An unrecognised Order sorts by title rather than failing, since ordering is
-// presentation and a bad one should not turn a search into an error.
+// Every ordering here is total, so a Limit cannot slice an arbitrary subset of
+// tied rows. The date orders break the tie on id descending, since they are
+// RFC3339 to the second and two books added in one second still read newest
+// first. Rating and pubdate break it alphabetically.
+//
+// An unrecognised Order sorts by title rather than failing.
 func orderClause(o Order) string {
-	// sort_title is NULL for most books: its only source is the EPUB 3 file-as
+	// sort_title is NULL for most books. Its only source is the EPUB 3 file-as
 	// refine, EPUB 2 has no equivalent, and editing a title clears it. Ordering
-	// on the bare column would put every one of those in a single NULL tie and
-	// list them by id, so fall back to the title itself.
+	// on the bare column would put all of those in one NULL tie and list them
+	// by id.
 	const byTitle = "COALESCE(b.sort_title, b.title), b.id"
 	switch o {
 	case OrderDateAdded:
@@ -70,10 +65,9 @@ func escapeSQLLike(s string) string {
 	return s
 }
 
-// Exists reports whether the index holds a book with exactly this title and
-// exactly this set of author display names, the ingest duplicate rule. The set
-// comparison is in SQL: the book must have len(names) authors and none outside
-// names. See BookExists in queries.sql. names must be distinct.
+// Exists is the ingest duplicate rule: the same title and the same set of
+// author display names. BookExists in queries.sql does the set comparison,
+// which requires names to be distinct.
 func (idx *Index) Exists(title string, names []string) (bool, error) {
 	return idx.queries.BookExists(idx.ctx, dbsqlc.BookExistsParams{
 		Title:       title,

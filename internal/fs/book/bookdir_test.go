@@ -12,7 +12,6 @@ import (
 	"github.com/knusbaum/go9p/proto"
 )
 
-// newTestBookDir builds a BookDir over a fresh FS with a no-op edit callback.
 func newTestBookDir(t *testing.T, b *library.Book) *BookDir {
 	t.Helper()
 	return NewBookDir(util.NewTestFS(t), mock.ContentReader{}, func(int64, library.Edits) error { return nil }, b)
@@ -51,13 +50,6 @@ func TestBookDirHasIDChild(t *testing.T) {
 	fstest.ChildAs[*fs.StaticFile](t, d, "id")
 }
 
-// readChild opens a child file and reads it whole, the way a client cat'ing it
-// would.
-func readChild(t *testing.T, d *BookDir, name string) string {
-	t.Helper()
-	return fstest.Fid(t, fstest.ChildAs[fs.File](t, d, name), 1).Get(proto.Mode(0), 4096)
-}
-
 // The rendering, including the sort: a map has no order, and a file that
 // shuffles between reads is no use to a diff.
 func TestBookDirIdentifiersFile(t *testing.T) {
@@ -80,7 +72,7 @@ func TestBookDirIdentifiersFile(t *testing.T) {
 	}
 }
 
-// A book with none still gets the file, the way an unset pubdate does: present
+// A book with no identifiers still gets the file, the way an unset pubdate does: present
 // and empty, so a client never has to tell "no identifiers" from "no such file".
 func TestBookDirIdentifiersFileEmpty(t *testing.T) {
 	d := newTestBookDir(t, util.MakeBook(1, "Test", "Author"))
@@ -88,4 +80,11 @@ func TestBookDirIdentifiersFileEmpty(t *testing.T) {
 	if got := readChild(t, d, "identifiers"); got != "\n" {
 		t.Errorf("identifiers = %q, want a lone newline", got)
 	}
+}
+
+// readChild opens a child file and reads it whole, the way a client cat'ing it
+// would.
+func readChild(t *testing.T, d *BookDir, name string) string {
+	t.Helper()
+	return fstest.Fid(t, fstest.ChildAs[fs.File](t, d, name), 1).Get(proto.Mode(0), 4096)
 }

@@ -62,8 +62,6 @@ Notes:
 `
 )
 
-// helpText renders the help file: each command's signature and description
-// indented under the header, then the footer.
 func helpText() string {
 	var b strings.Builder
 	b.WriteString(helpHeader)
@@ -78,8 +76,6 @@ func helpText() string {
 	return b.String()
 }
 
-// NewHelpFile creates a read-only file named "help" that documents the
-// available ctl commands.
 func NewHelpFile(f *fs.FS) *fs.StaticFile {
 	return fs.NewStaticFile(newStat(f, "help", 0444), []byte(helpText()))
 }

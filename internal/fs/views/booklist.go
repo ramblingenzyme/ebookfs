@@ -35,15 +35,9 @@ func newBookListDir(stat *proto.Stat) *bookListDir {
 // disambiguatedName is the entry name for a book whose plain title collides with
 // another book's. Mirrors the store's canonicalDir convention.
 //
-// Known gap: Add tests the plain title for collisions but not the name it mints,
-// so a book literally titled "Foo (2)" and the minted name for book 2 titled
-// "Foo" are the same key. It bites in one order only, with the literal title
-// added first and the collision minting over it. The minted entry replaces the
-// literal one, so a registered book vanishes from the listing, and because
-// entries then maps both ids to that name, removing either deletes the other's
-// entry too. Added the other way round it is fine, since by then the plain
-// title "Foo (2)" is taken and gets disambiguated in turn. Fixing it means
-// minting until the name is free rather than assuming one pass suffices.
+// ponytail: Add checks the plain title for a collision but not the name it
+// mints, so a book titled "Foo (2)" added before book 2 titled "Foo" loses one
+// of them. Mint until the name is free if a library ever hits it.
 func disambiguatedName(b *library.Book) string {
 	return fmt.Sprintf("%s (%d)", naming.PathSafe(b.Title()), b.ID())
 }
@@ -55,7 +49,6 @@ func (d *bookListDir) Add(dir *book.BookDir) {
 	// entries would name a child that cannot be deleted.
 	name := naming.PathSafe(b.Title())
 	if child, ok := d.Children()[name]; ok && child != dir {
-		// Plain title is taken by a different book, so disambiguate with the id.
 		d.AddChild(&namedBookDir{
 			BookDir:  dir,
 			baseStat: dir.Stat(),

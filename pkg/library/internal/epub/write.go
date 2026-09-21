@@ -101,7 +101,7 @@ func authors(as []book.Author) []epubfile.Author {
 // series folds a half-named series edit onto the membership the file records,
 // and returns nil for one to clear. cur is what a reader was shown, so an
 // index-only edit moves the book the reader saw rather than inventing a
-// collection, and a book in no series has no position to set, so the edit is
+// collection. A book in no series has no position to set, so the edit is
 // dropped rather than minting an empty one.
 func series(cur *epubfile.Series, e book.Edits) *epubfile.Series {
 	s := epubfile.Series{}

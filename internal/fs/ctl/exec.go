@@ -10,9 +10,8 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// SearchDeleter is the half of the library this package uses. Edits are absent
-// because they go through the registry instead, so the 9P tree is re-rendered
-// with them.
+// SearchDeleter is the half of the library this package uses. Edits go through
+// the registry instead, so the 9P tree is re-rendered with them.
 type SearchDeleter interface {
 	Search(q library.Query) ([]*library.Book, error)
 	Delete(id int64) error
@@ -31,17 +30,8 @@ func (f *CtlFile) execute(cmd string) string {
 	return r
 }
 
-// command is one ctl verb. params spells its arguments the way the usage line
-// and the help file both show them, and doubles as the arity: every parameter
-// is required, so their count is how many args the handler needs.
-//
-// A handler takes the file rather than hanging off it: a command acts through
-// ctl but is not behaviour of the ctl file, which answers reads and writes.
-// Keeping them out of the method set leaves that surface the four 9P methods
-// and the machinery below.
-//
-// The verb's name is the slice entry's Name and nothing else, so dispatch, the
-// usage line and the help file cannot disagree about it.
+// command is one ctl verb. params doubles as the arity, since every parameter
+// is required.
 type command struct {
 	name   string
 	params string
@@ -49,10 +39,10 @@ type command struct {
 	run    func(*CtlFile, []string) string
 }
 
-// The descriptions long enough that escaping them into the table would make
-// both unreadable. They render as written.
-// statusDesc names the vocabulary through the library rather than spelling it,
-// since adding a status must not leave the help file describing the old set.
+// The descriptions too long to escape into the table. They render as written.
+//
+// statusDesc reads the vocabulary from the library, so adding a status cannot
+// leave the help file describing the old set.
 var statusDesc = "Set reading status for matching books.\nStatus: " + library.StatusList() + "."
 
 const (
@@ -67,8 +57,8 @@ duplicate <old>.`
 authors field file).`
 )
 
-// commands is ordered, since the help file lists them in this order. Lookup is
-// a scan of eight entries against one admin typing.
+// commands is ordered, since the help file lists them in this order. A scan of
+// eight entries is enough against one admin typing.
 var commands = []command{
 	{"add-tag", "<tag> <id-spec>", "Add a tag to matching books.", addTag},
 	{"remove-tag", "<tag> <id-spec>", "Remove a tag from matching books.", removeTag},
@@ -80,7 +70,6 @@ var commands = []command{
 	{"rename-series", "<old> <new>", "Rename a series across every book.", renameSeries},
 }
 
-// usage is the line a command answers with when its arguments do not fit.
 func (c command) usage() string { return "usage: " + c.name + " " + c.params }
 
 func (c command) arity() int { return len(strings.Fields(c.params)) }
@@ -168,10 +157,8 @@ func deleteBook(f *CtlFile, args []string) string {
 
 // --- entity management ---
 
-// renameTag replaces the tag old with new on every book that carries old. If a
-// book already has new, old is dropped rather than duplicated, so
-// renaming a tag onto an existing one merges the two. There is no separate
-// merge command: this is the merge.
+// renameTag replaces the tag old with new on every book that carries old.
+// If new already exists on a book, the two merge by dropping old.
 func renameTag(f *CtlFile, args []string) string {
 	old, curr := args[0], args[1]
 
@@ -207,18 +194,15 @@ func renameAuthor(f *CtlFile, args []string) string {
 				matched = true
 			}
 		}
-		// The query matched on name or sort name and so does this, so a book
-		// reaching here without a match means the index disagrees with the
-		// snapshot. Counted as skipped rather than silently passed over.
+		// Query{Authors} selects on name or sort name and the loop re-tests
+		// both, so no match means the index and the snapshot disagree.
 		if !matched {
 			return nil
 		}
-		// Renaming onto an author the book already has (or renaming two of its
-		// authors to the same person) would duplicate that author; dedupe so the
-		// rename doubles as a merge, like rename-tag. This also collapses any
-		// duplicate authors the book already carried, broader than the rename
-		// strictly implies, but harmless: only books the rename matched are
-		// rewritten at all.
+
+		// Renaming onto an author the book already has would duplicate it, so
+		// dedupeAuthors makes rename a merge, as rename-tag is. It also
+		// collapses duplicates the book already carried.
 		updated = dedupeAuthors(updated)
 		return &library.Edits{Authors: &updated}
 	})
@@ -234,16 +218,15 @@ func renameSeries(f *CtlFile, args []string) string {
 
 // --- helpers ---
 
-// idsOnly reports whether q selects by id and nothing else, i.e. it came from a
-// bare id-spec ("1,2,3") rather than a query that happens to name ids.
+// idsOnly reports whether q came from a bare id-spec rather than a query that
+// happens to name ids.
 func idsOnly(q library.Query) bool {
 	return len(q.IDs) > 0 && len(q.Authors) == 0 && len(q.Tags) == 0 &&
 		len(q.Series) == 0 && len(q.Status) == 0 && len(q.Titles) == 0
 }
 
-// dedupeAuthors returns authors with duplicate display names removed, keeping
-// the first occurrence of each name. rename-author uses it to fold a renamed
-// author into a matching one the book already carries instead of duplicating it.
+// dedupeAuthors keeps the first occurrence of each display name, so
+// rename-author folds a renamed author into one the book already carries.
 func dedupeAuthors(authors []library.Author) []library.Author {
 	seen := make(map[string]bool, len(authors))
 	out := make([]library.Author, 0, len(authors))
@@ -268,14 +251,8 @@ func (f *CtlFile) editSpec(op, spec string, editFn func(*library.Book) *library.
 }
 
 // editSelection applies editFn to each book the selection addresses, reporting
-// the result as op. An editFn returning nil leaves the book alone and counts it
-// as skipped, which is how a command says the book is already in the state it
-// asked for.
-//
-// It runs one library.Search(query) rather than hydrating the whole library to
-// filter it down. When the query is a bare id list, an id naming no book is
-// reported (so a typo isn't counted as success) and a duplicated id is
-// collapsed to a single visit; otherwise every returned book is visited.
+// the result as op. A nil from editFn counts the book as skipped, which is how
+// a command says it is already in the state asked for.
 func (f *CtlFile) editSelection(op string, query library.Query, editFn func(*library.Book) *library.Edits) string {
 	books, err := f.lib.Search(query)
 	if err != nil {
@@ -287,10 +264,9 @@ func (f *CtlFile) editSelection(op string, query library.Query, editFn func(*lib
 		byID[b.ID()] = b
 	}
 
-	// Walk the explicit id list when the query is nothing but ids, so a typo
-	// surfaces as "not found". Once the query also filters (id:42+status:read),
-	// an id absent from the results means "filtered out", not "no such book",
-	// so walk what the query returned instead.
+	// A bare id list is walked as given, so a typo surfaces as "not found".
+	// Once the query also filters, an absent id was filtered out rather than
+	// missing, so the results are walked instead.
 	visit := query.IDs
 	if !idsOnly(query) {
 		visit = make([]int64, 0, len(books))

@@ -20,12 +20,11 @@ func NewWriteBuffer(max uint64) WriteBuffer {
 	return WriteBuffer{max: max, bufs: make(map[uint64][]byte)}
 }
 
-// Write applies one 9P write at offset, growing fid's buffer as needed. seed,
-// when non-nil, provides the buffer's initial content the first time fid
-// writes (so a client can append or edit at a middle offset); nil starts
-// empty. A first write at offset 0 shorter than the seeded content replaces it
-// entirely. The buffer is truncated to the written bytes, so residual old
-// content can't leak through (Linux v9fs on 9P2000 doesn't send Otrunc).
+// Write applies one 9P write at offset. A non-nil seed gives fid's buffer its
+// initial content, so a client can append or edit at a middle offset.
+//
+// A first write at offset 0 shorter than the seed truncates rather than
+// merging, so no residual old content leaks through.
 func (w *WriteBuffer) Write(fid uint64, offset uint64, data []byte, seed func() []byte) (uint32, error) {
 	if len(data) == 0 {
 		return 0, nil
@@ -37,18 +36,22 @@ func (w *WriteBuffer) Write(fid uint64, offset uint64, data []byte, seed func() 
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
+
 	buf, exists := w.bufs[fid]
 	if !exists && seed != nil {
 		buf = append([]byte(nil), seed()...)
 	}
+
 	end := offset + uint64(len(data))
 	if end > uint64(len(buf)) {
 		buf = append(buf, make([]byte, end-uint64(len(buf)))...)
 	}
+
 	copy(buf[offset:], data)
 	if !exists && offset == 0 && end < uint64(len(buf)) {
 		buf = buf[:end]
 	}
+
 	w.bufs[fid] = buf
 	return uint32(len(data)), nil
 }

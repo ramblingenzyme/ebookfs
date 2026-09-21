@@ -1,7 +1,5 @@
 // Package naming turns arbitrary text into strings safe to use as filesystem
-// path components. It is a leaf utility shared by the epub parser and the 9P
-// boundary, and depends on nothing else in the tree so neither has to import
-// the other to sanitize a name.
+// path components.
 package naming
 
 import "strings"

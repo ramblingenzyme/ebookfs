@@ -24,17 +24,12 @@ func makeBookWithSeries(id int64, title, author string, seriesName, seriesIndex 
 	return wrapBook(b)
 }
 
-// newTestRegistry builds a registry over a fresh in-memory FS with no backing
-// library, for driving views through their Add/Remove notifications.
 func newTestRegistry(t *testing.T) *registry.BookRegistry {
 	t.Helper()
 	return registry.NewBookRegistry(newTestFS(t), nil)
 }
 
-// newTestSearchDir builds a search directory over a fresh in-memory FS with no
-// backing library. ttl and maxHandles are passed through so the reclamation
-// tests can drive cleanupLocked; a non-zero one starts the cleanup goroutine,
-// hence the Close.
+// A non-zero ttl or maxHandles starts the cleanup goroutine, hence the Close.
 func newTestSearchDir(t *testing.T, ttl time.Duration, maxHandles int) (*registry.BookRegistry, *searchDir) {
 	t.Helper()
 	f := newTestFS(t)
@@ -50,7 +45,6 @@ func newTestSearchHandle(t *testing.T) (*registry.BookRegistry, *searchHandleDir
 	return reg, sd.allocateHandle()
 }
 
-// ctlOf returns a handle's ctl file, the only way in to the search protocol.
 func ctlOf(t *testing.T, handle *searchHandleDir) *searchCtlFile {
 	t.Helper()
 	return fstest.ChildAs[*searchCtlFile](t, handle, "ctl")

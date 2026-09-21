@@ -3,9 +3,8 @@
 // field it changed. Spans three packages, so it pairs with no single source
 // file, and drives only the public 9P path.
 //
-// Registry-internal behavior (edit on an unknown id, and the concurrent
-// snapshot swap) is tested white-box in fs/registry instead, since those tests
-// call the unexported edit method.
+// Registry-internal behaviour is tested white-box in fs/registry, where the
+// tests can call the unexported edit method.
 
 package fs
 
@@ -22,13 +21,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/views"
 )
-
-// writeField drives a field edit the way a 9P client would: open the named
-// fieldFile with Otrunc, write the new value, and close to commit.
-func writeField(t *testing.T, bd fs.Dir, name, value string) {
-	t.Helper()
-	fstest.Fid(t, fstest.ChildAs[fs.File](t, bd, name), 1).Set(proto.Otrunc, value)
-}
 
 func TestRegistryEditTitleRehomesInAllViews(t *testing.T) {
 	f := newTestFS(t)
@@ -120,4 +112,10 @@ func TestRegistryEditStatusChangesReaderView(t *testing.T) {
 	writeField(t, fstest.ChildAs[fs.Dir](t, allBooks, "Test"), "status", "reading")
 
 	fstest.HasChild(t, fstest.ChildAs[fs.ModDir](t, readerDir, "Author1"), "Test.epub")
+}
+
+// Otrunc then close, which is how a 9P client commits a field edit.
+func writeField(t *testing.T, bd fs.Dir, name, value string) {
+	t.Helper()
+	fstest.Fid(t, fstest.ChildAs[fs.File](t, bd, name), 1).Set(proto.Otrunc, value)
 }

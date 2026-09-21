@@ -26,8 +26,8 @@ import (
 var ErrNoCover = errors.New("no cover in epub")
 
 // SetCover stages a replacement cover image, written by the next Save. The
-// image replaces the entry the manifest already names, in place and in the same
-// format, so the manifest, the cover-image property and the legacy
+// image replaces the entry the manifest already names, in place and in the
+// same format. The manifest, the cover-image property and the legacy
 // <meta name="cover"> keep pointing at what they already did, which is why
 // there is no transcoding and no way to add a cover to a book without one.
 //
@@ -229,10 +229,9 @@ func (b *Book) refitCoverPage(enc *ocf.EncryptionInfo, width, height int, replac
 // syncNCX adds the rewritten NCX to replace, when the package declares one and
 // the edit touched a field it carries; package ncx says why.
 //
-// An NCX that cannot be read, whether encrypted or malformed, is skipped
-// rather than failing the edit. The package document is the metadata of record,
-// and refusing would leave a book that arrived with an unreadable NCX permanently
-// unrenameable.
+// An unreadable NCX, encrypted or malformed, is skipped rather than failing the
+// edit: the package document is the metadata of record, and refusing would
+// leave a book that arrived with a broken NCX permanently unrenameable.
 func (b *Book) syncNCX(enc *ocf.EncryptionInfo, m moved, replace map[string][]byte) error {
 	if !m.title && !m.authors {
 		return nil
@@ -277,8 +276,8 @@ func (b *Book) syncNCX(enc *ocf.EncryptionInfo, m moved, replace map[string][]by
 }
 
 // rewrite writes a temp epub beside the original with the named entries
-// swapped, proves it opens, then renames it over the original and adopts it.
-// The temp file is cleaned up on any failure.
+// swapped, proves it opens, renames it over the original and adopts it. The
+// temp file is cleaned up on any failure.
 //
 // Faithfulness rules, matching what calibre's safe_replace honours:
 //   - mimetype is written first and copied byte-for-byte, keeping its STORED

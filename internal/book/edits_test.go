@@ -7,7 +7,6 @@ import (
 	"testing"
 )
 
-// testBook creates a Book for validation tests with the given cover path and series.
 func testBook(coverPath string, series *SeriesRef) *Book {
 	return &Book{
 		Bib: Bib{
@@ -15,35 +14,6 @@ func testBook(coverPath string, series *SeriesRef) *Book {
 			Series:    series,
 		},
 	}
-}
-
-// assertSingleFieldError asserts err is a *ValidationError carrying exactly one
-// entry, on the named field.
-func assertSingleFieldError(t *testing.T, err error, field string) {
-	t.Helper()
-	var ve *ValidationError
-	if !errors.As(err, &ve) {
-		t.Fatalf("error is not *ValidationError: %T", err)
-	}
-	if len(*ve) != 1 || (*ve)[0].Field != field {
-		t.Errorf("expected a single %q field error, got %v", field, *ve)
-	}
-}
-
-// assertHasFieldError asserts err is a *ValidationError with at least one entry
-// on the named field whose message contains msgSubstr (empty matches any).
-func assertHasFieldError(t *testing.T, err error, field, msgSubstr string) {
-	t.Helper()
-	var ve *ValidationError
-	if !errors.As(err, &ve) {
-		t.Fatalf("error is not *ValidationError: %T", err)
-	}
-	for _, fe := range *ve {
-		if fe.Field == field && strings.Contains(fe.Message, msgSubstr) {
-			return
-		}
-	}
-	t.Errorf("expected an error on field %q containing %q, got %v", field, msgSubstr, *ve)
 }
 
 func TestValidateStatus(t *testing.T) {
@@ -418,19 +388,6 @@ func TestEditsNormalized(t *testing.T) {
 	}
 }
 
-func assertRounded(t *testing.T, field string, got, want *float64) {
-	t.Helper()
-	switch {
-	case want == nil && got != nil:
-		t.Errorf("%s = %v, want nil — an absent edit must stay absent", field, *got)
-	case want == nil:
-	case got == nil:
-		t.Errorf("%s = nil, want %v", field, *want)
-	case *got != *want:
-		t.Errorf("%s = %v, want %v", field, *got, *want)
-	}
-}
-
 // The interaction Normalized's doc comment relies on: rounding must leave NaN
 // and ±Inf intact so Validate is still the thing that rejects them. Were
 // rounding to fold them to a finite number, an unusable value would pass
@@ -468,5 +425,43 @@ func TestEditsNormalizedDoesNotMutateItsReceiver(t *testing.T) {
 
 	if rating != 4.567 {
 		t.Errorf("caller's Rating = %v, want it untouched at 4.567", rating)
+	}
+}
+
+func assertSingleFieldError(t *testing.T, err error, field string) {
+	t.Helper()
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("error is not *ValidationError: %T", err)
+	}
+	if len(*ve) != 1 || (*ve)[0].Field != field {
+		t.Errorf("expected a single %q field error, got %v", field, *ve)
+	}
+}
+
+func assertHasFieldError(t *testing.T, err error, field, msgSubstr string) {
+	t.Helper()
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("error is not *ValidationError: %T", err)
+	}
+	for _, fe := range *ve {
+		if fe.Field == field && strings.Contains(fe.Message, msgSubstr) {
+			return
+		}
+	}
+	t.Errorf("expected an error on field %q containing %q, got %v", field, msgSubstr, *ve)
+}
+
+func assertRounded(t *testing.T, field string, got, want *float64) {
+	t.Helper()
+	switch {
+	case want == nil && got != nil:
+		t.Errorf("%s = %v, want nil — an absent edit must stay absent", field, *got)
+	case want == nil:
+	case got == nil:
+		t.Errorf("%s = nil, want %v", field, *want)
+	case *got != *want:
+		t.Errorf("%s = %v, want %v", field, *got, *want)
 	}
 }

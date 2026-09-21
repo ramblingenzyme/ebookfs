@@ -41,10 +41,9 @@ func (f seriesField) get() *Series {
 // EPUB 2 has no standard mechanism, so the proprietary calibre metas are used
 // instead.
 //
-// Both halves are stated. A caller changing one reads the other back from get
-// first, which is where the reader's answer comes from: an empty-named
-// collection is invisible to get, so the name it reports may be the calibre
-// meta's rather than the collection's.
+// Both halves are written. A caller changing one reads the other back from get
+// first: an empty-named collection is invisible to get, so the name it reports
+// may be the calibre meta's rather than the collection's.
 func (f seriesField) set(s *Series) {
 	series, position := "", ""
 	if s != nil {

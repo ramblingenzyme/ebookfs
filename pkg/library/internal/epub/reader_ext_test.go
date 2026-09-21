@@ -13,7 +13,7 @@ import (
 // File, which this package's reader embeds. What is pinned here is that the
 // whole EpubReader reports a use-after-close alike — including Cover, which is
 // this package's own and would otherwise answer "no cover" for a handle that is
-// simply gone.
+// gone.
 //
 // An EpubReader is reached from the 9P read path through vfile.ReadAtFile,
 // where a client holding a fid across a re-ingest is exactly how a
@@ -45,7 +45,7 @@ func TestReaderClosedContract(t *testing.T) {
 	}
 
 	// The library facade runs this same table against library.ErrClosed;
-	// impl_ext_test.go says why both exist.
+	// library_ext_test.go says why both exist.
 	for _, tc := range []struct {
 		name string
 		call func() error

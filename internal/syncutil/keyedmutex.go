@@ -5,14 +5,13 @@ package syncutil
 import "sync"
 
 // KeyedMutex hands out one mutex per int64 key, created lazily on first use.
-// The zero value is ready to use. Entries are never freed: keys are book ids,
-// whose count is small and bounded by the library size.
+// Entries are never freed but keys are book ids, whose count is small and bounded by the library size.
+// ponytail: add cleanup if used in another context that requires it or library size grows
 type KeyedMutex struct {
 	mu    sync.Mutex
 	locks map[int64]*sync.Mutex
 }
 
-// For returns the mutex for key, creating it on first use.
 func (k *KeyedMutex) For(key int64) *sync.Mutex {
 	k.mu.Lock()
 	defer k.mu.Unlock()

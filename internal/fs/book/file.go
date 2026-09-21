@@ -11,6 +11,7 @@ import (
 // does, reports missing. Both failures are worded here because every file in
 // this package meets them, the second when a book is removed after its fid was
 // opened.
+// ponytail: remove present arg, likely after deletinng benchmark tests
 func snapshot(present bool, missing string, book func() *library.Book) (*library.Book, error) {
 	if !present {
 		return nil, errors.New(missing)
@@ -22,7 +23,6 @@ func snapshot(present bool, missing string, book func() *library.Book) (*library
 	return b, nil
 }
 
-// content opens the book's epub through lib.
 func content(lib ContentReader, book func() *library.Book) (library.EpubReader, error) {
 	b, err := snapshot(lib != nil, "library not available", book)
 	if err != nil {
@@ -31,9 +31,7 @@ func content(lib ContentReader, book func() *library.Book) (library.EpubReader, 
 	return lib.Content(b.ID())
 }
 
-// contentBytes is a vfile.SnapshotFile loader returning what pick takes from the
-// open epub. The reader is closed before the bytes are handed back, so a caller
-// holds no epub beyond the load.
+// contentBytes is a vfile.SnapshotFile loader returning what `pick` takes from the open epub.
 func contentBytes(lib ContentReader, book func() *library.Book, pick func(library.EpubReader) ([]byte, error)) func() ([]byte, error) {
 	return func() ([]byte, error) {
 		r, err := content(lib, book)

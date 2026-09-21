@@ -16,7 +16,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/drift"
 )
 
-// Store manages filesystem operations on the library directory tree.
 type Store struct {
 	root string // absolute path to the library root
 }
@@ -25,8 +24,6 @@ func New(root string) *Store {
 	return &Store{root: root}
 }
 
-// AbsPath resolves a relative path (the EpubPath stored in a book's Location)
-// to an absolute path on disk.
 func (s *Store) AbsPath(relPath string) string {
 	return filepath.Join(s.root, relPath)
 }
@@ -34,10 +31,12 @@ func (s *Store) AbsPath(relPath string) string {
 func (s *Store) Root() string { return s.root }
 
 // PathTaken reports whether the library already holds an epub file for these
-// authors and this title. Index.Exists is the duplicate rule; this is the
-// backstop for what the index cannot see, a book on disk that the indexer
-// skipped. Being path-derived it can miss (author order and FAT sanitization
-// both change the path), which is why it is a guard and not the rule.
+// authors and this title.
+// Mirrored by Index.Exists, but this covers when book wasn't indexed
+// and is still on disk.
+//
+// Being path-derived it can miss, since author order and FAT
+// sanitization both change the path.
 //
 // Each book lives in a subdirectory named "Title (id)" under the author
 // directory, so those are walked rather than globbed; titles may contain
@@ -61,12 +60,9 @@ func (s *Store) PathTaken(authors []book.Author, title string) bool {
 	return false
 }
 
-// Stat observes the on-disk state of a book's epub and meta.toml, both sizes
-// and both modification times, for drift detection. A stat failure is returned
-// rather than defaulted away: a zero mtime can never match a real file, so
-// recording one would silently force a full reindex on every startup thereafter.
-// Callers that need to record a directory they could not observe store the
-// zero drift.PathInfo instead.
+// Stat returns a failure rather than defaulting it away. A caller recording a
+// directory it could not observe stores the zero drift.PathInfo, which says
+// what that costs.
 func (s *Store) Stat(loc book.Location) (drift.PathInfo, error) {
 	epubFI, err := os.Stat(s.AbsPath(loc.EpubPath))
 	if err != nil {
@@ -84,9 +80,8 @@ func (s *Store) Stat(loc book.Location) (drift.PathInfo, error) {
 	}, nil
 }
 
-// Move relocates a book from one location to another, renaming the epub within
-// the directory if its filename differs. The caller decides the destination
-// (see Layout); the store just performs the move.
+// Move renames the epub within the directory when its filename differs from
+// the one it arrives with.
 func (s *Store) Move(from, to book.Location) error {
 	if from.EpubPath == to.EpubPath {
 		return nil
@@ -140,8 +135,9 @@ func (s *Store) renameDir(fromDir, toDir string) (func(error), error) {
 	}, nil
 }
 
-// removeIfEmpty tries to delete an author directory that may have just lost its
-// last book; ENOTEMPTY (other books remain) and ENOENT (already gone) are fine.
+// removeIfEmpty is called on an author directory that may have just lost its
+// last book. ENOTEMPTY means other books remain and ENOENT means it is already
+// gone, so neither is an error here.
 func removeIfEmpty(dir string) error {
 	if err := os.Remove(dir); err != nil && !errors.Is(err, syscall.ENOTEMPTY) && !errors.Is(err, os.ErrNotExist) {
 		return err
@@ -149,8 +145,6 @@ func removeIfEmpty(dir string) error {
 	return nil
 }
 
-// Delete removes the book directory at loc, and the author directory above it
-// when that was its last book.
 func (s *Store) Delete(loc book.Location) error {
 	path := s.AbsPath(loc.Dir())
 	if err := os.RemoveAll(path); err != nil {
@@ -160,9 +154,6 @@ func (s *Store) Delete(loc book.Location) error {
 	return removeIfEmpty(filepath.Dir(path))
 }
 
-// Update applies the edits to the book's on-disk state: moves it from oldLoc to
-// newLoc if necessary, writes the updated meta.toml, and returns the observed
-// state for drift detection.
 func (s *Store) Update(oldLoc, newLoc book.Location, meta *book.Meta) (drift.PathInfo, error) {
 	if err := s.Move(oldLoc, newLoc); err != nil {
 		return drift.PathInfo{}, err

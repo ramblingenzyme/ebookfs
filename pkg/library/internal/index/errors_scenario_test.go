@@ -72,10 +72,9 @@ func TestClosedIndexSurfacesErrors(t *testing.T) {
 	}
 }
 
-// The helpers that write through a
-// *dbsqlc.Queries: a failed statement must propagate rather than return nil and
-// let the caller commit a half-written book. Same caveat: presence of an error
-// is all it asserts.
+// The helpers that write through a *dbsqlc.Queries: a failed statement must
+// propagate rather than return nil and let the caller commit a half-written
+// book.
 func TestRolledBackTxSurfacesErrors(t *testing.T) {
 	tests := []struct {
 		name string
