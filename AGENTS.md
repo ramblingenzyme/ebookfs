@@ -1,165 +1,87 @@
 # Agent notes
 
-## A comment belongs to its declaration
+## Comments
 
-A comment sitting above a declaration is that declaration's doc comment, not
-loose text between functions. This is where comments rot, so it is the first
-thing to check after an edit, ahead of anything about how they read.
+### Keep each comment on its declaration
 
-The ways one comes off its declaration, each seen in this repo:
+A comment above a declaration is its doc comment. After any edit, check that
+none were left behind, duplicated, stacked, detached by a blank line,
+displaced by an inserted declaration, made stale, or left naming something
+since renamed. After a move, split or rename, check both ends. Three checks
+are mechanical:
 
-  - Left behind. Code moved or was deleted and the comment stayed, describing
-    whatever landed below it.
-  - Duplicated. A split copied the comment into both halves, and the two
-    drift apart.
-  - Stacked. A rewrite was prepended and the original never deleted, so one
-    declaration carries two doc comments.
-  - Detached. A blank line between a comment and its field leaves it
-    documenting nothing.
-  - Displaced. A var or const inserted under a doc comment takes it, and
-    godoc attributes the paragraph to the wrong declaration.
-  - Stale. The code changed and the comment still asserts the old behaviour.
-    Worse than no comment, because a reader trusts it.
-  - Renamed. The comment names an identifier, package or file that has since
-    been renamed, so it points at nothing. Three comments in
-    internal/testing/util still said `testutil` after the package became
-    `util`.
+  - a comment block directly under another is stacked;
+  - `grep -c '^\s*//$'` before and after catches a re-wrap that ate paragraph
+    breaks;
+  - every identifier a comment names should still resolve.
 
-After a move, split or rename, check both ends. Three of these are mechanical:
-a comment block immediately following another comment block is stacked, the
-separator count below catches a re-wrap that ate the paragraph breaks, and
-every identifier a comment names should still resolve, which grep answers.
+### Paragraph breaks
 
-## Paragraph breaks, and editing comments with a script
+A comment carrying more than one fact keeps its `//` separator lines. Apply
+the delete test per paragraph, and cut a paragraph's separator with it. A
+script that joins a block to re-wrap it drops every separator and still
+passes gofmt, vet and the tests. Rewrite one block at a time, or treat each
+paragraph as its own unit.
 
-A comment carrying more than one fact keeps its `//` separator lines. Four
-short paragraphs scan; one twelve-line wall does not, however good the
-sentences are.
+### Whether a comment should exist
 
-Delete-it applies per paragraph, not just per comment. A paragraph whose fact
-the code now gives goes, and its separator goes with it.
+Default to none. Keep a comment only if you can name the mistake a reader would
+make without it. "A reader might wonder" is not a mistake. When unsure, delete.
 
-This is the thing a script gets wrong. Joining a comment block to re-wrap it
-silently drops every `//` separator inside it, and the result passes gofmt, vet
-and the tests while reading worse than what it replaced. Rewrite comments one
-block at a time with the paragraph structure in hand, or make the script treat
-each paragraph as its own unit. `grep -c '^\s*//$'` before and after catches
-that: a count that fell for a paragraph you did not decide to cut is a re-wrap
-that ate a break.
+Run that test before rewording. Rewording a comment that fails it only
+shortens it. One pass over internal/testing/util took 38 comment lines to 23
+by rewording, and to 9 by applying the test first.
 
-## Whether a comment should exist
+A surviving comment may hold an invariant, a unit or format, what the zero
+value means, which side sets a thing, result or call order, concurrency
+safety, a spec reference, or a choice between equally plausible options. This
+is not a checklist. Every function has a call order, and that alone is no
+reason to comment.
 
-The test: delete it. If a competent reader recovers the fact from the code,
-leave it deleted.
+Not for history, conventions stated in this file, or where the code lives.
+The one exception: a regression test may name the defect it guards.
 
-Run the test first, then decide whether what survives needs rewriting.
-Shortening a comment that fails the test gives a shorter comment that still
-fails it, and the trimming makes the result look considered, so the next
-reader leaves it alone. One pass over internal/testing/util took 38 comment
-lines to 23 by rewording, and to 9 by applying the test first.
+Templates write empty comments. `// Name does X` and "…rather than X, which
+would Y" are always available, so reach for a form only after the comment has
+passed the test. Open a doc comment on its identifier. Keep field comments to
+one line. Put reasoning that spans packages in docs/DECISIONS.md and point to
+it.
 
-What survives is what the code can't say: an invariant between fields, a unit
-or format, what the zero value means, which side sets a thing and which reads
-it, result ordering, call order, concurrency safety. A spec reference with its
-section number. A choice where another option looked equally right, so nobody
-later "fixes" it back.
-
-Not for: restating the name or the line below it; history, which git already
-holds; conventions that live in this file; the author's reasoning about where
-to put the code.
-
-History has one legitimate form. A regression test may name the defect it
-guards, because that is why the test exists and git will not surface it to
-someone reading the file. "It used to be a path lookup, which missed a book
-credited in either order" earns its place. "This broke in commit abc123" does
-not.
-
-Length follows from how many facts survive the test, not from a cap. A comment
-carrying four consequences is four facts long, and the spec tests in epub are
-right to run past ten lines: each names a consequence, a spec ambiguity, or a
-deliberate narrowing that the code cannot state. Padding is wrong at any
-length, and a cap would cut the wrong end first. Reasoning that spans packages
-belongs in DECISIONS.md with a pointer from the code.
-
-Default to one sentence opening with the identifier, and watch that the
-template does not write the comment for you: `// Name does X` is always
-available, which makes an empty one easy to produce. A field comment is one
-line, and only when name and type don't already say it.
-
-Test functions are the exception. Their names are long and describe the claim
-already, godoc never surfaces them, and the name sits on the very next line, so
-repeating it is noise. Open on the fact instead:
-
-	// TestIDFromPath pins the inverse of canonicalDir's " (id)" suffix.
+Test functions skip the name, since it sits on the next line. Open on the
+fact:
 
 	// The inverse of canonicalDir's " (id)" suffix.
 
-Test helpers rarely keep a doc at all. A helper's body runs one to eight lines
-with no branches, so the name and the body carry everything: `MakeBook`,
-`WrapBook`, `Fixed` and `NewTestFS` each lost a doc that restated a one-line
-body. What survives comes from outside the helper, such as an import rule the
-compiler does not enforce, or the spec clause a fixture satisfies.
+Test helpers rarely keep a doc. Keep one only for a fact from outside the
+body, such as an import rule or the spec clause a fixture satisfies.
 
-## Say it once
+### Say it once
 
-A rule belongs in one place, usually the function that enforces it. Other sites
-point at it ("package ncx says why"). Repeating a rationale across a package
-doc, a method, its caller and its test is four places to update and three
-places to go stale.
+A rationale lives in the function that enforces it, and other sites point
+there ("package ncx says why"). A one-line pass-through points at the doc of
+whatever it delegates to rather than copying it.
 
-A one-line pass-through is the common trap: it invites a copy of the doc
-comment of whatever it delegates to. Point at that instead.
+### Cite, don't paraphrase
 
-## Cite, don't paraphrase
+Name the section (`§5.5.3.1.2`, `D.3.7`, `OPF 2.0 §2.6`) and quote at most
+one clause, only where the exact wording is what the code turns on. In spec
+tests, never cut the section number or the quote. Where a test asserts more
+than the spec requires, say which half is ours.
 
-Name the section, `§5.5.3.1.2`, `D.3.7`, `OPF 2.0 §2.6`, and quote at most one
-clause, only where the exact wording is what the code turns on. Do not restate
-the spec's argument in your own words; the reader can open `specs/`.
+### How a comment reads
 
-Where a test asserts something the specs do not require, say which half is
-ours. The existing spec tests do this and it is worth keeping.
-
-In those spec tests the section number and the verbatim quote are the part that
-must survive. They let a reader check the assertion against the spec without
-leaving the file. Cut the prose around them, never them.
-
-## How a comment reads
-
-Present tense, describing the code as it stands. Third person or imperative;
-not "I", and rarely "we". State the consequence concretely instead of calling
-something important: "recording one would force a full reindex on every
-startup" beats "this matters".
-
-Explaining a choice means naming the alternative that was rejected and why it
-lost, in a clause: "…rather than X, which would Y" is the whole form.
-
-Name the thing doing the acting and keep subject and verb together. Write "if a
-rebuild does not record what it found, the next startup rebuilds again", not
-"the failure these share is a rebuild that does not record what it saw". An
-abstract summary noun standing in for a subject reads worse and is usually
-longer.
-
-Mechanics that keep it plain:
-
-  - Active voice. Passive only when the actor is genuinely unknown.
-  - One idea per sentence. A sentence reaching for an em dash, a colon, or a
-    third comma is usually two sentences; prefer the period. Banning only the
-    em dash moves the same construction onto the colon, which is how this
-    repo ended up with 554 of them.
-  - No "not X, but Y", and no mirrored "one ... the other" comparisons. Both
-    read as structure where a fact belongs. "The closing half of" and "the
-    other direction from" are the same tic.
-  - A magnitude claim carries a number or gets cut. "Every startup" beats
-    "often"; "five minutes" beats "a long time".
+  - Present tense, third person or imperative. No "I", rarely "we".
+  - Active voice, with the actor as subject and its verb beside it.
+  - One idea per sentence. An em dash, a colon or a third comma usually marks
+    two sentences.
+  - Name the concrete consequence, not the importance: "forces a full reindex
+    on every startup", not "this matters".
+  - Back a magnitude claim with a number, or cut it.
   - Plain connectives: also, though, but, since, so.
-  - No throat-clearing, hedging, or asides addressed to one reader at one
-    moment. Delete "note that", "it is worth noting", "keep in mind", "simply".
-  - No decayed words: robust, seamless, dynamic, innovative, leverage as a
-    verb. They carry no information.
-  - No closing recap, and no flourishes. Cut aphorisms and the closing
-    sentence that restates the paragraph with feeling. These are all wrong:
-    "…is the whole safety rule of this package"; "…which beats writing a title
-    into one of the two places that claim to hold it".
+  - No "not X, but Y", no mirrored "one … the other".
+  - No hedging, "note that", "simply", or decayed words like robust, seamless
+    or leverage.
+  - No recaps, aphorisms, or closing flourishes.
 
 Turn history into a standing property:
 
@@ -169,30 +91,28 @@ Turn history into a standing property:
 	// Nothing in CI builds this tag, so a change to library.Open breaks
 	// this file without failing any build.
 
-The first is true until someone adds the tag to CI. The second stays true and
-tells a reader what to watch for.
+## Test files
 
-## Test files pair with source files
+  - `foo_test.go` tests `foo.go` and is white-box (`package foo`).
+  - `foo_ext_test.go` is black-box (`package foo_test`) and covers the contract
+    other packages rely on.
+  - Tests spanning several source files go in `_scenario_test.go`, with a
+    header saying what they pin. Never name a test file for a quality or a
+    feature.
+  - `helpers_test.go` and `helpers_ext_test.go` hold shared helpers and no
+    tests. The package rule still applies.
 
-`foo_test.go` holds the tests for `foo.go` and is white-box (`package foo`).
-`foo_ext_test.go` is black-box (`package foo_test`) and describes the contract
-other packages rely on. Filename and package always agree: a bare name means
-white-box, the `_ext_` marker means black-box, no exceptions.
+## Working
 
-Tests spanning several source files cannot pair with one, so they take
-`_scenario_test.go` and a file header saying what they pin. Never name a test
-file for a quality or a feature. `library_err_test.go` held the only tests for
-four different source files and nothing in the name said so.
-
-`helpers_test.go` and `helpers_ext_test.go` hold what a package's test files
-share and no tests of their own, so they pair with the suite rather than with a
-source file. The package rule still governs, and a package carries both when
-its white-box and black-box suites each need helpers.
-
-## `ponytail:` marks a deliberate ceiling
-
-A shortcut taken knowingly carries a `ponytail:` comment naming the limit and
-what would justify lifting it, in two lines.
-
-	// ponytail: rescans per call, O(n²) over a document holding tens of elements.
-	// Thread a set through the callers only if a profile ever says to.
+  - **Sweeps:** do one package, then stop, report what changed, and wait for
+    review before the next.
+  - **Before compressing:** check whether a premature abstraction should be
+    undone first. A method that reads one field of its receiver usually wants
+    to be a free function taking that value.
+  - **Before calling something a bug:** grep docs/DECISIONS.md. Several
+    decisions choose strictness over availability and look like defects. If a
+    decision covers it, honour it or raise the conflict and ask. Improving the
+    diagnostics of a deliberate failure is usually welcome.
+  - **Planning docs:** keep TODO.md and docs/DECISIONS.md at the design level.
+    No file:line references and no internal Go symbols. Public names (9P paths,
+    config fields, a proposed interface) are fine.
