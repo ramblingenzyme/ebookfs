@@ -2,7 +2,7 @@
 // github.com/ophymx/opds, adding the download and cover routes it lacks.
 //
 // The catalog is read-only. OPDS has no write semantics, so 9P remains the
-// only way into the library (DECISIONS.md #4).
+// only way into the library (docs/DECISIONS.md #4).
 package opds
 
 import (

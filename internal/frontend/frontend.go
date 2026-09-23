@@ -1,8 +1,5 @@
-// Package frontend runs the library's network frontends for the life of the
-// process: start each one, wait for a signal or a failure, stop them all.
-//
-// A frontend that stops serving takes the others down with it, for the reasons
-// in DECISIONS.md #26.
+// Package frontend runs the network frontends. One that stops serving takes
+// the others down with it (docs/DECISIONS.md #26).
 package frontend
 
 import (
@@ -13,31 +10,23 @@ import (
 	"time"
 )
 
-// Frontend is a server that binds a port and serves the library until it is
-// shut down.
 type Frontend interface {
-	// Name labels the frontend in logs and in the errors Run reports.
 	Name() string
 
-	// Serve blocks until Shutdown, then reports nil. Returning any earlier is
-	// a failure whatever it reports, since the port has stopped answering.
+	// Serve blocks until Shutdown. An earlier return is a failure, even nil.
 	Serve() error
 
-	// Shutdown closes the listener and waits out in-flight work against ctx's
-	// deadline. Serve returns once it has.
 	Shutdown(ctx context.Context) error
 }
 
-// Run starts every frontend and blocks until ctx is cancelled or one of them
-// returns. It shuts all of them down either way, with timeout shared across
-// the whole set, and reports every failure it collected.
+// Run stops every frontend once ctx is cancelled or any Serve returns. timeout
+// covers the whole shutdown.
 func Run(ctx context.Context, timeout time.Duration, frontends ...Frontend) error {
 	exits := make(chan exit, len(frontends))
 	for _, f := range frontends {
 		go func() { exits <- exit{f.Name(), f.Serve()} }()
 	}
 
-	// errors.Join drops nils, so every outcome is appended unconditionally.
 	var errs []error
 	running := len(frontends)
 
@@ -57,9 +46,7 @@ func Run(ctx context.Context, timeout time.Duration, frontends ...Frontend) erro
 		}
 	}
 
-	// The wait for the remaining Serves shares the shutdown deadline. One that
-	// never returns would otherwise hang the process with its listener already
-	// closed, and there is nothing left to wait for at that point.
+	// Bounded, so a Serve that never returns cannot hang the process.
 	for running > 0 {
 		select {
 		case e := <-exits:
@@ -73,14 +60,11 @@ func Run(ctx context.Context, timeout time.Duration, frontends ...Frontend) erro
 	return errors.Join(errs...)
 }
 
-// exit is one Serve return, named so an error says which frontend produced it.
 type exit struct {
 	name string
 	err  error
 }
 
-// early describes a Serve that returned before anything asked it to, which is
-// a failure even when it reports nil.
 func (e exit) early() error {
 	if e.err == nil {
 		return fmt.Errorf("%s stopped serving before shutdown", e.name)
@@ -88,8 +72,6 @@ func (e exit) early() error {
 	return e.wrapped()
 }
 
-// wrapped describes a Serve that returned after Shutdown, where nil is the
-// outcome the interface asks for.
 func (e exit) wrapped() error {
 	if e.err == nil {
 		return nil

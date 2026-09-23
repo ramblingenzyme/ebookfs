@@ -8,13 +8,11 @@ import (
 	"time"
 )
 
-// fake blocks in Serve until Shutdown releases it. A serveErr makes Serve
-// return straight away instead, standing in for a listener that cannot bind.
 type fake struct {
 	name     string
 	serveErr error
-	early    bool // Serve returns nil without waiting for Shutdown
-	hang     bool // Serve stays blocked even after Shutdown
+	early    bool
+	hang     bool
 
 	released chan struct{}
 	stops    int // written by Run's goroutine, read once it has returned
@@ -42,7 +40,6 @@ func (f *fake) Shutdown(context.Context) error {
 	return nil
 }
 
-// A cancelled context stops every frontend, and reports nothing.
 func TestRunOnSignal(t *testing.T) {
 	a, b := newFake("a"), newFake("b")
 
@@ -57,8 +54,8 @@ func TestRunOnSignal(t *testing.T) {
 	}
 }
 
-// One frontend failing stops the rest, without waiting for a signal. ctx is
-// never cancelled here, so a Run that returns at all is the fail-fast path.
+// ctx is never cancelled here, so a Run that returns at all is the fail-fast
+// path.
 func TestRunOnServeFailure(t *testing.T) {
 	bind := errors.New("address already in use")
 	a, b := newFake("a"), newFake("b")
@@ -76,8 +73,6 @@ func TestRunOnServeFailure(t *testing.T) {
 	}
 }
 
-// A Serve returning nil before Shutdown is still a failure. Reporting nil
-// would exit 0 on a frontend that quietly stopped answering its port.
 func TestRunOnServeReturningEarly(t *testing.T) {
 	a, b := newFake("a"), newFake("b")
 	a.early = true
@@ -91,9 +86,6 @@ func TestRunOnServeReturningEarly(t *testing.T) {
 	}
 }
 
-// The wait for a Serve that never returns ends at the shutdown deadline.
-// Unbounded, this is the hang an operator sees as a process that ignores
-// SIGTERM.
 func TestRunOnServeThatNeverReturns(t *testing.T) {
 	a := newFake("a")
 	a.hang = true
