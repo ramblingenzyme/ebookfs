@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-	"github.com/ramblingenzyme/ebookfs/internal/naming"
+	"github.com/ramblingenzyme/ebookfs/internal/util/naming"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/kepub"
 )

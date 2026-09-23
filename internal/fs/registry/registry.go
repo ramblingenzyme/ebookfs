@@ -10,7 +10,7 @@ import (
 
 	"github.com/knusbaum/go9p/fs"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
-	"github.com/ramblingenzyme/ebookfs/internal/syncutil"
+	"github.com/ramblingenzyme/ebookfs/internal/util/syncutil"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
