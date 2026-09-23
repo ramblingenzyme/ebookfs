@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **One startup lifecycle for every frontend.** `internal/frontend` holds a three-method interface the 9P and OPDS servers implement, and a `Run` that starts them, waits on a context, and shuts them all down against a shared deadline. A frontend that fails to bind now takes the process down instead of being logged while the rest keep serving: a binary answering 9P with its catalog port dead looks healthy to init. `SetupServer` on both frontends is now `New`, taking a package-level `Config` in place of positional parameters, and `Server.Start` is now `Server.Serve`, carrying no listen address, since it blocks and Go reads `Start` as returning immediately. See DECISIONS.md #26.
+
 - **The epub tree no longer knows what an ebookfs book is.** `opf` and `ncx` report what the file says, with nothing rejected or defaulted; ebookfs's own rules moved to the adapter. The refusal to write an unfilable book now runs before the rewrite, so the original survives untouched instead of being replaced and then reported broken. See DECISIONS.md #25.
 
 - **`library/` and `epub/` moved under `pkg/`.** Import paths change: `github.com/ramblingenzyme/ebookfs/library` becomes `.../pkg/library`, and `.../epub` becomes `.../pkg/epub`. The Dockerfile moved to `build/`, `config.example.toml` to `configs/`, and the shared test packages under `internal/testing/`.

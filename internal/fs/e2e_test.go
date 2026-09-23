@@ -48,9 +48,9 @@ func startTestServer(t *testing.T) (addr string) {
 		t.Fatalf("Exporter: %v", err)
 	}
 
-	srv, err := SetupServer(lib, exp, 0, 0)
+	srv, err := New(lib, exp, Config{})
 	if err != nil {
-		t.Fatalf("SetupServer: %v", err)
+		t.Fatalf("New: %v", err)
 	}
 	t.Cleanup(func() { srv.Shutdown(context.Background()) })
 

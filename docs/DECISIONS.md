@@ -221,3 +221,30 @@ about what should be importable (see TODO.md).
 Two costs were taken deliberately. A `v1.0.0` tag binds a second package, and
 re-asserting a value the file already carries no longer repairs the document, so
 an edit that changes nothing now changes nothing at all.
+
+## 26. A frontend that stops serving takes the whole process down
+
+Every frontend runs under one startup path that starts them together, waits,
+and stops them together. The first one to return from serving ends the wait:
+the rest are shut down against a shared deadline and the process exits
+non-zero, whether the cause was a port already bound, a listener dying, or a
+server returning cleanly for no stated reason.
+
+The alternative was what the OPDS listener did when it landed, which was to log
+the bind failure and leave 9P serving. A process answering 9P with its catalog
+port refusing connections looks healthy to init, to a supervisor watching the
+main PID, and to anyone reading `systemctl status`. The failure surfaces days
+later when a reader app cannot refresh, by which time the one log line
+explaining it has rotated away.
+
+Ranking the frontends instead, with 9P essential and the catalog optional, was
+rejected for the same reason. It only moves the question to which
+half-functioning process is acceptable, and that answer changes every time a
+frontend is added.
+
+The cost is that a mistyped catalog port now takes the 9P mount down with it,
+where before the mount kept working. Recovery is unchanged: fix the config and
+restart. A supervisor turns the exit into a restart loop, which shows up the
+first time anyone looks. Shutdown is bounded by the same deadline as the drain,
+so a listener that will not return delays the exit by seconds rather than
+holding it open.

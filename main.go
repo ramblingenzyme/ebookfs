@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ramblingenzyme/ebookfs/internal/config"
+	"github.com/ramblingenzyme/ebookfs/internal/frontend"
 	"github.com/ramblingenzyme/ebookfs/internal/fs"
 	"github.com/ramblingenzyme/ebookfs/internal/opds"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
@@ -82,61 +83,40 @@ func main() {
 		fatal("creating exporter", err)
 	}
 
-	srv, err := fs.SetupServer(lib, exp, cfg.Search.HandleTTL, cfg.Search.MaxHandles)
+	srv, err := fs.New(lib, exp, fs.Config{
+		Listen:           cfg.Server.Listen,
+		SearchTTL:        cfg.Search.HandleTTL,
+		SearchMaxHandles: cfg.Search.MaxHandles,
+	})
 	if err != nil {
 		fatal("setting up server", err)
 	}
+	frontends := []frontend.Frontend{srv}
 
-	// Start returns without error once Shutdown is called.
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- srv.Start(cfg.Server.Listen)
-	}()
-
-	var opdsSrv *opds.Server
-	opdsDone := make(chan struct{})
 	if cfg.OPDS.Listen != "" {
 		opdsExp, err := opdsExporter(lib, cfg, exp)
 		if err != nil {
 			fatal("creating OPDS exporter", err)
 		}
-		opdsSrv = opds.SetupServer(lib, opdsExp, cfg.OPDS.BaseURL)
-		go func() {
-			defer close(opdsDone)
-			// Logged here rather than after the shutdown wait below: a bind
-			// failure happens at startup, and an error only read at shutdown
-			// leaves the operator staring at a port that never answers.
-			if err := opdsSrv.Start(cfg.OPDS.Listen); err != nil {
-				slog.Error("OPDS listener failed", "listen", cfg.OPDS.Listen, "error", err)
-			}
-		}()
+		frontends = append(frontends, opds.New(lib, opdsExp, opds.Config{
+			Listen:  cfg.OPDS.Listen,
+			BaseURL: cfg.OPDS.BaseURL,
+		}))
 	} else {
 		slog.Info("OPDS catalog disabled", "reason", "opds.listen is empty")
 	}
 
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	<-sig
-	slog.Info("shutting down…")
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		slog.Warn("9P shutdown deadline exceeded, forcing close", "error", err)
-	}
-	if opdsSrv != nil {
-		if err := opdsSrv.Shutdown(shutdownCtx); err != nil {
-			slog.Warn("OPDS shutdown deadline exceeded, forcing close", "error", err)
-		}
-		<-opdsDone // the listener has already reported its own failure
-	}
-
-	if err := <-errCh; err != nil {
-		slog.Error("9P server exited with error", "error", err)
-	}
-
+	// The library closes before the exit status is reported, so a frontend
+	// failure still leaves the index shut down cleanly.
+	runErr := frontend.Run(ctx, 10*time.Second, frontends...)
 	if err := lib.Close(); err != nil {
 		slog.Error("closing library", "error", err)
+	}
+	if runErr != nil {
+		fatal("serving", runErr)
 	}
 
 	slog.Info("server stopped")

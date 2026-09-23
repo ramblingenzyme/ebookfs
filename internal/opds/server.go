@@ -20,18 +20,26 @@ import (
 )
 
 type Server struct {
-	http *http.Server
-	base string // kept only for the startup log
+	http   *http.Server
+	base   string // kept only for the startup log
+	listen string
 }
 
-// SetupServer builds the catalog and its mux without binding a port, so the
-// wiring can be tested with httptest. baseURL is the catalog's canonical
-// absolute URL, scheme://host with no trailing slash. An empty one leaves the
-// handler deriving a base per request from client-controlled headers, which is
-// safe only behind a proxy that overwrites them.
-func SetupServer(lib Library, rend Renderer, baseURL string) *Server {
-	return &Server{base: baseURL, http: &http.Server{
-		Handler: NewHandler(lib, rend, baseURL),
+type Config struct {
+	Listen string
+
+	// BaseURL is the catalog's canonical absolute URL, scheme://host with no
+	// trailing slash. An empty one leaves the handler deriving a base per
+	// request from client-controlled headers, which is safe only behind a
+	// proxy that overwrites them.
+	BaseURL string
+}
+
+// New builds the catalog and its mux without binding a port, so the wiring can
+// be tested with httptest.
+func New(lib Library, rend Renderer, cfg Config) *Server {
+	return &Server{base: cfg.BaseURL, listen: cfg.Listen, http: &http.Server{
+		Handler: NewHandler(lib, rend, cfg.BaseURL),
 		// No WriteTimeout: a response is a whole epub, and a slow client on a
 		// slow link would have its download cut off mid-file.
 		ReadHeaderTimeout: 10 * time.Second,
@@ -63,14 +71,14 @@ func NewHandler(lib Library, rend Renderer, baseURL string) http.Handler {
 	return mux
 }
 
-// Start blocks, so it runs in a goroutine and the main one takes signals. It
-// returns nil on a clean shutdown, as fs.Server.Start does.
-func (s *Server) Start(listen string) error {
-	slog.Info("serving OPDS", "listen", listen, "prefix", Prefix, "base_url", s.base)
+func (s *Server) Name() string { return "OPDS" }
+
+func (s *Server) Serve() error {
+	slog.Info("serving OPDS", "listen", s.listen, "prefix", Prefix, "base_url", s.base)
 	if s.base == "" {
 		slog.Warn("opds.base_url is unset; absolute URLs in served documents follow the client's Host and X-Forwarded-* headers")
 	}
-	s.http.Addr = listen
+	s.http.Addr = s.listen
 	if err := s.http.ListenAndServe(); err != http.ErrServerClosed {
 		return err
 	}

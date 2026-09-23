@@ -13,7 +13,7 @@ import (
 	"github.com/knusbaum/go9p/fs"
 )
 
-func TestSetupServer(t *testing.T) {
+func TestNew(t *testing.T) {
 	lib := mock.Library{SearchDeleter: mock.SearchDeleter{
 		SearchFn: func(_ library.Query) ([]*library.Book, error) {
 			b1 := makeBook(1, "Book One", "Alice")
@@ -25,12 +25,12 @@ func TestSetupServer(t *testing.T) {
 	}}
 	exp := mock.Exporter{StatusList: []string{"unread"}}
 
-	srv, err := SetupServer(lib, exp, 30*time.Minute, 100)
+	srv, err := New(lib, exp, Config{SearchTTL: 30 * time.Minute, SearchMaxHandles: 100})
 	if err != nil {
-		t.Fatalf("SetupServer: %v", err)
+		t.Fatalf("New: %v", err)
 	}
 	if srv.root == nil {
-		t.Fatal("SetupServer returned nil root")
+		t.Fatal("New returned nil root")
 	}
 	srv.Shutdown(context.Background())
 
@@ -40,19 +40,19 @@ func TestSetupServer(t *testing.T) {
 	}
 }
 
-func TestSetupServer_QueryError(t *testing.T) {
+func TestNew_QueryError(t *testing.T) {
 	lib := mock.Library{SearchDeleter: mock.SearchDeleter{
 		SearchFn: func(_ library.Query) ([]*library.Book, error) {
 			return nil, errTest
 		},
 	}}
-	_, err := SetupServer(lib, mock.Exporter{}, 30*time.Minute, 100)
+	_, err := New(lib, mock.Exporter{}, Config{SearchTTL: 30 * time.Minute, SearchMaxHandles: 100})
 	if err == nil {
-		t.Fatal("expected error from SetupServer when Query fails")
+		t.Fatal("expected error from New when Query fails")
 	}
 }
 
-func TestSetupServer_BooksPopulated(t *testing.T) {
+func TestNew_BooksPopulated(t *testing.T) {
 	lib := mock.Library{SearchDeleter: mock.SearchDeleter{
 		SearchFn: func(_ library.Query) ([]*library.Book, error) {
 			b := makeBook(1, "Present", "Alice")
@@ -60,9 +60,9 @@ func TestSetupServer_BooksPopulated(t *testing.T) {
 			return []*library.Book{util.WrapBook(b)}, nil
 		},
 	}}
-	srv, err := SetupServer(lib, mock.Exporter{}, 30*time.Minute, 100)
+	srv, err := New(lib, mock.Exporter{}, Config{SearchTTL: 30 * time.Minute, SearchMaxHandles: 100})
 	if err != nil {
-		t.Fatalf("SetupServer: %v", err)
+		t.Fatalf("New: %v", err)
 	}
 	srv.Shutdown(context.Background())
 
