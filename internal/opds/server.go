@@ -1,7 +1,7 @@
 // Package opds is the composition root of the OPDS frontend: it wires a
 // catalog onto github.com/ophymx/opds's HTTP handler and serves it. The
 // handler owns feed routing, OPDS 1.2/2.0 content negotiation, OpenSearch and
-// pagination. This package supplies the catalog behind it and the two content
+// pagination. This package supplies the catalog behind it and the two byte
 // routes it does not cover.
 //
 // The catalog is read-only. OPDS has no write semantics, so 9P remains the
@@ -17,31 +17,7 @@ import (
 
 	"github.com/ophymx/opds"
 	"github.com/ophymx/opds/opdshttp"
-	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
-
-// Prefix is where the catalog is mounted. It is fixed rather than configured:
-// a deployment that wants it elsewhere rewrites the path in its reverse proxy,
-// and every href the catalog emits is built from this one constant.
-const Prefix = "/opds"
-
-type Library interface {
-	Search(library.Query) ([]*library.Book, error)
-	Get(int64) (*library.Book, error)
-	Content(int64) (library.EpubReader, error)
-	Authors() ([]library.Facet, error)
-	Series() ([]library.Facet, error)
-	Tags() ([]library.Facet, error)
-}
-
-// Renderer is the three library.Exporter methods that deliver a book's bytes.
-// Includes and Dirname are absent because they decide reader/ membership and
-// grouping, and the catalog serves the whole library under its own navigation.
-type Renderer interface {
-	Open(*library.Book) (library.EpubReader, error)
-	Size(*library.Book) (int64, bool)
-	Filename(*library.Book) string
-}
 
 type Server struct {
 	http *http.Server
@@ -67,7 +43,8 @@ func SetupServer(lib Library, rend Renderer, baseURL string) *Server {
 // ahead of it. ServeMux prefers the more specific pattern, so the content
 // routes win over the catalog's subtree match.
 func NewHandler(lib Library, rend Renderer, baseURL string) http.Handler {
-	c := &catalog{lib: lib, rend: rend, base: strings.TrimSuffix(baseURL, "/")}
+	files := &content{lib: lib, rend: rend}
+	c := &catalog{lib: lib, filename: rend.Filename, base: strings.TrimSuffix(baseURL, "/")}
 	h := opdshttp.New(c,
 		opdshttp.WithPrefix(Prefix),
 		opdshttp.WithBaseURL(baseURL),
@@ -77,11 +54,12 @@ func NewHandler(lib Library, rend Renderer, baseURL string) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle(Prefix, h)
 	mux.Handle(Prefix+"/", h)
+
 	// The trailing filename segment is ignored. It is there so a client that
 	// names the download after its URL rather than Content-Disposition still
 	// saves a sensibly named file.
-	mux.HandleFunc("GET "+Prefix+"/content/{id}/{filename}", c.serveEpub)
-	mux.HandleFunc("GET "+Prefix+"/cover/{id}", c.serveCover)
+	mux.HandleFunc("GET "+contentBase+"{id}/{filename}", files.byID(files.serveEpub))
+	mux.HandleFunc("GET "+coverBase+"{id}", files.byID(files.serveCover))
 	return mux
 }
 

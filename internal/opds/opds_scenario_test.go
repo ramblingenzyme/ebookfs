@@ -155,6 +155,40 @@ func TestRootFeedSectionsAllResolve(t *testing.T) {
 	}
 }
 
+// Every kind in the table is reachable from the root feed and leads to books,
+// which is what stops the table's two consumers drifting: Root renders it and
+// Feed dispatches on it, so a kind wired into one and not the other fails here
+// rather than 404ing in a reader app.
+func TestEveryKindResolvesThroughToBooks(t *testing.T) {
+	b := util.MakeMutableBook(1, "Dune", "Frank Herbert")
+	b.Meta.Tags = []string{"scifi"}
+	b.Series = &book.SeriesRef{Name: "Dune", Index: "1"}
+	_, h := newFake(t, util.WrapBook(b))
+
+	root := feed(t, h, Prefix+"/")
+	if len(root.Entries) != len(kinds) {
+		t.Fatalf("root has %d entries, want one per kind (%d)", len(root.Entries), len(kinds))
+	}
+	for i, k := range kinds {
+		e := root.Entries[i]
+		if e.Title != k.title {
+			t.Errorf("root entry %d = %q, want %q", i, e.Title, k.title)
+		}
+		sub := feed(t, h, e.Links[0].Href)
+		if k.list == nil {
+			continue
+		}
+		// A kind with a listing is one hop further from its books.
+		if len(sub.Entries) == 0 {
+			t.Errorf("%s: listing is empty", k.id)
+			continue
+		}
+		if code := get(t, h, sub.Entries[0].Links[0].Href).Code; code != http.StatusOK {
+			t.Errorf("%s: %s -> status %d, want 200", k.id, sub.Entries[0].Links[0].Href, code)
+		}
+	}
+}
+
 // Following a facet listing reaches the books behind that value. The names
 // carry a slash and a space because a href is a path segment and both have
 // broken one before.
@@ -292,11 +326,12 @@ func TestMissesAre404(t *testing.T) {
 	}
 
 	cases := map[string]int{
-		Prefix + "/cover/7":                 http.StatusNotFound,
-		Prefix + "/cover/999":               http.StatusNotFound,
-		Prefix + "/content/999/x.epub":      http.StatusNotFound,
-		Prefix + "/feed/nonsense":           http.StatusNotFound,
-		Prefix + "/feed/author:Nobody%20Xx": http.StatusOK,
+		Prefix + "/cover/7":                  http.StatusNotFound,
+		Prefix + "/cover/999":                http.StatusNotFound,
+		Prefix + "/content/999/x.epub":       http.StatusNotFound,
+		Prefix + "/feed/nonsense":            http.StatusNotFound,
+		Prefix + "/feed/all?value=junk":      http.StatusNotFound,
+		Prefix + "/feed/author?value=Nobody": http.StatusOK,
 	}
 	for path, want := range cases {
 		if code := get(t, h, path).Code; code != want {
@@ -306,28 +341,37 @@ func TestMissesAre404(t *testing.T) {
 }
 
 // A library longer than one page hands the client a next link, and following
-// it reaches the rest.
+// it reaches the rest. The tag feed is the case that matters: its href already
+// carries ?value=, so a next link that dropped the query string would page
+// through the whole library instead of the tag.
 func TestPaginationLinksTheNextPage(t *testing.T) {
 	books := make([]*library.Book, pageSize+3)
 	for i := range books {
-		books[i] = util.MakeBook(int64(i+1), fmt.Sprintf("Book %03d", i+1))
+		b := util.MakeMutableBook(int64(i+1), fmt.Sprintf("Book %03d", i+1))
+		b.Meta.Tags = []string{"scifi"}
+		books[i] = util.WrapBook(b)
 	}
 	_, h := newFake(t, books...)
 
-	first := feed(t, h, Prefix+"/feed/all")
-	if len(first.Entries) != pageSize {
-		t.Fatalf("first page = %d entries, want %d", len(first.Entries), pageSize)
-	}
-	next := first.href("next")
-	if next == "" {
-		t.Fatal("no next link on a feed with more pages")
-	}
-	second := feed(t, h, next)
-	if len(second.Entries) != 3 {
-		t.Errorf("second page = %d entries, want 3", len(second.Entries))
-	}
-	if second.href("next") != "" {
-		t.Error("last page advertises a next page")
+	for _, path := range []string{Prefix + "/feed/all", Prefix + "/feed/tag?value=scifi"} {
+		first := feed(t, h, path)
+		if len(first.Entries) != pageSize {
+			t.Fatalf("%s: first page = %d entries, want %d", path, len(first.Entries), pageSize)
+		}
+		next := first.href("next")
+		if next == "" {
+			t.Fatalf("%s: no next link on a feed with more pages", path)
+		}
+		second := feed(t, h, next)
+		if len(second.Entries) != 3 {
+			t.Errorf("%s -> %s: second page = %d entries, want 3", path, next, len(second.Entries))
+		}
+		if second.href("next") != "" {
+			t.Errorf("%s: last page advertises a next page", path)
+		}
+		if got := second.href("self"); got != next {
+			t.Errorf("%s: self on page 2 = %q, want %q", path, got, next)
+		}
 	}
 }
 
