@@ -13,12 +13,11 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// toPublication leaves out rating and reading status. Neither has an OPDS slot,
-// the status feeds already navigate by status, and nothing consumes a rating.
+// toPublication leaves out rating and reading status, since neither has an
+// OPDS slot.
 //
 // filename is the exporter's name for the book, which a converting exporter
-// spells differently from b.Filename(). It is the one thing rendering needs
-// from the exporter, so it arrives as a string rather than behind a Renderer.
+// spells differently from b.Filename().
 func toPublication(b *library.Book, filename string) opds.Publication {
 	id := strconv.FormatInt(b.ID(), 10)
 	p := opds.NewPublication(urn("book:"+id), b.Title()).
@@ -43,8 +42,8 @@ func toPublication(b *library.Book, filename string) opds.Publication {
 		p.PublishedAt(t)
 	}
 
-	// Sorted by scheme, since the map's own order varies per call and a feed
-	// that reshuffles between requests defeats a client's caching.
+	// Sorted, since map order varies per call and a reshuffled feed defeats
+	// client caching.
 	ids := b.Identifiers()
 	for _, scheme := range slices.Sorted(maps.Keys(ids)) {
 		p.Identifier(identifierURN(scheme, ids[scheme]))
@@ -72,8 +71,7 @@ func toPublication(b *library.Book, filename string) opds.Publication {
 	return *p
 }
 
-// published accepts a full timestamp, a date, or a year alone, the three
-// shapes real epubs carry. Anything else is dropped rather than guessed at.
+// published accepts the three date shapes real epubs carry.
 func published(s string) (time.Time, bool) {
 	for _, layout := range []string{time.RFC3339, "2006-01-02", "2006"} {
 		if t, err := time.Parse(layout, s); err == nil {
@@ -83,10 +81,9 @@ func published(s string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-// seriesPosition maps an EPUB 3.3 D.3.7 collection index onto the float
-// opds.Series carries, which renders in OPDS 2.0 only. An index D.3.7 allows
-// and a float cannot hold, such as the multi-level "1.2.3", stays at zero
-// rather than becoming a number that means something else.
+// seriesPosition maps an EPUB 3.3 D.3.7 collection index onto opds.Series's
+// float, which renders in OPDS 2.0 only. A multi-level index such as "1.2.3"
+// stays zero.
 func seriesPosition(index string) float64 {
 	pos, err := strconv.ParseFloat(index, 64)
 	if err != nil {
@@ -95,9 +92,8 @@ func seriesPosition(index string) float64 {
 	return pos
 }
 
-// identifierURN renders an identifier as the URN OPDS expects. ISBN and ISSN
-// have registered URN namespaces. Anything else keeps its scheme as an
-// informal prefix, which is what the epub's own dc:identifier carried.
+// identifierURN gives ISBN and ISSN their registered URN namespaces. Any other
+// scheme stays an informal prefix, as the epub's dc:identifier had it.
 func identifierURN(scheme, value string) string {
 	switch strings.ToLower(scheme) {
 	case "isbn", "issn":

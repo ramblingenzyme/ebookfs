@@ -1,13 +1,10 @@
 // The catalog driven the way an OPDS reader drives it: an HTTP request in, a
-// parsed Atom document out. Every layer between the URL and the library is the
-// production one, including the upstream handler's routing and negotiation.
-// Only the library and the exporter are faked.
+// parsed Atom document out. Only the library and the exporter are faked.
 //
-// What these pin, which no single source file holds: that a href the catalog
-// writes into one feed routes back to the query it names when a client follows
-// it, that a facet value with a slash or a space survives that round trip, that
-// a cover is read from the original epub rather than the export rendition, and
-// that a download keeps the range support a reader resumes on.
+// These pin what no single source file holds. A href written into one feed
+// routes back to the query it names, and a facet value with a slash or a space
+// survives that trip. A cover comes from the original epub, and a download
+// keeps the range support a reader resumes on.
 package opds
 
 import (
@@ -133,32 +130,8 @@ func feed(t *testing.T, h http.Handler, path string) atomFeed {
 	return f
 }
 
-// The root feed names every section, and each href it writes resolves to a
-// feed rather than a 404, which catches a section renamed on one side of the
-// id scheme only.
-func TestRootFeedSectionsAllResolve(t *testing.T) {
-	b := util.MakeMutableBook(1, "Dune", "Frank Herbert")
-	b.Meta.Tags = []string{"scifi"}
-	b.Series = &book.SeriesRef{Name: "Dune", Index: "1"}
-	_, h := newFake(t, util.WrapBook(b))
-
-	root := feed(t, h, Prefix+"/")
-	want := []string{"All Books", "Recently Added", "Authors", "Series", "Tags", "Reading Status"}
-	if got := root.titles(); !slices.Equal(got, want) {
-		t.Fatalf("root sections = %v, want %v", got, want)
-	}
-	for _, e := range root.Entries {
-		href := e.Links[0].Href
-		if code := get(t, h, href).Code; code != http.StatusOK {
-			t.Errorf("%s -> %s: status %d, want 200", e.Title, href, code)
-		}
-	}
-}
-
-// Every kind in the table is reachable from the root feed and leads to books,
-// which is what stops the table's two consumers drifting: Root renders it and
-// Feed dispatches on it, so a kind wired into one and not the other fails here
-// rather than 404ing in a reader app.
+// Root renders the kinds table and Feed dispatches on it. A kind wired into
+// only one fails here rather than 404ing in a reader app.
 func TestEveryKindResolvesThroughToBooks(t *testing.T) {
 	b := util.MakeMutableBook(1, "Dune", "Frank Herbert")
 	b.Meta.Tags = []string{"scifi"}
@@ -166,6 +139,12 @@ func TestEveryKindResolvesThroughToBooks(t *testing.T) {
 	_, h := newFake(t, util.WrapBook(b))
 
 	root := feed(t, h, Prefix+"/")
+	// Spelled out rather than read from kinds, to pin the wording and order a
+	// reader sees.
+	want := []string{"All Books", "Recently Added", "Authors", "Series", "Tags", "Reading Status"}
+	if got := root.titles(); !slices.Equal(got, want) {
+		t.Errorf("root sections = %v, want %v", got, want)
+	}
 	if len(root.Entries) != len(kinds) {
 		t.Fatalf("root has %d entries, want one per kind (%d)", len(root.Entries), len(kinds))
 	}
@@ -189,9 +168,7 @@ func TestEveryKindResolvesThroughToBooks(t *testing.T) {
 	}
 }
 
-// Following a facet listing reaches the books behind that value. The names
-// carry a slash and a space because a href is a path segment and both have
-// broken one before.
+// A slash and a space each broke the href when the value was a path segment.
 func TestFacetHrefRoundTripsAwkwardNames(t *testing.T) {
 	b := util.MakeMutableBook(1, "Either/Or", "Søren Kierkegaard")
 	b.Meta.Tags = []string{"philosophy/ethics"}
@@ -215,8 +192,6 @@ func TestFacetHrefRoundTripsAwkwardNames(t *testing.T) {
 	}
 }
 
-// An entry carries what a reader needs to fetch the book: an acquisition link
-// at the epub media type, a cover, the authors and the tags.
 func TestEntryCarriesAcquisitionAndMetadata(t *testing.T) {
 	b := util.MakeMutableBook(7, "Dune", "Frank Herbert")
 	b.EpubPath = "Frank Herbert/Dune (7)/Dune.epub"
@@ -259,8 +234,6 @@ func TestEntryCarriesAcquisitionAndMetadata(t *testing.T) {
 	}
 }
 
-// A download serves the rendition with the length and range support a reader
-// resumes on.
 func TestDownloadSupportsRanges(t *testing.T) {
 	b := util.MakeMutableBook(7, "Dune", "Frank Herbert")
 	b.EpubPath = "Frank Herbert/Dune (7)/Dune.epub"
@@ -292,8 +265,8 @@ func TestDownloadSupportsRanges(t *testing.T) {
 	}
 }
 
-// The cover comes from the original epub. Reading it through the exporter
-// would convert the book, which is minutes of CPU for a thumbnail.
+// Reading the cover through the exporter would convert the book, minutes of
+// CPU for a thumbnail.
 func TestCoverBypassesTheExporter(t *testing.T) {
 	b := util.MakeMutableBook(7, "Dune", "Frank Herbert")
 	b.CoverPath = "OEBPS/cover.png"
@@ -311,10 +284,8 @@ func TestCoverBypassesTheExporter(t *testing.T) {
 	}
 }
 
-// A coverless book is ordinary, so its cover route answers 404 rather than
-// 500. Same for a book and a feed that do not exist.
-// An author with no books is an empty feed instead: the catalog cannot tell
-// that from a name nobody queried, and neither can a client.
+// An author with no books gets an empty feed rather than a 404, since the
+// catalog cannot tell it from a name nobody queried.
 func TestMissesAre404(t *testing.T) {
 	b := util.MakeMutableBook(7, "Dune", "Frank Herbert")
 	f, h := newFake(t, util.WrapBook(b))
@@ -340,10 +311,8 @@ func TestMissesAre404(t *testing.T) {
 	}
 }
 
-// A library longer than one page hands the client a next link, and following
-// it reaches the rest. The tag feed is the case that matters: its href already
-// carries ?value=, so a next link that dropped the query string would page
-// through the whole library instead of the tag.
+// The tag feed's href already carries ?value=, so a next link that dropped the
+// query string would page through the whole library instead of the tag.
 func TestPaginationLinksTheNextPage(t *testing.T) {
 	books := make([]*library.Book, pageSize+3)
 	for i := range books {
@@ -375,8 +344,6 @@ func TestPaginationLinksTheNextPage(t *testing.T) {
 	}
 }
 
-// Search maps the OpenSearch terms onto a title query, and the description
-// document advertises the endpoint the handler actually serves.
 func TestSearchQueriesTitles(t *testing.T) {
 	f, h := newFake(t, util.MakeBook(1, "Dune"))
 
@@ -395,15 +362,12 @@ func TestSearchQueriesTitles(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("opensearch: status %d", w.Code)
 	}
-	// OpenSearch 1.1 wants an absolute template, and the upstream handler only
-	// absolutizes one it built itself, so this is the catalog's own job.
 	if want := "https://books.example.com" + Prefix + "/search?q={searchTerms}"; !strings.Contains(w.Body.String(), want) {
 		t.Errorf("opensearch template is not %q:\n%s", want, w.Body)
 	}
 }
 
-// filter is the fake index, and selects over only the fields the catalog's own
-// feeds set.
+// filter is the fake index, over only the fields the catalog's feeds set.
 func filter(books []*library.Book, q library.Query) []*library.Book {
 	var out []*library.Book
 	for _, b := range books {
@@ -451,8 +415,6 @@ func seriesOf(b *library.Book) []string {
 	return []string{b.SeriesName()}
 }
 
-// count builds a facet listing the way the index does, one entry per distinct
-// value.
 func count(books []*library.Book, values func(*library.Book) []string) []library.Facet {
 	var out []library.Facet
 	seen := map[string]int{}

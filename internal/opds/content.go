@@ -11,16 +11,12 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// content is separate from catalog so a byte route cannot reach the feed
-// builders, and a feed builder cannot reach the ResponseWriter.
 type content struct {
 	lib  Library
 	rend Renderer
 }
 
-// byID resolves the {id} segment ahead of serve and turns a returned error
-// into a status, so each route below runs against a book that exists and never
-// writes a failure itself.
+// byID turns serve's error into a status, so no route writes its own failure.
 func (c *content) byID(serve func(*library.Book, http.ResponseWriter, *http.Request) error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		b, err := lookupBook(c.lib, r.PathValue("id"))
@@ -53,9 +49,9 @@ func (c *content) serveEpub(b *library.Book, w http.ResponseWriter, r *http.Requ
 		return nil
 	}
 
-	// Logged rather than returned: the body is already going out, so there is
-	// no status left to send.
 	slog.Warn("opds: rendition size unknown, serving without ranges", "book_id", b.ID())
+	// Logged rather than returned, since the body is already going out and
+	// there is no status left to send.
 	if _, err := io.Copy(w, io.NewSectionReader(rd, 0, math.MaxInt64)); err != nil {
 		slog.Warn("opds: download failed", "book_id", b.ID(), "error", err)
 	}
@@ -76,16 +72,14 @@ func (c *content) serveCover(b *library.Book, w http.ResponseWriter, r *http.Req
 	if err != nil {
 		return err
 	}
-	// The zip path's extension is the only type hint the index holds; sniffing
-	// covers the rest, and both agree for the jpeg and png real epubs carry.
+	// Sniffed rather than taken from the cover path's extension as
+	// toPublication does. The two agree for the jpeg and png real epubs carry.
 	w.Header().Set("Content-Type", http.DetectContentType(img))
 	http.ServeContent(w, r, "", b.DateModified(), bytes.NewReader(img))
 	return nil
 }
 
-// httpError maps a library error onto a status. It mirrors opdshttp's own
-// default mapping, which the content routes bypass by not going through the
-// OPDS handler.
+// httpError mirrors opdshttp's default error mapping, which these routes bypass.
 func httpError(w http.ResponseWriter, r *http.Request, err error) {
 	if isNotFound(err) {
 		http.NotFound(w, r)

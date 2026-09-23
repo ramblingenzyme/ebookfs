@@ -5,25 +5,21 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// recentLimit holds the recently-added feed to a single page. A "what's new"
-// feed that paginates through the whole library is the all-books feed
-// reordered.
+// recentLimit caps the recent feed at one page. Paginated, it would be the
+// all-books feed reordered.
 const recentLimit = pageSize
 
-// kindAuthor is named because the entry renderer links each author back to
-// their feed, which is the one id used outside this table.
 const kindAuthor = "author"
 
-// kind is one axis the catalog can be browsed by. Root renders this table and
-// Feed dispatches on it, so a kind reachable by URL but absent from the root
-// feed is not a state this package can reach.
+// kind is one axis the catalog can be browsed by. Root and Feed both read the
+// kinds table, so every kind a URL reaches is listed in the root feed.
 type kind struct {
 	id    string // URL segment, and the atom:id fragment feedURN builds from
 	title string
 	rel   string // the relation Root's link to it carries
 
-	// list returns the kind's distinct values. A nil list means the kind has
-	// no listing to browse: its id alone addresses an acquisition feed.
+	// list returns the kind's distinct values. Nil means the id addresses an
+	// acquisition feed directly.
 	list func(Library) ([]library.Facet, error)
 
 	// query selects the books behind one value, or behind the kind itself when
@@ -31,7 +27,7 @@ type kind struct {
 	query func(value string) library.Query
 }
 
-// kinds are ordered, since Root lists them in this order.
+// kinds is in the order Root lists them.
 var kinds = []kind{
 	{
 		id: "all", title: "All Books", rel: opds.RelSubsection,
@@ -74,8 +70,6 @@ func lookupKind(id string) (kind, bool) {
 	return kind{}, false
 }
 
-// mediaType is the type of the feed a kind's own id addresses: a listing for a
-// kind that has one, the books themselves for a kind that does not.
 func (k kind) mediaType() string {
 	if k.list == nil {
 		return opds.MediaTypeAcquisition
@@ -83,10 +77,8 @@ func (k kind) mediaType() string {
 	return opds.MediaTypeNavigation
 }
 
-// statusFacets lists the reading-status vocabulary, which is fixed rather than
-// drawn from the library: a status with no books is still a status, and the
-// empty feed behind it says so. The counts stay zero, and navFeed shows no
-// count rather than claiming none exist.
+// statusFacets lists the fixed status vocabulary, so a status no book holds
+// still gets a feed. Counts stay zero, which navFeed shows as no count.
 func statusFacets(Library) ([]library.Facet, error) {
 	statuses := library.Statuses()
 	out := make([]library.Facet, len(statuses))
