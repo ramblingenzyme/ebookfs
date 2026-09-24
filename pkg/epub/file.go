@@ -10,7 +10,7 @@ var ErrClosed = errors.New("epub file is closed")
 
 // File is an open epub archive: the zip central directory, a validated
 // mimetype, and the package document's path resolved from the OCF container.
-// The package document itself is not parsed, so opening one costs no XML work
+// The package document itself is not parsed, so opening one costs no XML work:
 // Open does that.
 //
 // The underlying file handle stays open, so repeated reads avoid re-reading the

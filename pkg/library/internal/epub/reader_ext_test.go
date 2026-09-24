@@ -9,15 +9,8 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
 )
 
-// The closed flag and the guard on each accessor live in the epub package's
-// File, which this package's reader embeds. What is pinned here is that the
-// whole EpubReader reports a use-after-close alike — including Cover, which is
-// this package's own and would otherwise answer "no cover" for a handle that is
-// gone.
-//
-// An EpubReader is reached from the 9P read path through vfile.ReadAtFile,
-// where a client holding a fid across a re-ingest is exactly how a
-// use-after-close arises.
+// Cover is implemented in this package, not pkg/epub, so it has its own
+// closed check.
 func TestReaderClosedContract(t *testing.T) {
 	path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
 	r, err := epub.OpenReader(path, "OEBPS/cover.jpg")
@@ -25,7 +18,6 @@ func TestReaderClosedContract(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Working before the close, so the errors after it mean something.
 	opf, err := r.OPF()
 	if err != nil {
 		t.Fatalf("OPF before close: %v", err)
@@ -44,8 +36,8 @@ func TestReaderClosedContract(t *testing.T) {
 		t.Fatalf("first Close: %v", err)
 	}
 
-	// The library facade runs this same table against library.ErrClosed;
-	// library_ext_test.go says why both exist.
+	// library_ext_test.go runs this table against library.ErrClosed, and says
+	// why both tests exist.
 	for _, tc := range []struct {
 		name string
 		call func() error
@@ -63,9 +55,6 @@ func TestReaderClosedContract(t *testing.T) {
 	}
 }
 
-// A reader opened for a book with no cover reports that rather than returning
-// empty bytes: Bib.CoverPath is "" when the epub carries no cover image, and
-// that value is handed straight to OpenReader.
 func TestReaderWithNoCover(t *testing.T) {
 	path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
 	r, err := epub.OpenReader(path, "")
@@ -77,7 +66,6 @@ func TestReaderWithNoCover(t *testing.T) {
 	if _, err := r.Cover(); err == nil {
 		t.Error("Cover returned no error for an epub with no cover path")
 	}
-	// The rest of the reader still works: no cover is not a broken reader.
 	if _, err := r.OPF(); err != nil {
 		t.Errorf("OPF: %v", err)
 	}

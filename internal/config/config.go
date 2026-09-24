@@ -42,7 +42,7 @@ type ReaderConfig struct {
 // is the default.
 type OPDSConfig struct {
 	Listen  string `toml:"listen"`   // e.g. "0.0.0.0:8080"
-	BaseURL string `toml:"base_url"` // absolute, scheme://host, no trailing slash
+	BaseURL string `toml:"base_url"` // absolute, scheme://host; trailing slashes are stripped
 
 	// Convert is the catalog's rendition choice, separate from [reader]'s.
 	// There is no opds.cache_dir: both convert into reader.cache_dir, since a

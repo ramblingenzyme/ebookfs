@@ -122,9 +122,9 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 
 // authorNames is the set Index.Exists compares against. It filters nothing:
 // the set compared has to be the set written, or the same book ingests twice.
-// Nothing needs filtering either, since epub.Parse drops creators that
-// sanitize to nothing and rejects a book left with none, and Edits rejects an
-// empty name.
+// Nothing needs filtering either, since epub.Parse drops creators with an
+// empty name and rejects a book left with none, and Edits rejects an empty
+// name.
 func authorNames(authors []book.Author) []string {
 	names := make([]string, len(authors))
 	for i, a := range authors {

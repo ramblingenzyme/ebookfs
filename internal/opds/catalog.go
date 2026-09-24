@@ -114,7 +114,10 @@ func (c *catalog) navFeed(k kind) (*opds.Feed, error) {
 		// The count rides along as the entry's description, the only place
 		// OPDS 1.2 navigation has for it.
 		if v.Count > 0 {
-			e.Content = plural(v.Count, "book")
+			e.Content = strconv.Itoa(v.Count) + " books"
+			if v.Count == 1 {
+				e.Content = "1 book"
+			}
 		}
 		f.AddNavEntry(e)
 	}
@@ -146,11 +149,4 @@ func (c *catalog) page(f *opds.Feed, baseHref string, reqPage int, books []*libr
 	}
 	f.Page(len(books), pageSize, start+1)
 	return f.Paged(baseHref, page, end < len(books))
-}
-
-func plural(n int, noun string) string {
-	if n == 1 {
-		return "1 " + noun
-	}
-	return strconv.Itoa(n) + " " + noun + "s"
 }

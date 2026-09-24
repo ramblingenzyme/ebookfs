@@ -14,7 +14,7 @@ type field struct {
 	get func(*library.Book) string
 	// edits converts string input to typed Edits. Error return is for input
 	// parsing failures (e.g. strconv.Atoi); validation against the book's current
-	// state is centralized in edits.Validate, so this needs no snapshot.
+	// state is centralized in book.Validate, so this needs no snapshot.
 	edits func(string) (library.Edits, error)
 }
 
@@ -103,7 +103,7 @@ var fields = map[string]field{
 		},
 		// Passed through as written: the position is a string all the way from
 		// the epub (EPUB 3.3 D.3.7 allows "2.2.1"), and its grammar is checked
-		// by edits.Validate along with every other field's.
+		// by book.Validate along with every other field's.
 		edits: func(s string) (library.Edits, error) {
 			return library.Edits{SeriesIndex: &s}, nil
 		},

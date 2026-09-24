@@ -29,8 +29,8 @@ func (c *content) byID(serve func(*library.Book, http.ResponseWriter, *http.Requ
 	}
 }
 
-// serveEpub delivers a book's export rendition through http.ServeContent, so a
-// reader can resume an interrupted download with a Range request.
+// serveEpub delivers a book's export rendition, using http.ServeContent and
+// Range support when the rendition size is known.
 func (c *content) serveEpub(b *library.Book, w http.ResponseWriter, r *http.Request) error {
 	rd, err := c.rend.Open(b)
 	if err != nil {

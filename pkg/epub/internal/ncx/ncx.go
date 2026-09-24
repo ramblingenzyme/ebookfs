@@ -27,14 +27,14 @@ type Doc struct {
 
 // Parse rejects a document it cannot round-trip, rather than writing back the
 // correction etree would make; ValidateInput buys the syntax error and its line
-// for the caller to log. Strict here and permissive in opf.Parse: a rejected
+// for the caller to log. Strict here and permissive in pkgdoc.Parse: a rejected
 // NCX is skipped and the edit still lands, where a rejected package document
 // costs the caller the whole book.
 func Parse(b []byte) (*Doc, error) {
 	doc := etree.NewDocument()
 	// pkgdoc.Parse says why this document validates and that one does not.
 	doc.ReadSettings.ValidateInput = true
-	// opf.Parse says why CDATA is preserved.
+	// pkgdoc.Parse says why CDATA is preserved.
 	doc.ReadSettings.PreserveCData = true
 	if err := doc.ReadFromBytes(b); err != nil {
 		return nil, err

@@ -1,11 +1,3 @@
-// What Rewrite does with an bookmodel.Edits that the epub package's own fields cannot
-// say: a nil means the edit did not name the field, so one half of a series
-// carries the other over, a retitled book drops its stale sort title, and an
-// edit naming nothing at all is not an edit.
-//
-// Also the two refusals that are this layer's: bookmodel.Validate as a backstop, and the
-// title check that must run before anything is written.
-
 package epub_test
 
 import (
@@ -19,10 +11,8 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
 )
 
-// reindexSeries applies an index-only series edit to the epub at path, with the
-// book model claiming series. bookmodel.Validate refuses a SeriesIndex edit on a book
-// with no series at all, so the model has to carry one, the shape library.Edit
-// hands in after reading the book from the index.
+// The Book is given a series because book.Validate refuses an index edit on
+// a book without one.
 func reindexSeries(t *testing.T, path, series, index string) bookmodel.Bib {
 	t.Helper()
 	b := &bookmodel.Book{
@@ -37,8 +27,7 @@ func reindexSeries(t *testing.T, path, series, index string) bookmodel.Bib {
 	return bib
 }
 
-// An index-only edit has no name to write, so the OPF is the only source. Get
-// it wrong and moving a book within its series silently drops the series.
+// An index-only edit carries no series name, so the name is kept from the OPF.
 func TestWriteBibSeriesIndexOnlyKeepsName(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -62,20 +51,16 @@ func TestWriteBibSeriesIndexOnlyKeepsName(t *testing.T) {
 	}
 }
 
-// Index says the book is in a series, the epub has no such metadata. With no
-// name to write against, the edit is dropped rather than inventing an empty
-// collection.
+// The index says the book is in a series, but the epub has none. The edit is
+// dropped rather than creating an empty series.
 func TestWriteBibSeriesIndexOnlyWithoutSeriesInOPF(t *testing.T) {
-	path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3)) // no series metadata
+	path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
 
 	book := reindexSeries(t, path, "Phantom Saga", "4")
 
 	if book.Series != nil {
 		t.Errorf("series = %+v, want nil — the OPF has none to carry over, and the edit must not invent one", book.Series)
 	}
-	// SeriesIndex is deliberately not asserted: translateSeries defaults it to
-	// 1 for every book with a series, and only sets Series when the name is
-	// non-empty, so the position never escapes.
 }
 
 func TestWriteBibBlankTitleRejected(t *testing.T) {
@@ -83,7 +68,6 @@ func TestWriteBibBlankTitleRejected(t *testing.T) {
 	if _, err := writeBib(path, bookmodel.Edits{Title: new("   ")}); err == nil {
 		t.Fatal("expected error blanking title, got nil")
 	}
-	// Original must be untouched and still valid.
 	book, err := epub.Parse(path)
 	if err != nil {
 		t.Fatalf("original epub broken after rejected edit: %v", err)
@@ -94,9 +78,6 @@ func TestWriteBibBlankTitleRejected(t *testing.T) {
 }
 
 func TestWriteBibTitleChangeClearsStaleSortTitle(t *testing.T) {
-	// epubtest.OPF3 starts with sort title "Title, Original"; changing the title without a
-	// new sort title must clear it rather than leave a value derived from the old
-	// title.
 	path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
 	before, err := epub.Parse(path)
 	if err != nil {
@@ -115,14 +96,11 @@ func TestWriteBibTitleChangeClearsStaleSortTitle(t *testing.T) {
 	}
 }
 
-// Rewrite's short circuit, as its doc promises: an bookmodel.Edits carrying nothing
-// returns b.Bib verbatim and leaves the file alone. library.Edit depends on it:
-// it calls Rewrite on every edit including meta-only ones, so a rewrite here
-// would rebuild the zip and restamp dcterms:modified for a change to a rating.
+// library.Edit calls Rewrite even for edits that only touch meta.toml, such as
+// a rating. Rewriting the epub then would needlessly update dcterms:modified.
 //
-// The Bib handed in deliberately disagrees with the file, so a Rewrite that
-// re-parsed instead of short-circuiting would return the file's title rather
-// than this one.
+// The Bib passed in differs from the file on purpose. If Rewrite read the
+// file, the returned title would change.
 func TestRewriteWithNoEditsIsATotalNoOp(t *testing.T) {
 	path := epubtest.Build(t, epubtest.EPUB3(`<dc:title>On Disk</dc:title><dc:creator>Alice</dc:creator>`))
 
@@ -151,10 +129,9 @@ func TestRewriteWithNoEditsIsATotalNoOp(t *testing.T) {
 	}
 }
 
-// rewriteEpub re-parses before renaming, so a write producing an unreadable book
-// is abandoned. The trigger is a sort-title-only edit on a package with no
-// dc:title: the refinement mints an empty element, and an empty title is not a
-// book. Reachable only if the file changed on disk after being indexed.
+// Setting a sort title on a package with no dc:title adds an empty title,
+// which Rewrite rejects. This only happens if the file changed on disk after
+// it was indexed.
 func TestFailedValidationLeavesTheOriginal(t *testing.T) {
 	opf := epubtest.OPF3
 	for _, drop := range []string{
@@ -186,9 +163,8 @@ func TestFailedValidationLeavesTheOriginal(t *testing.T) {
 	}
 }
 
-// os.SameFile compares device and inode, so it catches the rewrite even when the
-// rebuilt zip is byte-identical. The returned Bib still comes from the file,
-// the part the skip must not cost.
+// os.SameFile compares inodes, so it detects a rewrite even when the new zip
+// has identical bytes. The returned Bib must still be read from the file.
 func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 	path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
 	statOf := func() os.FileInfo {
@@ -206,8 +182,8 @@ func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// A Title without a new SortTitle clears the stale sort title, which is a
-	// real change, and epubtest.OPF3 carries one.
+	// Title is paired with its current SortTitle, because a Title on its own
+	// clears the sort title and so is a real change.
 	for _, tc := range []struct {
 		name string
 		e    bookmodel.Edits
@@ -228,7 +204,8 @@ func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 		}
 	}
 
-	// Control: a real change must still land, or the check above proves nothing.
+	// A real change must still rewrite the file, or the checks above prove
+	// nothing.
 	changed := current.Title + " (Revised)"
 	if _, err := writeBib(path, bookmodel.Edits{Title: new(changed)}); err != nil {
 		t.Fatal(err)
@@ -238,9 +215,8 @@ func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 	}
 }
 
-// Two creators of one name have no meaning in either spec, and reusing one
-// element for both would silently collapse the list. Validate rejects it
-// and Rewrite re-checks, so an unvalidated Edits cannot reach the file.
+// Two authors with the same name would be written to one creator element,
+// silently dropping one of them.
 func TestRewriteRefusesDuplicateAuthors(t *testing.T) {
 	path := epubtest.Build(t, epubtest.RichOPF3)
 	before := epubtest.ReadEntry(t, path, epubtest.OPFPath)

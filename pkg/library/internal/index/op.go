@@ -10,7 +10,7 @@ import (
 )
 
 // Op represents a single mutation operation. The caller calls BeginOp to
-// obtain one, optionally calls MarkPending before touching disk, performs the
+// obtain one, then calls MarkPending before touching disk, performs the
 // store writes, then calls Op.Put or Op.Delete to commit the index write and
 // atomically clear the pending row.
 type Op struct {

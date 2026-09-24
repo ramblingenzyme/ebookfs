@@ -34,10 +34,6 @@ type Edits struct {
 	Series      *string
 	SeriesIndex *string
 
-	// Cover replaces the cover image in the epub, applied before any bib edits
-	// so a combined Cover + OPF edit produces one final rewrite. Every mutation
-	// reaches the epub through Edit, which is what keeps the registry snapshot
-	// consistent with the file.
 	Cover *[]byte
 
 	// Meta fields (written to the meta.toml sidecar).

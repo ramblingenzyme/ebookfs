@@ -7,9 +7,9 @@ import (
 )
 
 // WriteBuffer accumulates per-fid 9P write data for files whose writes are
-// buffered and committed when the fid is closed (cover and field files). It is
-// self-locking with its own mutex, independent of the embedding file's, so
-// callers never juggle lock ordering against the base-file methods.
+// buffered and committed when the fid is closed (field, cover, and control
+// files). It is self-locking with its own mutex, independent of the embedding
+// file's, so callers never juggle lock ordering against the base-file methods.
 type WriteBuffer struct {
 	mu   sync.Mutex
 	max  uint64

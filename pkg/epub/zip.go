@@ -48,10 +48,10 @@ type archive struct {
 	opf   string               // package document path, resolved once
 }
 
-// openArchive indexes the entries and resolves the package document. It does
-// not validate: a malformed container is reported as ErrNotEpub by validate,
-// which OpenFile calls once, so resolving an entry by name costs no mimetype
-// read of its own.
+// openArchive indexes the entries and resolves the package document, failing
+// when the container declares none the archive holds. It does not check the
+// mimetype. validate does, and OpenFile calls it once, so resolving an entry
+// by name costs no mimetype read of its own.
 func openArchive(zr *zip.Reader) (*archive, error) {
 	a := &archive{zr: zr, files: make(map[string]*zip.File, len(zr.File))}
 	for _, f := range a.zr.File {

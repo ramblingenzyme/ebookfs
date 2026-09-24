@@ -1,17 +1,11 @@
-// Package epub adapts the standalone epub package to the library's model. The
-// file format lives there; this package translates, and holds the rules that
-// are ebookfs's rather than the format's.
+// Package epub translates between pkg/epub and the library's book model. It
+// also applies three rules of ebookfs's own:
 //
-// Three of them. A book needs a title and authors to be filed, because the
-// store builds every path from both, so Parse refuses one missing either while
-// the format package reports what the file says. A series position the spec
-// disallows still has to display, so it is defaulted on the way in and never
-// written back. And a retitled book drops the sort title it carried, which
-// described the old title.
-//
-// On the write side the job is unwrapping book.Edits, whose nil field means the
-// caller did not name it. That encoding is the library's rather than the
-// format's, so the epub package is handed values and never pointers.
+//   - A book needs a title and at least one author, because the store builds
+//     every path from them.
+//   - A series position the spec disallows is read as 1. The file is not
+//     changed.
+//   - Changing a book's title clears its sort title.
 package epub
 
 import (
@@ -21,7 +15,6 @@ import (
 	epubfile "github.com/ramblingenzyme/ebookfs/pkg/epub"
 )
 
-// Parse reads the epub's metadata into the Bib the library indexes.
 func Parse(bpath string) (*book.Bib, error) {
 	b, err := epubfile.Open(bpath)
 	if err != nil {
@@ -31,9 +24,6 @@ func Parse(bpath string) (*book.Bib, error) {
 	return bib(b)
 }
 
-// bib turns what the file says about itself into the Bib ebookfs indexes,
-// applying the two rules that are ebookfs's rather than the format's: a book
-// must be usable, and a malformed series position must still display.
 func bib(b *epubfile.Book) (*book.Bib, error) {
 	if err := usable(b); err != nil {
 		return nil, err
@@ -47,9 +37,7 @@ func bib(b *epubfile.Book) (*book.Bib, error) {
 		Pubdate:     b.Pubdate(),
 		Identifiers: b.Identifiers(),
 		CoverPath:   b.CoverPath(),
-		// From the zip central directory, so nothing is decompressed. The
-		// epub's own size is left to the library, which stats it for drift
-		// detection anyway.
+		// EpubSize is left to the library, which already stats the file.
 		OpfSize: b.Size(b.PackagePath()),
 	}
 	for _, a := range b.Authors {
@@ -59,8 +47,6 @@ func bib(b *epubfile.Book) (*book.Bib, error) {
 		bib.CoverSize = b.Size(bib.CoverPath)
 	}
 	if b.Series != nil {
-		// Defaulted on the way in, not in the document, so a rewrite cannot
-		// write it back.
 		index := b.Series.Index
 		if !book.ValidSeriesIndex(index) {
 			index = "1"
@@ -70,10 +56,6 @@ func bib(b *epubfile.Book) (*book.Bib, error) {
 	return bib, nil
 }
 
-// usable reports whether the book can be filed. ebookfs builds every path from
-// the title and the authors, so a book missing either has nowhere to live; the
-// epub package reports both as the file states them, because an epub is free to
-// omit them.
 func usable(b *epubfile.Book) error {
 	if b.Title == "" {
 		return errors.New("no title")

@@ -7,43 +7,31 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/opf"
 )
 
-// Book is an open epub and the metadata its package document carries. Assign a
-// field and call Save; a field left alone is left alone in the file.
-//
-// The exported fields are what this package models and can write back.
-// Everything else is a method: Identifiers and CoverPath because writing
-// through them is meaningless, Cover because it costs I/O.
-//
-// A Book is not safe for concurrent use.
+// Book is an open epub and its package document's metadata. Assign a field and
+// call Save; a field left alone is left alone in the file. A Book is not safe
+// for concurrent use.
 type Book struct {
 	*File
 
-	Title     string
-	SortTitle string // "" when the file states none, and "" to remove it
-	Authors   []Author
-	Series    *Series // nil when the book is in none, and nil to remove it
-	// Description is repeatable in the spec but single-valued here; a "" is a
-	// legitimate empty element, not an absent one.
-	Description string
+	Title       string
+	SortTitle   string // "" when the file states none, and "" to remove it
+	Authors     []Author
+	Series      *Series // nil when the book is in none, and nil to remove it
+	Description string  // "" is an empty element, not an absent one
 	Language    string
 
-	pubdate string
-	doc     *opf.Doc
-	// identifiers and coverPath are read once at Open: neither is writable, so
-	// neither can go stale, and both cost a walk of the package document.
+	pubdate     string
+	doc         *opf.Doc
 	identifiers map[string]string
 	coverPath   string
-	// orig is the metadata as parsed, deep-copied so a caller mutating an
-	// exported slice or the Series it points at cannot move the baseline with
-	// it. Save writes whatever differs from this.
+	// orig is deep-copied, so a caller mutating an exported slice cannot move
+	// the baseline Save diffs against.
 	orig snapshot
-	// cover is a staged image replacement, applied by the next Save. Staged
-	// rather than written so that a cover edit and a metadata edit rebuild the
-	// archive once between them.
+	// cover is staged until Save, so a cover and a metadata edit rebuild the
+	// archive once.
 	cover []byte
 }
 
-// snapshot is the comparable half of a Book: the fields Save diffs.
 type snapshot struct {
 	Title       string
 	SortTitle   string
@@ -53,19 +41,14 @@ type snapshot struct {
 	Language    string
 }
 
-// Open opens the epub at path and parses its package document. The returned
-// Book keeps the file open; the caller must Close it. It is non-nil iff err is
-// nil.
-//
-// Nothing is rejected for its contents. A book with no title, no authors or a
-// series position the spec does not allow opens successfully and reports what
-// it carries, because whether that is usable is the caller's question.
+// Open opens the epub at path and parses its package document. The caller
+// closes the returned Book, which is non-nil iff err is nil. Nothing is
+// rejected for its contents.
 func Open(p string) (_ *Book, err error) {
 	f, err := OpenFile(p)
 	if err != nil {
 		return nil, err
 	}
-	// OpenFile says why the close is deferred rather than written at each exit.
 	defer func() {
 		if err != nil {
 			f.Close()
@@ -100,8 +83,6 @@ func newBook(f *File, doc *opf.Doc) *Book {
 	return b
 }
 
-// take copies the diffed fields, deeply enough that nothing the caller can
-// reach is shared with the result.
 func (b *Book) take() snapshot {
 	s := snapshot{
 		Title:       b.Title,
@@ -117,25 +98,20 @@ func (b *Book) take() snapshot {
 	return s
 }
 
-// Pubdate returns the publication date exactly as the file states it, never
-// parsed, and "" when the file states none or states several ambiguously.
-// Read-only: nothing here writes a date, so it is a method rather than a field.
+// Pubdate returns the publication date as the file states it, unparsed. It is
+// "" when the file states none or several ambiguously.
 func (b *Book) Pubdate() string { return b.pubdate }
 
-// Identifiers returns the book's identifiers keyed by scheme ("isbn", "uuid",
-// "doi") as the file states it, falling back to the element's XML id and then
-// to a numbered "unknown" when nothing names it. Read-only: an identifier is a
-// claim about the book's published identity, not a field to edit.
-//
-// The map is the Book's own; a caller mutating it changes nothing in the file.
+// Identifiers returns the book's identifiers keyed by scheme ("isbn", "uuid"),
+// falling back to the element's XML id, then a numbered "unknown"
+// (docs/DECISIONS.md #24). Read-only, since an identifier is a claim about the
+// book's published identity. Mutating the map changes nothing in the file.
 func (b *Book) Identifiers() map[string]string { return b.identifiers }
 
-// CoverPath returns the cover image's zip-relative path, or "" when the package
-// document points at none. Derived from the manifest, so it is read-only.
+// CoverPath returns the cover image's zip-relative path, or "".
 func (b *Book) CoverPath() string { return b.coverPath }
 
-// Cover returns the cover image's bytes, or ErrNoCover when the package
-// document points at none.
+// Cover returns the cover image's bytes, or ErrNoCover.
 func (b *Book) Cover() ([]byte, error) {
 	if b.coverPath == "" {
 		return nil, ErrNoCover

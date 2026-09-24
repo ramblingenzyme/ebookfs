@@ -10,9 +10,10 @@
 //
 // Three rules shape the fields:
 //
-//   - A field with a write side is a type with get/set (title, authors, series,
-//     modified). A read-only field is a single Doc method (description,
-//     language, pubdate, identifiers, cover).
+//   - A field with an encoding of its own is a type with get/set (title,
+//     authors, series, modified). Description and language are one plain
+//     element each, so a Doc method reads them and a Set method writes them.
+//     A read-only field is a single Doc method (pubdate, identifiers, cover).
 //
 //   - A field says what a value should be, never where it is kept. The slots
 //     pkgdoc hands out know where, and this package does not import etree.
