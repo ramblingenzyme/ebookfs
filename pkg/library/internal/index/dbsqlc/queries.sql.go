@@ -603,6 +603,118 @@ func (q *Queries) InsertTag(ctx context.Context, name string) error {
 	return err
 }
 
+const listAuthors = `-- name: ListAuthors :many
+
+SELECT a.name, COUNT(ba.book_id) AS book_count
+FROM authors a
+         JOIN book_authors ba ON ba.author_id = a.id
+GROUP BY a.id
+ORDER BY a.sort_name, a.name
+`
+
+type ListAuthorsRow struct {
+	Name      string
+	BookCount int64
+}
+
+// Facet listings
+// Ordered by sort_name, so "van Gogh" files under V. Collation is the
+// database's job, and no caller re-sorts.
+func (q *Queries) ListAuthors(ctx context.Context) ([]ListAuthorsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAuthors)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAuthorsRow
+	for rows.Next() {
+		var i ListAuthorsRow
+		if err := rows.Scan(&i.Name, &i.BookCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSeries = `-- name: ListSeries :many
+SELECT s.name, COUNT(b.id) AS book_count
+FROM series s
+         JOIN books b ON b.series_id = s.id
+GROUP BY s.id
+ORDER BY s.name
+`
+
+type ListSeriesRow struct {
+	Name      string
+	BookCount int64
+}
+
+func (q *Queries) ListSeries(ctx context.Context) ([]ListSeriesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSeries)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSeriesRow
+	for rows.Next() {
+		var i ListSeriesRow
+		if err := rows.Scan(&i.Name, &i.BookCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTags = `-- name: ListTags :many
+SELECT t.name, COUNT(bt.book_id) AS book_count
+FROM tags t
+         JOIN book_tags bt ON bt.tag_id = t.id
+GROUP BY t.id
+ORDER BY t.name
+`
+
+type ListTagsRow struct {
+	Name      string
+	BookCount int64
+}
+
+func (q *Queries) ListTags(ctx context.Context) ([]ListTagsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTags)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTagsRow
+	for rows.Next() {
+		var i ListTagsRow
+		if err := rows.Scan(&i.Name, &i.BookCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const nextBookID = `-- name: NextBookID :one
 
 INSERT INTO book_id_seq DEFAULT VALUES RETURNING id

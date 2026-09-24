@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -12,6 +13,7 @@ type Config struct {
 	Library LibraryConfig `toml:"library"`
 	Reader  ReaderConfig  `toml:"reader"`
 	Server  ServerConfig  `toml:"server"`
+	OPDS    OPDSConfig    `toml:"opds"`
 	Search  SearchConfig  `toml:"search"`
 	Log     LogConfig     `toml:"log"`
 }
@@ -34,6 +36,18 @@ type ReaderConfig struct {
 	Statuses []string `toml:"statuses"`
 	Convert  bool     `toml:"convert"`
 	CacheDir string   `toml:"cache_dir"`
+}
+
+// OPDSConfig configures the OPDS catalog. An empty Listen disables it, which
+// is the default.
+type OPDSConfig struct {
+	Listen  string `toml:"listen"`   // e.g. "0.0.0.0:8080"
+	BaseURL string `toml:"base_url"` // absolute, scheme://host, no trailing slash
+
+	// Convert is the catalog's rendition choice, separate from [reader]'s.
+	// There is no opds.cache_dir: both convert into reader.cache_dir, since a
+	// book's kepub is the same file whoever asked for it.
+	Convert bool `toml:"convert"`
 }
 
 type ServerConfig struct {
@@ -110,6 +124,22 @@ func (c *Config) validateReader() error {
 	return nil
 }
 
+// validateOPDS leaves the cache-dir rules to library.Exporter, which enforces
+// them on the exporter the catalog asks for.
+func (c *Config) validateOPDS() error {
+	if c.OPDS.BaseURL == "" {
+		return nil
+	}
+	u, err := url.Parse(c.OPDS.BaseURL)
+	if err != nil {
+		return fmt.Errorf("opds.base_url is not a URL: %w", err)
+	}
+	if u.Scheme == "" || u.Host == "" {
+		return fmt.Errorf("opds.base_url must be absolute (scheme://host), got %q", c.OPDS.BaseURL)
+	}
+	return nil
+}
+
 func (c *Config) validateSearch() error {
 	if c.Search.HandleTTL < 0 {
 		return fmt.Errorf("search.handle_ttl must be >= 0, got %s", c.Search.HandleTTL)
@@ -138,6 +168,10 @@ func (c *Config) validate() error {
 	}
 
 	if err := c.validateAuth(); err != nil {
+		return err
+	}
+
+	if err := c.validateOPDS(); err != nil {
 		return err
 	}
 

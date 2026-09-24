@@ -36,6 +36,11 @@ const (
 	OrderPubdate                   // most recently published first
 )
 
+type Facet struct {
+	Name  string
+	Count int
+}
+
 type Stats struct {
 	Books        int
 	Authors      int

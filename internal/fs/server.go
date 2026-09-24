@@ -22,13 +22,15 @@ type Server struct {
 	ebookfs  *fs.FS
 	root     *fs.StaticDir
 	go9pSrv  *go9p.Server
+	listen   string
 	shutdown func() // closes frontend resources (search cleanup)
 }
 
-// Start blocks, so it runs in a goroutine and the main one takes signals.
-func (s *Server) Start(listen string) error {
-	slog.Info("serving 9P", "listen", listen)
-	return s.go9pSrv.Serve(listen)
+func (s *Server) Name() string { return "9P" }
+
+func (s *Server) Serve() error {
+	slog.Info("serving 9P", "listen", s.listen)
+	return s.go9pSrv.Serve(s.listen)
 }
 
 // Shutdown closes the listener and waits out active connections against ctx's
@@ -48,9 +50,18 @@ type Library interface {
 	views.StatsReader
 }
 
-// SetupServer wires everything without starting the listener, so the wiring
-// can be tested without blocking.
-func SetupServer(lib Library, exp library.Exporter, searchTTL time.Duration, searchMaxHandles int) (*Server, error) {
+type Config struct {
+	Listen string
+
+	// A zero SearchTTL leaves handles unexpiring, and a zero SearchMaxHandles
+	// leaves them uncapped. Zero on both leaves no cleanup worker running.
+	SearchTTL        time.Duration
+	SearchMaxHandles int
+}
+
+// New wires everything without starting the listener, so the wiring can be
+// tested without blocking.
+func New(lib Library, exp library.Exporter, cfg Config) (*Server, error) {
 	ebookfs, root := fs.NewFS("glenda", "glenda", 0555, fs.IgnorePermissions())
 	reg := registry.NewBookRegistry(ebookfs, lib)
 	ebookfs.CreateFile = vfile.DispatchCreate
@@ -90,13 +101,14 @@ func SetupServer(lib Library, exp library.Exporter, searchTTL time.Duration, sea
 	root.AddChild(ctl.NewLogFile(ebookfs, cmdLog))
 	root.AddChild(ctl.NewHelpFile(ebookfs))
 
-	search := views.NewSearchDir(ebookfs, reg, searchTTL, searchMaxHandles)
+	search := views.NewSearchDir(ebookfs, reg, cfg.SearchTTL, cfg.SearchMaxHandles)
 	root.AddChild(search)
 
 	return &Server{
 		ebookfs:  ebookfs,
 		root:     root,
 		go9pSrv:  go9p.NewServer(ebookfs.Server()),
+		listen:   cfg.Listen,
 		shutdown: search.Close,
 	}, nil
 }

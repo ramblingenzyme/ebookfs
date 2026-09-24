@@ -16,6 +16,7 @@ var (
 	ErrNoRootfile      = epubfile.ErrNoRootfile
 	ErrRootfileMissing = epubfile.ErrRootfileMissing
 	ErrNotEpub         = epubfile.ErrNotEpub
+	ErrNoCover         = epubfile.ErrNoCover
 )
 
 // EpubReader provides access to a book's epub content from an open handle.

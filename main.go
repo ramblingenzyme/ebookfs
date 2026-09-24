@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/ramblingenzyme/ebookfs/internal/config"
+	"github.com/ramblingenzyme/ebookfs/internal/frontend"
 	"github.com/ramblingenzyme/ebookfs/internal/fs"
+	"github.com/ramblingenzyme/ebookfs/internal/opds"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
@@ -37,6 +39,22 @@ func setupLogging(cfg config.LogConfig) {
 func fatal(msg string, err error) {
 	slog.Error(msg, "error", err)
 	os.Exit(1)
+}
+
+// opdsExporter reuses the reader's exporter whenever the two want the same
+// rendition. Both convert into reader.cache_dir, so at most one kepub cache
+// exists in the process.
+//
+// Statuses is left empty. It decides reader/ membership through Includes,
+// which the catalog's Renderer does not declare and never calls.
+func opdsExporter(lib *library.Library, cfg *config.Config, readerExp library.Exporter) (library.Exporter, error) {
+	if cfg.OPDS.Convert == cfg.Reader.Convert {
+		return readerExp, nil
+	}
+	return lib.Exporter(library.ReaderConfig{
+		Convert:  cfg.OPDS.Convert,
+		CacheDir: cfg.Reader.CacheDir,
+	})
 }
 
 func main() {
@@ -65,34 +83,40 @@ func main() {
 		fatal("creating exporter", err)
 	}
 
-	srv, err := fs.SetupServer(lib, exp, cfg.Search.HandleTTL, cfg.Search.MaxHandles)
+	srv, err := fs.New(lib, exp, fs.Config{
+		Listen:           cfg.Server.Listen,
+		SearchTTL:        cfg.Search.HandleTTL,
+		SearchMaxHandles: cfg.Search.MaxHandles,
+	})
 	if err != nil {
 		fatal("setting up server", err)
 	}
+	frontends := []frontend.Frontend{srv}
 
-	// Start returns without error once Shutdown is called.
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- srv.Start(cfg.Server.Listen)
-	}()
-
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	<-sig
-	slog.Info("shutting down…")
-
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		slog.Warn("9P shutdown deadline exceeded, forcing close", "error", err)
+	if cfg.OPDS.Listen != "" {
+		opdsExp, err := opdsExporter(lib, cfg, exp)
+		if err != nil {
+			fatal("creating OPDS exporter", err)
+		}
+		frontends = append(frontends, opds.New(lib, opdsExp, opds.Config{
+			Listen:  cfg.OPDS.Listen,
+			BaseURL: cfg.OPDS.BaseURL,
+		}))
+	} else {
+		slog.Info("OPDS catalog disabled", "reason", "opds.listen is empty")
 	}
 
-	if err := <-errCh; err != nil {
-		slog.Error("9P server exited with error", "error", err)
-	}
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
+	// The library closes before the exit status is reported, so a frontend
+	// failure still leaves the index shut down cleanly.
+	runErr := frontend.Run(ctx, 10*time.Second, frontends...)
 	if err := lib.Close(); err != nil {
 		slog.Error("closing library", "error", err)
+	}
+	if runErr != nil {
+		fatal("serving", runErr)
 	}
 
 	slog.Info("server stopped")

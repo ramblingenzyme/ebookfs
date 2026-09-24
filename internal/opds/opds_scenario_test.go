@@ -1,0 +1,432 @@
+// The catalog driven the way an OPDS reader drives it: an HTTP request in, a
+// parsed Atom document out. Only the library and the exporter are faked.
+//
+// These pin what no single source file holds. A href written into one feed
+// routes back to the query it names, and a facet value with a slash or a space
+// survives that trip. A cover comes from the original epub, and a download
+// keeps the range support a reader resumes on.
+package opds
+
+import (
+	"bytes"
+	"encoding/xml"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
+	"github.com/ramblingenzyme/ebookfs/pkg/library"
+)
+
+type atomFeed struct {
+	XMLName xml.Name   `xml:"feed"`
+	Title   string     `xml:"title"`
+	Links   []atomLink `xml:"link"`
+	Entries []struct {
+		Title   string     `xml:"title"`
+		ID      string     `xml:"id"`
+		Content string     `xml:"content"`
+		Links   []atomLink `xml:"link"`
+		Authors []struct {
+			Name string `xml:"name"`
+		} `xml:"author"`
+		Categories []struct {
+			Term string `xml:"term,attr"`
+		} `xml:"category"`
+	} `xml:"entry"`
+}
+
+type atomLink struct {
+	Rel  string `xml:"rel,attr"`
+	Href string `xml:"href,attr"`
+	Type string `xml:"type,attr"`
+}
+
+func (f atomFeed) href(rel string) string {
+	for _, l := range f.Links {
+		if l.Rel == rel {
+			return l.Href
+		}
+	}
+	return ""
+}
+
+func (f atomFeed) titles() []string {
+	out := make([]string, len(f.Entries))
+	for i, e := range f.Entries {
+		out[i] = e.Title
+	}
+	return out
+}
+
+type fake struct {
+	mock.Catalog
+	queries []library.Query
+	opened  int
+}
+
+// epubBody's length is the Content-Length the download assertions expect.
+const epubBody = "PK\x03\x04 pretend this is an epub"
+
+// newFake derives the facet listings from books, so a nav feed and the feed it
+// links to cannot disagree.
+func newFake(t *testing.T, books ...*library.Book) (*fake, http.Handler) {
+	t.Helper()
+	f := &fake{}
+	f.SearchFn = func(q library.Query) ([]*library.Book, error) {
+		f.queries = append(f.queries, q)
+		return filter(books, q), nil
+	}
+	f.GetFn = func(id int64) (*library.Book, error) {
+		for _, b := range books {
+			if b.ID() == id {
+				return b, nil
+			}
+		}
+		return nil, fmt.Errorf("book %d: %w", id, library.ErrBookNotFound)
+	}
+	f.ContentFn = func(int64) (library.EpubReader, error) {
+		return &mock.EpubReader{
+			Reader:  bytes.NewReader([]byte(epubBody)),
+			CoverFn: func() ([]byte, error) { return []byte("\x89PNG\r\n\x1a\n cover"), nil },
+		}, nil
+	}
+	f.AuthorsFn = func() ([]library.Facet, error) { return count(books, authorsOf), nil }
+	f.SeriesFn = func() ([]library.Facet, error) { return count(books, seriesOf), nil }
+	f.TagsFn = func() ([]library.Facet, error) { return count(books, (*library.Book).Tags), nil }
+
+	exp := mock.Exporter{Renderer: mock.Renderer{
+		OpenFn: func(*library.Book) (library.EpubReader, error) {
+			f.opened++
+			return &mock.EpubReader{Reader: bytes.NewReader([]byte(epubBody))}, nil
+		},
+		SizeFn: func(*library.Book) (int64, bool) { return int64(len(epubBody)), true },
+	}}
+	return f, NewHandler(f, exp, "https://books.example.com")
+}
+
+func get(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
+	t.Helper()
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+	return w
+}
+
+func feed(t *testing.T, h http.Handler, path string) atomFeed {
+	t.Helper()
+	w := get(t, h, path)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET %s: status %d, want 200\n%s", path, w.Code, w.Body)
+	}
+	var f atomFeed
+	if err := xml.Unmarshal(w.Body.Bytes(), &f); err != nil {
+		t.Fatalf("GET %s: parsing feed: %v\n%s", path, err, w.Body)
+	}
+	return f
+}
+
+// Root renders the kinds table and Feed dispatches on it. A kind wired into
+// only one fails here rather than 404ing in a reader app.
+func TestEveryKindResolvesThroughToBooks(t *testing.T) {
+	b := util.MakeMutableBook(1, "Dune", "Frank Herbert")
+	b.Meta.Tags = []string{"scifi"}
+	b.Series = &book.SeriesRef{Name: "Dune", Index: "1"}
+	_, h := newFake(t, util.WrapBook(b))
+
+	root := feed(t, h, Prefix+"/")
+	// Spelled out rather than read from kinds, to pin the wording and order a
+	// reader sees.
+	want := []string{"All Books", "Recently Added", "Authors", "Series", "Tags", "Reading Status"}
+	if got := root.titles(); !slices.Equal(got, want) {
+		t.Errorf("root sections = %v, want %v", got, want)
+	}
+	if len(root.Entries) != len(kinds) {
+		t.Fatalf("root has %d entries, want one per kind (%d)", len(root.Entries), len(kinds))
+	}
+	for i, k := range kinds {
+		e := root.Entries[i]
+		if e.Title != k.title {
+			t.Errorf("root entry %d = %q, want %q", i, e.Title, k.title)
+		}
+		sub := feed(t, h, e.Links[0].Href)
+		if k.list == nil {
+			continue
+		}
+		// A kind with a listing is one hop further from its books.
+		if len(sub.Entries) == 0 {
+			t.Errorf("%s: listing is empty", k.id)
+			continue
+		}
+		if code := get(t, h, sub.Entries[0].Links[0].Href).Code; code != http.StatusOK {
+			t.Errorf("%s: %s -> status %d, want 200", k.id, sub.Entries[0].Links[0].Href, code)
+		}
+	}
+}
+
+// A slash and a space each broke the href when the value was a path segment.
+func TestFacetHrefRoundTripsAwkwardNames(t *testing.T) {
+	b := util.MakeMutableBook(1, "Either/Or", "Søren Kierkegaard")
+	b.Meta.Tags = []string{"philosophy/ethics"}
+	f, h := newFake(t, util.WrapBook(b))
+
+	tags := feed(t, h, Prefix+"/feed/tag")
+	if got := tags.titles(); !slices.Equal(got, []string{"philosophy/ethics"}) {
+		t.Fatalf("tag listing = %v", got)
+	}
+	if got := tags.Entries[0].Content; got != "1 book" {
+		t.Errorf("count = %q, want %q", got, "1 book")
+	}
+
+	f.queries = nil
+	books := feed(t, h, tags.Entries[0].Links[0].Href)
+	if got := books.titles(); !slices.Equal(got, []string{"Either/Or"}) {
+		t.Fatalf("books behind the tag = %v", got)
+	}
+	if len(f.queries) != 1 || !slices.Equal(f.queries[0].Tags, []string{"philosophy/ethics"}) {
+		t.Errorf("query = %+v, want Tags [philosophy/ethics]", f.queries)
+	}
+}
+
+func TestEntryCarriesAcquisitionAndMetadata(t *testing.T) {
+	b := util.MakeMutableBook(7, "Dune", "Frank Herbert")
+	b.EpubPath = "Frank Herbert/Dune (7)/Dune.epub"
+	b.CoverPath = "OEBPS/cover.jpg"
+	b.Meta.Tags = []string{"scifi"}
+	_, h := newFake(t, util.WrapBook(b))
+
+	all := feed(t, h, Prefix+"/feed/all")
+	if len(all.Entries) != 1 {
+		t.Fatalf("entries = %d, want 1", len(all.Entries))
+	}
+	e := all.Entries[0]
+	if e.ID != "urn:ebookfs:book:7" {
+		t.Errorf("atom:id = %q", e.ID)
+	}
+	if len(e.Authors) != 1 || e.Authors[0].Name != "Frank Herbert" {
+		t.Errorf("authors = %+v", e.Authors)
+	}
+	if len(e.Categories) != 1 || e.Categories[0].Term != "scifi" {
+		t.Errorf("categories = %+v", e.Categories)
+	}
+
+	var acquisition, cover string
+	for _, l := range e.Links {
+		switch l.Rel {
+		case "http://opds-spec.org/acquisition/open-access":
+			acquisition = l.Href
+			if l.Type != mediaTypeEpub {
+				t.Errorf("acquisition type = %q, want %q", l.Type, mediaTypeEpub)
+			}
+		case "http://opds-spec.org/image":
+			cover = l.Href
+		}
+	}
+	if acquisition != Prefix+"/content/7/Dune.epub" {
+		t.Errorf("acquisition href = %q", acquisition)
+	}
+	if cover != Prefix+"/cover/7" {
+		t.Errorf("cover href = %q", cover)
+	}
+}
+
+func TestDownloadSupportsRanges(t *testing.T) {
+	b := util.MakeMutableBook(7, "Dune", "Frank Herbert")
+	b.EpubPath = "Frank Herbert/Dune (7)/Dune.epub"
+	_, h := newFake(t, util.WrapBook(b))
+
+	w := get(t, h, Prefix+"/content/7/Dune.epub")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200", w.Code)
+	}
+	if got := w.Body.String(); got != epubBody {
+		t.Errorf("body = %q", got)
+	}
+	if got := w.Header().Get("Content-Type"); got != mediaTypeEpub {
+		t.Errorf("content type = %q", got)
+	}
+	if got := w.Header().Get("Content-Disposition"); !strings.Contains(got, "Dune.epub") {
+		t.Errorf("content disposition = %q", got)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, Prefix+"/content/7/Dune.epub", nil)
+	req.Header.Set("Range", "bytes=2-5")
+	rw := httptest.NewRecorder()
+	h.ServeHTTP(rw, req)
+	if rw.Code != http.StatusPartialContent {
+		t.Fatalf("range status %d, want 206", rw.Code)
+	}
+	if got := rw.Body.String(); got != epubBody[2:6] {
+		t.Errorf("range body = %q, want %q", got, epubBody[2:6])
+	}
+}
+
+// Reading the cover through the exporter would convert the book, minutes of
+// CPU for a thumbnail.
+func TestCoverBypassesTheExporter(t *testing.T) {
+	b := util.MakeMutableBook(7, "Dune", "Frank Herbert")
+	b.CoverPath = "OEBPS/cover.png"
+	f, h := newFake(t, util.WrapBook(b))
+
+	w := get(t, h, Prefix+"/cover/7")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200", w.Code)
+	}
+	if got := w.Header().Get("Content-Type"); got != "image/png" {
+		t.Errorf("content type = %q, want image/png", got)
+	}
+	if f.opened != 0 {
+		t.Errorf("exporter opened %d times, want 0", f.opened)
+	}
+}
+
+// An author with no books gets an empty feed rather than a 404, since the
+// catalog cannot tell it from a name nobody queried.
+func TestMissesAre404(t *testing.T) {
+	b := util.MakeMutableBook(7, "Dune", "Frank Herbert")
+	f, h := newFake(t, util.WrapBook(b))
+	f.ContentFn = func(int64) (library.EpubReader, error) {
+		return &mock.EpubReader{
+			Reader:  bytes.NewReader(nil),
+			CoverFn: func() ([]byte, error) { return nil, library.ErrNoCover },
+		}, nil
+	}
+
+	cases := map[string]int{
+		Prefix + "/cover/7":                  http.StatusNotFound,
+		Prefix + "/cover/999":                http.StatusNotFound,
+		Prefix + "/content/999/x.epub":       http.StatusNotFound,
+		Prefix + "/feed/nonsense":            http.StatusNotFound,
+		Prefix + "/feed/all?value=junk":      http.StatusNotFound,
+		Prefix + "/feed/author?value=Nobody": http.StatusOK,
+	}
+	for path, want := range cases {
+		if code := get(t, h, path).Code; code != want {
+			t.Errorf("GET %s: status %d, want %d", path, code, want)
+		}
+	}
+}
+
+// The tag feed's href already carries ?value=, so a next link that dropped the
+// query string would page through the whole library instead of the tag.
+func TestPaginationLinksTheNextPage(t *testing.T) {
+	books := make([]*library.Book, pageSize+3)
+	for i := range books {
+		b := util.MakeMutableBook(int64(i+1), fmt.Sprintf("Book %03d", i+1))
+		b.Meta.Tags = []string{"scifi"}
+		books[i] = util.WrapBook(b)
+	}
+	_, h := newFake(t, books...)
+
+	for _, path := range []string{Prefix + "/feed/all", Prefix + "/feed/tag?value=scifi"} {
+		first := feed(t, h, path)
+		if len(first.Entries) != pageSize {
+			t.Fatalf("%s: first page = %d entries, want %d", path, len(first.Entries), pageSize)
+		}
+		next := first.href("next")
+		if next == "" {
+			t.Fatalf("%s: no next link on a feed with more pages", path)
+		}
+		second := feed(t, h, next)
+		if len(second.Entries) != 3 {
+			t.Errorf("%s -> %s: second page = %d entries, want 3", path, next, len(second.Entries))
+		}
+		if second.href("next") != "" {
+			t.Errorf("%s: last page advertises a next page", path)
+		}
+		if got := second.href("self"); got != next {
+			t.Errorf("%s: self on page 2 = %q, want %q", path, got, next)
+		}
+	}
+}
+
+func TestSearchQueriesTitles(t *testing.T) {
+	f, h := newFake(t, util.MakeBook(1, "Dune"))
+
+	results := feed(t, h, Prefix+"/search?q=Dun")
+	if got := results.titles(); !slices.Equal(got, []string{"Dune"}) {
+		t.Fatalf("results = %v", got)
+	}
+	if len(f.queries) != 1 || !slices.Equal(f.queries[0].Titles, []string{"Dun"}) {
+		t.Fatalf("query = %+v, want Titles [Dun]", f.queries)
+	}
+	if f.queries[0].ExactTitles {
+		t.Error("search asked for exact titles; browsing wants the substring")
+	}
+
+	w := get(t, h, Prefix+"/opensearch.xml")
+	if w.Code != http.StatusOK {
+		t.Fatalf("opensearch: status %d", w.Code)
+	}
+	if want := "https://books.example.com" + Prefix + "/search?q={searchTerms}"; !strings.Contains(w.Body.String(), want) {
+		t.Errorf("opensearch template is not %q:\n%s", want, w.Body)
+	}
+}
+
+// filter is the fake index, over only the fields the catalog's feeds set.
+func filter(books []*library.Book, q library.Query) []*library.Book {
+	var out []*library.Book
+	for _, b := range books {
+		if !matches(q.Authors, authorsOf(b)) || !matches(q.Tags, b.Tags()) ||
+			!matches(q.Series, seriesOf(b)) || !matches(q.Status, []string{b.Status()}) {
+			continue
+		}
+		if len(q.Titles) > 0 && !strings.Contains(b.Title(), q.Titles[0]) {
+			continue
+		}
+		out = append(out, b)
+	}
+	if q.Limit > 0 && len(out) > q.Limit {
+		out = out[:q.Limit]
+	}
+	return out
+}
+
+// matches treats an empty want as matching everything, which is how
+// index.Search treats an unset field.
+func matches(want, have []string) bool {
+	if len(want) == 0 {
+		return true
+	}
+	for _, w := range want {
+		if slices.Contains(have, w) {
+			return true
+		}
+	}
+	return false
+}
+
+func authorsOf(b *library.Book) []string {
+	out := make([]string, 0, len(b.Authors()))
+	for _, a := range b.Authors() {
+		out = append(out, a.Name)
+	}
+	return out
+}
+
+func seriesOf(b *library.Book) []string {
+	if !b.HasSeries() {
+		return nil
+	}
+	return []string{b.SeriesName()}
+}
+
+func count(books []*library.Book, values func(*library.Book) []string) []library.Facet {
+	var out []library.Facet
+	seen := map[string]int{}
+	for _, b := range books {
+		for _, v := range values(b) {
+			if i, ok := seen[v]; ok {
+				out[i].Count++
+				continue
+			}
+			seen[v] = len(out)
+			out = append(out, library.Facet{Name: v, Count: 1})
+		}
+	}
+	return out
+}

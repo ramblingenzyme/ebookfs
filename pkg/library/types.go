@@ -1,6 +1,8 @@
 package library
 
 import (
+	"slices"
+
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index"
@@ -20,6 +22,7 @@ type FieldError = book.FieldError
 type Query = index.Query
 type Order = index.Order
 type Stats = index.Stats
+type Facet = index.Facet
 type Author = book.Author
 type Series = book.SeriesRef
 type EpubReader = epub.EpubReader
@@ -27,6 +30,10 @@ type EpubReader = epub.EpubReader
 // StatusList renders the reading-status vocabulary, so a validation error and
 // the ctl help name the same set.
 var StatusList = book.StatusList
+
+// Statuses returns the vocabulary in presentation order. It is a copy, so a
+// caller sorting or truncating it cannot reorder the vocabulary process-wide.
+func Statuses() []string { return slices.Clone(book.Statuses) }
 
 const (
 	OrderSortTitle    = index.OrderSortTitle

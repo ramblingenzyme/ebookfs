@@ -6,6 +6,7 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/beevik/etree v1.8.0
 	github.com/knusbaum/go9p v1.18.0
+	github.com/ophymx/opds v0.5.1
 	github.com/pgaskin/kepubify/v4 v4.0.4
 	golang.org/x/text v0.42.0
 	modernc.org/sqlite v1.59.0

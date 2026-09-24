@@ -168,3 +168,40 @@ type Library struct {
 	Ingester
 	StatsReader
 }
+
+type Getter struct {
+	GetFn func(int64) (*library.Book, error)
+}
+
+func (g Getter) Get(id int64) (*library.Book, error) {
+	if g.GetFn != nil {
+		return g.GetFn(id)
+	}
+	return nil, errors.New("mock: no GetFn")
+}
+
+type Facets struct {
+	AuthorsFn func() ([]library.Facet, error)
+	SeriesFn  func() ([]library.Facet, error)
+	TagsFn    func() ([]library.Facet, error)
+}
+
+func (f Facets) Authors() ([]library.Facet, error) { return facets(f.AuthorsFn) }
+func (f Facets) Series() ([]library.Facet, error)  { return facets(f.SeriesFn) }
+func (f Facets) Tags() ([]library.Facet, error)    { return facets(f.TagsFn) }
+
+func facets(fn func() ([]library.Facet, error)) ([]library.Facet, error) {
+	if fn != nil {
+		return fn()
+	}
+	return nil, nil
+}
+
+// Catalog embeds SearchDeleter for its SearchFn. The catalog never calls
+// Delete.
+type Catalog struct {
+	SearchDeleter
+	ContentReader
+	Getter
+	Facets
+}
