@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-// pkgWithPrefix builds a minimal package document carrying the given prefix
-// attribute, for the functions that need a *Doc rather than a bare map.
 func pkgWithPrefix(t *testing.T, prefix string) *Doc {
 	t.Helper()
 	attr := ""
@@ -46,8 +44,8 @@ func TestExpand(t *testing.T) {
 	}
 }
 
-// D.1.4's grammar: a whitespace-separated list of "prefix: URL" pairs, which
-// real files wrap.
+// D.1.4: a whitespace-separated list of "prefix: URL" pairs, which real files
+// wrap.
 func TestVocabulariesParsesThePrefixAttribute(t *testing.T) {
 	for _, tc := range []struct {
 		name, prefix string
@@ -63,7 +61,6 @@ func TestVocabulariesParsesThePrefixAttribute(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got := pkgWithPrefix(t, tc.prefix).vocab.bindings()
 
-			// The reserved set is always present and unmodified unless declared over.
 			for name, url := range reservedPrefixes {
 				if _, declared := tc.want[name]; declared {
 					continue
@@ -91,8 +88,7 @@ func TestSpell(t *testing.T) {
 	const dcterms = "http://purl.org/dc/terms/"
 	for _, tc := range []struct {
 		name, prefix, in, want string
-		// declares is a binding the call is expected to add to the package.
-		declares string
+		declares               string
 	}{
 		{
 			name: "default vocabulary is unchanged",

@@ -10,10 +10,9 @@ type authorsField struct{ d *pkgdoc.Doc }
 
 func (o *Doc) authors() authorsField { return authorsField{o.d} }
 
-// creators returns the creator elements this package owns: those carrying the
-// "aut" MARC relator, or carrying no role at all. That second half is this
-// package's interpretation, not a rule either spec states. Other contributors
-// (editors, illustrators, translators) are excluded on purpose.
+// creators returns the creators this package owns: those with the aut role, or
+// no role. Counting a role-less creator as an author is our reading, not a
+// spec rule.
 func (f authorsField) creators() []*pkgdoc.Element {
 	var out []*pkgdoc.Element
 	for _, c := range f.d.DCAll("creator") {
@@ -30,9 +29,8 @@ func (f authorsField) creators() []*pkgdoc.Element {
 func (f authorsField) get() []Author {
 	var out []Author
 	for _, c := range f.creators() {
-		// Reported as written; §5.5.2 requires a non-empty value, so a creator
-		// with none is not an author. Making a name safe to use as a path
-		// component belongs to whoever builds the path, not here.
+		// §5.5.2 requires a non-empty value, so an empty creator is not an
+		// author.
 		name := c.Get()
 		if name == "" {
 			continue
@@ -46,8 +44,8 @@ func (f authorsField) get() []Author {
 	return out
 }
 
-// set writes each author's name, role and sort name. Which creator elements
-// exist is reconcileCreators' business; only the values are written here.
+// set writes each author's name, role and sort name. reconcileCreators decides
+// which elements exist.
 func (f authorsField) set(authors []Author) {
 	for i, c := range f.reconcileCreators(authors) {
 		a := authors[i]
@@ -55,15 +53,14 @@ func (f authorsField) set(authors []Author) {
 
 		if !f.d.EPUB3() {
 			c.OPFAttr("role").Set("aut")
-			// The author may have lost the sort name it was written with.
+			// Put clears a sort name the author no longer has.
 			pkgdoc.Put(c.OPFAttr("file-as"), a.SortName)
 			continue
 		}
 
-		// Roles are "zero or more" (D.3.10), so aut is added only when absent
-		// and any other role is left alone. D.3.10 only SHOULDs a scheme, and
-		// names no particular one; marc:relators is the choice here, reserved by
-		// D.1.5 so it needs no declaration.
+		// D.3.10 allows zero or more roles, so aut is added only if missing and
+		// other roles stay. It only SHOULDs a scheme; marc:relators is reserved
+		// by D.1.5 and needs no declaration.
 		if !slices.Contains(creatorRoles(c), "aut") {
 			c.Refine("role").Add("aut", "marc:relators")
 		}
@@ -75,23 +72,20 @@ func (f authorsField) set(authors []Author) {
 	}
 }
 
-// reconcileCreators makes the document carry one creator element per author, in
-// order, and returns them. A creator whose name survives is reused, keeping
-// refinements this package does not manage; every other author creator is
-// dropped with its refinements, and non-author creators are left alone.
+// reconcileCreators makes the document carry one creator per author, in order,
+// and returns them. A creator whose name is kept is reused with its
+// refinements. Other author creators are removed with theirs, and non-author
+// creators are left alone.
 //
-// An unmatched name is a new assertion rather than a rename, so it gets a fresh
-// element. Pairing leftovers by position would carry refinements onto a name
-// their author never saw. D.3.1 makes alternate-script an expression of the
-// refined value and a custom property may be one too, so whoever wrote one is
-// the authority who can write it again.
+// A new name gets a new element rather than a renamed old one, so refinements
+// such as an alternate-script (D.3.1) never describe a name their author did
+// not write.
 //
-// Do not detach the unclaimed creators before the loop finishes. ensureID mints
-// ids by scanning the tree, so a detached creator is invisible to it and a
-// later creator could be given the same id.
+// Unclaimed creators are removed only after the loop, since ensureID scans the
+// tree for ids and cannot see a detached creator.
 func (f authorsField) reconcileCreators(authors []Author) []*pkgdoc.Element {
 	// Keyed by the name get reports, so a match is the creator the caller was
-	// shown. Anything unmatchable is rebuilt from scratch.
+	// shown.
 	byName := map[string]*pkgdoc.Element{}
 	unclaimed := map[*pkgdoc.Element]bool{}
 	for _, c := range f.creators() {
@@ -120,9 +114,8 @@ func (f authorsField) reconcileCreators(authors []Author) []*pkgdoc.Element {
 	return out
 }
 
-// creatorRoles returns the roles attached to a creator, in document order. The
-// single-valued EPUB 2 opf:role wins outright when present; otherwise all of the
-// EPUB 3 role refinements are used (D.3.10, "zero or more").
+// creatorRoles returns a creator's roles in document order. An EPUB 2 opf:role
+// wins when present; otherwise every EPUB 3 role refinement counts (D.3.10).
 func creatorRoles(c *pkgdoc.Element) []string {
 	if r := c.OPFAttr("role").Get(); r != "" {
 		return []string{r}

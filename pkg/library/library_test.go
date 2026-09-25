@@ -9,12 +9,8 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
-// Field-by-field application. Every case starts from the same Meta so what a nil
-// edit leaves alone is asserted alongside what a set one changes, which is
-// applyMeta's whole job: the boundary between those two.
-//
-// Independence of the result is TestApplyMetaClonesTags' job; the value receiver
-// makes it uninteresting for every field except Tags.
+// Every case starts from the same Meta, so what a nil edit leaves alone is
+// checked alongside what a set one changes.
 func TestApplyMeta(t *testing.T) {
 	start := book.Meta{ID: 1, Status: "unread", Rating: 2.5, Tags: []string{"keep"}}
 
@@ -54,8 +50,8 @@ func TestApplyMeta(t *testing.T) {
 			if updated.ID != start.ID {
 				t.Errorf("ID = %d, want %d — applyMeta must not touch identity", updated.ID, start.ID)
 			}
-			// Bumped even when no field changed: the edit still happened, and the sidecar
-			// write that follows must not look older than the file.
+			// Bumped even when no field changed, so the sidecar write does not
+			// look older than the file.
 			if updated.DateModified.Before(before) {
 				t.Errorf("DateModified = %v, want it stamped at or after %v", updated.DateModified, before)
 			}
@@ -63,12 +59,8 @@ func TestApplyMeta(t *testing.T) {
 	}
 }
 
-// The one field a value receiver does not make independent. Tags comes either
-// from the Meta passed in or from the Edits, both of which the caller still holds
-// while the result travels on to the sidecar write and the index, so writing
-// through one must not be visible through the other. Element assignment is what
-// detects the sharing: appending would not, since a len-1 slice hides a write
-// past its own end.
+// Tags is the one field a value receiver does not copy. Element assignment
+// detects the sharing where append would not.
 func TestApplyMetaClonesTags(t *testing.T) {
 	t.Run("from the meta", func(t *testing.T) {
 		meta := book.Meta{ID: 1, Tags: []string{"keep"}}
@@ -101,17 +93,10 @@ func TestApplyMetaClonesTags(t *testing.T) {
 	})
 }
 
-// Every field of Edits has to reach one of three destinations: the epub
-// rewrite (HasBibEdits, then internal/epub's apply), the cover replacement
-// (HasCoverEdit), or the meta sidecar (applyMeta). The routing is three
-// hand-written nil-chains and nothing in the types makes them cover the struct,
-// so this walks it and fails on a field no route claims.
-//
-// It catches a field wired nowhere, and a field wired into apply but left out
-// of HasBibEdits, which would make the edit silently do nothing. It does not
-// catch the reverse: a field added to HasBibEdits and forgotten in apply still
-// reports as routed. Proving the effect needs a per-field assertion against a
-// real library, which library_ext_test.go does for the fields it covers.
+// Every Edits field must reach the epub rewrite, the cover, or the sidecar, and
+// nothing in the types enforces it. This catches a field routed nowhere, or
+// into apply but not HasBibEdits. It misses one in HasBibEdits but not apply;
+// library_ext_test.go checks effects.
 func TestEveryEditFieldIsRouted(t *testing.T) {
 	// applyMeta's three, which have no predicate of their own to ask.
 	meta := map[string]bool{"Status": true, "Rating": true, "Tags": true}

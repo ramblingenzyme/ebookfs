@@ -8,25 +8,19 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/xml"
 )
 
-// The fields whose whole encoding fits in a few lines. The four with more to
-// say (authors, series, cover, identifiers) keep a file each.
-
 type titleField struct{ d *pkgdoc.Doc }
 
 func (o *Doc) title() titleField { return titleField{o.d} }
 
 func (f titleField) element() *pkgdoc.Element { return f.d.DC("title") }
 
-// The sort title has the same shape as the series: a standard EPUB 3 mechanism,
-// and for EPUB 2, which has none, the proprietary meta calibre writes. Checked
-// against calibre itself: `ebook-meta --title-sort` writes a file-as refinement
-// into a v3 package and calibre:title_sort into a v2 one.
-
+// calibreSort is where an EPUB 2 package keeps its sort title. Checked against
+// calibre: `ebook-meta --title-sort` writes a file-as refinement into a v3
+// package and calibre:title_sort into a v2 one.
 func (f titleField) calibreSort() *pkgdoc.Named { return f.d.Named("calibre:title_sort") }
 
-// get returns the title and its sort value, preferring the standard refinement
-// and falling back to the calibre meta, so a v2 file written by calibre reads
-// back the sort title it carries.
+// get prefers the file-as refinement for the sort title and falls back to
+// calibre's meta.
 func (f titleField) get() (title, sort string) {
 	el := f.element()
 	sort = el.Refine("file-as").Get()
@@ -61,17 +55,12 @@ func (f titleField) set(title, sort *string) {
 	}
 }
 
-// dropSegments removes every dc:title except keep, with its refinements. A
-// further dc:title is another segment of the same title (§5.5.3.1.2's
-// multipart example), describing one the book no longer has once the title is
-// replaced; §5.5.3.1.2 asks for "only a single dc:title element" regardless.
+// dropSegments removes every dc:title except keep, with its refinements. The
+// others are segments of the old title (§5.5.3.1.2's multipart example), and
+// §5.5.3.1.2 asks for "only a single dc:title element".
 //
-// It also stops the edit silently not taking: a reader honouring the deprecated
-// title-type refinement, as calibre does, shows the segment labelled "main",
-// which need not be the element written here.
-//
-// keep's own refinements stay. A title-type left on the last element is
-// harmless, since both readings resolve to it.
+// It also makes the edit visible to calibre, which shows the segment labelled
+// "main" by the deprecated title-type refinement.
 func (f titleField) dropSegments(keep *pkgdoc.Element) {
 	for _, el := range f.d.DCAll("title") {
 		if !el.Same(keep) {
@@ -85,7 +74,7 @@ type modifiedField struct{ d *pkgdoc.Doc }
 func (o *Doc) modified() modifiedField { return modifiedField{o.d} }
 
 // set records the time of this rewrite: exactly one unrefined dcterms:modified
-// per §5.5.5, in the UTC format §5.5.4 fixes. Write-only, and EPUB 3 only.
+// per §5.5.5, in the UTC format §5.5.4 fixes. EPUB 3 only.
 func (f modifiedField) set(t time.Time) {
 	if !f.d.EPUB3() {
 		return
@@ -93,20 +82,18 @@ func (f modifiedField) set(t time.Time) {
 	f.d.UnrefinedMeta("dcterms:modified").Set(t.UTC().Format("2006-01-02T15:04:05Z"))
 }
 
-// description and language are repeatable (§5.5.3.2.1) but single-valued here,
-// and have no encoding of their own, so they get no field type: pkgdoc's DC picks
-// the element a read and a write both mean.
+// description and language are repeatable (§5.5.3.2.1) but single-valued
+// here. pkgdoc's DC picks the element a read and a write both mean, so they
+// need no field type.
 func (o *Doc) description() string { return o.d.DC("description").Get() }
 
 func (o *Doc) language() string { return o.d.DC("language").Get() }
 
-// pubdate returns a <dc:date> verbatim, never parsed. An EPUB 2 opf:event
-// picks it: "publication" is authoritative, and any other event means the file
-// saying this is not the publication date, leaving the untagged elements.
-// Exactly one of those is used; zero or several leaves the date unset.
+// pubdate returns a dc:date as written. An opf:event of "publication" wins.
+// Otherwise a date with any other event is not the publication date, and the
+// one untagged date is used; zero or several leave it unset.
 //
-// §5.5.3.2.4 forbids more than one dc:date, so coping with several is tolerance
-// for a malformed file rather than a case the spec allows.
+// §5.5.3.2.4 forbids more than one dc:date, so several is a malformed file.
 func (o *Doc) pubdate() string {
 	var (
 		untagged string

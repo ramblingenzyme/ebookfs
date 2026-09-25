@@ -7,9 +7,8 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// The duplicate rule is "same title, same set of authors", a set, so the same
-// book credited in either order is one book. It used to be a path lookup, which
-// made "A & B" and "B & A" two different directories and two library entries.
+// The duplicate rule compares author sets, so either order is one book.
+// Regression: a path lookup filed "A & B" and "B & A" as two books.
 func TestIngestDuplicateIgnoresAuthorOrder(t *testing.T) {
 	lib := openTestLibrary(t)
 
@@ -27,8 +26,7 @@ func TestIngestDuplicateIgnoresAuthorOrder(t *testing.T) {
 	}
 }
 
-// A different author set with the same title is a different book, so it must
-// still ingest: the narrowing query matches it, only the set comparison rejects.
+// The title query matches it; only the author set tells the two apart.
 func TestIngestSameTitleDifferentAuthors(t *testing.T) {
 	lib := openTestLibrary(t)
 
@@ -36,10 +34,8 @@ func TestIngestSameTitleDifferentAuthors(t *testing.T) {
 	ingestTestEpub(t, lib, buildTestEpub(t, "Selected Poems", "Bob"))
 }
 
-// A file that is not an epub fails the ingest with an error a caller can name.
-// The sentinel is the epub package's, surfaced here because this is where a
-// caller meets it: the 9P inbox reports an upload it could not file, and
-// "not an epub" is the one case the person who uploaded it can fix.
+// Not an epub is the one ingest failure the uploader can fix, so it has a
+// sentinel.
 func TestIngestRejectsAFileThatIsNotAnEpub(t *testing.T) {
 	lib := openTestLibrary(t)
 

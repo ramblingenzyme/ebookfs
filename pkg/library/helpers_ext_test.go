@@ -1,11 +1,3 @@
-// Helpers for the black-box tests in package library_test. A helper declared
-// in package library is invisible here, and the white-box tests need the same
-// five, so the public-API portion of helpers_test.go is duplicated rather than
-// shared.
-//
-// The white-box-only helpers, drifted, breakEpub, dropIndex, metaPathOf and
-// assertSettlesClean, stay in helpers_test.go.
-
 package library_test
 
 import (
@@ -32,7 +24,6 @@ func openTestLibrary(t *testing.T) *library.Library {
 	return openLib(t, testConfig(t))
 }
 
-// The black-box twin of helpers_test.go's openLib, which says what it is for.
 func openLib(t *testing.T, cfg library.Config, opts ...library.Option) *library.Library {
 	t.Helper()
 	lib, err := library.Open(cfg, opts...)
@@ -43,7 +34,6 @@ func openLib(t *testing.T, cfg library.Config, opts ...library.Option) *library.
 	return lib
 }
 
-// The black-box twin of helpers_test.go's ingestTestEpub, which says why.
 func ingestTestEpub(t *testing.T, lib *library.Library, data []byte) *library.Book {
 	//goland:noinspection DuplicatedCode
 	t.Helper()

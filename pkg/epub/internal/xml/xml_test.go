@@ -14,8 +14,6 @@ func TestResolveHref(t *testing.T) {
 		{"percent-encoded space", "OEBPS", "cover%20image.jpg", "OEBPS/cover image.jpg"},
 		{"percent-encoded utf8", "OEBPS", "couv%C3%A9.jpg", "OEBPS/couvé.jpg"},
 		{"absolute and encoded", "OEBPS", "/img/a%20b.jpg", "img/a b.jpg"},
-		// A guide or landmarks reference into the cover page carries one, and
-		// still names the document.
 		{"fragment dropped", "OEBPS", "cover.xhtml#cover-image", "OEBPS/cover.xhtml"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

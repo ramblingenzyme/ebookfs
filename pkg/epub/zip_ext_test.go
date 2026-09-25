@@ -1,8 +1,3 @@
-// The archive under the metadata: the mimetype, the OCF container, which
-// rootfile is the package document, and what a rewrite copies through. These
-// drive the seam every entry point shares, so a read and the write that follows
-// it cannot resolve a name differently.
-
 package epub_test
 
 import (
@@ -51,18 +46,15 @@ func withoutEntry(entries []epubtest.Entry, name string) []epubtest.Entry {
 	return out
 }
 
-// --- cover resolution ---
-
-// §4.2.6.3.1.3 makes full-path a path-relative-scheme-less-URL, so "OEBPS/My Book.opf"
-// is declared "My%20Book.opf" while the entry holds the decoded name.
-// Undecoded, the book is unopenable and blamed on a rootfile that is present.
+// §4.2.6.3.1.3 makes full-path a URL, so a space in the entry name is declared
+// as %20.
 func TestOpenResolvesEncodedRootfilePath(t *testing.T) {
 	container := epubtest.ContainerFor("OEBPS/My%20Book.opf", epubtest.PackageMediaType)
 
 	path := epubtest.WriteEpub(t, []epubtest.Entry{
 		{Name: "mimetype", Data: []byte(epubtest.MimetypeValue), Store: true},
 		{Name: "META-INF/container.xml", Data: []byte(container)},
-		{Name: "OEBPS/My Book.opf", Data: []byte(epubtest.OPF3)}, // literal space in the entry name
+		{Name: "OEBPS/My Book.opf", Data: []byte(epubtest.OPF3)},
 		{Name: "OEBPS/cover.jpg", Data: epubtest.CoverBytes},
 		{Name: "OEBPS/chapter1.xhtml", Data: epubtest.ChapterBytes},
 	})
@@ -82,9 +74,8 @@ func TestOpenResolvesEncodedRootfilePath(t *testing.T) {
 	}
 }
 
-// encoding/xml does not apply XML 1.0 §3.3.3 normalization. §4.2.6.3.1.3
-// requires the package media type, so a container wrapping it has every
-// rootfile skipped and reports ErrNoRootfile for a package that is right there.
+// encoding/xml does not apply XML 1.0 §3.3.3 whitespace normalisation, so a
+// padded media type would match no rootfile.
 func TestOpenCollapsesRootfileMediaType(t *testing.T) {
 	container := epubtest.ContainerFor("OEBPS/content.opf", epubtest.Wrapped(epubtest.PackageMediaType))
 
@@ -101,9 +92,7 @@ func TestOpenCollapsesRootfileMediaType(t *testing.T) {
 	}
 }
 
-// Badly repacked epubs carry two entries under one name. Disagreeing means an
-// edit computed from one copy and reported from the other, invisible until the
-// copies differ. Either rule would do; it has to be one rule.
+// Either copy would do, as long as Open and Save pick the same one.
 func TestOpenAndSaveAgreeOnADuplicateEntry(t *testing.T) {
 	path := duplicateOPFEpub(t)
 
@@ -112,11 +101,9 @@ func TestOpenAndSaveAgreeOnADuplicateEntry(t *testing.T) {
 		t.Fatal(err)
 	}
 	if bib.Title != "First Copy" {
-		t.Errorf("title = %q, want First Copy — Parse must resolve it the way findEntry does", bib.Title)
+		t.Errorf("title = %q, want First Copy, the copy Save resolves", bib.Title)
 	}
 
-	// The edit is computed from whichever copy the writer reads, so the re-parse
-	// sees the result only when both picked the same one.
 	if _, err := save(t, path, func(b *epub.Book) { b.Title = "Edited Title" }); err != nil {
 		t.Fatal(err)
 	}
@@ -129,9 +116,8 @@ func TestOpenAndSaveAgreeOnADuplicateEntry(t *testing.T) {
 	}
 }
 
-// %20 decodes, but url.Parse would read "C:/..." as a scheme and truncate at
-// '#' or '?'. PathUnescape touches nothing but the escapes. The literal rows
-// cover an entry whose name really contains '%20'.
+// url.Parse would read "C:/..." as a scheme and cut at '#' or '?', so only the
+// escapes are decoded.
 func TestOpenRootfilePathEdgeCases(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
@@ -163,12 +149,8 @@ func TestOpenRootfilePathEdgeCases(t *testing.T) {
 	}
 }
 
-// --- container & mimetype validation ---
-
-// Each entry point opens the file itself, so each could grow its own rule.
-// Callers tell "not a book" from "the disk is broken" with errors.Is on
-// ErrNotEpub. A nonexistent path says nothing about contents, so labelling it
-// ErrNotEpub is the obvious wrong fix.
+// Callers use ErrNotEpub to tell a bad book from a broken disk, so a missing
+// file keeps its os error.
 func TestEntryPointsAgreeOnABadEpub(t *testing.T) {
 	good := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
 	raw, err := os.ReadFile(good)
@@ -249,17 +231,13 @@ func TestOpenRejectsMissingMimetype(t *testing.T) {
 }
 
 func TestOpenToleratesMimetypeWhitespace(t *testing.T) {
-	// A trailing newline on the mimetype is tolerated (trimmed), matching calibre.
+	// calibre also trims it.
 	p := epubtest.WriteEpub(t, withMimetype(epubtest.BaseEntries(epubtest.OPF3), "application/epub+zip\n"))
 	if _, err := parse(t, p); err != nil {
 		t.Fatalf("Parse rejected a whitespace-padded mimetype: %v", err)
 	}
 }
 
-// Lookup is first-wins, but writeUpdatedEpub matches its replacement map by
-// name against every entry copied, so both copies of a duplicated package
-// document were overwritten. The copy nobody resolved is somebody else's data,
-// and the archive is copied verbatim.
 func TestSaveReplacesOnlyTheResolvedDuplicate(t *testing.T) {
 	path := duplicateOPFEpub(t)
 
@@ -301,8 +279,6 @@ func TestSaveReplacesOnlyTheResolvedDuplicate(t *testing.T) {
 	}
 }
 
-// A container naming a package document that cannot be found is not a container
-// naming none. The two send a reader to different places.
 func TestOpenDistinguishesMissingFromUndeclared(t *testing.T) {
 	for _, tc := range []struct {
 		name, container string
@@ -320,8 +296,7 @@ func TestOpenDistinguishesMissingFromUndeclared(t *testing.T) {
 		},
 		{
 			name: "no rootfiles at all",
-			// No builder: an empty <rootfiles> is the shape being tested, not
-			// a value inside one.
+			// ContainerFor cannot build an empty <rootfiles>.
 			container: `<?xml version="1.0"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
   <rootfiles></rootfiles>
@@ -339,8 +314,6 @@ func TestOpenDistinguishesMissingFromUndeclared(t *testing.T) {
 	}
 }
 
-// Kobo epubs sometimes declare several <rootfile> entries where only one
-// exists; the absent ones must be skipped on both the read and write paths.
 func TestMultipleRootfilesKobo(t *testing.T) {
 	path := epubtest.WriteEpub(t, withContainer(epubtest.BaseEntries(epubtest.OPF3), epubtest.MultiRootContainer))
 
@@ -354,7 +327,7 @@ func TestMultipleRootfilesKobo(t *testing.T) {
 
 	edited, err := save(t, path, func(b *epub.Book) { b.Title = "Edited Title" })
 	if err != nil {
-		t.Fatalf("writeBib failed on Kobo multi-rootfile epub: %v", err)
+		t.Fatalf("Save failed on Kobo multi-rootfile epub: %v", err)
 	}
 	if edited.Title != "Edited Title" {
 		t.Errorf("edited title = %q, want Edited Title", edited.Title)
@@ -367,7 +340,6 @@ func TestSavePreservesContainerLayout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Untouched entries copied verbatim.
 	got, ok := epubtest.ReadEntryFromFile(t, path, "OEBPS/chapter1.xhtml")
 	if !ok || !bytes.Equal(got, epubtest.ChapterBytes) {
 		t.Errorf("chapter bytes changed: %q", got)
@@ -378,8 +350,8 @@ func TestSavePreservesContainerLayout(t *testing.T) {
 	}
 }
 
-// OCF requires exactly one mimetype entry, first and stored, so a source with
-// two is malformed and copying both preserves the defect the hoist exists to fix.
+// OCF allows one mimetype entry, so copying both would keep the file
+// malformed.
 func TestSaveDeduplicatesMimetype(t *testing.T) {
 	mt := epubtest.Entry{Name: epubtest.MimetypePath, Data: []byte(epubtest.MimetypeValue), Store: true}
 	entries := append([]epubtest.Entry{mt}, epubtest.BaseEntries(epubtest.OPF3)[1:]...)
@@ -408,10 +380,10 @@ func TestSaveDeduplicatesMimetype(t *testing.T) {
 	assertOCFHeader(t, path, "after the write")
 }
 
-// OCF §4.3.3 layout, asserted as bytes: sniffers read "mimetype" at offset 30
-// and its content at 38, so one check covers position, STORED and the MUST NOT
-// on extra fields. Both input orders run, or the hoist could be deleted with
-// nothing failing.
+// OCF §4.3.3: sniffers read "mimetype" at offset 30 and its content at 38, so
+// one byte check covers position, compression and the MUST NOT on extra
+// fields. Both input orders run, or writing mimetype first could be deleted
+// with nothing failing.
 func TestSaveHoistsMimetypeToTheFront(t *testing.T) {
 	rest := []epubtest.Entry{
 		{Name: "META-INF/container.xml", Data: []byte(epubtest.ContainerXML)},
@@ -424,11 +396,8 @@ func TestSaveHoistsMimetypeToTheFront(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		entries []epubtest.Entry
-		// conformingInput says the fixture already satisfies §4.3.3, so the
-		// layout is asserted before the write as well. Without that precondition
-		// this row proves nothing: a fixture that did not conform would come out
-		// conforming anyway, and the assertion would pass without showing that
-		// the input order was preserved rather than overridden.
+		// conformingInput also checks the fixture before the write. Without it,
+		// the row passes even if the fixture never conformed.
 		conformingInput bool
 	}{
 		{name: "mimetype last", entries: append(slices.Clone(rest), mimetype)},
@@ -448,9 +417,6 @@ func TestSaveHoistsMimetypeToTheFront(t *testing.T) {
 	}
 }
 
-// assertOCFHeader checks the byte layout OCF §4.3.3 guarantees: the local file
-// header first, "mimetype" as its name at offset 30, and the media type
-// immediately after at 38.
 func assertOCFHeader(t *testing.T, path, when string) {
 	t.Helper()
 	raw, err := os.ReadFile(path)
@@ -468,8 +434,8 @@ func assertOCFHeader(t *testing.T, path, when string) {
 	}
 }
 
-// encoding/xml does not normalize attribute values. A wrapped Algorithm must
-// still read as font obfuscation, a wrapped URI must still identify the entry.
+// encoding/xml does not normalise attribute whitespace, so both attributes are
+// collapsed by hand.
 func TestEncryptionAttributesAreCollapsed(t *testing.T) {
 	t.Run("wrapped obfuscation algorithm still allows the edit", func(t *testing.T) {
 		enc := epubtest.EncryptionXML(epubtest.Wrapped(epubtest.FontObfusc), "OEBPS/fonts/x.otf")
@@ -520,5 +486,3 @@ func TestSetCoverWithDirectoryEntries(t *testing.T) {
 
 	wantDirEntries(t, path, "OEBPS/", "fonts/")
 }
-
-// --- WriteCover ---

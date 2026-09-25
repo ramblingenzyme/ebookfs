@@ -1,10 +1,3 @@
-// The white-box side of ingest's tests; the black-box side is ingest_ext_test.go.
-// Reaching the state these pin (a book on disk that the index does not hold, and
-// an inbox temp directory that cannot be written) means touching lib.index and
-// lib.inboxTemp, which no public call exposes. The assertions themselves are on
-// public behaviour: ErrDuplicateOnDisk, and CreateIngest failing rather than
-// returning an unusable handle.
-
 package library
 
 import (
@@ -13,9 +6,8 @@ import (
 	"testing"
 )
 
-// A book the indexer skipped is absent from the books table, so Index.Exists
-// cannot see it. Ingesting it again would leave two copies on disk with only
-// one of them indexed; the store guard is what refuses.
+// Index.Exists cannot see a skipped book, so the store check is what refuses
+// it.
 func TestIngestRejectsUnindexedBookOnDisk(t *testing.T) {
 	lib := openTestLibrary(t)
 	data := buildTestEpub(t, "Orphaned", "Alice")

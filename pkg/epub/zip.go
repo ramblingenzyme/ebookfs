@@ -22,9 +22,9 @@ const (
 	mimetypeValue = "application/epub+zip"
 )
 
-// notEpub classifies a failure to open the archive: a malformed zip is not an
-// epub, while a missing file, a permission problem or a disk error passes
-// through verbatim, saying nothing about the contents.
+// notEpub wraps a malformed-zip error in ErrNotEpub. Other errors, such as a
+// missing file or a permission problem, say nothing about the contents and
+// pass through unchanged.
 func notEpub(path string, err error) error {
 	if errors.Is(err, zip.ErrFormat) {
 		return fmt.Errorf("%w: %s: %w", ErrNotEpub, path, err)
@@ -32,31 +32,22 @@ func notEpub(path string, err error) error {
 	return err
 }
 
-// archive owns how an entry is located, so a read and the write that follows it
-// cannot resolve a duplicated name, the package document's path, or "present"
-// differently.
+// archive is the one place entries are looked up by name, so a read and a
+// later write always agree on duplicate names, the package document's path,
+// and whether an entry exists.
 //
-// files indexes zr.File rather than replacing it: writeTo walks the slice in
-// order and copies every entry, duplicates included.
-//
-// Closing is the caller's: File holds the archive for the life of the handle,
-// and Save holds it across the rewrite so untouched entries can be copied from
-// the original while the replacement is built.
+// files indexes zr.File without replacing it, since writeTo copies every entry
+// in zr.File, duplicates included.
 type archive struct {
 	zr    *zip.Reader
-	files map[string]*zip.File // index over zr.File; first wins
-	opf   string               // package document path, resolved once
+	files map[string]*zip.File // the first entry of each name
+	opf   string
 }
 
-// openArchive indexes the entries and resolves the package document, failing
-// when the container declares none the archive holds. It does not check the
-// mimetype. validate does, and OpenFile calls it once, so resolving an entry
-// by name costs no mimetype read of its own.
+// openArchive does not check the mimetype; OpenFile calls validate for that.
 func openArchive(zr *zip.Reader) (*archive, error) {
 	a := &archive{zr: zr, files: make(map[string]*zip.File, len(zr.File))}
 	for _, f := range a.zr.File {
-		// First wins. A duplicate name is malformed either way; what matters is
-		// that every caller resolves it to the same entry.
 		if _, dup := a.files[f.Name]; !dup {
 			a.files[f.Name] = f
 		}
@@ -70,16 +61,10 @@ func openArchive(zr *zip.Reader) (*archive, error) {
 	return a, nil
 }
 
-// file returns the entry, or nil. Callers that need the *zip.File rather than
-// its bytes read UncompressedSize64 from the central directory without
-// decompressing, or Method and Modified when copying.
 func (a *archive) file(name string) *zip.File { return a.files[name] }
 
 func (a *archive) has(name string) bool { return a.files[name] != nil }
 
-// size is the entry's uncompressed length from the central directory, so it
-// costs no decompression. Absent entries are 0, which is what a caller recording
-// a size for something optional wants.
 func (a *archive) size(name string) int64 {
 	f := a.file(name)
 	if f == nil {
@@ -101,9 +86,9 @@ func (a *archive) read(name string) ([]byte, error) {
 	return io.ReadAll(rc)
 }
 
-// validate enforces the OCF mimetype declaration. Unlike calibre, this rejects
-// rather than warn: a wrong mimetype usually means a non-epub zip, such as a
-// mis-added .cbz.
+// validate checks the mimetype entry. calibre only warns about a wrong one,
+// but it usually means a zip that is not an epub, such as a .cbz added by
+// mistake.
 func (a *archive) validate() error {
 	if !a.has(mimetypePath) {
 		return fmt.Errorf("%w: missing mimetype declaration", ErrNotEpub)
@@ -118,11 +103,11 @@ func (a *archive) validate() error {
 	return nil
 }
 
-// metadataPath returns the package document's path, and guarantees the archive
-// holds an entry under it, which callers rely on rather than re-checking.
+// metadataPath returns the package document's path, and guarantees the
+// archive holds that entry.
 //
-// Some Kobo epubs declare several <rootfile> entries where only one exists, so
-// missing ones are skipped and the first present one wins.
+// Some Kobo epubs list several rootfiles of which only one exists, so it
+// returns the first that does.
 func (a *archive) metadataPath() (string, error) {
 	f := a.file(ocf.ContainerPath)
 	if f == nil {
@@ -139,9 +124,6 @@ func (a *archive) metadataPath() (string, error) {
 		return "", err
 	}
 
-	// container.go decides what the file declares and in what order to try it;
-	// only "which of these does this archive actually hold" is the archive's to
-	// answer. That is the Kobo case: several rootfiles declared, one present.
 	paths := c.PackagePaths()
 	if len(paths) == 0 {
 		return "", ErrNoRootfile
@@ -153,13 +135,13 @@ func (a *archive) metadataPath() (string, error) {
 	}
 	return "", ErrRootfileMissing
 }
+
 func (a *archive) writeTo(zw *zip.Writer, replace map[string][]byte) error {
 	used := make(map[string]bool, len(replace))
 	writeEntry := func(f *zip.File) error {
-		// Matched by identity, not by name. A zip may carry two entries under
-		// one name; the archive resolved the replacement against exactly one of
-		// them, and the other is somebody else's data that this function is
-		// contracted to copy verbatim.
+		// Matched by the entry itself, not only its name. A zip can hold two
+		// entries with one name. The replacement was resolved against one of
+		// them, and the other must be copied unchanged.
 		data, ok := replace[f.Name]
 		ok = ok && a.file(f.Name) == f
 
@@ -181,9 +163,8 @@ func (a *archive) writeTo(zw *zip.Writer, replace map[string][]byte) error {
 		}
 	}
 
-	// mimetype must come first per the OCF spec. Written before anything else and
-	// skipped in the main loop, so the guarantee holds for whatever order the
-	// source happened to use rather than inheriting it.
+	// OCF requires mimetype to be the first entry. Writing it here and skipping
+	// it below guarantees that, whatever order the original used.
 	mt := a.file(mimetypePath)
 	if mt == nil {
 		return fmt.Errorf("%w: missing mimetype declaration", ErrNotEpub)
@@ -210,10 +191,9 @@ func (a *archive) writeTo(zw *zip.Writer, replace map[string][]byte) error {
 	return nil
 }
 
-// readEncryption parses META-INF/encryption.xml if present. A missing file means
-// nothing is encrypted (nil info); a malformed file is reported as an error
-// rather than silently treated as "no encryption", since proceeding could
-// corrupt a protected entry.
+// readEncryption parses META-INF/encryption.xml. It returns nil if the file is
+// absent, meaning nothing is encrypted. A malformed file is an error rather
+// than "nothing encrypted", since editing a protected entry would corrupt it.
 func (a *archive) readEncryption() (*ocf.EncryptionInfo, error) {
 	f := a.file(ocf.EncryptionPath)
 	if f == nil {

@@ -5,19 +5,14 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/xml"
 )
 
-// A Slot is one string value together with the place in the document that
-// records it. The opf package decides what a value should be; a slot knows how
-// the package document stores it, so nothing above here touches etree.
-//
-// Set and Clear stay separate rather than overloading Set(""): an empty sort
-// title means "remove the refinement", but an empty description means "blank
-// the element", and both behaviours have to survive.
+// Slot is one place the document keeps a string value. Set and Clear are
+// separate rather than Set(""), since an empty sort title removes a refinement
+// but an empty description blanks an element.
 type Slot interface {
 	Set(value string)
 	Clear()
 }
 
-// Put is set-or-clear, for the places where an empty value means absent.
 func Put(s Slot, value string) {
 	if value == "" {
 		s.Clear()
@@ -26,10 +21,8 @@ func Put(s Slot, value string) {
 	s.Set(value)
 }
 
-// Element is an element's text, and the anchor for the refinements and
-// opf: attributes that hang off it. The element may not exist yet: ensure
-// materialises it on the first write, so a field can describe a value without
-// knowing whether the file already carries one.
+// Element is an element's text, and the anchor for its refinements and opf:
+// attributes. The element may not exist yet; the first write creates it.
 //
 // newEl and parent are separate because a field may own the order its elements
 // sit in; see Place.
@@ -45,8 +38,8 @@ func (e *Element) Exists() bool { return e.el != nil }
 
 func (e *Element) Get() string { return text(e.el) }
 
-// Same reports whether two slots stand for one element. Slots are minted per
-// call, so a field holding on to one has to ask.
+// Same reports whether two slots stand for one element. Slots are made per
+// call, so == does not answer that.
 func (e *Element) Same(other *Element) bool {
 	return e.el != nil && other != nil && e.el == other.el
 }
@@ -59,17 +52,15 @@ func (e *Element) ensure() *etree.Element {
 	return e.el
 }
 
-// Place moves the element to the end of its parent, for the fields that own the
-// order theirs sit in. AddChild moves an element already in the tree rather than
-// duplicating it.
+// Place moves the element to the end of its parent. AddChild moves an element
+// already in the tree rather than copying it.
 func (e *Element) Place() { e.parent().AddChild(e.ensure()) }
 
-// Remove takes the element and the refinements bound to it, and unbinds the
-// slot, so a later write creates a fresh element rather than resurrecting a
-// detached one.
+// Remove takes the element and its refinements, and unbinds the slot, so a
+// later write creates a fresh element rather than reviving the detached one.
 //
-// ponytail: rescans the metadata per element removed, where the callers used to
-// batch one scan. Tens of elements; batch again only if a profile says to.
+// ponytail: rescans the metadata per element removed. There are tens of
+// elements; batch the scans if a profile says to.
 func (e *Element) Remove() {
 	if e.el == nil {
 		return
@@ -81,8 +72,8 @@ func (e *Element) Remove() {
 
 func (e *Element) Set(value string) { e.ensure().SetText(value) }
 
-// ID reads the element's id without minting one: a read must not modify the
-// document, and an element with no id can carry no refinements anyway.
+// ID reads the element's id without minting one, since a read must not modify
+// the document.
 func (e *Element) ID() string {
 	if e.el == nil {
 		return ""
@@ -90,8 +81,6 @@ func (e *Element) ID() string {
 	return attr(e.el, "id")
 }
 
-// mintID mints one on demand, since a refinement can only bind to an element
-// that has an id to bind to.
 func (e *Element) mintID() string { return e.d.ensureID(e.ensure(), e.idPrefix) }
 
 func (e *Element) Refine(property string) *Refine {
@@ -102,8 +91,6 @@ func (e *Element) OPFAttr(name string) *OPFAttr {
 	return &OPFAttr{d: e.d, owner: e, name: name}
 }
 
-// Refine is an EPUB 3 refinement: a <meta property="..."> bound to the
-// owner element by id.
 type Refine struct {
 	d             *Doc
 	owner         *Element
@@ -112,9 +99,8 @@ type Refine struct {
 	schemedAs     string
 }
 
-// Unschemed narrows to the refinements carrying no scheme, for a property whose
-// meaning depends on one: D.3.4 defines series and set only "when no scheme is
-// specified", so a value from someone else's code list is neither.
+// Unschemed narrows to refinements with no scheme. D.3.4 defines series and set
+// only "when no scheme is specified".
 func (r *Refine) Unschemed() *Refine {
 	narrowed := *r
 	narrowed.unschemedOnly = true
@@ -122,10 +108,7 @@ func (r *Refine) Unschemed() *Refine {
 	return &narrowed
 }
 
-// Schemed narrows to the refinements whose value is a code in the named list,
-// such as an identifier-type from onix:codelist5. The scheme is matched through
-// the vocabulary, so a document that rebound the prefix is read on its own
-// terms.
+// Schemed resolves the scheme through the document's vocabulary.
 func (r *Refine) Schemed(scheme string) *Refine {
 	narrowed := *r
 	narrowed.unschemedOnly = false
@@ -159,11 +142,10 @@ func (r *Refine) Get() string {
 	return ""
 }
 
-// Set updates the refinement already there rather than replacing it, so it
-// keeps its position in the document.
+// Set updates the refinement already there, so it keeps its position.
 //
-// ponytail: duplicates of one property are left in place and only the first is
-// updated. Revisit if epubcheck rejects a file this package wrote.
+// ponytail: only the first of duplicate refinements is updated. Revisit if
+// epubcheck rejects a file this package wrote.
 func (r *Refine) Set(value string) {
 	if ms := r.elements(); len(ms) > 0 {
 		ms[0].SetText(value)
@@ -180,8 +162,6 @@ func (r *Refine) Clear() {
 	}
 }
 
-// Values returns every refinement of this property, for the ones the vocabulary
-// allows to repeat: role is "zero or more" (D.3.10).
 func (r *Refine) Values() []string {
 	var out []string
 	for _, m := range r.elements() {
@@ -192,14 +172,12 @@ func (r *Refine) Values() []string {
 	return out
 }
 
-// Add appends unconditionally, for properties where an existing value may be
-// one this package does not own, such as a creator's second role.
+// Add appends unconditionally, for a property whose existing value may not be
+// this package's, such as a creator's second role.
 func (r *Refine) Add(value, scheme string) {
 	r.d.addRefine(r.owner.mintID(), r.property, value, scheme)
 }
 
-// OPFAttr is an EPUB 2 opf: attribute on an element, such as opf:role or
-// opf:file-as. The namespace prefix is this slot's business, not a field's.
 type OPFAttr struct {
 	d     *Doc
 	owner *Element
@@ -213,11 +191,9 @@ func (a *OPFAttr) Get() string {
 	return attr(a.owner.el, a.name)
 }
 
-// Set writes the attribute Get would read. etree matches an attribute by local
-// name whatever prefix it carries, so a document with a bare file-as rather than
-// opf:file-as is read from that one; creating the qualified spelling regardless
-// would leave the element asserting two sort names, with the next read taking
-// the stale one. A creator with no such attribute gets the qualified spelling.
+// Set writes the attribute Get would read. etree matches by local name, so a
+// bare file-as is updated in place; adding opf:file-as beside it would leave
+// two sort names. A new attribute gets the opf: prefix.
 func (a *OPFAttr) Set(value string) {
 	el := a.owner.ensure()
 	if existing := el.SelectAttr(a.name); existing != nil {
@@ -236,8 +212,6 @@ func (a *OPFAttr) Clear() {
 	}
 }
 
-// Named is the EPUB 2 <meta name="..." content="..."> pair that
-// predates refinements.
 type Named struct {
 	d    *Doc
 	name string
@@ -252,8 +226,7 @@ func (n *Named) Get() string {
 
 func (n *Named) Exists() bool { return len(n.d.md.named(n.name)) > 0 }
 
-// Set updates the meta already there rather than replacing it, so it keeps its
-// position in the document.
+// Set updates the meta already there, so it keeps its position.
 func (n *Named) Set(value string) {
 	if ms := n.d.md.named(n.name); len(ms) > 0 {
 		ms[0].CreateAttr("content", value)

@@ -6,36 +6,24 @@ import (
 	"os"
 )
 
+// ErrClosed is returned by a File's methods after Close.
 var ErrClosed = errors.New("epub file is closed")
 
-// File is an open epub archive: the zip central directory, a validated
-// mimetype, and the package document's path resolved from the OCF container.
-// The package document itself is not parsed, so opening one costs no XML work:
-// Open does that.
-//
-// The underlying file handle stays open, so repeated reads avoid re-reading the
-// central directory. Close when done.
+// File is an open epub archive whose mimetype has been checked and whose
+// package document has been found. The package document is not parsed; Open does that.
 type File struct {
-	path string
-	f    *os.File
-	// a indexes the entries and holds the resolved package document path. The
-	// same seam OpenFile, Open and Save use, so all three resolve an entry
-	// alike.
+	path   string
+	f      *os.File
 	a      *archive
-	closed bool // true after Close; accessors return ErrClosed
+	closed bool
 }
 
-// OpenFile opens the epub at path and reads the zip central directory. The
-// returned File keeps the handle open; the caller must Close it. It is non-nil
-// iff err is nil.
+// OpenFile opens the epub at path without parsing its package document.
 func OpenFile(path string) (_ *File, err error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	// Every failure below closes the handle. Stated once rather than at each
-	// return, since a handle escaping a failed open is one no caller can reach
-	// to release.
 	defer func() {
 		if err != nil {
 			f.Close()
@@ -60,23 +48,19 @@ func OpenFile(path string) (_ *File, err error) {
 	return &File{path: path, f: f, a: a}, nil
 }
 
-// Closed reports whether Close has been called. A handle outliving what it was
-// opened for is an ordinary end rather than a caller's mistake, so a wrapper
-// needs to tell a closed file apart from its own reasons for having nothing to
-// return.
+// Closed reports whether Close has been called. A handle often outlives the
+// book it was opened for, so a wrapper needs to tell a closed file apart from
+// its own reasons for returning nothing.
 func (f *File) Closed() bool { return f.closed }
 
-// PackagePath returns the package document's zip-relative path, as the OCF
-// container declares it and the archive confirms it. Where a container names
-// several rootfiles, this is the one every read and write resolves.
+// PackagePath returns the package document's path inside the zip. If the
+// container lists several, it is the first one the archive holds.
 func (f *File) PackagePath() string { return f.a.opf }
 
-// ReadEntry returns an archive entry's bytes, decompressing on demand. Where a
-// name appears twice, this is the copy every other method means.
+// ReadEntry returns an entry's contents. If two entries share a name, it reads the first.
 //
-// There is deliberately no OPF method: Book embeds a *File and serializes its
-// pending edits, so two methods of that name would have the same signature and
-// opposite freshness.
+// File has no OPF method on purpose. Book embeds File, and a File.OPF would
+// return the package document without the Book's unsaved edits.
 func (f *File) ReadEntry(name string) ([]byte, error) {
 	if f.closed {
 		return nil, ErrClosed
@@ -84,9 +68,6 @@ func (f *File) ReadEntry(name string) ([]byte, error) {
 	return f.a.read(name)
 }
 
-// has reports whether the archive carries an entry by that name. Unexported
-// because nothing outside needs it: a caller wanting an entry calls ReadEntry
-// and handles the error.
 func (f *File) has(name string) bool {
 	if f.closed {
 		return false
@@ -94,8 +75,8 @@ func (f *File) has(name string) bool {
 	return f.a.has(name)
 }
 
-// Size returns an entry's uncompressed size from the zip central directory, so
-// nothing is decompressed. An absent entry is 0.
+// Size returns an entry's uncompressed size without decompressing it, or 0 if
+// there is no such entry.
 func (f *File) Size(name string) int64 {
 	if f.closed {
 		return 0
@@ -103,7 +84,7 @@ func (f *File) Size(name string) int64 {
 	return f.a.size(name)
 }
 
-// ReadAt implements io.ReaderAt on the raw epub bytes.
+// ReadAt implements io.ReaderAt on the raw bytes of the epub file.
 func (f *File) ReadAt(p []byte, off int64) (int, error) {
 	if f.closed {
 		return 0, ErrClosed
@@ -111,8 +92,7 @@ func (f *File) ReadAt(p []byte, off int64) (int, error) {
 	return f.f.ReadAt(p, off)
 }
 
-// Close releases the underlying file. The zip.Reader becomes invalid.
-// It is safe to call multiple times; subsequent calls return ErrClosed.
+// Close closes the file. Calling it again returns ErrClosed.
 func (f *File) Close() error {
 	if f.closed {
 		return ErrClosed

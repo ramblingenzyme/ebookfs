@@ -6,11 +6,6 @@ import (
 	"io"
 )
 
-// Reading META-INF/encryption.xml, which covers two unrelated things spelled
-// identically: real DRM and font obfuscation. Telling them apart is the point.
-// Treating obfuscation as DRM makes every book with an embedded font
-// uneditable; treating DRM as readable lets an edit corrupt a protected entry.
-
 const EncryptionPath = "META-INF/encryption.xml"
 
 type encryptionXML struct {
@@ -18,27 +13,27 @@ type encryptionXML struct {
 		Method struct {
 			Algorithm AttrText `xml:"Algorithm,attr"`
 		} `xml:"EncryptionMethod"`
-		// Keep the nesting: > works on an element field, but an attr-mode tag
-		// containing it is read as a literal attribute name and matches nothing.
+		// Nested because encoding/xml reads "a>b,attr" as a literal attribute
+		// name.
 		Ref struct {
 			URI AttrURL `xml:"URI,attr"`
 		} `xml:"CipherData>CipherReference"`
 	} `xml:"EncryptedData"`
 }
 
-// obfuscationAlgorithms are the two font-obfuscation schemes. They appear like
-// real DRM but are not encryption. Calibre treats them as readable and so does
-// this package, so a book with obfuscated fonts stays editable.
+// obfuscationAlgorithms are the font-obfuscation schemes, which calibre also
+// treats as readable.
 var obfuscationAlgorithms = map[string]bool{
 	"http://ns.adobe.com/pdf/enc#RC":     true,
 	"http://www.idpf.org/2008/embedding": true,
 }
 
-// EncryptionInfo records which zip entries are listed in META-INF/encryption.xml
-// and under which algorithm, so a real-DRM entry can be distinguished from a
-// merely font-obfuscated one (see obfuscationAlgorithms).
+// EncryptionInfo records which entries encryption.xml lists, and under which
+// algorithm. The file lists real DRM and font obfuscation alike. Obfuscation
+// must not block an edit, since every book with an embedded font would become
+// uneditable. DRM must, since editing a protected entry corrupts it.
 type EncryptionInfo struct {
-	algorithms map[string]string // zip entry name -> EncryptionMethod algorithm
+	algorithms map[string]string // zip entry name -> algorithm
 }
 
 func NewEncryptionInfo(r io.Reader) (*EncryptionInfo, error) {
@@ -53,9 +48,8 @@ func NewEncryptionInfo(r io.Reader) (*EncryptionInfo, error) {
 		if algo == "" {
 			continue
 		}
-		// Keyed under every name the URI could mean, because isEncrypted is
-		// asked about zip entry names and a producer may have written either
-		// form into both files.
+		// Keyed under both names the URI could mean, since a producer may have
+		// written either form into both files.
 		for _, name := range d.Ref.URI.Candidates() {
 			if name != "" {
 				info.algorithms[name] = algo
@@ -65,8 +59,9 @@ func NewEncryptionInfo(r io.Reader) (*EncryptionInfo, error) {
 	return info, nil
 }
 
-// IsEncrypted reports whether name is protected by real encryption (as opposed
-// to font obfuscation). An entry absent from encryption.xml is not encrypted.
+// IsEncrypted reports whether the entry is under real encryption rather than
+// font obfuscation. A nil EncryptionInfo, from an epub with no encryption.xml,
+// encrypts nothing.
 func (e *EncryptionInfo) IsEncrypted(name string) bool {
 	if e == nil {
 		return false

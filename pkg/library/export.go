@@ -16,9 +16,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/kepub"
 )
 
-// validateReaderConfig runs here rather than at whatever boundary the caller
-// read the values from, since the struct is public and a caller may build one
-// in Go.
 func (l *Library) validateReaderConfig(cfg ReaderConfig) error {
 	if !cfg.Convert {
 		return nil
@@ -26,7 +23,6 @@ func (l *Library) validateReaderConfig(cfg ReaderConfig) error {
 	if cfg.CacheDir == "" {
 		return errors.New("reader config: cache dir is required when converting")
 	}
-	// The store walk would otherwise index the converted kepubs as books.
 	root := filepath.Clean(l.store.Root())
 	dir := filepath.Clean(cfg.CacheDir)
 	if dir == root || strings.HasPrefix(dir, root+string(filepath.Separator)) {
@@ -48,8 +44,8 @@ func newExporter(cfg ReaderConfig, lib *Library) (Exporter, error) {
 	return epubExporter{readerPolicy: readerPolicy{statuses: cfg.Statuses}, lib: lib}, nil
 }
 
-// readerPolicy is the half of Exporter that decides what the reader view shows
-// and how it groups, independent of the rendition served.
+// readerPolicy is the half of Exporter that decides which books the reader
+// view shows and how it groups them, whatever the rendition.
 type readerPolicy struct {
 	statuses []string
 }
@@ -62,7 +58,7 @@ func (p readerPolicy) Dirname(b *Book) string {
 	return naming.ForFAT(book.JoinAuthors(b.Authors(), book.AuthorSep))
 }
 
-// kepubCache satisfies Exporter by promotion alone. kepub.Cache carries the
+// kepubCache satisfies Exporter by embedding alone: kepub.Cache has the
 // rendition methods and Close, readerPolicy the rest.
 type kepubCache struct {
 	readerPolicy
@@ -85,8 +81,8 @@ func (e epubExporter) Size(b *Book) (int64, bool) {
 func (e epubExporter) Warm(*Book)              {}
 func (e epubExporter) Filename(b *Book) string { return b.Filename() }
 
-// Exporter creates an export rendition for a reader view. Resources it holds
-// are released by Library.Close, so the caller has no teardown to perform.
+// Exporter creates the rendition for a reader view. Library.Close releases it,
+// so the caller has nothing to close.
 func (l *Library) Exporter(cfg ReaderConfig) (Exporter, error) {
 	if err := l.validateReaderConfig(cfg); err != nil {
 		return nil, err

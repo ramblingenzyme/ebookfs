@@ -1,30 +1,28 @@
 package library
 
-// Config is the library's storage layout. All three paths are required. The
-// library creates Root and InboxTemp if they are missing, and refuses to open
-// unless InboxTemp is on the same filesystem as Root, since ingest finalises by
-// renaming out of one into the other, and rename does not cross filesystems.
+// Config is the library's storage layout. All three paths are required. Open
+// creates Root and InboxTemp if missing, and refuses to open unless both are
+// on one filesystem, since ingest moves a book from one to the other by rename.
 //
-// Deliberately free of serialization tags. How a caller obtains these paths,
-// from a TOML file, flags or the environment, is the caller's concern.
+// It has no serialization tags; loading it is the caller's job.
 type Config struct {
-	// Root is the library tree: one directory per author, one per book beneath.
+	// Root holds one directory per author, and one per book beneath.
 	Root string
-	// InboxTemp holds in-flight uploads until they are laid down under Root.
+	// InboxTemp holds uploads until they are moved under Root.
 	InboxTemp string
-	// IndexPath is the SQLite index file. The index is a derived cache of Root
-	// (docs/DECISIONS.md #2), so it may be deleted; it is rebuilt on the next open.
+	// IndexPath is the SQLite index, a cache of Root (docs/DECISIONS.md #2). It
+	// may be deleted; the next Open rebuilds it.
 	IndexPath string
 }
 
-// ReaderConfig configures the export rendition served by Library.Exporter:
-// the reader/ view an e-reader is synced from.
+// ReaderConfig configures the rendition Library.Exporter serves to the reader/
+// view an e-reader syncs from.
 type ReaderConfig struct {
-	// Statuses selects which books appear.
+	// Statuses selects the books that appear.
 	Statuses []string
-	// Convert toggles kepub conversion. False serves the original epub.
+	// Convert serves kepubs; false serves the original epub.
 	Convert bool
-	// CacheDir holds converted kepubs and MUST live outside Config.Root, so
-	// the store walk never treats a cached file as a book.
+	// CacheDir holds converted kepubs. It must be outside Config.Root, or the
+	// store walk would index them as books.
 	CacheDir string
 }

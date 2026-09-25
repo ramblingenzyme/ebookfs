@@ -6,16 +6,15 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/xml"
 )
 
-// isRasterCoverType rejects markup "cover pages" the way calibre does: an empty
-// media-type, or one containing "xml" or "html".
+// isRasterCoverType rejects markup cover pages as calibre does: an empty media
+// type, or one containing "xml" or "html".
 func isRasterCoverType(mediaType string) bool {
 	mt := strings.ToLower(mediaType)
 	return mt != "" && !strings.Contains(mt, "xml") && !strings.Contains(mt, "html")
 }
 
 // cover resolves the cover image: the cover-image manifest property first, then
-// the legacy <meta name="cover"> (§5.9.3 fixes that order), then a heuristic.
-// The loops run in that order.
+// the legacy <meta name="cover"> (§5.9.3), then a heuristic.
 func (o *Doc) cover(base string) string {
 	manifest := o.d.Manifest()
 
@@ -34,7 +33,7 @@ func (o *Doc) cover(base string) string {
 		}
 	}
 
-	// Heuristic fallback, described by neither spec.
+	// Neither spec describes this fallback.
 	//
 	// ponytail: last match wins, where calibre takes the first. Revisit if a
 	// book shows the wrong cover.

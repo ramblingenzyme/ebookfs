@@ -1,7 +1,3 @@
-// Drift detection and rebuild. If a rebuild does not record what it found, the
-// next startup sees drift again and rebuilds again. One unreadable book then
-// reindexes the whole library on every startup, forever.
-
 package library
 
 import (
@@ -38,10 +34,8 @@ var legacyLayouts = []struct {
 	},
 }
 
-// writeManualBookDir lays down a book directory storeDrifted (via store.Walk)
-// will discover, without going through the library's ingest path, simulating a
-// book added directly to the store on disk. Walk only checks for meta.toml's
-// presence and an *.epub file, so their contents don't need to be valid.
+// Walk only checks that meta.toml and an *.epub exist, so neither needs valid
+// contents.
 func writeManualBookDir(t *testing.T, lib *Library, libraryPath string) {
 	t.Helper()
 	l := lib
@@ -57,11 +51,10 @@ func writeManualBookDir(t *testing.T, lib *Library, libraryPath string) {
 	}
 }
 
-// stageLegacyLayout ingests a book, closes the library, and then moves its
-// directory to legacyAuthorDir, the state an upgraded library finds on disk,
-// left by a naming convention it no longer uses. legacyEpub, when non-empty,
-// also renames the epub inside it. It returns the book and the canonical
-// location the next reindex has to restore.
+// stageLegacyLayout ingests a book, then moves its directory to
+// legacyAuthorDir with the library closed. A non-empty legacyEpub also renames
+// the epub inside it. It returns the book and the canonical location a reindex
+// must restore.
 func stageLegacyLayout(t *testing.T, cfg Config, title string, authors []string, legacyAuthorDir, legacyEpub string) (*Book, book.Location) {
 	t.Helper()
 
@@ -87,7 +80,6 @@ func stageLegacyLayout(t *testing.T, cfg Config, title string, authors []string,
 	return b, canonical
 }
 
-// A closed index cannot answer, so assume a rebuild is needed.
 func TestNeedsReindexClosedIndex(t *testing.T) {
 	lib := openTestLibrary(t)
 	lib.index.Close()
@@ -97,7 +89,6 @@ func TestNeedsReindexClosedIndex(t *testing.T) {
 	}
 }
 
-// What counts as the store drifting from the index.
 func TestStoreDrifted(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -204,7 +195,6 @@ func TestStoreDrifted(t *testing.T) {
 	}
 }
 
-// meta.toml edited on disk is drift. A size-only check never looked at it.
 func TestStoreDriftedDetectsManualMetaEdit(t *testing.T) {
 	lib := openTestLibrary(t)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Book"))
@@ -225,7 +215,6 @@ func TestStoreDriftedDetectsManualMetaEdit(t *testing.T) {
 	}
 }
 
-// An edit made through the library leaves the index and the store agreeing.
 func TestStoreCleanAfterEdit(t *testing.T) {
 	// A meta-only edit skips the epub rewrite; a title edit rewrites the epub
 	// and moves the directory. Both must leave the index clean.
@@ -282,7 +271,6 @@ func TestOpenReindexesOnDrift(t *testing.T) {
 	}
 }
 
-// That restart also puts a renamed epub back under its canonical name.
 func TestRenamedEpubHealedOnRestart(t *testing.T) {
 	cfg := testConfig(t)
 	lib := openLib(t, cfg)
@@ -317,7 +305,6 @@ func TestRenamedEpubHealedOnRestart(t *testing.T) {
 	}
 }
 
-// The Layout/Move pass relocates each legacy path and indexes where it landed.
 func TestReindexMigratesToCanonicalPath(t *testing.T) {
 	for _, tc := range legacyLayouts {
 		t.Run(tc.name, func(t *testing.T) {
@@ -385,7 +372,6 @@ func TestUnstattableBookReservesID(t *testing.T) {
 	}
 }
 
-// Once a rebuild records it as unobserved, it stops triggering drift.
 func TestUnstattableBookSettlesClean(t *testing.T) {
 	cfg := testConfig(t)
 	lib := openLib(t, cfg)
@@ -436,8 +422,8 @@ func TestUnreadableMetaAndUnstattableEpubSettlesClean(t *testing.T) {
 	assertSettlesClean(t, cfg)
 }
 
-// Last resort for an unparseable sidecar: the id is still legible in the
-// directory name. Reissuing it makes the repaired sidecar fatal (DECISIONS #14).
+// Last resort for an unparseable sidecar: the id is still in the directory
+// name. Reissuing it makes the repaired sidecar fatal (docs/DECISIONS.md #14).
 func TestUnreadableMetaReservesIDFromPath(t *testing.T) {
 	cfg := testConfig(t)
 	lib := openLib(t, cfg)
@@ -480,8 +466,6 @@ func TestUnreadableMetaReservesIDFromPath(t *testing.T) {
 	}
 }
 
-// A directory the rebuild cannot index is recorded as skipped, so the second
-// restart stays clean.
 func TestCorruptEpubDoesNotReindexForever(t *testing.T) {
 	cfg := testConfig(t)
 
@@ -497,7 +481,6 @@ func TestCorruptEpubDoesNotReindexForever(t *testing.T) {
 		t.Fatalf("corrupt epub: %v", err)
 	}
 
-	// First restart: genuine drift, so this one reindexes and records the skip.
 	lib2 := openLib(t, cfg)
 	if drifted(t, lib2) {
 		t.Error("storeDrifted() = true right after a reindex that skipped the corrupt book — the skip was not recorded, so startups will reindex forever")
@@ -552,7 +535,6 @@ func TestDuplicateBookIDFailsOpenNamingBothPaths(t *testing.T) {
 		lib2.Close()
 		t.Fatal("Open succeeded with two directories claiming one book id, want a fatal error")
 	}
-	// Both directories must appear, or the user has no way to know which to fix.
 	for _, want := range []string{book.Dir(), filepath.Join("Copies", filepath.Base(src))} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("Open error %q does not name the conflicting directory %q", err, want)

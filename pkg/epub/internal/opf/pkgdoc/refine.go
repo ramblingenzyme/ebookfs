@@ -7,17 +7,13 @@ import (
 	"github.com/beevik/etree"
 )
 
-// EPUB 3 refinements: a <meta property="..."> carrying a value for another
-// element, bound to it by id. The EPUB 2 name/content encoding is in
-// metadata.go.
-
-// refinesID reports whether m refines the element with the given id. Per §5.3.6
-// both "#c1" and "content.opf#c1" target c1; no fragment refines the document
-// itself. An empty id matches nothing, or every meta without a refines would.
+// refinesID reports whether m refines the element with id. Under §5.3.6 both
+// "#c1" and "content.opf#c1" target c1. An empty id matches nothing, or every
+// meta without a refines would.
 //
-// ponytail: a path naming a different document binds to a same-named local id
-// instead of failing. Revisit if a real epub refines across files; the fix is
-// resolving the relative URL against the OPF's own name.
+// ponytail: a path naming another document still binds to a local id of that
+// name. Resolve the URL against the package document's own name if a real
+// epub refines across files.
 func refinesID(m *etree.Element, id string) bool {
 	if id == "" {
 		return false
@@ -26,11 +22,6 @@ func refinesID(m *etree.Element, id string) bool {
 	return ok && frag == id
 }
 
-// refineElements returns every meta refining id that carries the property.
-// Plural because the vocabulary allows it: role is "zero or more" (D.3.10).
-//
-// A property whose meaning depends on the scheme attribute, such as
-// collection-type per D.3.4, is filtered by its own field.
 func (d *Doc) refineElements(id, property string) []*etree.Element {
 	var out []*etree.Element
 	for _, m := range d.md.children("meta") {
@@ -41,14 +32,9 @@ func (d *Doc) refineElements(id, property string) []*etree.Element {
 	return out
 }
 
-// addRefine appends unconditionally, for properties where an existing value may
-// be one this package does not own, such as a creator's second role. property
-// and scheme are spelled, since a rebound vocabulary would otherwise make them
-// someone else's.
-//
-// Two choices §5.3.6 leaves open, both deliberate: appended at the end rather
-// than beside the element it refines, since the binding is by id; and refines
-// written fragment-only, though a reader must accept path-qualified too.
+// addRefine spells property and scheme for this document. It makes two choices
+// §5.3.6 leaves open: the meta goes at the end rather than beside its element,
+// since the binding is by id, and refines is fragment-only.
 func (d *Doc) addRefine(id, property, value, scheme string) {
 	m := d.md.metaParent().CreateElement("meta")
 	m.CreateAttr("refines", "#"+id)
@@ -59,8 +45,6 @@ func (d *Doc) addRefine(id, property, value, scheme string) {
 	m.SetText(value)
 }
 
-// removeRefinements drops every meta refining any of ids, for use once the
-// elements they refine are themselves gone.
 func (d *Doc) removeRefinements(ids []string) {
 	for _, m := range d.md.children("meta") {
 		if slices.ContainsFunc(ids, func(id string) bool { return refinesID(m, id) }) {

@@ -2,10 +2,6 @@ package pkgdoc
 
 import "strings"
 
-// The parts of the package document that hold no metadata: the manifest, and
-// the two pointers into it. Reported as the document spells them, so which item
-// is the NCX, and which reference means the cover, are opf's rules.
-
 type Item struct {
 	ID         string
 	Href       string
@@ -25,8 +21,7 @@ func (d *Doc) Manifest() []Item {
 	for _, it := range m.SelectElements("item") {
 		out = append(out, Item{
 			ID: attr(it, "id"),
-			// Only trimmed, not collapsed: href is a percent-encoded URL, and
-			// collapsing could rewrite a literal filename.
+			// Trimmed, not collapsed: collapsing could rewrite a filename.
 			Href:       strings.TrimSpace(it.SelectAttrValue("href", "")),
 			MediaType:  attr(it, "media-type"),
 			Properties: attr(it, "properties"),
@@ -50,7 +45,6 @@ func (d *Doc) Guide() []Ref {
 	return out
 }
 
-// SpineFirst is the idref of the first document in the reading order, or "".
 func (d *Doc) SpineFirst() string {
 	spine := d.pkg.SelectElement("spine")
 	if spine == nil {

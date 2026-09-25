@@ -1,9 +1,3 @@
-// The exporter predicates: what a reader mount shows, what it calls a book, and
-// what size it reports. All three answer from the book record and the configured
-// statuses, with no library and no disk, so they are tested against the concrete
-// types directly. lib.Exporter's wiring is covered black-box in
-// export_ext_test.go.
-
 package library
 
 import (
@@ -15,9 +9,8 @@ import (
 
 var makeBook = util.MakeMutableBook
 
-// The status filter runs over both renditions, which reach it by embedding
-// readerPolicy. An exporter that grew its own Includes instead would serve a
-// reader mount the wrong set of books.
+// Both renditions reach Includes by embedding readerPolicy. One with its own
+// Includes would show the wrong books.
 func TestExporterIncludes(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -50,10 +43,7 @@ func TestExporterIncludes(t *testing.T) {
 	}
 }
 
-// Size answers from the size recorded at index time rather than the filesystem:
-// the book's path points at nothing, and the call must still succeed without
-// touching disk. Every indexed book was stat'd on the way in, so a missing file
-// surfaces at Open rather than as a length the exporter has to guess at.
+// Size answers from the size recorded at index time, without touching disk.
 func TestEpubExporter_Size_ReportsRecordedSize(t *testing.T) {
 	b := makeBook(1, "Test", "Author")
 	b.EpubPath = "/nonexistent/missing.epub"
@@ -68,10 +58,8 @@ func TestEpubExporter_Size_ReportsRecordedSize(t *testing.T) {
 	}
 }
 
-// A book carrying no recorded size was never observed, and reporting 0 as
-// authoritative would have 9P advertise a zero-length file and export sizing
-// believe it, so the size reads as unknown and the caller falls back rather
-// than trusting it.
+// An unrecorded size reads as unknown, so 9P does not advertise a zero-length
+// file.
 func TestEpubExporter_Size_Unrecorded(t *testing.T) {
 	b := makeBook(1, "Test", "Author") // EpubSize left at its zero value
 

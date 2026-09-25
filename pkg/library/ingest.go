@@ -13,8 +13,7 @@ import (
 )
 
 // IngestHandle stages an epub upload. The frontend writes the bytes, then
-// calls Ingest, which closes the file, parses the epub, lays it down in the
-// store and removes the temp file.
+// calls Ingest, which files the book and removes the temporary file.
 type IngestHandle interface {
 	io.WriterAt
 	Ingest() (*Book, error)
@@ -48,8 +47,7 @@ func (l *Library) CreateIngest() (IngestHandle, error) {
 }
 
 func (l *Library) ingestPath(epubPath string) (*Book, error) {
-	// Parse before taking ingestMu: it touches only this upload's staged temp
-	// file, so bulk uploads overlap their parsing instead of serializing on it.
+	// Parsed before ingestMu is taken, so bulk uploads parse in parallel.
 	bib, err := epub.Parse(epubPath)
 	if err != nil {
 		return nil, err
@@ -68,7 +66,7 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 	if dupe {
 		return nil, fmt.Errorf("%q: %w", bib.Title, ErrDuplicate)
 	}
-	// The index answers for books it holds; it cannot answer for one it skipped.
+	// The index cannot see a book it skipped.
 	if l.store.PathTaken(bib.Authors, bib.Title) {
 		return nil, fmt.Errorf("%q: %w", bib.Title, ErrDuplicateOnDisk)
 	}
@@ -107,7 +105,7 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 
 	if err != nil {
 		if rmErr := l.store.Delete(loc); rmErr == nil {
-			// The cleanup succeeded, so no on-disk state is left to heal.
+			// Nothing is left on disk to heal.
 			op.Cancel()
 		} else {
 			slog.Error("ingest cleanup failed", "path", loc.Dir(), "error", rmErr)
@@ -120,11 +118,9 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 	return b, nil
 }
 
-// authorNames is the set Index.Exists compares against. It filters nothing:
-// the set compared has to be the set written, or the same book ingests twice.
-// Nothing needs filtering either, since epub.Parse drops creators with an
-// empty name and rejects a book left with none, and Edits rejects an empty
-// name.
+// authorNames must not filter: the set Index.Exists compares has to be the set
+// written, or the same book ingests twice. Empty names are rejected before
+// this anyway.
 func authorNames(authors []book.Author) []string {
 	names := make([]string, len(authors))
 	for i, a := range authors {

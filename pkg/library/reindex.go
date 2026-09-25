@@ -15,24 +15,18 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/store"
 )
 
-// Reindex unconditionally rebuilds the index from the store (the source of
-// truth). Books that can't be read are logged and skipped rather than failing
-// the whole rebuild.
+// Reindex rebuilds the index from the store. A book that cannot be read is
+// logged and skipped rather than failing the rebuild.
 //
-// Open rebuilds through reindex directly rather than through here: nothing else
-// holds a reference to the library yet, and mutateMu is there for the callers
-// that do.
+// Open calls reindex directly, since nothing else holds the library yet.
 func (l *Library) Reindex() error {
 	l.mutateMu.Lock()
 	defer l.mutateMu.Unlock()
 	return l.reindex(nil)
 }
 
-// reindex rebuilds the index. scan, when non-nil, is the traversal storeDrifted
-// already performed. Reusing it saves both the walk and a stat per book on the
-// startup path that most often reaches here, where the scan happened moments ago.
-// Without one, the store is walked here and the scan carries no observations,
-// so every book is stat'd during the scan below.
+// reindex takes storeDrifted's scan when there is one, which saves a walk and
+// a stat per book at startup. With nil it walks the store itself.
 func (l *Library) reindex(scan *storeScan) error {
 	if scan == nil {
 		entries, err := l.store.Walk()
@@ -42,14 +36,10 @@ func (l *Library) reindex(scan *storeScan) error {
 		scan = &storeScan{entries: entries}
 	}
 
-	// Each entry is stat'd during the scan, before the canonical moves below.
-	// That ordering is what makes reusing the observations safe. They are keyed
-	// by pre-move library path, so reading them there lines the keys up and stops
-	// a book that moves into a path another just vacated from picking up that
-	// book's state. Rename preserves size and mtime, so a value captured then
-	// stays accurate once the moves run.
+	// Stat before the moves: observations are keyed by the pre-move path, and
+	// rename preserves size and mtime, so they stay accurate after.
 	s := l.scanEntries(scan)
-	// Before the moves, so the reported paths are the ones on disk right now.
+	// Before the moves, so the reported paths are the ones on disk.
 	if err := s.checkDuplicateIDs(); err != nil {
 		return err
 	}
@@ -62,24 +52,17 @@ func (l *Library) reindex(scan *storeScan) error {
 	return nil
 }
 
-// storeScan is one traversal of the store: every book directory the walk found,
-// and the file state observed for each, keyed by library path. Both halves are
-// carried together so a reindex triggered by a drift verdict can reuse the whole
-// traversal rather than walking and stat'ing the library a second time.
 type storeScan struct {
 	entries []book.Location
 	info    map[string]drift.PathInfo
 }
 
-// storeDrifted reports whether something bypassed the library and added,
-// removed or swapped a book on disk. It compares a directory listing against
-// the index on each file's size and mtime, with no parse, both from the stat
-// that recorded them. Size as well as mtime, because coarse-clock filesystems
-// reuse an mtime for writes in the same tick (see drift.PathInfo).
+// storeDrifted reports whether a book changed on disk behind the library. It
+// compares each file's size and mtime with the index, without parsing (see
+// drift.PathInfo for why size too).
 //
-// It returns the scan it built, so a reindex triggered by that verdict reuses
-// it. A nil scan means the walk failed; reindex then walks and stats everything
-// and surfaces the walk error rather than swallowing it here.
+// It returns its scan for reindex to reuse. A nil scan means the walk failed,
+// and reindex walks again and reports the error.
 func (l *Library) storeDrifted() (*storeScan, bool) {
 	entries, err := l.store.Walk()
 	if err != nil {
@@ -91,8 +74,7 @@ func (l *Library) storeDrifted() (*storeScan, bool) {
 	for _, e := range entries {
 		mt, err := l.store.Stat(e)
 		if err != nil {
-			// Unobserved rather than a forced rebuild, so both sides record the
-			// same marker (see drift.PathInfo).
+			// Recorded as unobserved, the same marker the index holds.
 			slog.Warn("reindex: could not stat, recording as unreadable", "path", e.Dir(), "error", err)
 			mt = drift.PathInfo{}
 		}
@@ -116,8 +98,6 @@ func (l *Library) storeDrifted() (*storeScan, bool) {
 	return onDisk, false
 }
 
-// scanEntries runs a bounded worker pool, since each entry is independent disk
-// and CPU work and reindex blocks startup.
 func (l *Library) scanEntries(scan *storeScan) *scanState {
 	s := &scanState{
 		indexed:   make([]index.BookPath, 0, len(scan.entries)),
@@ -141,11 +121,9 @@ func (l *Library) scanEntries(scan *storeScan) *scanState {
 }
 
 // scanEntry records one book directory in s: indexed when its sidecar and epub
-// both read, skipped with whatever file state was observed when they don't.
-// Either way it reserves the id the directory holds.
+// both read, skipped otherwise. Either way it reserves the directory's id.
 func (l *Library) scanEntry(s *scanState, known map[string]drift.PathInfo, e book.Location) {
-	// One stat up front serves every branch below. The error is held rather
-	// than acted on, so an unstattable book still reserves its id.
+	// The stat error is held, so an unstattable book still reserves its id.
 	pi, statErr := l.pathInfo(known, e)
 	if statErr != nil {
 		pi = drift.PathInfo{}
@@ -154,21 +132,17 @@ func (l *Library) scanEntry(s *scanState, known map[string]drift.PathInfo, e boo
 	meta, err := l.store.ReadMeta(e)
 	if err != nil {
 		slog.Warn("reindex: skip, read meta failed", "path", e.Dir(), "error", err)
-		// The sidecar is unreadable, but the layout encodes the id in the
-		// directory name. Reserve it anyway: this book still holds that id, and
-		// reissuing it would collide the moment the sidecar is repaired: a
-		// collision that now refuses to start.
+		// The id is also in the directory name. Reissuing it would make the
+		// repaired sidecar a fatal collision (docs/DECISIONS.md #14).
 		if id, ok := store.IDFromPath(e.Dir()); ok {
 			s.reserveID(id)
 		}
 		s.skip(e.EpubPath, pi)
 		return
 	}
-	// Reserve as soon as the meta is readable, even if the epub then fails to
-	// parse or the stat failed. The id is taken and must not be reissued.
+	// Reserved even if the stat failed or the epub will not parse.
 	s.reserveID(meta.ID)
 
-	// No trustworthy file state to index against.
 	if statErr != nil {
 		slog.Warn("reindex: skip, stat failed", "path", e.Dir(), "error", statErr)
 		s.skip(e.EpubPath, pi)
@@ -186,11 +160,9 @@ func (l *Library) scanEntry(s *scanState, known map[string]drift.PathInfo, e boo
 	s.add(index.BookPath{Book: b, Info: pi})
 }
 
-// moveToCanonical migrates books to the canonical naming convention (e.g.
-// all-author directory and filename). Books that can't be moved stay at their
-// old location, and the index still tracks them. This mutates the *book.Book
-// values indexed holds, so Rebuild writes each book's post-move location
-// against the file state the scan captured.
+// moveToCanonical moves books to their canonical paths. A book that cannot
+// move stays put and stays indexed. It updates the books in indexed, so
+// Rebuild records where they landed.
 func (l *Library) moveToCanonical(indexed []index.BookPath) {
 	for _, bp := range indexed {
 		b := bp.Book
@@ -205,10 +177,8 @@ func (l *Library) moveToCanonical(indexed []index.BookPath) {
 	}
 }
 
-// pathInfo returns loc's on-disk file state, preferring an entry already
-// captured by storeDrifted's scan over a fresh stat. An unobserved entry
-// records a failure, so it is re-stat'd. Handing it back as a reading would
-// index the book against file state nobody saw.
+// pathInfo prefers storeDrifted's observation over a fresh stat, except an
+// unobserved one, which recorded a failure rather than a reading.
 func (l *Library) pathInfo(known map[string]drift.PathInfo, loc book.Location) (drift.PathInfo, error) {
 	if pi, ok := known[loc.EpubPath]; ok && !pi.IsUnobserved() {
 		return pi, nil
@@ -216,7 +186,6 @@ func (l *Library) pathInfo(known map[string]drift.PathInfo, loc book.Location) (
 	return l.store.Stat(loc)
 }
 
-// needsReindex forces a rebuild when it cannot tell.
 func (l *Library) needsReindex() bool {
 	needs, err := l.index.NeedsReindex()
 	if err != nil {
@@ -226,9 +195,7 @@ func (l *Library) needsReindex() bool {
 	return needs
 }
 
-// scanState accumulates one rebuild's view of the store. Entries are scanned
-// concurrently, so every field is written through the methods below, which hold
-// mu; the scan itself never locks.
+// scanState is written concurrently, only through its methods, which hold mu.
 type scanState struct {
 	mu        sync.Mutex
 	indexed   []index.BookPath
@@ -242,15 +209,14 @@ func (s *scanState) add(bp index.BookPath) {
 	s.mu.Unlock()
 }
 
-// skip records a directory this rebuild can't index, so drift detection can
-// tell it apart from one that appeared on disk unaccounted for.
+// skip records a directory this rebuild cannot index, so drift detection does
+// not take it for one that appeared unaccounted for.
 func (s *scanState) skip(path string, pi drift.PathInfo) {
 	s.mu.Lock()
 	s.unindexed[path] = pi
 	s.mu.Unlock()
 }
 
-// reserveID marks id as taken, so a later ingest cannot reissue it.
 func (s *scanState) reserveID(id int64) {
 	s.mu.Lock()
 	if id > s.maxID {
@@ -259,17 +225,12 @@ func (s *scanState) reserveID(id int64) {
 	s.mu.Unlock()
 }
 
-// checkDuplicateIDs fails the rebuild when two directories claim one id: a
-// copied book directory or a restored backup beside the original.
+// checkDuplicateIDs fails the rebuild when two directories claim one id, as a
+// copied directory or a restored backup does. That is fatal
+// (docs/DECISIONS.md #14).
 //
-// Fatal by design (docs/DECISIONS.md #14), since renumbering breaks external
-// references keyed on the id and dropping one hides a library quietly missing
-// a book.
-//
-// Caught here rather than by the books primary key purely for the message:
-// SQLite reports only "UNIQUE constraint failed: books.id" and names neither
-// directory. Sorting first makes the reported pair stable, since the scan's
-// workers finish in arbitrary order.
+// It is caught here rather than by the primary key because SQLite's error
+// names neither directory. Sorting makes the reported pair stable.
 func (s *scanState) checkDuplicateIDs() error {
 	slices.SortFunc(s.indexed, func(a, b index.BookPath) int {
 		return strings.Compare(a.Book.EpubPath, b.Book.EpubPath)

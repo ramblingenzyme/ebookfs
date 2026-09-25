@@ -1,15 +1,13 @@
-// Package ncx writes the NCX: EPUB 2's table of contents (OPF 2.0 §2.4.1,
-// which defers to DAISY/NISO Z39.86 §8; §5.9.5 keeps it as a legacy feature of
-// EPUB 3, and packages still carry one). opf.NCXPath says where it lives.
+// Package ncx writes the NCX, EPUB 2's table of contents (OPF 2.0 §2.4.1,
+// which defers to DAISY/NISO Z39.86 §8). §5.9.5 keeps it as a legacy EPUB 3
+// feature. opf.NCXPath finds it.
 //
-// Its <docTitle> and <docAuthor> are a second copy of the title and authors,
-// and a reading system navigating by the NCX shows those rather than the OPF's.
-// Neither spec requires the two to agree, so keeping them in step is ours
-// rather than conformance: the package document stays the metadata of record,
-// and nothing is read back out of here.
+// Its <docTitle> and <docAuthor> copy the title and authors, and a reading
+// system navigating by the NCX shows them. Neither spec requires the copies to
+// agree, so keeping them in step is ours. Nothing is read back out of the NCX.
 //
-// Nothing is created that was not already there: where a new element would go
-// is Z39.86's content model to say, not ours.
+// A missing element is not created, since where it would go is for Z39.86's
+// content model to say.
 package ncx
 
 import (
@@ -22,17 +20,14 @@ import (
 
 type Doc struct {
 	doc *etree.Document
-	ncx *etree.Element // <ncx>
+	ncx *etree.Element
 }
 
-// Parse rejects a document it cannot round-trip, rather than writing back the
-// correction etree would make; ValidateInput buys the syntax error and its line
-// for the caller to log. Strict here and permissive in pkgdoc.Parse: a rejected
-// NCX is skipped and the edit still lands, where a rejected package document
-// costs the caller the whole book.
+// Parse rejects a document etree would have to correct, rather than writing
+// the correction back. It is strict where pkgdoc.Parse is permissive, since a
+// rejected NCX is skipped while a rejected package document loses the book.
 func Parse(b []byte) (*Doc, error) {
 	doc := etree.NewDocument()
-	// pkgdoc.Parse says why this document validates and that one does not.
 	doc.ReadSettings.ValidateInput = true
 	// pkgdoc.Parse says why CDATA is preserved.
 	doc.ReadSettings.PreserveCData = true
@@ -48,11 +43,9 @@ func Parse(b []byte) (*Doc, error) {
 
 func (d *Doc) Bytes() ([]byte, error) { return d.doc.WriteToBytes() }
 
-// Apply writes the title and author names, the only fields the NCX copies,
-// and reports whether that changed anything. Nothing is serialized until Bytes.
-//
-// A nil title or a nil names slice is one the caller did not touch. Names
-// rather than authors: the NCX has nowhere to record a sort name.
+// Apply writes the title and author names, and reports whether that changed
+// anything. A nil title or names slice leaves that field alone. It takes names
+// because the NCX has nowhere to record a sort name.
 func (d *Doc) Apply(title *string, names []string) bool {
 	before, _ := d.Bytes()
 
@@ -63,7 +56,7 @@ func (d *Doc) Apply(title *string, names []string) bool {
 		d.authors().set(names)
 	}
 
-	// Serialized, as opf.Doc.Apply does: a set may find the value already there.
+	// Compared as bytes, since a set may find the value already there.
 	after, _ := d.Bytes()
 	return !bytes.Equal(before, after)
 }
@@ -75,9 +68,9 @@ type authorsField struct{ d *Doc }
 func (d *Doc) authors() authorsField { return authorsField{d} }
 
 // set makes the NCX carry one <docAuthor> per author, in order, but only if it
-// already carries one: naming no author contradicts nothing. Extras go after
-// the last rather than at the end of <ncx>, whose content model fixes the order
-// of its children (head, docTitle, docAuthor*, navMap, …).
+// has any, since an NCX naming no author contradicts nothing. New ones go
+// after the last <docAuthor>, because the content model fixes the order of
+// <ncx>'s children (head, docTitle, docAuthor*, navMap, …).
 func (f authorsField) set(names []string) {
 	existing := f.d.ncx.SelectElements("docAuthor")
 	if len(existing) == 0 {
@@ -101,15 +94,14 @@ func (f authorsField) set(names []string) {
 	}
 }
 
-// The <text> child <docTitle> and <docAuthor> wrap their value in, the only
-// place the NCX records one. Write-only: nothing reads metadata out of an NCX.
+// textSlot is the <text> child that <docTitle> and <docAuthor> hold their value
+// in.
 type textSlot struct{ owner *etree.Element }
 
 func slot(owner *etree.Element) textSlot { return textSlot{owner: owner} }
 
-// set is a no-op when the owner is absent, so a missing <docTitle> stays missing
-// rather than invented in a position that would have to be guessed. A missing
-// <text> is created: Z39.86 requires it in both elements.
+// set does nothing when the owner is missing. A missing <text> is created,
+// since Z39.86 requires it in both elements.
 func (s textSlot) set(value string) {
 	if s.owner == nil {
 		return

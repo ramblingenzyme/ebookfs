@@ -7,10 +7,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/xml"
 )
 
-// The whole etree-facing surface: everything else goes through these.
-
-// text is nil-safe: primary returns nil for an absent element and every caller
-// wants "" for that.
 func text(e *etree.Element) string {
 	if e == nil {
 		return ""
@@ -18,26 +14,22 @@ func text(e *etree.Element) string {
 	return xml.Collapse(e.Text())
 }
 
-// attr collapses: etree wraps encoding/xml, which does not apply XML 1.0
-// §3.3.3, so a tab or newline in an attribute value arrives verbatim.
+// attr collapses whitespace, since etree does not apply XML 1.0 §3.3.3.
 func attr(e *etree.Element, name string) string {
 	return xml.Collapse(e.SelectAttrValue(name, ""))
 }
 
-// detach removes an element from wherever it sits: the parent may be a
-// dc-metadata or x-metadata wrapper rather than <metadata>.
+// detach removes an element from its parent, which may be a dc-metadata or
+// x-metadata wrapper rather than <metadata>.
 func detach(e *etree.Element) {
 	if p := e.Parent(); p != nil {
 		p.RemoveChild(e)
 	}
 }
 
-// ensureID returns the element's id, minting "stem", "stem-2", … if it has
-// none. Uniqueness is checked against every id in the document, not just those
-// of the same kind: XML 1.0 §3.3.1 makes ID values unique document-wide.
-//
-// stem is a name to build an id from, in neither sense this package uses the
-// word prefix: not xmlns:, not vocabulary.
+// ensureID returns the element's id, minting stem, stem-2, … if it has none.
+// It checks every id in the document, since XML 1.0 §3.3.1 makes ids unique
+// document-wide.
 //
 // ponytail: rescans per call, O(n²) over a document holding tens of elements.
 // Thread a set through the callers only if a profile ever says to.

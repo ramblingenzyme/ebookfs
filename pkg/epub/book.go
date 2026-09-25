@@ -7,28 +7,27 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/opf"
 )
 
-// Book is an open epub and its package document's metadata. Assign a field and
-// call Save; a field left alone is left alone in the file. A Book is not safe
-// for concurrent use.
+// Book is an open epub with its metadata. Change a field and call Save to
+// write it. A Book is not safe for concurrent use.
 type Book struct {
 	*File
 
 	Title       string
-	SortTitle   string // "" when the file states none, and "" to remove it
+	SortTitle   string // "" if the file has none; set "" to remove it
 	Authors     []Author
-	Series      *Series // nil when the book is in none, and nil to remove it
-	Description string  // "" is an empty element, not an absent one
+	Series      *Series // nil if the book is in no series; set nil to remove it
+	Description string  // "" is an empty element, not a missing one
 	Language    string
 
 	pubdate     string
 	doc         *opf.Doc
 	identifiers map[string]string
 	coverPath   string
-	// orig is deep-copied, so a caller mutating an exported slice cannot move
-	// the baseline Save diffs against.
+	// orig is a deep copy, so changing an exported slice cannot change what
+	// Save compares against.
 	orig snapshot
-	// cover is staged until Save, so a cover and a metadata edit rebuild the
-	// archive once.
+	// cover is held until Save, so a cover and a metadata change rebuild the
+	// archive only once.
 	cover []byte
 }
 
@@ -41,9 +40,8 @@ type snapshot struct {
 	Language    string
 }
 
-// Open opens the epub at path and parses its package document. The caller
-// closes the returned Book, which is non-nil iff err is nil. Nothing is
-// rejected for its contents.
+// Open opens the epub at path and parses its package document. A book is never
+// rejected for what its metadata says.
 func Open(p string) (_ *Book, err error) {
 	f, err := OpenFile(p)
 	if err != nil {
@@ -98,20 +96,22 @@ func (b *Book) take() snapshot {
 	return s
 }
 
-// Pubdate returns the publication date as the file states it, unparsed. It is
-// "" when the file states none or several ambiguously.
+// Pubdate returns the publication date exactly as the file writes it. It is ""
+// if the file has none, or has several and none can be chosen.
 func (b *Book) Pubdate() string { return b.pubdate }
 
-// Identifiers returns the book's identifiers keyed by scheme ("isbn", "uuid"),
-// falling back to the element's XML id, then a numbered "unknown"
-// (docs/DECISIONS.md #24). Read-only, since an identifier is a claim about the
-// book's published identity. Mutating the map changes nothing in the file.
+// Identifiers returns the book's identifiers keyed by scheme, such as "isbn" or
+// "uuid". One with no scheme is keyed by its XML id, or else by "unknown",
+// "unknown-2" and so on (docs/DECISIONS.md #24).
+//
+// Identifiers are read-only, since they state the book's published identity.
+// Changing the map does not change the file.
 func (b *Book) Identifiers() map[string]string { return b.identifiers }
 
-// CoverPath returns the cover image's zip-relative path, or "".
+// CoverPath returns the cover image's path inside the zip, or "".
 func (b *Book) CoverPath() string { return b.coverPath }
 
-// Cover returns the cover image's bytes, or ErrNoCover.
+// Cover returns the cover image, or ErrNoCover if the book has none.
 func (b *Book) Cover() ([]byte, error) {
 	if b.coverPath == "" {
 		return nil, ErrNoCover
