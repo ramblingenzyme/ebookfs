@@ -80,19 +80,29 @@ func JoinAuthors(authors []Author, sep string) string {
 	return strings.Join(names, sep)
 }
 
+// Contributor mirrors epub.Contributor.
+type Contributor struct {
+	Name string
+	Role string
+}
+
 // Bib holds the bibliographic data parsed from the epub.
 type Bib struct {
-	Title       string
-	SortTitle   string
-	Authors     []Author
-	Series      *SeriesRef
-	Language    string
-	Pubdate     string
-	Description string
-	Identifiers map[string]string
-	CoverPath   string // zip-relative path to cover image; empty if none
-	OpfSize     int64  // OPF uncompressed size from zip central directory; 0 if unavailable
-	CoverSize   int64  // cover uncompressed size from zip central directory; 0 if unavailable
+	Title        string
+	SortTitle    string
+	Authors      []Author
+	Series       *SeriesRef
+	Language     string
+	Publisher    string
+	Rights       string
+	Pubdate      string
+	Description  string
+	Subjects     []string
+	Contributors []Contributor
+	Identifiers  map[string]string
+	CoverPath    string // zip-relative path to cover image; empty if none
+	OpfSize      int64  // OPF uncompressed size from zip central directory; 0 if unavailable
+	CoverSize    int64  // cover uncompressed size from zip central directory; 0 if unavailable
 }
 
 // Location identifies where a book lives on disk.

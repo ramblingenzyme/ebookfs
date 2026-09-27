@@ -35,14 +35,19 @@ func bib(b *epubfile.Book) (*book.Bib, error) {
 		SortTitle:   b.SortTitle,
 		Description: b.Description,
 		Language:    b.Language,
+		Publisher:   b.Publisher,
+		Rights:      b.Rights,
 		Pubdate:     b.Pubdate(),
-		Identifiers: b.Identifiers(),
+		Subjects:    b.Subjects,
 		CoverPath:   b.CoverPath(),
 		// EpubSize is left to the library, which already stats the file.
 		OpfSize: b.Size(b.PackagePath()),
 	}
 	for _, a := range b.Authors {
 		bib.Authors = append(bib.Authors, book.Author{Name: a.Name, SortName: a.SortName})
+	}
+	for _, c := range b.Contributors {
+		bib.Contributors = append(bib.Contributors, book.Contributor{Name: c.Name, Role: c.Role})
 	}
 	if bib.CoverPath != "" {
 		bib.CoverSize = b.Size(bib.CoverPath)
