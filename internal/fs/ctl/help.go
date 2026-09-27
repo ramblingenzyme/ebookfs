@@ -54,11 +54,6 @@ Examples:
 Notes:
 
   • Operations continue on error; see the log file for details.
-  • rename-tag doubles as a merge: renaming a tag onto an
-    existing one folds the two together (the old tag is
-    dropped from books that already had the new one).
-  • rename-author matches authors whose name OR sort-name
-    equals <old>, then replaces both with the new value.
 `
 )
 

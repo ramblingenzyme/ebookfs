@@ -115,12 +115,10 @@ func TestEpubFilename(t *testing.T) {
 	}
 }
 
-func TestEpubFilenameForFFallback(t *testing.T) {
-	// A title that sanitizes away entirely comes back from ForFAT unchanged, and
-	// epubFilename adds no handling of its own.
+func TestEpubFilenameForFATFallback(t *testing.T) {
 	got := epubFilename([]book.Author{{Name: "Alice"}}, ".")
-	if got != ". - Alice.epub" {
-		t.Errorf("epubFilename = %q, want %q", got, ". - Alice.epub")
+	if got != "_ - Alice.epub" {
+		t.Errorf("epubFilename = %q, want %q", got, "_ - Alice.epub")
 	}
 }
 

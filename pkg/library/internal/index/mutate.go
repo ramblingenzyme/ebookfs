@@ -39,7 +39,7 @@ func (idx *Index) insertBook(q *dbsqlc.Queries, b *book.Book, mt drift.PathInfo)
 		return err
 	}
 
-	return idx.finishBook(q, b)
+	return idx.putRelations(q, b)
 }
 
 // putBook inserts or replaces b; insertBook says why Rebuild uses that one.
@@ -51,7 +51,7 @@ func (idx *Index) putBook(q *dbsqlc.Queries, b *book.Book, mt drift.PathInfo) er
 		return err
 	}
 
-	if err := idx.finishBook(q, b); err != nil {
+	if err := idx.putRelations(q, b); err != nil {
 		return err
 	}
 	// Replacing a book can strand its former author/series/tag rows.
@@ -59,7 +59,7 @@ func (idx *Index) putBook(q *dbsqlc.Queries, b *book.Book, mt drift.PathInfo) er
 }
 
 // bookParams is the index row for b: every column except series_id and
-// series_index, which finishBook sets once the series row exists.
+// series_index, which putRelations sets once the series row exists.
 func bookParams(b *book.Book, mt drift.PathInfo) dbsqlc.InsertBookParams {
 	return dbsqlc.InsertBookParams{
 		ID:           b.Meta.ID,
@@ -85,16 +85,17 @@ func bookParams(b *book.Book, mt drift.PathInfo) dbsqlc.InsertBookParams {
 	}
 }
 
-// finishBook sweeps no orphans. The callers that can strand rows, putBook and
-// deleteBook, call cleanupOrphans themselves.
-func (idx *Index) finishBook(q *dbsqlc.Queries, b *book.Book) error {
-	if err := idx.upsertAuthors(q, b.Meta.ID, b.Authors); err != nil {
+// putRelations writes the book's authors, tags, series and identifiers. It
+// sweeps no orphans; putBook and deleteBook, which can strand rows, call
+// cleanupOrphans themselves.
+func (idx *Index) putRelations(q *dbsqlc.Queries, b *book.Book) error {
+	if err := idx.replaceAuthors(q, b.Meta.ID, b.Authors); err != nil {
 		return err
 	}
-	if err := idx.upsertTags(q, b.Meta.ID, b.Meta.Tags); err != nil {
+	if err := idx.replaceTags(q, b.Meta.ID, b.Meta.Tags); err != nil {
 		return err
 	}
-	if err := idx.upsertSeries(q, b); err != nil {
+	if err := idx.setSeries(q, b); err != nil {
 		return err
 	}
 
@@ -113,7 +114,7 @@ func (idx *Index) finishBook(q *dbsqlc.Queries, b *book.Book) error {
 	return nil
 }
 
-func (idx *Index) upsertAuthors(q *dbsqlc.Queries, bookID int64, authors []book.Author) error {
+func (idx *Index) replaceAuthors(q *dbsqlc.Queries, bookID int64, authors []book.Author) error {
 	if err := q.DeleteBookAuthors(idx.ctx, bookID); err != nil {
 		return err
 	}
@@ -141,7 +142,7 @@ func (idx *Index) upsertAuthors(q *dbsqlc.Queries, bookID int64, authors []book.
 	return nil
 }
 
-func (idx *Index) upsertTags(q *dbsqlc.Queries, bookID int64, tags []string) error {
+func (idx *Index) replaceTags(q *dbsqlc.Queries, bookID int64, tags []string) error {
 	if err := q.DeleteBookTags(idx.ctx, bookID); err != nil {
 		return err
 	}
@@ -163,8 +164,8 @@ func (idx *Index) upsertTags(q *dbsqlc.Queries, bookID int64, tags []string) err
 	return nil
 }
 
-// upsertSeries runs after the books row exists, since it updates that row.
-func (idx *Index) upsertSeries(q *dbsqlc.Queries, b *book.Book) error {
+// setSeries runs after the books row exists, since it updates that row.
+func (idx *Index) setSeries(q *dbsqlc.Queries, b *book.Book) error {
 	var seriesID sql.NullInt64
 	var seriesIndex sql.NullString
 

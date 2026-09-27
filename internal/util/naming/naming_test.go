@@ -24,9 +24,8 @@ func TestForFAT(t *testing.T) {
 		{"trailing space trimmed", "file ", "file"},
 		{"trailing tab trimmed", "file\t", "file"},
 		{"all combined", "Tit:le*/<>\x00. ", "Tit-le----"},
-		// Nothing survives sanitizing, so the input comes back unchanged.
-		{"empty string", "", ""},
-		{"only stripped chars", ". \t\x01", ". \t\x01"},
+		{"empty string", "", "_"},
+		{"only stripped chars", ". \t\x01", "_"},
 		{"unicode retained", "漢字:title", "漢字-title"},
 		{"only fat illegal", "\\:*?\"<>|", "--------"},
 	}

@@ -43,16 +43,13 @@ func pathComponent(s string) string {
 }
 
 // ForFAT makes s safe for use as a filename on a FAT filesystem, which an epub
-// is copied to directly on a Kobo.
-//
-// A value that sanitizes away entirely comes back unchanged rather than as an
-// error, since every caller wants a name and none of them can do better with
-// the failure than use what they were given.
+// is copied to directly on a Kobo. Like PathSafe, it cannot fail: a value that
+// sanitizes away entirely becomes "_".
 func ForFAT(s string) string {
 	if out := fatComponent(s); out != "" {
 		return out
 	}
-	return s
+	return "_"
 }
 
 // PathSafe makes s usable as a single path component, for a library directory

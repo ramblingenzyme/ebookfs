@@ -5,7 +5,8 @@
 //     every path from them.
 //   - A series position the spec disallows is read as 1. The file is not
 //     changed.
-//   - Changing a book's title clears its sort title.
+//   - Changing a book's title clears its sort title, which described the old
+//     title.
 package epub
 
 import (

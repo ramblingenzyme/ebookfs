@@ -46,7 +46,7 @@ func TestExpand(t *testing.T) {
 
 // D.1.4: a whitespace-separated list of "prefix: URL" pairs, which real files
 // wrap.
-func TestVocabulariesParsesThePrefixAttribute(t *testing.T) {
+func TestBindingsParsesThePrefixAttribute(t *testing.T) {
 	for _, tc := range []struct {
 		name, prefix string
 		want         map[string]string

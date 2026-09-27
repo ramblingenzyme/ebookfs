@@ -20,10 +20,8 @@ import (
 // without Series ("index-only" edit) updates the position of the book's
 // current series, resolved against the live snapshot under the per-book lock.
 //
-// SortTitle follows the same nil/empty rules. As a special case, changing Title
-// without supplying a SortTitle clears any existing sort title, which was derived
-// from the old title, so leaving it would make the sort title disagree with the
-// title.
+// SortTitle follows the same nil/empty rules. Changing Title without a SortTitle
+// clears the sort title; package library/internal/epub applies that rule.
 type Edits struct {
 	// Bib fields (written to the epub OPF).
 	Title       *string

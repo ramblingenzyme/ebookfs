@@ -80,8 +80,9 @@ func (s *Store) Stat(loc book.Location) (drift.PathInfo, error) {
 	}, nil
 }
 
-// Move renames the epub within the directory when its filename differs from
-// the one it arrives with.
+// Move renames the book directory, then the epub inside it, rolling the
+// directory back if the epub rename fails. It then removes the old author
+// directory if that left it empty.
 func (s *Store) Move(from, to book.Location) error {
 	if from.EpubPath == to.EpubPath {
 		return nil
