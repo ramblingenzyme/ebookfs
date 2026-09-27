@@ -23,10 +23,6 @@ func openTestLibrary(t *testing.T) *Library {
 	return openLib(t, testConfig(t))
 }
 
-// openLib opens a library at cfg and registers its close, so an assertion that
-// fails mid-test cannot leave the index open. Tests that reopen across a
-// simulated restart still Close explicitly for sequencing; the second close is
-// a no-op.
 func openLib(t *testing.T, cfg Config, opts ...Option) *Library {
 	t.Helper()
 	lib, err := Open(cfg, opts...)
@@ -37,24 +33,21 @@ func openLib(t *testing.T, cfg Config, opts ...Option) *Library {
 	return lib
 }
 
-// drifted reports storeDrifted's verdict, discarding the store scan it returns
-// for the reindex path to reuse.
 func drifted(t *testing.T, lib *Library) bool {
 	t.Helper()
 	_, d := lib.storeDrifted()
 	return d
 }
 
-// metaPathOf returns the path of book's meta.toml sidecar. The store keeps the
-// filename private, so tests that reach around the library restate it here once.
+// The store keeps the sidecar's filename private, so tests restate it here
+// once.
 func metaPathOf(book *Book, root string) string {
 	return filepath.Join(root, book.Dir(), "meta.toml")
 }
 
-// breakEpub replaces book's epub with a symlink to nothing. store.Walk still
-// reports the directory, since findEpub only reads the directory entry, while
-// os.Stat follows the link and fails, which is the one way to reach the
-// rebuild's "could not observe this book at all" path from a test.
+// store.Walk still lists the directory, but os.Stat follows the dangling
+// symlink and fails. That is the only way to reach the rebuild's
+// could-not-observe path from a test.
 func breakEpub(t *testing.T, book *Book, root string) {
 	t.Helper()
 	absEpub := filepath.Join(root, book.EpubPath())
@@ -67,12 +60,8 @@ func breakEpub(t *testing.T, book *Book, root string) {
 	}
 }
 
-// dropIndex deletes the index database, so the next Open rebuilds it from the
-// store alone. That is the state the id-reservation logic exists for: the id
-// sequence lives in the index, so a rebuild that starts without one has nothing
-// but the store to learn which ids are already spoken for. Rebuild leaves the
-// sequence table alone otherwise, which is why merely reindexing does not
-// exercise this.
+// The id sequence lives in the index, so only a rebuild without one depends on
+// the store's id reservations.
 func dropIndex(t *testing.T, cfg Config) {
 	t.Helper()
 	// The WAL and shared-memory sidecars would otherwise resurrect the sequence.
@@ -83,15 +72,9 @@ func dropIndex(t *testing.T, cfg Config) {
 	}
 }
 
-// assertSettlesClean pins that a library at cfg stops drifting once it has been
-// rebuilt: the first Open reindexes and records what it found, and every Open
-// after that must see a clean index. A book the rebuild cannot read is the case
-// that breaks this. If the rebuild forgets it, drift detection sees a directory
-// on disk it cannot account for and reindexes the whole library on every startup.
-//
-// Two restarts is the whole proof: one to record, one to confirm the record is
-// believed. Both are closed explicitly rather than through openLib, since the
-// point is what a later process sees after this one has let go.
+// A rebuild that forgets an unreadable book sees it as drift on every startup.
+// Two restarts prove it: one records, one confirms. Both close explicitly,
+// since the point is what a later process sees.
 func assertSettlesClean(t *testing.T, cfg Config) {
 	t.Helper()
 	for i := 1; i <= 2; i++ {
@@ -110,12 +93,6 @@ func assertSettlesClean(t *testing.T, cfg Config) {
 	}
 }
 
-// ingestTestEpub has a twin in helpers_ext_test.go. Neither can move to
-// internal/testing: it would have to name *Library, so the package holding it
-// would import library, and this file is package library, which makes that a
-// test-time import cycle (internal/testing/util's package doc states the same
-// rule). The white-box tests need it, since reindex_test.go reaches lib.index
-// and storeDrifted.
 func ingestTestEpub(t *testing.T, lib *Library, data []byte) *Book {
 	//goland:noinspection DuplicatedCode
 	t.Helper()

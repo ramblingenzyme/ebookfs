@@ -82,6 +82,8 @@ than the spec requires, say which half is ours.
   - No hedging, "note that", "simply", or decayed words like robust, seamless
     or leverage.
   - No recaps, aphorisms, or closing flourishes.
+  - Wrap at 80 columns. One line of a paragraph may run to 100 if that saves
+    a line. Never split a citation such as `OPF 2.0 §2.2.2` across lines.
 
 Turn history into a standing property:
 

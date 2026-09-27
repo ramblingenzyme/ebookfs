@@ -1,3 +1,3 @@
-// Package vfile holds the generic 9P file primitives: the snapshot and read-at
-// base types that concrete files embed, plus the NewStat owner convention.
+// Package vfile holds generic 9P file primitives: snapshot and read-at base
+// types, per-fid write buffers, stat builders, and create dispatch.
 package vfile

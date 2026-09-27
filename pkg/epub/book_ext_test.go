@@ -1,10 +1,3 @@
-// What Open reads out of a package document, and the rules it applies doing
-// so: which of several elements is the one meant, what an empty or absent one
-// means, and how a value the file states two ways is reconciled.
-//
-// Nothing here edits. A value is reported as the file carries it, so a book
-// with no title reads back an empty Title rather than an error.
-
 package epub_test
 
 import (
@@ -16,8 +9,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testing/epubtest"
 )
 
-// A percent-encoded cover href must resolve to the literal zip entry so the
-// cover is found by both the metadata read and the entry lookups.
 func TestOpenResolvesEncodedCoverHref(t *testing.T) {
 	opfEncoded := epubtest.Pkg{Meta: `    <dc:creator id="creator1">Jane Doe</dc:creator>
     <meta refines="#creator1" property="role">aut</meta>`, Manifest: `<item id="cover-img" href="cover%20image.jpg" media-type="image/jpeg" properties="cover-image"/>
@@ -61,9 +52,7 @@ func TestFirstDescriptionWins(t *testing.T) {
 	}
 }
 
-// A legacy cover meta naming an id not in the manifest suppresses the
-// id-heuristic fallback, so a broken pointer does worse than a missing one.
-// The spec says nothing; calibre keeps looking.
+// The spec says nothing here. calibre keeps looking, and so does this.
 func TestDanglingCoverMetaFallsThrough(t *testing.T) {
 
 	opf := epubtest.EPUB2(`    <meta name="cover" content="does-not-exist"/>`)
@@ -77,9 +66,8 @@ func TestDanglingCoverMetaFallsThrough(t *testing.T) {
 	}
 }
 
-// An empty dc:date is invalid, and skipping it matters more than for a title or
-// creator: pubdate returns a date only when exactly one untagged dc:date has a
-// value, so counting an empty one makes it two and the book loses its date.
+// Pubdate needs exactly one untagged date, so counting the empty one would
+// make two and lose the date.
 func TestEmptyDateIsSkipped(t *testing.T) {
 	bib, err := parse(t, epubtest.Build(t, epubtest.EPUB3(`    <dc:date>   </dc:date>
     <dc:date>2020-01-02</dc:date>`)))
@@ -91,9 +79,7 @@ func TestEmptyDateIsSkipped(t *testing.T) {
 	}
 }
 
-// A stray empty creator costs nothing, and a file with no readable author at all
-// still fails loudly. Rejecting the first would lose a whole book over an
-// element carrying no information.
+// Rejecting the book would lose it over an element that carries nothing.
 func TestEmptyCreatorIsSkippedNotFatal(t *testing.T) {
 	t.Run("skipped alongside a usable one", func(t *testing.T) {
 		bib, err := parse(t, epubtest.Build(t, epubtest.EPUB3(`    <dc:creator id="c1">Ann Rand</dc:creator>
@@ -122,11 +108,8 @@ func TestEmptyFirstTitleFallsThrough(t *testing.T) {
 	}
 }
 
-// --- an edit has to land somewhere ---
-
-// A file-as meta with no refines, beside a creator with no id. Nothing links
-// them, so the meta refines the package as a whole (§5.3.6) and must not be read
-// as that creator's sort name.
+// With no refines, the meta refines the whole package (§5.3.6), not the
+// creator beside it.
 func TestUnrefinedMetaIsNotACreatorsSortName(t *testing.T) {
 	opf := epubtest.EPUB3(`    <meta property="file-as">Someone, Else</meta>`)
 
@@ -139,12 +122,8 @@ func TestUnrefinedMetaIsNotACreatorsSortName(t *testing.T) {
 	}
 }
 
-// --- cover fallback ordering ---
-
-// No cover-image property, no <meta name="cover">, just manifest ids containing
-// "cover". Neither spec describes this. calibre takes the first such item and
-// this takes the last, pinned rather than left to be discovered by a book
-// showing the wrong cover.
+// Neither spec describes this fallback. calibre takes the first match; this
+// takes the last.
 func TestCoverHeuristicTakesTheLastMatch(t *testing.T) {
 	opf := epubtest.Pkg{Manifest: `<item id="cover-thumb" href="thumb.jpg" media-type="image/jpeg"/>
     <item id="cover.jpg" href="cover.jpg" media-type="image/jpeg"/>
@@ -159,10 +138,6 @@ func TestCoverHeuristicTakesTheLastMatch(t *testing.T) {
 	}
 }
 
-// --- duplicate refinements ---
-
-// The scheme keys a dc:identifier because that is what the value is. The XML id
-// is a document-local handle and only the last resort (docs/DECISIONS.md #24).
 func TestIdentifierKeying(t *testing.T) {
 	tests := []struct {
 		name string
@@ -173,9 +148,8 @@ func TestIdentifierKeying(t *testing.T) {
 		opf:  epubtest.EPUB2(`    <dc:identifier id="BookId" opf:scheme="ISBN">9780123456789</dc:identifier>`),
 		want: map[string]string{"isbn": "9780123456789"},
 	}, {
-		// etree matches an attribute by local name whatever prefix it carries, so a
-		// bare spelling reads the same as opf:scheme. The write side documents
-		// that in OPFAttr.Set.
+		// etree matches attributes by local name, so a bare scheme reads like
+		// opf:scheme.
 		name: "unprefixed scheme attribute",
 		opf:  epubtest.EPUB2(`    <dc:identifier id="BookId" scheme="ASIN">B00X57B4KG</dc:identifier>`),
 		want: map[string]string{"asin": "B00X57B4KG"},
@@ -190,8 +164,8 @@ func TestIdentifierKeying(t *testing.T) {
     <meta refines="#pub-id" property="identifier-type">DOI</meta>`),
 		want: map[string]string{"doi": "10.1234/beta"},
 	}, {
-		// A code list we do not know is not ours to read, so the value's own URN gets
-		// the next turn. Here there is none, and the id is left.
+		// A code from an unknown list is ignored. With no URN in the value, the
+		// id is used.
 		name: "identifier-type from another code list falls through",
 		opf: epubtest.EPUB3(`    <dc:identifier id="pub-id">12345</dc:identifier>
     <meta refines="#pub-id" property="identifier-type" scheme="marc:relators">15</meta>`),
@@ -203,9 +177,7 @@ func TestIdentifierKeying(t *testing.T) {
     <meta refines="#pub-id" property="identifier-type" scheme="onix:codelist5">22</meta>`),
 		want: map[string]string{"isbn": "9780123456789"},
 	}, {
-		// The v2 spelling of the same thing: a scheme of urn says only that the
-		// kind is in the value, so the value's own namespace answers and the
-		// identifier is not keyed under "urn" with the prefix still attached.
+		// The EPUB 2 form of the case above.
 		name: "opf:scheme of urn falls through to the value",
 		opf:  epubtest.EPUB2(`    <dc:identifier id="BookId" opf:scheme="URN">urn:isbn:9780123456789</dc:identifier>`),
 		want: map[string]string{"isbn": "9780123456789"},
@@ -218,8 +190,7 @@ func TestIdentifierKeying(t *testing.T) {
 		opf:  epubtest.EPUB3(`    <dc:identifier id="pub-id">URN:UUID:A1B0D67E</dc:identifier>`),
 		want: map[string]string{"uuid": "A1B0D67E"},
 	}, {
-		// The prefix is only redundant when it repeats the key. Under calibre's
-		// own scheme it is part of what the value says.
+		// The urn prefix is dropped only when it repeats the scheme.
 		name: "urn under an unrelated scheme is kept whole",
 		opf:  epubtest.EPUB2(`    <dc:identifier id="BookId" opf:scheme="calibre">urn:uuid:A1B0D67E</dc:identifier>`),
 		want: map[string]string{"calibre": "urn:uuid:A1B0D67E"},
@@ -228,23 +199,19 @@ func TestIdentifierKeying(t *testing.T) {
 		opf:  epubtest.EPUB3(`    <dc:identifier id="BookId">12345</dc:identifier>`),
 		want: map[string]string{"bookid": "12345"},
 	}, {
-		// Only the unique-identifier target has to carry an id, so a second
-		// dc:identifier without one is legal and common in v2 output. Nothing
-		// names this one and there is no id to borrow, but the value is an
-		// identifier all the same.
+		// Only the unique-identifier needs an id, so this is legal and common in
+		// EPUB 2.
 		name: "an identifier with no id at all is still carried",
 		opf: epubtest.EPUB2(`    <dc:identifier id="BookId" opf:scheme="ISBN">9780123456789</dc:identifier>
     <dc:identifier>B00X57B4KG</dc:identifier>`),
 		want: map[string]string{"isbn": "9780123456789", "unknown": "B00X57B4KG"},
 	}, {
-		// Numbered rather than sharing one key, so first-wins does not eat the
-		// second: position is all that distinguishes them.
 		name: "two unnamed identifiers are numbered, not dropped",
 		opf: epubtest.EPUB2(`    <dc:identifier>B00X57B4KG</dc:identifier>
     <dc:identifier>12345</dc:identifier>`),
 		want: map[string]string{"unknown": "B00X57B4KG", "unknown-2": "12345"},
 	}, {
-		// ISBN-10 and ISBN-13 are one scheme to us, and only one row can exist.
+		// ISBN-10 and ISBN-13 share one scheme, and a map holds one value.
 		name: "two identifiers on one scheme, first in document order wins",
 		opf: epubtest.EPUB3(`    <dc:identifier id="isbn13">9780123456789</dc:identifier>
     <meta refines="#isbn13" property="identifier-type" scheme="onix:codelist5">15</meta>
@@ -282,9 +249,8 @@ func TestIdentifierKeying(t *testing.T) {
 	}
 }
 
-// D.1.4 lets a document bind its own prefix to ONIX's code list, so the scheme
-// is matched through the vocabulary. A reader comparing the literal "onix:"
-// would read this identifier as untyped.
+// D.1.4 lets a document bind its own prefix to ONIX's code list, so the
+// scheme is resolved rather than compared to the literal "onix:".
 func TestIdentifierTypeInReboundVocabulary(t *testing.T) {
 	opf := epubtest.Pkg{Meta: `    <dc:identifier id="pub-id">9780123456789</dc:identifier>
     <meta refines="#pub-id" property="identifier-type" scheme="onx:codelist5">15</meta>`, Attrs: `prefix="onx: http://www.editeur.org/ONIX/book/codelists/current.html#"`}.EPUB3()
@@ -299,10 +265,7 @@ func TestIdentifierTypeInReboundVocabulary(t *testing.T) {
 	}
 }
 
-// --- xml:lang and dir ---
-
-// calibre records a v2 sort title in calibre:title_sort and nowhere else, so
-// without this fallback every calibre-managed v2 book reads back with none.
+// calibre records an EPUB 2 sort title only in calibre:title_sort.
 func TestOpenReadsCalibreTitleSortFromEPUB2(t *testing.T) {
 	opf := epubtest.OPF2.With(`    <meta name="calibre:title_sort" content="Hobbit, The"/>`)
 	bib, err := parse(t, epubtest.WriteEpub(t, epubtest.BaseEntries(opf)))
@@ -314,8 +277,6 @@ func TestOpenReadsCalibreTitleSortFromEPUB2(t *testing.T) {
 	}
 }
 
-// A belongs-to-collection of type "set" is not a series, so it must be ignored
-// and the legacy calibre:series read instead. Not mistaken for the series.
 func TestSetCollectionIsNotASeries(t *testing.T) {
 	path := epubtest.WriteEpub(t, epubtest.BaseEntries(opfSeriesSetCollection))
 	book, err := parse(t, path)
@@ -341,14 +302,11 @@ func TestCoverSkipsAMarkupCoverImage(t *testing.T) {
 	}
 }
 
-// Publication-date selection across the opf:event vocabulary: an explicit
-// "publication" wins; otherwise evented dates are dropped and only a lone
-// untagged dc:date is used, with genuinely ambiguous cases left unset.
 func TestPubdateSelection(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		dates string
-		want  string // "" means no date (zero time)
+		want  string
 	}{
 		{
 			"publication wins over creation and modification",
@@ -380,16 +338,13 @@ func TestPubdateSelection(t *testing.T) {
 			"",
 		},
 		{
-			// Selection is by authored count, so the unreadable sibling cannot resolve
-			// the ambiguity by dropping out. It stays two untagged dates.
+			// Dates are counted as written, not as parsed.
 			"two untagged, one unreadable, still ambiguous",
 			`<dc:date>2019-05-01</dc:date>
      <dc:date>not-a-date</dc:date>`,
 			"",
 		},
 		{
-			// A designated publication date is authoritative and stored verbatim,
-			// even if it would not have been parseable as an ISO date.
 			"publication date stored verbatim even if not ISO",
 			`<dc:date opf:event="publication">not-a-date</dc:date>
      <dc:date>2019-05-01</dc:date>`,
@@ -409,8 +364,6 @@ func TestPubdateSelection(t *testing.T) {
 	}
 }
 
-// EPUB 3 stores last-modified as a meta property, not a dc:date, so it must not
-// be mistaken for the publication date.
 func TestPubdateIgnoresDctermsModified(t *testing.T) {
 	path := epubtest.WriteEpub(t, epubtest.BaseEntries(opfV3WithModified))
 	book, err := parse(t, path)
@@ -422,17 +375,14 @@ func TestPubdateIgnoresDctermsModified(t *testing.T) {
 	}
 }
 
-// opfMarkupCoverImage mislabels an XHTML cover page with
-// properties="cover-image"; the real raster cover is reached via <meta name="cover">.
+// The XHTML cover page is mislabelled cover-image. The real cover is reached
+// through <meta name="cover">.
 var opfMarkupCoverImage = epubtest.Pkg{Meta: `    <dc:creator id="creator1">Jane Doe</dc:creator>
     <meta refines="#creator1" property="role">aut</meta>
     <meta name="cover" content="real-cover"/>`, Manifest: `<item id="coverpage" href="coverpage.xhtml" media-type="application/xhtml+xml" properties="cover-image"/>
     <item id="real-cover" href="cover.jpg" media-type="image/jpeg"/>
     <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`}.EPUB3()
 
-// opfSeriesSetCollection carries an EPUB 3 belongs-to-collection of type "set"
-// (a publisher bundle, not a series) alongside a legacy calibre:series. The set
-// must be ignored so the real series is the one read.
 var opfSeriesSetCollection = epubtest.Pkg{Meta: epubtest.Metas(
 	`<dc:title>Box Set Book</dc:title>`,
 	`<dc:creator id="creator1">Jane Doe</dc:creator>`,
@@ -441,17 +391,12 @@ var opfSeriesSetCollection = epubtest.Pkg{Meta: epubtest.Metas(
 	epubtest.CalibreSeries("Real Series", "3"),
 ), Manifest: epubtest.ChapterOnlyManifest}.EPUB3()
 
-// opfWithDates builds a minimal EPUB 2 package whose <metadata> carries the
-// given raw <dc:date ...> elements, for exercising publication-date selection.
 func opfWithDates(dateXML string) epubtest.PackageDoc {
 	return epubtest.Pkg{Meta: `    <dc:title>Dated Book</dc:title>
     <dc:creator opf:role="aut">Jane Doe</dc:creator>
     ` + dateXML, Manifest: epubtest.ChapterOnlyManifest}.EPUB2()
 }
 
-// opfV3WithModified is an EPUB 3 package with a publication dc:date and a
-// dcterms:modified meta; the latter is not a dc:date and must not be read as the
-// publication date.
 var opfV3WithModified = epubtest.Pkg{Meta: `    <dc:title>V3 Book</dc:title>
     <dc:creator id="creator1">Jane Doe</dc:creator>
     <meta refines="#creator1" property="role">aut</meta>

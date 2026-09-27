@@ -7,19 +7,14 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/xml"
 )
 
-// The two things read out of the manifest that are not fields: where the NCX
-// lives, and which document displays the cover.
-
-// Required of the NCX item by OPF 2.0 §2.4.1.2, and §3.2's core media type
-// table names it too.
+// OPF 2.0 §2.4.1.2 requires this media type of the NCX item.
 const ncxMediaType = "application/x-dtbncx+xml"
 
-// NCXPath returns the container path of the NCX, or "". base is the OPF's own
-// directory, as for Metadata.
+// NCXPath returns the NCX's path in the container, or "". base is as for
+// Metadata.
 //
-// Found by media type rather than through <spine toc="…">, since §5.7.1 demotes
-// that attribute to optional and legacy while the media type is required either
-// way.
+// It matches the media type rather than <spine toc="…">, since §5.7.1 makes
+// that attribute optional and legacy.
 func (o *Doc) NCXPath(base string) string {
 	for _, item := range o.d.Manifest() {
 		if item.MediaType == ncxMediaType {
@@ -29,10 +24,9 @@ func (o *Doc) NCXPath(base string) string {
 	return ""
 }
 
-// CoverPages returns the documents the package points at as displaying the
-// cover, best pointer first: the legacy <guide> reference (OPF 2.0 §2.6, kept
-// by §5.9.4), then the first spine item. Both are candidates rather than
-// answers. The caller confirms one by finding the cover image inside it.
+// CoverPages returns the documents that may display the cover, best first: the
+// legacy <guide> reference (OPF 2.0 §2.6, kept by §5.9.4), then the first
+// spine item. The caller confirms one by finding the cover image inside it.
 //
 // ponytail: the landmarks nav (§7.4.4) is not consulted, which would mean
 // finding and parsing the navigation document. Add it if a book turns up whose
@@ -49,8 +43,7 @@ func (o *Doc) CoverPages(base string) []string {
 	}
 
 	for _, r := range o.d.Guide() {
-		// §2.6 fixes the type as "cover" case-sensitively. Producers disagree on
-		// case, so an exact match would miss them.
+		// §2.6 fixes "cover" case-sensitively, but producers disagree on case.
 		if strings.EqualFold(r.Type, "cover") {
 			add(r.Href)
 		}
@@ -59,9 +52,8 @@ func (o *Doc) CoverPages(base string) []string {
 	return out
 }
 
-// firstSpineHref is the href of the first document in the reading order, or "".
-// An idref the spine does not carry matches nothing, rather than the manifest
-// item that also has none.
+// firstSpineHref returns "" for a spine with no itemref, rather than matching a
+// manifest item with no id.
 func (o *Doc) firstSpineHref() string {
 	idref := o.d.SpineFirst()
 	if idref == "" {

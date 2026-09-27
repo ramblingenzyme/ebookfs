@@ -16,8 +16,8 @@ type seriesField struct{ d *pkgdoc.Doc }
 
 func (o *Doc) series() seriesField { return seriesField{o.d} }
 
-// get returns the series as the document records it: no index means an empty
-// Index, not a default.
+// get returns the series as the document records it. No position gives an
+// empty Index, not a default.
 func (f seriesField) get() *Series {
 	if coll := f.collection(); coll.Exists() {
 		return &Series{
@@ -25,10 +25,8 @@ func (f seriesField) get() *Series {
 			Index: coll.Refine("group-position").Get(),
 		}
 	}
-	// calibre:series and its siblings are <meta name=…> values matched
-	// literally (pkgdoc), not property names: the colon is part of a
-	// proprietary flat string, not a vocabulary prefix, so nothing here goes
-	// through spell.
+	// calibre:series is a <meta name>, matched literally rather than as a
+	// vocabulary property.
 	name := f.d.Named("calibre:series").Get()
 	if name == "" {
 		return nil
@@ -36,14 +34,13 @@ func (f seriesField) get() *Series {
 	return &Series{Name: name, Index: f.d.Named("calibre:series_index").Get()}
 }
 
-// set writes the series membership, or clears it when s is nil or its name is
-// empty. EPUB 3 records it as a belongs-to-collection meta with refinements;
-// EPUB 2 has no standard mechanism, so the proprietary calibre metas are used
-// instead.
+// set writes the series, or clears it when s is nil or has no name. EPUB 3
+// uses a belongs-to-collection meta; EPUB 2 has no standard mechanism, so
+// calibre's metas are used.
 //
-// Both halves are written. A caller changing one reads the other back from get
-// first: an empty-named collection is invisible to get, so the name it reports
-// may be the calibre meta's rather than the collection's.
+// Both halves are written, so a caller changing one reads the other from get.
+// An empty-named collection is invisible to get, so the name get reports may
+// be the calibre meta's.
 func (f seriesField) set(s *Series) {
 	series, position := "", ""
 	if s != nil {
@@ -66,8 +63,8 @@ func (f seriesField) set(s *Series) {
 		coll.Set(series)
 		pkgdoc.Put(coll.Refine("group-position"), position)
 	} else {
-		// A v2 package keeps no collection, and loses any duplicate or
-		// empty-named one it carried.
+		// A v2 package keeps no collection, including a duplicate or
+		// empty-named one.
 		coll.Clear()
 	}
 
@@ -77,23 +74,19 @@ func (f seriesField) set(s *Series) {
 	}
 }
 
-// seriesCollection is the belongs-to-collection meta recording the series. It is
-// a pkgdoc.Element with two extra duties: a write marks the collection as a
-// series, and both a write and a clear drop the other series collections, so the
-// document is left recording exactly one.
+// seriesCollection is the belongs-to-collection meta holding the series. Its
+// Set marks the collection as a series, and its Set and Clear remove every
+// other series collection, so the document records exactly one.
 //
-// Those duties are why it shadows Set and Clear rather than calling the Element
-// through. A pkgdoc slot writes one value and knows nothing about a field's
-// invariants, so the invariant is held here; Exists, Get and Refine are still
-// the embedded Element's. Widening pkgdoc to carry an after-write hook would
-// grow the package to serve this one field.
+// The invariant lives here rather than in pkgdoc, which would otherwise need an
+// after-write hook for this one field.
 type seriesCollection struct {
 	*pkgdoc.Element
 	f seriesField
 }
 
-// collection finds the collection recording the series, or an unbound slot when
-// the series lives in the calibre metas instead, or nowhere.
+// collection returns the collection holding the series, or an unbound slot
+// when there is none.
 func (f seriesField) collection() seriesCollection {
 	for _, m := range f.collections() {
 		if f.isSeries(m) && m.Get() != "" {
@@ -103,7 +96,6 @@ func (f seriesField) collection() seriesCollection {
 	return seriesCollection{f: f, Element: f.d.NewPropertyMeta(collectionProperty, seriesIDPrefix)}
 }
 
-// collections is every collection the document records, series or not.
 func (f seriesField) collections() []*pkgdoc.Element {
 	return f.d.PropertyMetas(collectionProperty, seriesIDPrefix)
 }
@@ -111,8 +103,8 @@ func (f seriesField) collections() []*pkgdoc.Element {
 func (s seriesCollection) Set(value string) {
 	s.Element.Set(value)
 	s.markSeries()
-	// Only the extra collections go; this one's refinements may hold metadata
-	// the package did not write.
+	// Only the other collections go; this one's refinements may hold metadata
+	// this package did not write.
 	s.f.dropCollections(s.Element)
 }
 
@@ -121,12 +113,10 @@ func (s seriesCollection) Clear() {
 	s.f.dropCollections(nil)
 }
 
-// markSeries records the collection as a series rather than a set or a
-// publisher bundle.
 func (s seriesCollection) markSeries() { s.f.seriesType(s.Element).Set("series") }
 
-// seriesType is the collection-type refinement saying which kind a collection
-// is. Only an unschemed one is ours to read or to write.
+// seriesType is the unschemed collection-type refinement. A schemed one is
+// someone else's (D.3.4).
 func (f seriesField) seriesType(m *pkgdoc.Element) *pkgdoc.Refine {
 	return m.Refine("collection-type").Unschemed()
 }
@@ -134,8 +124,8 @@ func (f seriesField) seriesType(m *pkgdoc.Element) *pkgdoc.Refine {
 func (f seriesField) isSeries(m *pkgdoc.Element) bool { return f.seriesType(m).Get() == "series" }
 
 // dropCollections removes every series collection except keep, with its
-// refinements. Sets and publisher bundles are recorded the same way and are not
-// ours to remove. Unlike collection an empty name is still ours to clear.
+// refinements, and leaves sets alone. Unlike collection, it also removes an
+// empty-named one.
 func (f seriesField) dropCollections(keep *pkgdoc.Element) {
 	for _, m := range f.collections() {
 		if !m.Same(keep) && f.isSeries(m) {
@@ -144,8 +134,8 @@ func (f seriesField) dropCollections(keep *pkgdoc.Element) {
 	}
 }
 
-// calibreIndex narrows a series position to the float calibre:series_index is by
-// calibre's convention, keeping the first two levels of a D.3.7 position.
+// calibreIndex keeps the first two levels of a D.3.7 position, since
+// calibre:series_index is a float by calibre's convention.
 //
 // ponytail: 2.2.1 and 2.2.9 both write 2.2 into a v2 file. The EPUB 3
 // group-position keeps it exact. Revisit if a v2 book nests three deep.

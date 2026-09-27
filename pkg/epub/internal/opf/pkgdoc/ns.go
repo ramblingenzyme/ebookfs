@@ -7,18 +7,13 @@ const (
 	dcNamespace  = "http://purl.org/dc/elements/1.1/"
 )
 
-// ns resolves xmlns: prefixes against the package element's declarations. It is
-// vocab's twin, for the other of the two naming systems: these prefixes are
-// resolved by the XML parser, vocabulary prefixes live inside attribute values.
-// Each has a get-or-declare step: prefix here, spell there.
+// ns resolves xmlns: prefixes against <package>'s declarations. vocab is its
+// counterpart for vocabulary prefixes, which live inside attribute values
+// where the XML parser does not resolve them.
 type ns struct{ pkg *etree.Element }
 
-// prefix returns the xmlns: prefix bound to uri, declaring preferred if the
-// document binds none.
-//
-// Only <package>'s attributes are scanned, so a declaration further down (OPF
-// 2.0 §2.2 puts xmlns:opf on <metadata>) gets a redundant second one at the
-// top, harmless since both bind the same URI.
+// Only <package> is scanned, so a declaration on <metadata> (OPF 2.0 §2.2)
+// gets a harmless second one at the top.
 func (n ns) prefix(uri, preferred string) string {
 	for i := range n.pkg.Attr {
 		a := n.pkg.Attr[i]
@@ -30,18 +25,14 @@ func (n ns) prefix(uri, preferred string) string {
 	return preferred
 }
 
-// opf returns the prefix bound to the OPF namespace. opf:role and opf:file-as
-// need one because attributes cannot use a default namespace.
+// opf returns the OPF namespace prefix, which opf:role and opf:file-as need
+// because attributes cannot use a default namespace.
 func (n ns) opf() string { return n.prefix(opfNamespace, "opf") }
 
-// dcPrefix takes the Dublin Core xmlns: prefix from <dc:title>, so a new dc
-// element matches the existing declaration. It sits on Doc rather than either
-// half, being the one question that asks both.
 func (d *Doc) dcPrefix() string {
 	if els := d.md.children("title"); len(els) > 0 {
 		return els[0].Space
 	}
-	// Nothing to copy, so use the declarations: an undeclared prefix would put
-	// the new element in no namespace at all.
+	// An undeclared prefix would put the new element in no namespace.
 	return d.ns.prefix(dcNamespace, "dc")
 }

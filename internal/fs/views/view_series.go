@@ -33,7 +33,7 @@ func seriesEntryName(b *library.Book, pad *padWidth) string {
 
 // seriesLevel reads the first level of a series position, which is the only
 // part the padding and the pad-width decision look at. A position that is not a
-// number at all sorts as 0; edits.Validate rejects those on the way in,
+// number at all sorts as 0; book.Validate rejects those on the way in,
 // so this only covers what an epub already contained.
 func seriesLevel(s string) int {
 	head, _, _ := strings.Cut(s, ".")

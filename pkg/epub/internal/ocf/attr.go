@@ -7,15 +7,9 @@ import (
 	epubxml "github.com/ramblingenzyme/ebookfs/pkg/epub/internal/xml"
 )
 
-// The attribute types the container's documents declare their fields with.
-// Types rather than helpers, so declaring a field is what applies the rule and
-// nothing has to be remembered at each read.
-//
-// They live here rather than in internal/xml because they only work through
-// encoding/xml, and this is the only package that uses it: every other document
-// in an epub is edited as well as read, which is etree's job.
-
-// AttrText is an attribute value, collapsed.
+// AttrText is an attribute value with its whitespace collapsed. It and AttrURL
+// live here rather than in internal/xml because only this package uses
+// encoding/xml; the others edit their documents with etree.
 type AttrText string
 
 func (a *AttrText) UnmarshalXMLAttr(x xml.Attr) error {
@@ -23,10 +17,10 @@ func (a *AttrText) UnmarshalXMLAttr(x xml.Attr) error {
 	return nil
 }
 
-// AttrURL is an attribute the spec types as a URL and this package matches
-// against a zip entry name. Decoded is what a conforming file means. Raw is
-// kept because a producer that wrote an unencoded name into both the XML and
-// the zip has an entry whose name really does contain "%20".
+// AttrURL is a URL attribute matched against zip entry names. Decoded is what a
+// conforming file means. Raw is kept because some producers write the
+// unencoded name into both the XML and the zip, so the entry's name really
+// contains "%20".
 type AttrURL struct{ Raw, Decoded string }
 
 func (u *AttrURL) UnmarshalXMLAttr(x xml.Attr) error {
@@ -43,8 +37,7 @@ func (u *AttrURL) Candidates() []string {
 	return []string{u.Decoded, u.Raw}
 }
 
-// An invalid escape is not a decodable path, so the literal stands, which
-// is also what a name containing a bare '%' needs.
+// An invalid escape, such as a bare '%', leaves the name as written.
 func unescapePath(s string) string {
 	decoded, err := url.PathUnescape(s)
 	if err != nil {

@@ -1,6 +1,3 @@
-// The two calls that put an edit through, shared by the parse and write tests.
-// The corpus itself is internal/epubtest, shared with the epub package's suite.
-
 package epub_test
 
 import (
@@ -10,16 +7,12 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
 )
 
-// writeBib applies edits to the package document of the epub at epubPath,
-// rewrites the file in place, and returns the re-parsed Bib. Production code
-// drives that flow through library.Edit.
 func writeBib(epubPath string, e bookmodel.Edits) (bookmodel.Bib, error) {
 	return epub.Rewrite(epubPath, &bookmodel.Book{Location: bookmodel.Location{EpubPath: epubPath}}, e)
 }
 
-// book builds the Book that Rewrite validates against, the way library.Edit
-// does: from the file's current state. An index edit is refused unless the book
-// already has a series, so an empty Bib is not a usable stand-in.
+// An empty Bib won't do: book.Validate refuses an index edit on a book with no
+// series, so the Bib is read from the file.
 func book(t *testing.T, path string) *bookmodel.Book {
 	t.Helper()
 	bib, err := epub.Parse(path)

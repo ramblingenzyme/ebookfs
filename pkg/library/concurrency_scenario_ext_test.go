@@ -1,7 +1,6 @@
-// Concurrency, which spans library.go's Edit and ingest.go's ingest path and so
-// pairs with neither. Two races are pinned: a cover write racing a metadata
-// edit on one book, and two simultaneous ingests of the same new book, where
-// exactly one must win and the other must see ErrDuplicate.
+// Concurrency across Edit and ingest. Pins two races: a cover edit racing a
+// title edit on one book, and two ingests of one new book, where exactly one
+// wins and the other gets ErrDuplicate.
 
 package library_test
 
@@ -18,13 +17,11 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
 )
 
-// An Edit that moves the book directory (title change) races a WriteCover on
-// the same book. Both address the book by id and re-base on its current state
-// under the per-book lock, so both must always succeed, whichever runs second
-// resolving the post-move location, and both changes must be present in the
-// final epub. Without the locked re-base the two rewriteEpub calls read the same
-// pre-state and the last rename silently drops the other's change (lost update).
-func TestEditWriteCoverConcurrentSameBook(t *testing.T) {
+// A title edit, which moves the book directory, races a cover edit on the same
+// book. Both re-read the book under the per-book lock, so both succeed and both
+// changes land. Without the lock, the two epub.Rewrite calls read the same
+// starting state and the second rename silently drops the first's change.
+func TestConcurrentTitleAndCoverEditsBothLand(t *testing.T) {
 	cfg := testConfig(t)
 	lib := openLib(t, cfg)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Race Book"))
@@ -62,12 +59,10 @@ func TestEditWriteCoverConcurrentSameBook(t *testing.T) {
 			t.Fatalf("iteration %d: Edit: %v", i, editErr)
 		}
 		if coverErr != nil {
-			t.Fatalf("iteration %d: WriteCover: %v", i, coverErr)
+			t.Fatalf("iteration %d: cover edit: %v", i, coverErr)
 		}
 		book = edited
 
-		// The book must still be a valid epub at its new location, carrying
-		// both changes.
 		parsed, err := epub.Parse(filepath.Join(root, book.EpubPath()))
 		if err != nil {
 			t.Fatalf("iteration %d: final epub does not parse: %v", i, err)
@@ -85,10 +80,9 @@ func TestEditWriteCoverConcurrentSameBook(t *testing.T) {
 			t.Fatalf("iteration %d: Cover: %v", i, err)
 		}
 		if !bytes.Equal(got, newCover.Bytes()) {
-			t.Fatalf("iteration %d: WriteCover reported success but cover bytes were lost", i)
+			t.Fatalf("iteration %d: cover edit reported success but the cover bytes were lost", i)
 		}
 
-		// No stray temp files may accumulate in the book directory.
 		entries, err := os.ReadDir(filepath.Join(root, filepath.Dir(book.EpubPath())))
 		if err != nil {
 			t.Fatalf("iteration %d: %v", i, err)
@@ -151,7 +145,6 @@ func TestConcurrentDuplicateIngestRejected(t *testing.T) {
 		t.Fatalf("expected at least 2 errors for duplicate ingests, got %d", len(errs))
 	}
 
-	// Verify exactly one book exists in the library.
 	got, err := lib.Search(library.Query{Authors: []string{"Alice"}})
 	if err != nil {
 		t.Fatalf("Query: %v", err)

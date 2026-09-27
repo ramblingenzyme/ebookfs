@@ -33,7 +33,7 @@ type SeriesRef struct {
 
 const UnknownAuthor = "Unknown"
 
-// Referenced in Validate, reader.statuses & Statuses, so adding a new status requires updating all.
+// A new status must also join Statuses, which every check and listing reads.
 const (
 	StatusUnread    = "unread"
 	StatusReading   = "reading"
@@ -109,7 +109,7 @@ type Meta struct {
 	ID           int64     `toml:"id"`
 	DateAdded    time.Time `toml:"date_added"`
 	DateModified time.Time `toml:"date_modified"`
-	Status       string    `toml:"status"` // unread | reading | read | abandoned
+	Status       string    `toml:"status"`
 	Rating       float64   `toml:"rating"`
 	Tags         []string  `toml:"custom_tags"` // toml key preserved for file compatibility
 }

@@ -11,17 +11,14 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/store"
 )
 
-// Option is the extension point, so a new one does not change Open's
-// signature.
 type Option func(*options)
 
 type options struct {
 	forceReindex bool
 }
 
-// WithForceReindex rebuilds the index from the store even when it looks clean.
-// The drift check only compares what it can observe cheaply (see storeDrifted),
-// so an operator who knows better says so this way.
+// WithForceReindex rebuilds the index even when it looks clean. The drift check
+// compares only size and mtime, so it can miss a change.
 func WithForceReindex() Option {
 	return func(o *options) { o.forceReindex = true }
 }
@@ -56,10 +53,7 @@ func Open(cfg Config, opts ...Option) (*Library, error) {
 		index:     idx,
 		inboxTemp: cfg.InboxTemp,
 	}
-	// Spelled out rather than as one || chain, which short-circuits the same
-	// way, so the store scan can be captured. When storeDrifted is the check
-	// that fires, its scan is handed to the rebuild, which then neither walks
-	// the store nor stats the books a second time.
+	// Not one || chain, so storeDrifted's scan can be handed to reindex.
 	var onDisk *storeScan
 	needs := o.forceReindex || lib.needsReindex()
 	if !needs {
@@ -67,9 +61,8 @@ func Open(cfg Config, opts ...Option) (*Library, error) {
 	}
 	if needs {
 		if err := lib.reindex(onDisk); err != nil {
-			// The index was opened above and lib is never returned, so nothing
-			// else will ever close it. A duplicate book id makes this a routine
-			// path (docs/DECISIONS.md #14).
+			// lib is never returned, so nothing else would close the index. A
+			// duplicate book id makes this a routine path (docs/DECISIONS.md #14).
 			idx.Close()
 			return nil, fmt.Errorf("reindexing library: %w", err)
 		}
@@ -98,8 +91,7 @@ func cleanInboxTemp(dir string) error {
 	return nil
 }
 
-// checkSameFilesystem tries a real rename, which is the only way to answer the
-// question ingest turns on. Config says why the two must share a filesystem.
+// checkSameFilesystem tries a real rename, the only reliable test of what ingest needs.
 func checkSameFilesystem(a, b string) error {
 	tmp, err := os.CreateTemp(a, ".fschk-*")
 	if err != nil {

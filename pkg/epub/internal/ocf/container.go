@@ -5,17 +5,13 @@ import (
 	"io"
 )
 
-// Reading META-INF/container.xml, which says where the package document is.
-// This is only what the container declares; whether the archive holds it is the
-// caller's question.
-
 const (
 	ContainerPath = "META-INF/container.xml"
 	metadataType  = "application/oebps-package+xml"
 )
 
-// Container holds the rootfile elements pointing at the package documents; an
-// epub may declare more than one. Never written, so a struct is shape enough.
+// Container is META-INF/container.xml, which names the package documents. An
+// epub may declare more than one.
 type Container struct {
 	Rootfiles []*rootfile `xml:"rootfiles>rootfile"`
 }
@@ -33,9 +29,8 @@ func NewContainer(r io.Reader) (*Container, error) {
 	return &c, nil
 }
 
-// PackagePaths returns every package document declared, in the order to try
-// them. Empty means none was declared. The field types carry the normalization
-// and the decoded/raw fallback.
+// PackagePaths returns every declared package document path, in the order to
+// try them. Whether the archive holds them is the caller's check.
 func (c *Container) PackagePaths() []string {
 	var out []string
 	for _, rf := range c.Rootfiles {

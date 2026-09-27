@@ -2,7 +2,7 @@
 // failures are injected and every path that should surface them is driven in
 // one table each: a closed database (NextID, MarkPending, Put, Delete, Rebuild,
 // NeedsReindex, dropAllTables) and a rolled-back transaction (insertBook,
-// putBook, finishBook, the three upserts, deleteBook, cleanupOrphans).
+// putBook, putRelations and its three writers, deleteBook, cleanupOrphans).
 //
 // The rule is that no write path swallows a database error.
 
@@ -80,19 +80,19 @@ func TestRolledBackTxSurfacesErrors(t *testing.T) {
 		name string
 		call func(*Index, *dbsqlc.Queries) error
 	}{
-		{"finishBook", func(idx *Index, q *dbsqlc.Queries) error {
-			return idx.finishBook(q, newBook(1, "Test"))
+		{"putRelations", func(idx *Index, q *dbsqlc.Queries) error {
+			return idx.putRelations(q, newBook(1, "Test"))
 		}},
-		{"upsertAuthors", func(idx *Index, q *dbsqlc.Queries) error {
-			return idx.upsertAuthors(q, 1, []book.Author{{Name: "Alice", SortName: "Alice"}})
+		{"replaceAuthors", func(idx *Index, q *dbsqlc.Queries) error {
+			return idx.replaceAuthors(q, 1, []book.Author{{Name: "Alice", SortName: "Alice"}})
 		}},
-		{"upsertTags", func(idx *Index, q *dbsqlc.Queries) error {
-			return idx.upsertTags(q, 1, []string{"sci-fi"})
+		{"replaceTags", func(idx *Index, q *dbsqlc.Queries) error {
+			return idx.replaceTags(q, 1, []string{"sci-fi"})
 		}},
-		{"upsertSeries", func(idx *Index, q *dbsqlc.Queries) error {
+		{"setSeries", func(idx *Index, q *dbsqlc.Queries) error {
 			b := newBook(1, "Test")
 			b.Series = &book.SeriesRef{Name: "S", Index: "1"}
-			return idx.upsertSeries(q, b)
+			return idx.setSeries(q, b)
 		}},
 		{"putBook", func(idx *Index, q *dbsqlc.Queries) error {
 			return idx.putBook(q, newBook(1, "Test"), drift.PathInfo{})

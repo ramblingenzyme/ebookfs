@@ -49,9 +49,7 @@ func TestLibraryImplExporterConvertRequiresCacheDir(t *testing.T) {
 	}
 }
 
-// ReaderConfig's invariants are enforced by the package that owns the struct,
-// not only by whatever parsed the values. A caller building one in Go gets the
-// same checks a TOML file does.
+// A ReaderConfig built in Go gets the same checks as one loaded from TOML.
 func TestExporterRejectsBadReaderConfig(t *testing.T) {
 	t.Run("convert without a cache dir", func(t *testing.T) {
 		lib := openTestLibrary(t)
@@ -78,10 +76,6 @@ func TestExporterRejectsBadReaderConfig(t *testing.T) {
 	})
 }
 
-// The kepub rendition forwards to its cache rather than answering for itself: a
-// .kepub.epub name, the author dirname, a cold size for a book never converted,
-// and an Open that surfaces the conversion's error. Close goes through
-// lib.Close, which owns the exporters it hands out.
 func TestKepubCacheDelegates(t *testing.T) {
 	lib := openTestLibrary(t)
 	exp, err := lib.Exporter(library.ReaderConfig{
@@ -117,7 +111,6 @@ func TestKepubCacheDelegates(t *testing.T) {
 		t.Error("Size should report cold for a book with no cached conversion")
 	}
 
-	// Warm must not panic.
 	exp.Warm(util.WrapBook(b))
 
 	// The book is not in this library, so the conversion has no epub to read.
@@ -125,16 +118,13 @@ func TestKepubCacheDelegates(t *testing.T) {
 		t.Error("expected an error opening a book the library does not hold")
 	}
 
-	// Close stops the warmer without error.
 	if err := lib.Close(); err != nil {
 		t.Errorf("close: %v", err)
 	}
 }
 
-// The read path the reader/ view is for. Everything else about the epub
-// rendition (Includes, Filename, Dirname, Size) answers from the book record
-// without touching disk, so nothing previously opened one. A mount that lists
-// the right names and serves nothing would have passed every other test here.
+// Every other exporter method answers from the book record, so without this a
+// mount listing the right names and serving nothing would pass.
 func TestExporterOpenServesTheRealEpub(t *testing.T) {
 	lib := openTestLibrary(t)
 	b := ingestTestEpub(t, lib, buildTestEpub(t, "Readable", "Alice"))

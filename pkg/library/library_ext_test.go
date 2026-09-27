@@ -11,9 +11,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// Close asserts the returned error, which is the index's. openTestLibrary also
-// registers a Close via t.Cleanup, so these tests double as coverage of closing
-// an already-closed library.
 func TestClose(t *testing.T) {
 	lib := openTestLibrary(t)
 
@@ -22,9 +19,7 @@ func TestClose(t *testing.T) {
 	}
 }
 
-// Closing twice is safe and still reports success: the 9P server closes on
-// shutdown and t.Cleanup closes again, so a second close returning an error
-// would turn every test teardown into a failure.
+// Shutdown and t.Cleanup both close, so a second close must succeed.
 func TestCloseMultiple(t *testing.T) {
 	lib := openTestLibrary(t)
 
@@ -49,8 +44,6 @@ func TestGetReturnsTheIngestedBook(t *testing.T) {
 	}
 }
 
-// Every id-addressed read reports a missing book the same way, so a caller can
-// test one sentinel whichever it called.
 func TestGetMissingBookIsErrBookNotFound(t *testing.T) {
 	lib := openTestLibrary(t)
 
@@ -62,12 +55,9 @@ func TestGetMissingBookIsErrBookNotFound(t *testing.T) {
 	}
 }
 
-// The part of Search the index cannot do: the index stores a library-relative
-// path, while every consumer of a result (the exporter, the 9P epub file) needs
-// an absolute one, so Search fills it in on the way out. Query has the same loop
-// and its own coverage; Search's copy had none, so deleting it broke no test
-// while leaving every search result unopenable.
-func TestLibraryImplSearchHydratesEpubPath(t *testing.T) {
+// Search returns the path relative to the store root, and every consumer joins
+// it to the root. An empty or absolute path would leave the result unopenable.
+func TestSearchReturnsARootRelativeEpubPath(t *testing.T) {
 	cfg := testConfig(t)
 	lib := openLib(t, cfg)
 	want := ingestTestEpub(t, lib, buildTestEpub(t, "Findable", "Alice"))
@@ -95,9 +85,8 @@ func TestLibraryImplSearchHydratesEpubPath(t *testing.T) {
 	}
 }
 
-// A query matching nothing is not an error: the 9P search directory reads an
-// empty result as "no books", and an error there would surface as a failed
-// readdir instead.
+// The 9P search view reads an empty result as no books; an error would fail the
+// readdir.
 func TestLibraryImplSearchNoMatches(t *testing.T) {
 	lib := openTestLibrary(t)
 	ingestTestEpub(t, lib, buildTestEpub(t, "Findable", "Alice"))
@@ -191,14 +180,9 @@ func TestLibraryImplExtractOPF(t *testing.T) {
 	}
 }
 
-// Regression test for a production bug. A book ingested before FAT sanitization
-// was applied consistently has an epub filename holding FAT-illegal characters
-// such as ':', while its directory, built from the raw title, still matches what
-// Layout recomputes.
-//
-// An edit touching only Status leaves the title and authors alone, so Layout
-// returns that same directory with a sanitized filename. Move has to treat it as
-// an in-place rename rather than fail on "destination already exists".
+// Regression: a book filed before FAT sanitization has a ':' in its epub name,
+// under a directory Layout still produces. A status-only edit must rename it in
+// place, not fail on "destination already exists".
 func TestEditSelfHealsLegacyUnsanitizedFilename(t *testing.T) {
 	cfg := testConfig(t)
 	lib := openLib(t, cfg)
@@ -219,8 +203,7 @@ func TestEditSelfHealsLegacyUnsanitizedFilename(t *testing.T) {
 		t.Fatalf("Reindex: %v", err)
 	}
 
-	// Edit an unrelated field (Status), leaving Title/Authors untouched. This
-	// used to hit "destination already exists" and fail every time.
+	// An unrelated field, so Layout keeps the directory.
 	status := "reading"
 	updated, err := lib.Edit(id, library.Edits{Status: &status})
 	if err != nil {
@@ -230,7 +213,6 @@ func TestEditSelfHealsLegacyUnsanitizedFilename(t *testing.T) {
 		t.Errorf("status = %q, want %q", updated.Status(), status)
 	}
 
-	// Self-heal: filename should now be FAT-sanitized.
 	if strings.Contains(filepath.Base(updated.EpubPath()), ":") {
 		t.Errorf("filename not sanitized after edit: %q", filepath.Base(updated.EpubPath()))
 	}
@@ -241,8 +223,7 @@ func TestEditSelfHealsLegacyUnsanitizedFilename(t *testing.T) {
 		t.Errorf("legacy filename still present after self-heal")
 	}
 
-	// A second edit must also succeed (regression: the original bug caused
-	// every subsequent edit to fail identically, not just the first).
+	// The bug failed every later edit too.
 	status2 := "read"
 	if _, err := lib.Edit(id, library.Edits{Status: &status2}); err != nil {
 		t.Fatalf("second Edit: %v", err)
@@ -292,9 +273,6 @@ func TestDeleteNonexistentBookErrors(t *testing.T) {
 	}
 }
 
-// The remaining mutation that addresses a book by id. Get, Content and Delete
-// already assert the identity contract; Edit is the last, and a frontend
-// distinguishes "no such book" from an index failure only through errors.Is.
 func TestEditMissingBookIsErrBookNotFound(t *testing.T) {
 	lib := openTestLibrary(t)
 
@@ -303,11 +281,8 @@ func TestEditMissingBookIsErrBookNotFound(t *testing.T) {
 	}
 }
 
-// The concurrency contract stated on Library: a *Book handed out is a snapshot
-// the library never mutates. The 9P tree relies on it, since BookDir holds one
-// of these behind an atomic pointer and reads it from many goroutines with no
-// lock, so a library that edited a returned Book in place would tear values
-// under those readers.
+// BookDir reads a *Book from many goroutines without a lock, so the library
+// must never mutate one it handed out.
 func TestSearchSnapshotsAreImmutable(t *testing.T) {
 	lib := openTestLibrary(t)
 	ingestTestEpub(t, lib, buildTestEpub(t, "Before", "Alice"))
@@ -339,9 +314,8 @@ func TestSearchSnapshotsAreImmutable(t *testing.T) {
 		t.Error("Tags() handed out the book's own slice")
 	}
 
-	// Series is a pointer on the record, so its getter has to copy the value
-	// rather than hand back the address. SortTitle is here because nothing
-	// else reaches it.
+	// Series is a pointer, so its getter must copy the value. SortTitle is here
+	// because nothing else reaches it.
 	_ = held.SortTitle()
 	if s := held.Series(); s != nil {
 		s.Name = "Injected"
@@ -351,9 +325,6 @@ func TestSearchSnapshotsAreImmutable(t *testing.T) {
 	}
 }
 
-// Every EpubReader accessor reports a use-after-close with an error a caller
-// can name. The 9P layer holds one of these per fid, and a client keeping a fid
-// across a re-ingest is how a closed reader gets read.
 func TestClosedEpubReaderIsErrClosed(t *testing.T) {
 	lib := openTestLibrary(t)
 	b := ingestTestEpub(t, lib, buildTestEpub(t, "Dune", "Frank Herbert"))
@@ -366,10 +337,9 @@ func TestClosedEpubReaderIsErrClosed(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	// internal/epub's reader_ext_test.go runs this same table against
-	// epub.ErrClosed. Sharing it would need a structural interface in a third
-	// package to save 13 lines, and running it at both layers is what says the
-	// facade preserves the behaviour rather than inventing its own.
+	// internal/epub's reader_ext_test.go runs this table against
+	// epub.ErrClosed. Running it here too shows the facade keeps that
+	// behaviour.
 	for _, tc := range []struct {
 		name string
 		call func() error

@@ -2,18 +2,13 @@ package pkgdoc
 
 import "testing"
 
-// The fallback that has no path through Parse: a package with no dc element to
-// copy a prefix from. Reachable only while creating the first one, so the whole
-// branch rests on getting it right without a corpus to catch it.
-//
-// The bug this replaced was returning "dc" unconditionally, which puts a new
-// element in no namespace at all when the document binds Dublin Core to some
-// other prefix, or to none.
+// No fixture reaches the no-dc-element fallback, since it runs only while
+// creating the first one. Regression: it returned "dc" unconditionally, which
+// put a new element in no namespace when Dublin Core was bound elsewhere.
 func TestDCPrefix(t *testing.T) {
 	for _, tc := range []struct {
 		name, pkgAttrs, metadata, want string
-		// declares is an xmlns: binding the call is expected to add.
-		declares string
+		declares                       string
 	}{
 		{
 			name:     "copies the prefix an existing dc element uses",
@@ -51,8 +46,6 @@ func TestDCPrefix(t *testing.T) {
 			if got != tc.want {
 				t.Errorf("dcPrefix() = %q, want %q", got, tc.want)
 			}
-			// Whatever it returns must actually be bound, or a new element lands
-			// in no namespace.
 			if bound := d.pkg.SelectAttrValue("xmlns:"+got, ""); tc.declares != "" && bound != tc.declares {
 				t.Errorf("xmlns:%s = %q, want %q declared", got, bound, tc.declares)
 			}

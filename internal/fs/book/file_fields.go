@@ -73,7 +73,6 @@ func (f *fieldFile) Close(fid uint64) error {
 	f.Lock()
 	delete(f.truncated, fid)
 	f.Unlock()
-	// Returns error but internally always returns nil...
 	f.SnapshotFile.Close(fid)
 	if len(data) == 0 {
 		return nil

@@ -160,16 +160,16 @@ func deleteBook(f *CtlFile, args []string) string {
 // renameTag replaces the tag old with new on every book that carries old.
 // If new already exists on a book, the two merge by dropping old.
 func renameTag(f *CtlFile, args []string) string {
-	old, curr := args[0], args[1]
+	old, newName := args[0], args[1]
 
 	return f.editSelection("renamed", library.Query{Tags: []string{old}}, func(b *library.Book) *library.Edits {
 		updated := slices.Clone(b.Tags())
-		if slices.Contains(updated, curr) {
+		if slices.Contains(updated, newName) {
 			updated = slices.DeleteFunc(updated, func(t string) bool { return t == old })
 		} else {
 			for i, t := range updated {
 				if t == old {
-					updated[i] = curr
+					updated[i] = newName
 				}
 			}
 		}
@@ -209,10 +209,10 @@ func renameAuthor(f *CtlFile, args []string) string {
 }
 
 func renameSeries(f *CtlFile, args []string) string {
-	old, curr := args[0], args[1]
+	old, newName := args[0], args[1]
 
 	return f.editSelection("renamed", library.Query{Series: []string{old}}, func(*library.Book) *library.Edits {
-		return &library.Edits{Series: &curr}
+		return &library.Edits{Series: &newName}
 	})
 }
 
