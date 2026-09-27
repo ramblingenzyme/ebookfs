@@ -248,3 +248,13 @@ restart. A supervisor turns the exit into a restart loop, which shows up the
 first time anyone looks. Shutdown is bounded by the same deadline as the drain,
 so a listener that will not return delays the exit by seconds rather than
 holding it open.
+
+## 27. Repeatable Dublin Core elements are read as single-valued
+
+The EPUB spec allows some Dublin Core elements to repeat: description, language, publisher, and rights are all marked as "Repeatable" in §5.5.3.2.1. This package reads only the first non-empty element and writes to the primary element, leaving extras untouched.
+
+The alternative was to model them as slices, matching the spec's allowance for repetition. That would handle edge cases like co-publishers or multi-language descriptions, but those are rare in personal libraries. Most books have one description, one language, one publisher, and one rights statement. Treating them as single-valued matches the practical reality and keeps the data model simple.
+
+The cost is that a book with multiple publishers would only show the first one. If that becomes a real problem, the fields can be promoted to slices without breaking the file format: the reconciliation logic would match subjects, preserving extras rather than leaving them untouched.
+
+This decision applies to description, language, publisher, and rights. Other repeatable fields (title, authors, subjects, contributors) are genuinely multi-valued and are handled as slices.
