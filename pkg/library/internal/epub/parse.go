@@ -39,6 +39,7 @@ func bib(b *epubfile.Book) (*book.Bib, error) {
 		Rights:      b.Rights,
 		Pubdate:     b.Pubdate(),
 		Subjects:    b.Subjects,
+		Identifiers: b.Identifiers(),
 		CoverPath:   b.CoverPath(),
 		// EpubSize is left to the library, which already stats the file.
 		OpfSize: b.Size(b.PackagePath()),
