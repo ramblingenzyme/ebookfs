@@ -34,8 +34,26 @@ func toPublication(b *library.Book, filename string) opds.Publication {
 		})
 	}
 
+	for _, c := range b.Contributors() {
+		p.Contributors = append(p.Contributors, opds.Author{
+			Name: c.Name,
+		})
+	}
+
 	if l := b.Language(); l != "" {
 		p.In(l)
+	}
+
+	if pub := b.Publisher(); pub != "" {
+		p.Publisher = pub
+	}
+
+	if rights := b.Rights(); rights != "" {
+		p.Rights = rights
+	}
+
+	for _, subject := range b.Subjects() {
+		p.Subjects = append(p.Subjects, opds.Subject{Name: subject})
 	}
 
 	if t, ok := published(b.Pubdate()); ok {

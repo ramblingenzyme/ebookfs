@@ -20,6 +20,7 @@ type Order = index.Order
 type Stats = index.Stats
 type Facet = index.Facet
 type Author = book.Author
+type Contributor = book.Contributor
 type Series = book.SeriesRef
 type EpubReader = epub.EpubReader
 

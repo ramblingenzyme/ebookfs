@@ -14,6 +14,10 @@ to the library, never to a file on the server's disk of the same name.
 │       ├── series               ← read/write
 │       ├── series_index         ← read/write
 │       ├── language             ← read/write
+│       ├── publisher            ← read/write
+│       ├── rights               ← read/write
+│       ├── subjects             ← newline-separated, read/write
+│       ├── contributors         ← newline-separated "Name | Role", read/write
 │       ├── description          ← read/write
 │       ├── pubdate              ← read-only
 │       ├── identifiers          ← scheme=value per line, read-only

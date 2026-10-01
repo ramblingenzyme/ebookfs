@@ -46,7 +46,7 @@ sudo umount /mnt/ebookfs
 ## Features
 
 - **9P is the only write path**: everything below is reachable by mounting the server
-- **Metadata as files**: read/write title, authors, series, tags, status, rating, cover via the filesystem
+- **Metadata as files**: read/write title, authors, series, publisher, rights, subjects, contributors, tags, status, rating, cover via the filesystem
 - **Synthetic inbox**: `cp` an epub into `inbox/`; the server parses, validates, and files it atomically on close
 - **Live search**: Plan 9 clone-style API under `search/`: allocate a handle, write a query (`title:`, `author:`, `tag:`, `series:`, `status:`, `id:`, combinable with `+`), read live results back
 - **Bulk operations via `ctl`**: a root control file for renaming/merging authors, tags, and series, and for tagging or setting status/rating across many books at once, without a round-trip per book. `log` keeps a timestamped history of past commands and results; `help` documents every command
