@@ -97,6 +97,15 @@ func (q *Queries) DeleteBookAuthors(ctx context.Context, bookID int64) error {
 	return err
 }
 
+const deleteBookContributors = `-- name: DeleteBookContributors :exec
+DELETE FROM book_contributors WHERE book_id = ?
+`
+
+func (q *Queries) DeleteBookContributors(ctx context.Context, bookID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteBookContributors, bookID)
+	return err
+}
+
 const deleteBookIdentifiers = `-- name: DeleteBookIdentifiers :exec
 
 DELETE FROM identifiers WHERE book_id = ?
@@ -105,6 +114,15 @@ DELETE FROM identifiers WHERE book_id = ?
 // Identifier operations
 func (q *Queries) DeleteBookIdentifiers(ctx context.Context, bookID int64) error {
 	_, err := q.db.ExecContext(ctx, deleteBookIdentifiers, bookID)
+	return err
+}
+
+const deleteBookSubjects = `-- name: DeleteBookSubjects :exec
+DELETE FROM book_subjects WHERE book_id = ?
+`
+
+func (q *Queries) DeleteBookSubjects(ctx context.Context, bookID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteBookSubjects, bookID)
 	return err
 }
 
@@ -128,12 +146,30 @@ func (q *Queries) DeleteOrphanedAuthors(ctx context.Context) error {
 	return err
 }
 
+const deleteOrphanedContributors = `-- name: DeleteOrphanedContributors :exec
+DELETE FROM contributors WHERE id NOT IN (SELECT contributor_id FROM book_contributors)
+`
+
+func (q *Queries) DeleteOrphanedContributors(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteOrphanedContributors)
+	return err
+}
+
 const deleteOrphanedSeries = `-- name: DeleteOrphanedSeries :exec
 DELETE FROM series WHERE id NOT IN (SELECT series_id FROM books WHERE series_id IS NOT NULL)
 `
 
 func (q *Queries) DeleteOrphanedSeries(ctx context.Context) error {
 	_, err := q.db.ExecContext(ctx, deleteOrphanedSeries)
+	return err
+}
+
+const deleteOrphanedSubjects = `-- name: DeleteOrphanedSubjects :exec
+DELETE FROM subjects WHERE id NOT IN (SELECT subject_id FROM book_subjects)
+`
+
+func (q *Queries) DeleteOrphanedSubjects(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteOrphanedSubjects)
 	return err
 }
 
@@ -266,6 +302,69 @@ func (q *Queries) GetAuthorsByBookIDs(ctx context.Context, bookIds []int64) ([]G
 	return items, nil
 }
 
+const getContributorByNameAndRole = `-- name: GetContributorByNameAndRole :one
+SELECT id, name, role FROM contributors WHERE name = ? AND role = ?
+`
+
+type GetContributorByNameAndRoleParams struct {
+	Name string
+	Role string
+}
+
+func (q *Queries) GetContributorByNameAndRole(ctx context.Context, arg GetContributorByNameAndRoleParams) (Contributor, error) {
+	row := q.db.QueryRowContext(ctx, getContributorByNameAndRole, arg.Name, arg.Role)
+	var i Contributor
+	err := row.Scan(&i.ID, &i.Name, &i.Role)
+	return i, err
+}
+
+const getContributorsByBookIDs = `-- name: GetContributorsByBookIDs :many
+SELECT bc.book_id, c.name, c.role
+FROM book_contributors bc
+JOIN contributors c ON c.id = bc.contributor_id
+WHERE bc.book_id IN (/*SLICE:book_ids*/?)
+ORDER BY bc.book_id, bc.position
+`
+
+type GetContributorsByBookIDsRow struct {
+	BookID int64
+	Name   string
+	Role   string
+}
+
+func (q *Queries) GetContributorsByBookIDs(ctx context.Context, bookIds []int64) ([]GetContributorsByBookIDsRow, error) {
+	query := getContributorsByBookIDs
+	var queryParams []interface{}
+	if len(bookIds) > 0 {
+		for _, v := range bookIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:book_ids*/?", strings.Repeat(",?", len(bookIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:book_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetContributorsByBookIDsRow
+	for rows.Next() {
+		var i GetContributorsByBookIDsRow
+		if err := rows.Scan(&i.BookID, &i.Name, &i.Role); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getIdentifiersByBookIDs = `-- name: GetIdentifiersByBookIDs :many
 SELECT book_id, scheme, value
 FROM identifiers
@@ -362,6 +461,63 @@ func (q *Queries) GetStats(ctx context.Context) (GetStatsRow, error) {
 	return i, err
 }
 
+const getSubjectByName = `-- name: GetSubjectByName :one
+SELECT id, name FROM subjects WHERE name = ?
+`
+
+func (q *Queries) GetSubjectByName(ctx context.Context, name string) (Subject, error) {
+	row := q.db.QueryRowContext(ctx, getSubjectByName, name)
+	var i Subject
+	err := row.Scan(&i.ID, &i.Name)
+	return i, err
+}
+
+const getSubjectsByBookIDs = `-- name: GetSubjectsByBookIDs :many
+SELECT bs.book_id, s.name
+FROM book_subjects bs
+JOIN subjects s ON s.id = bs.subject_id
+WHERE bs.book_id IN (/*SLICE:book_ids*/?)
+ORDER BY bs.book_id, s.name
+`
+
+type GetSubjectsByBookIDsRow struct {
+	BookID int64
+	Name   string
+}
+
+func (q *Queries) GetSubjectsByBookIDs(ctx context.Context, bookIds []int64) ([]GetSubjectsByBookIDsRow, error) {
+	query := getSubjectsByBookIDs
+	var queryParams []interface{}
+	if len(bookIds) > 0 {
+		for _, v := range bookIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:book_ids*/?", strings.Repeat(",?", len(bookIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:book_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetSubjectsByBookIDsRow
+	for rows.Next() {
+		var i GetSubjectsByBookIDsRow
+		if err := rows.Scan(&i.BookID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTagByName = `-- name: GetTagByName :one
 SELECT id, name FROM tags WHERE name = ?
 `
@@ -441,11 +597,11 @@ const insertBook = `-- name: InsertBook :exec
 
 
 INSERT INTO books (
-    id, title, sort_title, pubdate, description, language,
+    id, title, sort_title, pubdate, description, language, publisher, rights,
     epub_path, cover_path, status, rating,
     date_added, date_modified, series_id, series_index,
     opf_size, cover_size, epub_size, epub_mtime, meta_mtime, meta_size
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertBookParams struct {
@@ -455,6 +611,8 @@ type InsertBookParams struct {
 	Pubdate      sql.NullString
 	Description  string
 	Language     string
+	Publisher    string
+	Rights       string
 	EpubPath     string
 	CoverPath    string
 	Status       string
@@ -484,6 +642,8 @@ func (q *Queries) InsertBook(ctx context.Context, arg InsertBookParams) error {
 		arg.Pubdate,
 		arg.Description,
 		arg.Language,
+		arg.Publisher,
+		arg.Rights,
 		arg.EpubPath,
 		arg.CoverPath,
 		arg.Status,
@@ -517,6 +677,35 @@ func (q *Queries) InsertBookAuthor(ctx context.Context, arg InsertBookAuthorPara
 	return err
 }
 
+const insertBookContributor = `-- name: InsertBookContributor :exec
+INSERT INTO book_contributors (book_id, contributor_id, position) VALUES (?, ?, ?)
+`
+
+type InsertBookContributorParams struct {
+	BookID        int64
+	ContributorID int64
+	Position      int64
+}
+
+func (q *Queries) InsertBookContributor(ctx context.Context, arg InsertBookContributorParams) error {
+	_, err := q.db.ExecContext(ctx, insertBookContributor, arg.BookID, arg.ContributorID, arg.Position)
+	return err
+}
+
+const insertBookSubject = `-- name: InsertBookSubject :exec
+INSERT INTO book_subjects (book_id, subject_id) VALUES (?, ?)
+`
+
+type InsertBookSubjectParams struct {
+	BookID    int64
+	SubjectID int64
+}
+
+func (q *Queries) InsertBookSubject(ctx context.Context, arg InsertBookSubjectParams) error {
+	_, err := q.db.ExecContext(ctx, insertBookSubject, arg.BookID, arg.SubjectID)
+	return err
+}
+
 const insertBookTag = `-- name: InsertBookTag :exec
 INSERT INTO book_tags (book_id, tag_id) VALUES (?, ?)
 `
@@ -528,6 +717,22 @@ type InsertBookTagParams struct {
 
 func (q *Queries) InsertBookTag(ctx context.Context, arg InsertBookTagParams) error {
 	_, err := q.db.ExecContext(ctx, insertBookTag, arg.BookID, arg.TagID)
+	return err
+}
+
+const insertContributor = `-- name: InsertContributor :exec
+
+INSERT OR IGNORE INTO contributors (name, role) VALUES (?, ?)
+`
+
+type InsertContributorParams struct {
+	Name string
+	Role string
+}
+
+// Contributor operations
+func (q *Queries) InsertContributor(ctx context.Context, arg InsertContributorParams) error {
+	_, err := q.db.ExecContext(ctx, insertContributor, arg.Name, arg.Role)
 	return err
 }
 
@@ -589,6 +794,17 @@ func (q *Queries) InsertSkippedBook(ctx context.Context, arg InsertSkippedBookPa
 		arg.MetaMtime,
 		arg.MetaSize,
 	)
+	return err
+}
+
+const insertSubject = `-- name: InsertSubject :exec
+
+INSERT OR IGNORE INTO subjects (name) VALUES (?)
+`
+
+// Subject operations
+func (q *Queries) InsertSubject(ctx context.Context, name string) error {
+	_, err := q.db.ExecContext(ctx, insertSubject, name)
 	return err
 }
 
@@ -754,14 +970,15 @@ func (q *Queries) UpdateBookSeries(ctx context.Context, arg UpdateBookSeriesPara
 
 const upsertBook = `-- name: UpsertBook :exec
 INSERT INTO books (
-    id, title, sort_title, pubdate, description, language,
+    id, title, sort_title, pubdate, description, language, publisher, rights,
     epub_path, cover_path, status, rating,
     date_added, date_modified, series_id, series_index,
     opf_size, cover_size, epub_size, epub_mtime, meta_mtime, meta_size
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     title=excluded.title, sort_title=excluded.sort_title, pubdate=excluded.pubdate,
     description=excluded.description, language=excluded.language,
+    publisher=excluded.publisher, rights=excluded.rights,
     epub_path=excluded.epub_path,
     cover_path=excluded.cover_path, status=excluded.status, rating=excluded.rating,
     date_added=excluded.date_added, date_modified=excluded.date_modified,
@@ -777,6 +994,8 @@ type UpsertBookParams struct {
 	Pubdate      sql.NullString
 	Description  string
 	Language     string
+	Publisher    string
+	Rights       string
 	EpubPath     string
 	CoverPath    string
 	Status       string
@@ -801,6 +1020,8 @@ func (q *Queries) UpsertBook(ctx context.Context, arg UpsertBookParams) error {
 		arg.Pubdate,
 		arg.Description,
 		arg.Language,
+		arg.Publisher,
+		arg.Rights,
 		arg.EpubPath,
 		arg.CoverPath,
 		arg.Status,

@@ -10,7 +10,7 @@ import (
 
 type bookRow struct {
 	id, opfSize, coverSize, epubSize                                   int64
-	title, pubdate, description, language, epubPath, coverPath, status string
+	title, pubdate, description, language, publisher, rights, epubPath, coverPath, status string
 	rating                                                             float64
 	dateAdded, dateModified                                            string
 	sortTitle                                                          sql.NullString
@@ -34,6 +34,8 @@ func (r *bookRow) toBook() *book.Book {
 			Pubdate:     r.pubdate,
 			Description: r.description,
 			Language:    r.language,
+			Publisher:   r.publisher,
+			Rights:      r.rights,
 			CoverPath:   r.coverPath,
 			OpfSize:     r.opfSize,
 			CoverSize:   r.coverSize,
@@ -73,6 +75,7 @@ func scanBookRows(rows *sql.Rows) ([]*book.Book, error) {
 		var r bookRow
 		if err := rows.Scan(
 			&r.id, &r.title, &r.sortTitle, &r.pubdate, &r.description, &r.language,
+			&r.publisher, &r.rights,
 			&r.epubPath, &r.coverPath,
 			&r.status, &r.rating, &r.dateAdded, &r.dateModified,
 			&r.seriesID, &r.seriesName, &r.seriesIndex,

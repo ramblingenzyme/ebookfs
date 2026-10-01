@@ -6,6 +6,8 @@ CREATE TABLE books
     pubdate       TEXT,
     description   TEXT    NOT NULL DEFAULT '',
     language      TEXT    NOT NULL DEFAULT '',
+    publisher     TEXT    NOT NULL DEFAULT '',
+    rights        TEXT    NOT NULL DEFAULT '',
     epub_path     TEXT    NOT NULL,
     cover_path    TEXT    NOT NULL DEFAULT '',
     status        TEXT    NOT NULL DEFAULT 'unread',
@@ -80,6 +82,35 @@ CREATE TABLE identifiers
     scheme  TEXT    NOT NULL,
     value   TEXT    NOT NULL,
     UNIQUE (book_id, scheme)
+);
+
+CREATE TABLE subjects
+(
+    id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE book_subjects
+(
+    book_id    INTEGER NOT NULL REFERENCES books (id) ON DELETE CASCADE,
+    subject_id INTEGER NOT NULL REFERENCES subjects (id),
+    PRIMARY KEY (book_id, subject_id)
+);
+
+CREATE TABLE contributors
+(
+    id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT '',
+    UNIQUE (name, role)
+);
+
+CREATE TABLE book_contributors
+(
+    book_id        INTEGER NOT NULL REFERENCES books (id) ON DELETE CASCADE,
+    contributor_id INTEGER NOT NULL REFERENCES contributors (id),
+    position       INTEGER NOT NULL,
+    PRIMARY KEY (book_id, contributor_id)
 );
 
 CREATE TABLE book_id_seq

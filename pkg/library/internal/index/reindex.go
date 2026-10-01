@@ -59,8 +59,8 @@ func (idx *Index) rebuildTx(books []BookPath, skipped map[string]drift.PathInfo,
 
 	return idx.withTx(func(q *dbsqlc.Queries, tx *sql.Tx) error {
 		for _, t := range []string{
-			"book_authors", "book_tags", "identifiers",
-			"books", "authors", "series", "tags", "skipped_books",
+			"book_authors", "book_tags", "book_subjects", "book_contributors", "identifiers",
+			"books", "authors", "series", "tags", "subjects", "contributors", "skipped_books",
 		} {
 			if _, err := tx.ExecContext(idx.ctx, "DELETE FROM "+t); err != nil {
 				return err

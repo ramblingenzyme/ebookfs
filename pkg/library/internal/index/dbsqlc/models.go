@@ -21,6 +21,8 @@ type Book struct {
 	Pubdate      sql.NullString
 	Description  string
 	Language     string
+	Publisher    string
+	Rights       string
 	EpubPath     string
 	CoverPath    string
 	Status       string
@@ -43,13 +45,30 @@ type BookAuthor struct {
 	Position int64
 }
 
+type BookContributor struct {
+	BookID        int64
+	ContributorID int64
+	Position      int64
+}
+
 type BookIDSeq struct {
 	ID int64
+}
+
+type BookSubject struct {
+	BookID    int64
+	SubjectID int64
 }
 
 type BookTag struct {
 	BookID int64
 	TagID  int64
+}
+
+type Contributor struct {
+	ID   int64
+	Name string
+	Role string
 }
 
 type Identifier struct {
@@ -74,6 +93,11 @@ type SkippedBook struct {
 	EpubMtime int64
 	MetaMtime int64
 	MetaSize  int64
+}
+
+type Subject struct {
+	ID   int64
+	Name string
 }
 
 type Tag struct {
