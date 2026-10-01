@@ -53,6 +53,14 @@ func (b *ImmutableBook) Pubdate() string { return b.inner.Pubdate }
 
 func (b *ImmutableBook) Description() string { return b.inner.Description }
 
+func (b *ImmutableBook) Publisher() string { return b.inner.Publisher }
+
+func (b *ImmutableBook) Rights() string { return b.inner.Rights }
+
+func (b *ImmutableBook) Subjects() []string { return slices.Clone(b.inner.Subjects) }
+
+func (b *ImmutableBook) Contributors() []Contributor { return slices.Clone(b.inner.Contributors) }
+
 func (b *ImmutableBook) Identifiers() map[string]string { return maps.Clone(b.inner.Identifiers) }
 
 func (b *ImmutableBook) CoverPath() string { return b.inner.CoverPath }

@@ -6,9 +6,10 @@
 // is defaulted or rejected; Doc.Metadata says what that leaves to the caller.
 //
 //   - A field with an encoding of its own is a type with get and set (title,
-//     authors, series, modified). Description and language are one plain
-//     element each, read by a Doc method and written by a Set method. A
-//     read-only field is a single Doc method (pubdate, identifiers, cover).
+//     authors, series, modified, subjects, contributors). Description, language,
+//     publisher and rights are one plain element each, read by a Doc method and
+//     written by a Set method. A read-only field is a single Doc method
+//     (pubdate, identifiers, cover).
 //
 //   - A field says what a value should be, not where it is kept. pkgdoc's
 //     slots know where, and this package does not import etree.
@@ -32,15 +33,19 @@ type Author struct{ Name, SortName string }
 type Series struct{ Name, Index string }
 
 type Metadata struct {
-	Title       string
-	SortTitle   string
-	Authors     []Author
-	Series      *Series // nil when the document records none
-	Description string
-	Language    string
-	Pubdate     string
-	Identifiers map[string]string
-	CoverPath   string
+	Title        string
+	SortTitle    string
+	Authors      []Author
+	Series       *Series // nil when the document records none
+	Description  string
+	Language     string
+	Publisher    string
+	Rights       string
+	Subjects     []string
+	Contributors []Contributor
+	Pubdate      string
+	Identifiers  map[string]string
+	CoverPath    string
 }
 
 type Doc struct{ d *pkgdoc.Doc }
@@ -86,7 +91,17 @@ func (o *Doc) SetDescription(v string) { o.d.DC("description").Set(v) }
 
 func (o *Doc) SetLanguage(v string) { o.d.DC("language").Set(v) }
 
+func (o *Doc) SetPublisher(v string) { o.d.DC("publisher").Set(v) }
+
+func (o *Doc) SetRights(v string) { o.d.DC("rights").Set(v) }
+
 func (o *Doc) SetAuthors(authors []Author) { o.authors().set(authors) }
+
+func (o *Doc) SetSubjects(subjects []string) { o.subjects().set(subjects) }
+
+func (o *Doc) SetContributors(contributors []Contributor) {
+	o.contributors().set(contributors)
+}
 
 // SetSeries writes the series, or clears it when s is nil. Both halves are
 // written, so a caller changing one passes the other as read.
@@ -105,15 +120,19 @@ func (o *Doc) Metadata(base string) Metadata {
 	// strips leading articles ("The Hobbit" -> "Hobbit, The"), but that depends
 	// on the language.
 	return Metadata{
-		Title:       title,
-		SortTitle:   sortTitle,
-		Authors:     o.authors().get(),
-		Series:      o.series().get(),
-		Description: o.description(),
-		Language:    o.language(),
-		Pubdate:     o.pubdate(),
-		Identifiers: o.identifiers(),
-		CoverPath:   o.cover(base),
+		Title:        title,
+		SortTitle:    sortTitle,
+		Authors:      o.authors().get(),
+		Series:       o.series().get(),
+		Description:  o.description(),
+		Language:     o.language(),
+		Publisher:    o.publisher(),
+		Rights:       o.rights(),
+		Subjects:     o.subjects().get(),
+		Contributors: o.contributors().get(),
+		Pubdate:      o.pubdate(),
+		Identifiers:  o.identifiers(),
+		CoverPath:    o.cover(base),
 	}
 }
 

@@ -24,13 +24,17 @@ import (
 // clears the sort title; package library/internal/epub applies that rule.
 type Edits struct {
 	// Bib fields (written to the epub OPF).
-	Title       *string
-	SortTitle   *string
-	Description *string
-	Language    *string
-	Authors     *[]Author
-	Series      *string
-	SeriesIndex *string
+	Title        *string
+	SortTitle    *string
+	Description  *string
+	Language     *string
+	Publisher    *string
+	Rights       *string
+	Authors      *[]Author
+	Series       *string
+	SeriesIndex  *string
+	Subjects     *[]string
+	Contributors *[]Contributor
 
 	Cover *[]byte
 
@@ -57,7 +61,9 @@ func (e Edits) Normalized() Edits {
 
 func (e Edits) HasBibEdits() bool {
 	return e.Title != nil || e.SortTitle != nil || e.Description != nil ||
-		e.Language != nil || e.Authors != nil || e.Series != nil || e.SeriesIndex != nil
+		e.Language != nil || e.Publisher != nil || e.Rights != nil ||
+		e.Authors != nil || e.Series != nil || e.SeriesIndex != nil ||
+		e.Subjects != nil || e.Contributors != nil
 }
 
 func (e Edits) HasCoverEdit() bool { return e.Cover != nil }

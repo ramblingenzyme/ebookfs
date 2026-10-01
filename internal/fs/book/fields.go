@@ -60,6 +60,55 @@ var fields = map[string]field{
 			return library.Edits{Description: &s}, nil
 		},
 	},
+	"publisher": {
+		get: func(b *library.Book) string { return b.Publisher() },
+		edits: func(s string) (library.Edits, error) {
+			return library.Edits{Publisher: &s}, nil
+		},
+	},
+	"rights": {
+		get: func(b *library.Book) string { return b.Rights() },
+		edits: func(s string) (library.Edits, error) {
+			return library.Edits{Rights: &s}, nil
+		},
+	},
+	"subjects": {
+		get: func(b *library.Book) string { return strings.Join(b.Subjects(), "\n") },
+		edits: func(s string) (library.Edits, error) {
+			subjects := strings.FieldsFunc(s, func(r rune) bool { return r == '\n' })
+			return library.Edits{Subjects: &subjects}, nil
+		},
+	},
+	"contributors": {
+		get: func(b *library.Book) string {
+			contributors := b.Contributors()
+			lines := make([]string, len(contributors))
+			for i, c := range contributors {
+				if c.Role != "" {
+					lines[i] = fmt.Sprintf("%s | %s", c.Name, c.Role)
+				} else {
+					lines[i] = c.Name
+				}
+			}
+			return strings.Join(lines, "\n")
+		},
+		edits: func(s string) (library.Edits, error) {
+			var contributors []library.Contributor
+			for line := range strings.SplitSeq(s, "\n") {
+				parts := strings.SplitN(line, " | ", 2)
+				name := strings.TrimSpace(parts[0])
+				if name == "" {
+					continue
+				}
+				role := ""
+				if len(parts) > 1 {
+					role = strings.TrimSpace(parts[1])
+				}
+				contributors = append(contributors, library.Contributor{Name: name, Role: role})
+			}
+			return library.Edits{Contributors: &contributors}, nil
+		},
+	},
 	"authors": {
 		get: func(b *library.Book) string {
 			authors := b.Authors()

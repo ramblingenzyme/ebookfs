@@ -16,6 +16,7 @@ type bookQuery struct {
 func (q *bookQuery) sql() (string, []any) {
 	qry := `
 		SELECT b.id, b.title, b.sort_title, COALESCE(b.pubdate, ''), b.description, b.language,
+			b.publisher, b.rights,
 			b.epub_path, b.cover_path,
 			b.status, b.rating, b.date_added, b.date_modified,
 			s.id, s.name, b.series_index,

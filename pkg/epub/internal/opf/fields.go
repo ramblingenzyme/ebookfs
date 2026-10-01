@@ -82,12 +82,26 @@ func (f modifiedField) set(t time.Time) {
 	f.d.UnrefinedMeta("dcterms:modified").Set(t.UTC().Format("2006-01-02T15:04:05Z"))
 }
 
-// description and language are repeatable (§5.5.3.2.1) but single-valued
-// here. pkgdoc's DC picks the element a read and a write both mean, so they
-// need no field type.
+// description, language, publisher and rights are repeatable (§5.5.3.2.1) but
+// single-valued here. pkgdoc's DC picks the primary element a read and a write
+// both mean, so they need no field type. Extras survive a write untouched.
 func (o *Doc) description() string { return o.d.DC("description").Get() }
 
 func (o *Doc) language() string { return o.d.DC("language").Get() }
+
+func (o *Doc) publisher() string { return o.d.DC("publisher").Get() }
+
+func (o *Doc) rights() string { return o.d.DC("rights").Get() }
+
+// elementRoles returns an element's roles in document order. An EPUB 2 opf:role
+// wins when present; otherwise every EPUB 3 role refinement counts (D.3.10).
+// Shared between authors and contributors, which have the same role encoding.
+func elementRoles(c *pkgdoc.Element) []string {
+	if r := c.OPFAttr("role").Get(); r != "" {
+		return []string{r}
+	}
+	return c.Refine("role").Values()
+}
 
 // pubdate returns a dc:date as written. An opf:event of "publication" wins.
 // Otherwise a date with any other event is not the publication date, and the

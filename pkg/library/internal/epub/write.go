@@ -68,11 +68,23 @@ func apply(f *epubfile.Book, e book.Edits) {
 	if e.Language != nil {
 		f.Language = *e.Language
 	}
+	if e.Publisher != nil {
+		f.Publisher = *e.Publisher
+	}
+	if e.Rights != nil {
+		f.Rights = *e.Rights
+	}
 	if e.Authors != nil {
 		f.Authors = authors(*e.Authors)
 	}
 	if e.Series != nil || e.SeriesIndex != nil {
 		f.Series = series(f.Series, e)
+	}
+	if e.Subjects != nil {
+		f.Subjects = *e.Subjects
+	}
+	if e.Contributors != nil {
+		f.Contributors = contributors(*e.Contributors)
 	}
 }
 
@@ -80,6 +92,14 @@ func authors(as []book.Author) []epubfile.Author {
 	out := make([]epubfile.Author, len(as))
 	for i, a := range as {
 		out[i] = epubfile.Author{Name: a.Name, SortName: a.SortName}
+	}
+	return out
+}
+
+func contributors(cs []book.Contributor) []epubfile.Contributor {
+	out := make([]epubfile.Contributor, len(cs))
+	for i, c := range cs {
+		out[i] = epubfile.Contributor{Name: c.Name, Role: c.Role}
 	}
 	return out
 }

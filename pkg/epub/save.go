@@ -127,17 +127,22 @@ func (b *Book) stage() (map[string][]byte, error) {
 // it, so they always agree.
 type moved struct {
 	title, sortTitle, description, language, authors, series bool
+	publisher, rights, subjects, contributors                bool
 }
 
 func (b *Book) moved() moved {
 	o := b.orig
 	return moved{
-		title:       b.Title != o.Title,
-		sortTitle:   b.SortTitle != o.SortTitle,
-		description: b.Description != o.Description,
-		language:    b.Language != o.Language,
-		authors:     !slices.Equal(b.Authors, o.Authors),
-		series:      !sameSeries(b.Series, o.Series),
+		title:        b.Title != o.Title,
+		sortTitle:    b.SortTitle != o.SortTitle,
+		description:  b.Description != o.Description,
+		language:     b.Language != o.Language,
+		authors:      !slices.Equal(b.Authors, o.Authors),
+		series:       !sameSeries(b.Series, o.Series),
+		publisher:    b.Publisher != o.Publisher,
+		rights:       b.Rights != o.Rights,
+		subjects:     !slices.Equal(b.Subjects, o.Subjects),
+		contributors: !slices.Equal(b.Contributors, o.Contributors),
 	}
 }
 
@@ -182,6 +187,22 @@ func (b *Book) write(d *opf.Doc, m moved) {
 	}
 	if m.series {
 		d.SetSeries((*opf.Series)(b.Series))
+	}
+	if m.publisher {
+		d.SetPublisher(b.Publisher)
+	}
+	if m.rights {
+		d.SetRights(b.Rights)
+	}
+	if m.subjects {
+		d.SetSubjects(b.Subjects)
+	}
+	if m.contributors {
+		cs := make([]opf.Contributor, len(b.Contributors))
+		for i, c := range b.Contributors {
+			cs[i] = opf.Contributor(c)
+		}
+		d.SetContributors(cs)
 	}
 }
 

@@ -1,6 +1,6 @@
 // Package epub reads and edits the metadata of an EPUB file: the title,
-// authors, series, description, language and publication date in the package
-// document, and the cover image.
+// authors, series, description, language, publisher, rights, subjects,
+// contributors and publication date in the package document, and the cover image.
 //
 // OpenFile opens only the archive, which is enough to read its entries. Open
 // also parses the package document, which reading or changing metadata needs.
@@ -17,6 +17,14 @@ package epub
 type Author struct {
 	Name     string
 	SortName string // "" if the file has none; never derived
+}
+
+// Contributor is a secondary participant in the book, such as an editor,
+// translator, or illustrator. Role is a MARC relator code (e.g. "edt", "trl")
+// or "" if the file has none.
+type Contributor struct {
+	Name string
+	Role string
 }
 
 // Series is the collection a book belongs to, and its position in it. Index

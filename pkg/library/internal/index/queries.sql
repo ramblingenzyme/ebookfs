@@ -7,22 +7,23 @@
 
 -- name: InsertBook :exec
 INSERT INTO books (
-    id, title, sort_title, pubdate, description, language,
+    id, title, sort_title, pubdate, description, language, publisher, rights,
     epub_path, cover_path, status, rating,
     date_added, date_modified, series_id, series_index,
     opf_size, cover_size, epub_size, epub_mtime, meta_mtime, meta_size
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpsertBook :exec
 INSERT INTO books (
-    id, title, sort_title, pubdate, description, language,
+    id, title, sort_title, pubdate, description, language, publisher, rights,
     epub_path, cover_path, status, rating,
     date_added, date_modified, series_id, series_index,
     opf_size, cover_size, epub_size, epub_mtime, meta_mtime, meta_size
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     title=excluded.title, sort_title=excluded.sort_title, pubdate=excluded.pubdate,
     description=excluded.description, language=excluded.language,
+    publisher=excluded.publisher, rights=excluded.rights,
     epub_path=excluded.epub_path,
     cover_path=excluded.cover_path, status=excluded.status, rating=excluded.rating,
     date_added=excluded.date_added, date_modified=excluded.date_modified,
@@ -82,6 +83,34 @@ DELETE FROM identifiers WHERE book_id = ?;
 -- name: InsertIdentifier :exec
 INSERT INTO identifiers (book_id, scheme, value) VALUES (?, ?, ?);
 
+-- Subject operations
+
+-- name: InsertSubject :exec
+INSERT OR IGNORE INTO subjects (name) VALUES (?);
+
+-- name: GetSubjectByName :one
+SELECT * FROM subjects WHERE name = ?;
+
+-- name: DeleteBookSubjects :exec
+DELETE FROM book_subjects WHERE book_id = ?;
+
+-- name: InsertBookSubject :exec
+INSERT INTO book_subjects (book_id, subject_id) VALUES (?, ?);
+
+-- Contributor operations
+
+-- name: InsertContributor :exec
+INSERT OR IGNORE INTO contributors (name, role) VALUES (?, ?);
+
+-- name: GetContributorByNameAndRole :one
+SELECT * FROM contributors WHERE name = ? AND role = ?;
+
+-- name: DeleteBookContributors :exec
+DELETE FROM book_contributors WHERE book_id = ?;
+
+-- name: InsertBookContributor :exec
+INSERT INTO book_contributors (book_id, contributor_id, position) VALUES (?, ?, ?);
+
 -- Relationship loading
 
 -- name: GetAuthorsByBookIDs :many
@@ -103,6 +132,20 @@ SELECT book_id, scheme, value
 FROM identifiers
 WHERE book_id IN (sqlc.slice('book_ids'))
 ORDER BY book_id;
+
+-- name: GetSubjectsByBookIDs :many
+SELECT bs.book_id, s.name
+FROM book_subjects bs
+JOIN subjects s ON s.id = bs.subject_id
+WHERE bs.book_id IN (sqlc.slice('book_ids'))
+ORDER BY bs.book_id, s.name;
+
+-- name: GetContributorsByBookIDs :many
+SELECT bc.book_id, c.name, c.role
+FROM book_contributors bc
+JOIN contributors c ON c.id = bc.contributor_id
+WHERE bc.book_id IN (sqlc.slice('book_ids'))
+ORDER BY bc.book_id, bc.position;
 
 -- Duplicate detection
 
@@ -156,6 +199,12 @@ DELETE FROM series WHERE id NOT IN (SELECT series_id FROM books WHERE series_id 
 
 -- name: DeleteOrphanedTags :exec
 DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM book_tags);
+
+-- name: DeleteOrphanedSubjects :exec
+DELETE FROM subjects WHERE id NOT IN (SELECT subject_id FROM book_subjects);
+
+-- name: DeleteOrphanedContributors :exec
+DELETE FROM contributors WHERE id NOT IN (SELECT contributor_id FROM book_contributors);
 
 -- Pending operations
 

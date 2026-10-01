@@ -22,6 +22,14 @@ func (idx *Index) hydrateBooks(books []*book.Book) error {
 	if err != nil {
 		return err
 	}
+	subjects, err := idx.loadSubjects(ids)
+	if err != nil {
+		return err
+	}
+	contributors, err := idx.loadContributors(ids)
+	if err != nil {
+		return err
+	}
 
 	for _, b := range books {
 		b.Authors = authors[b.Meta.ID]
@@ -36,6 +44,14 @@ func (idx *Index) hydrateBooks(books []*book.Book) error {
 			b.Identifiers = m
 		} else {
 			b.Identifiers = make(map[string]string)
+		}
+		b.Subjects = subjects[b.Meta.ID]
+		if b.Subjects == nil {
+			b.Subjects = []string{}
+		}
+		b.Contributors = contributors[b.Meta.ID]
+		if b.Contributors == nil {
+			b.Contributors = []book.Contributor{}
 		}
 	}
 
@@ -83,6 +99,33 @@ func (idx *Index) loadIdentifiers(ids []int64) (map[int64]map[string]string, err
 			out[row.BookID] = m
 		}
 		m[row.Scheme] = row.Value
+	}
+	return out, nil
+}
+
+func (idx *Index) loadSubjects(ids []int64) (map[int64][]string, error) {
+	rows, err := idx.queries.GetSubjectsByBookIDs(idx.ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64][]string, len(ids))
+	for _, row := range rows {
+		out[row.BookID] = append(out[row.BookID], row.Name)
+	}
+	return out, nil
+}
+
+func (idx *Index) loadContributors(ids []int64) (map[int64][]book.Contributor, error) {
+	rows, err := idx.queries.GetContributorsByBookIDs(idx.ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64][]book.Contributor, len(ids))
+	for _, row := range rows {
+		out[row.BookID] = append(out[row.BookID], book.Contributor{
+			Name: row.Name,
+			Role: row.Role,
+		})
 	}
 	return out, nil
 }

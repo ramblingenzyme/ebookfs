@@ -16,7 +16,7 @@ func (o *Doc) authors() authorsField { return authorsField{o.d} }
 func (f authorsField) creators() []*pkgdoc.Element {
 	var out []*pkgdoc.Element
 	for _, c := range f.d.DCAll("creator") {
-		roles := creatorRoles(c)
+		roles := elementRoles(c)
 		if len(roles) == 0 || slices.Contains(roles, "aut") {
 			out = append(out, c)
 		}
@@ -61,7 +61,7 @@ func (f authorsField) set(authors []Author) {
 		// D.3.10 allows zero or more roles, so aut is added only if missing and
 		// other roles stay. It only SHOULDs a scheme; marc:relators is reserved
 		// by D.1.5 and needs no declaration.
-		if !slices.Contains(creatorRoles(c), "aut") {
+		if !slices.Contains(elementRoles(c), "aut") {
 			c.Refine("role").Add("aut", "marc:relators")
 		}
 		pkgdoc.Put(c.Refine("file-as"), a.SortName)
@@ -112,13 +112,4 @@ func (f authorsField) reconcileCreators(authors []Author) []*pkgdoc.Element {
 		c.Remove()
 	}
 	return out
-}
-
-// creatorRoles returns a creator's roles in document order. An EPUB 2 opf:role
-// wins when present; otherwise every EPUB 3 role refinement counts (D.3.10).
-func creatorRoles(c *pkgdoc.Element) []string {
-	if r := c.OPFAttr("role").Get(); r != "" {
-		return []string{r}
-	}
-	return c.Refine("role").Values()
 }
