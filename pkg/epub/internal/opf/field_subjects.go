@@ -49,4 +49,3 @@ func (f subjectsField) set(subjects []string) {
 		el.Remove()
 	}
 }
-

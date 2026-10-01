@@ -78,4 +78,3 @@ func (f contributorsField) set(contributors []Contributor) {
 		el.Remove()
 	}
 }
-

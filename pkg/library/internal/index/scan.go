@@ -9,14 +9,14 @@ import (
 )
 
 type bookRow struct {
-	id, opfSize, coverSize, epubSize                                   int64
+	id, opfSize, coverSize, epubSize                                                      int64
 	title, pubdate, description, language, publisher, rights, epubPath, coverPath, status string
-	rating                                                             float64
-	dateAdded, dateModified                                            string
-	sortTitle                                                          sql.NullString
-	seriesID                                                           sql.NullInt64
-	seriesName                                                         sql.NullString
-	seriesIndex                                                        sql.NullString
+	rating                                                                                float64
+	dateAdded, dateModified                                                               string
+	sortTitle                                                                             sql.NullString
+	seriesID                                                                              sql.NullInt64
+	seriesName                                                                            sql.NullString
+	seriesIndex                                                                           sql.NullString
 }
 
 func (r *bookRow) toBook() *book.Book {
