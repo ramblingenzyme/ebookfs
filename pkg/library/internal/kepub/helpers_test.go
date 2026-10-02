@@ -12,18 +12,16 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
 )
 
-// fakeResolver implements SidecarResolver for tests. It returns paths under
-// dir/{id}/.sidecar/kepub.epub, creating the .sidecar directory on demand.
-type fakeResolver struct {
-	dir string
-}
-
-func (r fakeResolver) SidecarPath(id int64, name string) (string, error) {
-	cacheDir := filepath.Join(r.dir, fmt.Sprintf("%d", id), ".sidecar")
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
-		return "", err
+// fakeSidecarPath implements the path function for tests. It returns paths
+// under dir/{id}/.sidecar/kepub.epub, creating the .sidecar directory on demand.
+func fakeSidecarPath(dir string) func(int64, string) (string, error) {
+	return func(id int64, name string) (string, error) {
+		cacheDir := filepath.Join(dir, fmt.Sprintf("%d", id), ".sidecar")
+		if err := os.MkdirAll(cacheDir, 0755); err != nil {
+			return "", err
+		}
+		return filepath.Join(cacheDir, name), nil
 	}
-	return filepath.Join(cacheDir, name), nil
 }
 
 type fakeSource struct {
@@ -56,7 +54,7 @@ func newTestCache(t *testing.T, body string) (*Cache, string) {
 	if err := os.WriteFile(filepath.Join(dir, "source.epub"), []byte("epub-data"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	c := NewCache(fakeResolver{dir: dir}, fakeSource{t: t, dir: dir})
+	c := NewCache(fakeSidecarPath(dir), fakeSource{t: t, dir: dir})
 	c.convertFn = func(_ context.Context, w io.Writer, _ io.ReaderAt, _ int64) error {
 		_, err := w.Write([]byte(body))
 		return err

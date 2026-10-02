@@ -19,7 +19,7 @@ func (noopSource) Content(int64) (epub.EpubReader, error) {
 }
 
 func TestCacheClose(t *testing.T) {
-	c := NewCache(fakeResolver{dir: t.TempDir()}, noopSource{})
+	c := NewCache(fakeSidecarPath(t.TempDir()), noopSource{})
 
 	if err := c.Close(); err != nil {
 		t.Errorf("Close: %v", err)
@@ -30,7 +30,7 @@ func TestCacheClose(t *testing.T) {
 // test gets one running.
 func TestCacheCloseCancelsConversion(t *testing.T) {
 	dir := t.TempDir()
-	c := NewCache(fakeResolver{dir: dir}, fakeSource{t: t, dir: dir})
+	c := NewCache(fakeSidecarPath(dir), fakeSource{t: t, dir: dir})
 	started := make(chan struct{})
 	c.convertFn = func(ctx context.Context, w io.Writer, _ io.ReaderAt, _ int64) error {
 		close(started)
@@ -60,7 +60,7 @@ func TestCacheCloseCancelsConversion(t *testing.T) {
 }
 
 func TestCacheFilename(t *testing.T) {
-	c := NewCache(fakeResolver{dir: t.TempDir()}, noopSource{})
+	c := NewCache(fakeSidecarPath(t.TempDir()), noopSource{})
 
 	tests := []struct {
 		name     string
@@ -85,7 +85,7 @@ func TestCacheFilename(t *testing.T) {
 
 func TestCacheSize(t *testing.T) {
 	dir := t.TempDir()
-	c := NewCache(fakeResolver{dir: dir}, noopSource{})
+	c := NewCache(fakeSidecarPath(dir), noopSource{})
 	b := makeBook(1, "Test", "Alice")
 
 	_, ok := c.Size(wrapBook(b))
@@ -135,7 +135,7 @@ func TestCacheEnsureCreatesFile(t *testing.T) {
 func TestCacheEnsureFreshIsNoop(t *testing.T) {
 	dir := t.TempDir()
 	src := fakeSource{t: t, dir: dir}
-	c := NewCache(fakeResolver{dir: dir}, src)
+	c := NewCache(fakeSidecarPath(dir), src)
 	var convertCalls int
 	c.convertFn = func(_ context.Context, w io.Writer, _ io.ReaderAt, _ int64) error {
 		convertCalls++

@@ -21,15 +21,10 @@ type EpubSource interface {
 	Content(int64) (epub.EpubReader, error)
 }
 
-// SidecarResolver resolves the path to a sidecar file for a book.
-type SidecarResolver interface {
-	SidecarPath(id int64, name string) (string, error)
-}
-
 // Cache writes kepub sidecar files into each book's .sidecar/ directory.
 type Cache struct {
-	resolver SidecarResolver
-	src      EpubSource
+	pathFn func(id int64, name string) (string, error)
+	src    EpubSource
 
 	locks  syncutil.KeyedMutex // per-book conversion lock
 	warmer *warmer
@@ -44,10 +39,10 @@ type Cache struct {
 	convertFn func(context.Context, io.Writer, io.ReaderAt, int64) error
 }
 
-func NewCache(resolver SidecarResolver, src EpubSource) *Cache {
+func NewCache(pathFn func(id int64, name string) (string, error), src EpubSource) *Cache {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &Cache{
-		resolver:  resolver,
+		pathFn:    pathFn,
 		src:       src,
 		convertFn: convert,
 		ctx:       ctx,
@@ -128,7 +123,7 @@ func (c *Cache) Ensure(b *book.ImmutableBook) error {
 }
 
 func (c *Cache) path(b *book.ImmutableBook) (string, error) {
-	return c.resolver.SidecarPath(b.ID(), "kepub.epub")
+	return c.pathFn(b.ID(), "kepub.epub")
 }
 
 // write renames into place, so a reader never observes a partial kepub.
