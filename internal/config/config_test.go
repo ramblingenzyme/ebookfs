@@ -62,7 +62,6 @@ index_path = "/custom/index"
 [reader]
 statuses = ["read", "abandoned"]
 convert = true
-cache_dir = "/custom/cache"
 
 [server]
 listen = ":9999"
@@ -85,25 +84,11 @@ format = "json"
 		if !cfg.Reader.Convert {
 			t.Errorf("Reader.Convert should be true")
 		}
-		if cfg.Reader.CacheDir != "/custom/cache" {
-			t.Errorf("Reader.CacheDir = %q", cfg.Reader.CacheDir)
-		}
 		if cfg.Log.Level != "debug" {
 			t.Errorf("Log.Level = %q", cfg.Log.Level)
 		}
 		if cfg.Log.Format != "json" {
 			t.Errorf("Log.Format = %q", cfg.Log.Format)
-		}
-	})
-
-	t.Run("reader defaults", func(t *testing.T) {
-		path := writeConfig(t, reqLibSection)
-		cfg, err := Load(path)
-		if err != nil {
-			t.Fatalf("Load: %v", err)
-		}
-		if cfg.Reader.CacheDir != "/var/lib/ebookfs/kepub-cache" {
-			t.Errorf("Reader.CacheDir should be default, got %q", cfg.Reader.CacheDir)
 		}
 	})
 
@@ -118,11 +103,10 @@ statuses = ["invalid_status"]
 		}
 	})
 
-	t.Run("convert with cache dir", func(t *testing.T) {
+	t.Run("convert", func(t *testing.T) {
 		path := writeConfig(t, reqLibSection+`
 [reader]
 convert = true
-cache_dir = "/cache"
 `)
 		_, err := Load(path)
 		if err != nil {

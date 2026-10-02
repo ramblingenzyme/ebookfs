@@ -1,7 +1,7 @@
 // Package kepub builds and caches Kobo-format (kepub) renditions of books,
 // layered on top of the library's epub access. It is the only package that
-// depends on kepubify. Nothing kepub-shaped reaches the library, store, or epub
-// APIs, which treat it as an ordinary consumer.
+// depends on kepubify. Nothing kepub-shaped reaches the library or epub APIs,
+// which treat it as an ordinary consumer.
 package kepub
 
 import (
@@ -21,11 +21,10 @@ type EpubSource interface {
 	Content(int64) (epub.EpubReader, error)
 }
 
-// Cache keeps its directory outside the library root, so the authoritative
-// store and its reindex walk never see kepubs.
+// Cache writes kepub sidecar files into each book's .sidecar/ directory.
 type Cache struct {
-	dir string
-	src EpubSource
+	pathFn func(id int64, name string) (string, error)
+	src    EpubSource
 
 	locks  syncutil.KeyedMutex // per-book conversion lock
 	warmer *warmer
@@ -40,10 +39,10 @@ type Cache struct {
 	convertFn func(context.Context, io.Writer, io.ReaderAt, int64) error
 }
 
-func NewCache(dir string, src EpubSource) *Cache {
+func NewCache(pathFn func(id int64, name string) (string, error), src EpubSource) *Cache {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &Cache{
-		dir:       dir,
+		pathFn:    pathFn,
 		src:       src,
 		convertFn: convert,
 		ctx:       ctx,
@@ -72,7 +71,11 @@ func (c *Cache) Filename(b *book.ImmutableBook) string {
 
 // Size answers the 9P stat length, so it must not convert.
 func (c *Cache) Size(b *book.ImmutableBook) (int64, bool) {
-	fi, err := os.Stat(c.path(b))
+	path, err := c.path(b)
+	if err != nil {
+		return 0, false
+	}
+	fi, err := os.Stat(path)
 	if err != nil {
 		return 0, false
 	}
@@ -85,7 +88,11 @@ func (c *Cache) Open(b *book.ImmutableBook) (epub.EpubReader, error) {
 	if err := c.Ensure(b); err != nil {
 		return nil, err
 	}
-	return epub.OpenReader(c.path(b), b.CoverPath())
+	path, err := c.path(b)
+	if err != nil {
+		return nil, err
+	}
+	return epub.OpenReader(path, b.CoverPath())
 }
 
 // Ensure is serialized per book, so concurrent warms and reads coalesce into a
@@ -95,9 +102,14 @@ func (c *Cache) Ensure(b *book.ImmutableBook) error {
 	l.Lock()
 	defer l.Unlock()
 
+	path, err := c.path(b)
+	if err != nil {
+		return err
+	}
+
 	// An in-place epub rewrite updates DateModified, which is what makes a
 	// cache older than it stale.
-	if cfi, err := os.Stat(c.path(b)); err == nil && !cfi.ModTime().Before(b.DateModified()) {
+	if cfi, err := os.Stat(path); err == nil && !cfi.ModTime().Before(b.DateModified()) {
 		return nil
 	}
 
@@ -107,16 +119,17 @@ func (c *Cache) Ensure(b *book.ImmutableBook) error {
 	}
 	defer content.Close()
 
-	return c.write(b, content)
+	return c.write(b, path, content)
 }
 
-func (c *Cache) path(b *book.ImmutableBook) string {
-	return filepath.Join(c.dir, fmt.Sprintf("%d.kepub.epub", b.ID()))
+func (c *Cache) path(b *book.ImmutableBook) (string, error) {
+	return c.pathFn(b.ID(), "kepub.epub")
 }
 
 // write renames into place, so a reader never observes a partial kepub.
-func (c *Cache) write(b *book.ImmutableBook, src epub.EpubReader) error {
-	tmp, err := os.CreateTemp(c.dir, fmt.Sprintf(".%d-*.tmp", b.ID()))
+func (c *Cache) write(b *book.ImmutableBook, path string, src epub.EpubReader) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, fmt.Sprintf(".%d-*.tmp", b.ID()))
 	if err != nil {
 		return err
 	}
@@ -134,5 +147,5 @@ func (c *Cache) write(b *book.ImmutableBook, src epub.EpubReader) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmpName, c.path(b))
+	return os.Rename(tmpName, path)
 }

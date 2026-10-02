@@ -164,3 +164,14 @@ func (s *Store) Update(oldLoc, newLoc book.Location, meta *book.Meta) (drift.Pat
 	}
 	return s.Stat(newLoc)
 }
+
+// SidecarPath returns the absolute path to a sidecar file in the book's
+// .sidecar/ subdirectory. Sidecar files are carried along by Move and removed
+// by Delete. The .sidecar/ directory is created on demand.
+func (s *Store) SidecarPath(loc book.Location, name string) (string, error) {
+	dir := filepath.Join(s.AbsPath(loc.Dir()), ".sidecar")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, name), nil
+}

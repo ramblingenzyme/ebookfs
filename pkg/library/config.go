@@ -22,7 +22,4 @@ type ReaderConfig struct {
 	Statuses []string
 	// Convert serves kepubs; false serves the original epub.
 	Convert bool
-	// CacheDir holds converted kepubs. It must be outside Config.Root, or the
-	// store walk would index them as books.
-	CacheDir string
 }
