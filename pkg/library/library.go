@@ -199,6 +199,16 @@ func (l *Library) Delete(id int64) error {
 	return nil
 }
 
+// SidecarPath resolves the absolute path to a sidecar file in the book's
+// .sidecar/ directory. The cache uses it to find where to write kepub files.
+func (l *Library) SidecarPath(id int64, name string) (string, error) {
+	b, err := l.get(id)
+	if err != nil {
+		return "", err
+	}
+	return l.store.SidecarPath(b.Location, name)
+}
+
 // applyMeta stamps the modified time and leaves a nil field alone. The result
 // shares nothing with its arguments: m is copied by value, but Tags is cloned,
 // since the caller still holds both Meta and Edits.

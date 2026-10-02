@@ -42,8 +42,8 @@ func fatal(msg string, err error) {
 }
 
 // opdsExporter reuses the reader's exporter whenever the two want the same
-// rendition. Both convert into reader.cache_dir, so at most one kepub cache
-// exists in the process.
+// rendition. Both convert into each book's .sidecar/ directory, so at most one
+// kepub file exists per book.
 //
 // Statuses is left empty. It decides reader/ membership through Includes,
 // which the catalog's Renderer does not declare and never calls.
@@ -52,8 +52,7 @@ func opdsExporter(lib *library.Library, cfg *config.Config, readerExp library.Ex
 		return readerExp, nil
 	}
 	return lib.Exporter(library.ReaderConfig{
-		Convert:  cfg.OPDS.Convert,
-		CacheDir: cfg.Reader.CacheDir,
+		Convert: cfg.OPDS.Convert,
 	})
 }
 
