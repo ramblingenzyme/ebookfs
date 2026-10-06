@@ -21,10 +21,11 @@ import (
 // PreCommit and the ingest operation. The library cleans up tempDir after
 // the ingest completes (success or failure).
 //
-// Event phases (OnIngested, OnEdited, OnDeleted) fire after the operation
-// commits, under the per-book lock. They must not block or call back into
-// the library. Panics are recovered and logged so one hook cannot prevent
-// later hooks from receiving the event.
+// Event phases (OnIngested, OnEdited, OnDeleting, OnDeleted) fire under the
+// per-book lock. OnDeleting fires before deletion; the others fire after the
+// operation commits. They must not block or call back into the library.
+// Panics are recovered and logged so one hook cannot prevent later hooks
+// from receiving the event.
 type Hook interface {
 	// PreParse rewrites the epub file before parsing. epubPath is the absolute
 	// path to the staged file. tempDir is per-ingest scratch space, retained
@@ -42,6 +43,12 @@ type Hook interface {
 
 	// OnEdited fires after a book is edited, under the per-book lock.
 	OnEdited(book *Book, sidecars *os.Root, openEpub func() (EpubReader, error))
+
+	// OnDeleting fires before a book is deleted, under the per-book lock.
+	// The hook receives the book, a sidecar root scoped to .sidecar/, and a
+	// lazy OpenEpub function that opens the epub for reading. The epub is
+	// deleted from disk after all OnDeleting hooks return.
+	OnDeleting(book *Book, sidecars *os.Root, openEpub func() (EpubReader, error))
 
 	// OnDeleted fires after a book is deleted, under the per-book lock.
 	OnDeleted(bookID int64)
@@ -61,6 +68,8 @@ func (HookBase) OnIngested(book *Book, sidecars *os.Root, openEpub func() (EpubR
 }
 
 func (HookBase) OnEdited(book *Book, sidecars *os.Root, openEpub func() (EpubReader, error)) {}
+
+func (HookBase) OnDeleting(book *Book, sidecars *os.Root, openEpub func() (EpubReader, error)) {}
 
 func (HookBase) OnDeleted(bookID int64) {}
 
@@ -142,6 +151,23 @@ func (s *hookSet) onEdited(l *Library, b *Book, loc book.Location) {
 	openEpub := func() (EpubReader, error) { return l.Content(b.ID()) }
 	for _, h := range hooks {
 		invokeEvent("OnEdited", h, func() { h.OnEdited(b, root, openEpub) })
+	}
+}
+
+func (s *hookSet) onDeleting(l *Library, b *Book, loc book.Location) {
+	hooks := s.snapshot()
+	if len(hooks) == 0 {
+		return
+	}
+	root, err := l.store.OpenSidecars(loc)
+	if err != nil {
+		slog.Error("hook OnDeleting: failed to open sidecars", "book_id", b.ID(), "error", err)
+		return
+	}
+	defer root.Close()
+	openEpub := func() (EpubReader, error) { return l.Content(b.ID()) }
+	for _, h := range hooks {
+		invokeEvent("OnDeleting", h, func() { h.OnDeleting(b, root, openEpub) })
 	}
 }
 

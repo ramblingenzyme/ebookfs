@@ -66,4 +66,3 @@ func writeField(t *testing.T, dir go9pfs.Dir, name, value string) {
 	t.Helper()
 	fstest.Fid(t, fstest.ChildAs[go9pfs.File](t, dir, name), 1).Set(proto.Otrunc, value)
 }
-

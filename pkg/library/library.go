@@ -189,6 +189,10 @@ func (l *Library) Delete(id int64) error {
 	if err != nil {
 		return err
 	}
+
+	// Fire OnDeleting hook before deletion, while the book and epub still exist
+	l.hooks.onDeleting(l, book.NewImmutableBook(b), b.Location)
+
 	op := l.index.BeginOp()
 	if err := op.MarkPending(); err != nil {
 		return err

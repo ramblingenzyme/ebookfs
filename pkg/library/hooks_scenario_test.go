@@ -71,6 +71,10 @@ func (h *ingestEditDeleteHook) OnEdited(*library.Book, *os.Root, func() (library
 	h.events = append(h.events, "edited")
 }
 
+func (h *ingestEditDeleteHook) OnDeleting(*library.Book, *os.Root, func() (library.EpubReader, error)) {
+	h.events = append(h.events, "deleting")
+}
+
 func (h *ingestEditDeleteHook) OnDeleted(id int64) {
 	h.events = append(h.events, "deleted")
 }
@@ -104,7 +108,7 @@ func TestHookLifecycleUsesCommittedOperations(t *testing.T) {
 		t.Fatalf("Delete: %v", err)
 	}
 
-	want := []string{"pre-commit", "ingested", "edited", "deleted"}
+	want := []string{"pre-commit", "ingested", "edited", "deleting", "deleted"}
 	if len(hook.events) != len(want) {
 		t.Fatalf("hook events = %v, want %v", hook.events, want)
 	}
@@ -217,5 +221,51 @@ func TestIngestHookErrorsAbortIngest(t *testing.T) {
 				t.Errorf("failed ingest left %d indexed books", len(books))
 			}
 		})
+	}
+}
+
+type epubReadingHook struct {
+	library.HookBase
+	t            *testing.T
+	epubReadable bool
+}
+
+func (h *epubReadingHook) OnDeleting(book *library.Book, sidecars *os.Root, openEpub func() (library.EpubReader, error)) {
+	if openEpub == nil {
+		return
+	}
+	reader, err := openEpub()
+	if err != nil {
+		return
+	}
+	defer reader.Close()
+
+	// Try to read the epub header
+	var header [4]byte
+	_, err = reader.ReadAt(header[:], 0)
+	if err != nil {
+		return
+	}
+
+	// Check if it's a valid zip/epub (starts with PK)
+	if header[0] == 'P' && header[1] == 'K' {
+		h.epubReadable = true
+	}
+}
+
+func TestOnDeletingHookCanReadEpub(t *testing.T) {
+	lib := openTestLibrary(t)
+	hook := &epubReadingHook{t: t}
+	lib.AddHook(hook)
+
+	data := buildTestEpub(t, "Readable Book", "Alice")
+	b := ingestTestEpub(t, lib, data)
+
+	if err := lib.Delete(b.ID()); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	if !hook.epubReadable {
+		t.Error("OnDeleting hook could not read epub content")
 	}
 }
