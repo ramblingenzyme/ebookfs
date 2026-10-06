@@ -10,10 +10,11 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// SearchDeleter is the half of the library this package uses. Edits go through
-// the registry instead, so the 9P tree is re-rendered with them.
-type SearchDeleter interface {
+// Library is the part of the library ctl commands use directly. Mutation
+// events update the 9P registry through its hook subscription.
+type Library interface {
 	Search(q library.Query) ([]*library.Book, error)
+	Edit(id int64, edits library.Edits) (*library.Book, error)
 	Delete(id int64) error
 }
 
@@ -151,7 +152,6 @@ func deleteBook(f *CtlFile, args []string) string {
 	if err := f.lib.Delete(id64); err != nil {
 		return fmt.Sprintf("error: book %d: %v", id64, err)
 	}
-	f.reg.Remove(id64)
 	return fmt.Sprintf("ok: book %d deleted", id64)
 }
 
@@ -295,7 +295,7 @@ func (f *CtlFile) editSelection(op string, query library.Query, editFn func(*lib
 			skipped++ // already in the requested state
 			continue
 		}
-		if err := f.reg.Edit(id, *edits); err != nil {
+		if _, err := f.lib.Edit(id, *edits); err != nil {
 			errs = append(errs, fmt.Sprintf("book %d: %v", id, err))
 		} else {
 			affected++

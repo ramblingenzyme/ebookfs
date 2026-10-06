@@ -45,9 +45,10 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // names *library.Library, so a test drives the tree with a fake.
 type Library interface {
 	registry.Editor
-	ctl.SearchDeleter
+	ctl.Library
 	inbox.Ingester
 	views.StatsReader
+	AddHook(library.Hook)
 }
 
 type Config struct {
@@ -64,6 +65,7 @@ type Config struct {
 func New(lib Library, exp library.Exporter, cfg Config) (*Server, error) {
 	ebookfs, root := fs.NewFS("glenda", "glenda", 0555, fs.IgnorePermissions())
 	reg := registry.NewBookRegistry(ebookfs, lib)
+	lib.AddHook(reg)
 	ebookfs.CreateFile = vfile.DispatchCreate
 
 	// Each view self-registers with the registry on construction.
@@ -81,11 +83,9 @@ func New(lib Library, exp library.Exporter, cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("loading books: %w", err)
 	}
-	for _, b := range books {
-		reg.Add(b)
-	}
+	reg.Load(books...)
 
-	root.AddChild(inbox.NewInboxDir(ebookfs, lib, reg.Add))
+	root.AddChild(inbox.NewInboxDir(ebookfs, lib))
 	root.AddChild(allBooks)
 	root.AddChild(byAuthor)
 	root.AddChild(byID)
@@ -97,7 +97,7 @@ func New(lib Library, exp library.Exporter, cfg Config) (*Server, error) {
 	root.AddChild(stats)
 
 	cmdLog := ctl.NewCommandLog(100)
-	root.AddChild(ctl.NewCtlFile(ebookfs, lib, reg, cmdLog))
+	root.AddChild(ctl.NewCtlFile(ebookfs, lib, cmdLog))
 	root.AddChild(ctl.NewLogFile(ebookfs, cmdLog))
 	root.AddChild(ctl.NewHelpFile(ebookfs))
 

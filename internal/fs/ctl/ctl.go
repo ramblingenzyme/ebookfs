@@ -2,7 +2,6 @@ package ctl
 
 import (
 	"github.com/knusbaum/go9p/fs"
-	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 )
 
@@ -17,17 +16,15 @@ var newStat = vfile.NewStat
 type CtlFile struct {
 	fs.BaseFile
 	writes vfile.WriteBuffer
-	lib    SearchDeleter
-	reg    *registry.BookRegistry
+	lib    Library
 	cmdLog *CommandLog
 }
 
-func NewCtlFile(f *fs.FS, lib SearchDeleter, reg *registry.BookRegistry, cmdLog *CommandLog) *CtlFile {
+func NewCtlFile(f *fs.FS, lib Library, cmdLog *CommandLog) *CtlFile {
 	return &CtlFile{
 		BaseFile: *fs.NewBaseFile(newStat(f, "ctl", 0644)),
 		writes:   vfile.NewWriteBuffer(4096),
 		lib:      lib,
-		reg:      reg,
 		cmdLog:   cmdLog,
 	}
 }

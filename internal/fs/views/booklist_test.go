@@ -13,11 +13,11 @@ func TestRegistryAddAndRemove(t *testing.T) {
 	d := NewAllBooksDir(reg)
 
 	b := makeBook(1, "Test Book", "Author")
-	reg.Add(wrapBook(b))
+	reg.Load(wrapBook(b))
 
 	fstest.HasChild(t, d, "Test Book")
 
-	reg.Remove(1)
+	removeBookFromView(t, reg, d, 1)
 
 	fstest.NoChild(t, d, "Test Book")
 }
@@ -28,9 +28,9 @@ func TestRegistryAddAndRemove(t *testing.T) {
 func TestRegistryRemoveUnknownID(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
-	reg.Add(util.MakeBook(1, "Kept", "Author"))
+	reg.Load(util.MakeBook(1, "Kept", "Author"))
 
-	reg.Remove(999)
+	removeBookFromView(t, reg, d, 999)
 
 	fstest.HasChild(t, d, "Kept")
 }
@@ -42,8 +42,8 @@ func TestRegistryAddSameIDTwiceUsesSameDir(t *testing.T) {
 	b1 := makeBook(1, "First Title", "Author")
 	b2 := makeBook(1, "Second Title", "Author")
 
-	reg.Add(wrapBook(b1))
-	reg.Add(wrapBook(b2))
+	reg.Load(wrapBook(b1))
+	reg.Load(wrapBook(b2))
 
 	// dirLocked returns the existing dir and does not update the book pointer, so
 	// the first title persists. The caller is expected not to reuse IDs.
@@ -55,8 +55,8 @@ func TestBooksDirMultipleBooks(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
 
-	reg.Add(util.MakeBook(1, "Alpha", "Author"))
-	reg.Add(util.MakeBook(2, "Beta", "Author"))
+	reg.Load(util.MakeBook(1, "Alpha", "Author"))
+	reg.Load(util.MakeBook(2, "Beta", "Author"))
 
 	fstest.ChildCount(t, d, 2)
 }
@@ -65,10 +65,10 @@ func TestBooksDirRemoveOnlyOne(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
 
-	reg.Add(util.MakeBook(1, "Keep", "Author"))
-	reg.Add(util.MakeBook(2, "Remove", "Author"))
+	reg.Load(util.MakeBook(1, "Keep", "Author"))
+	reg.Load(util.MakeBook(2, "Remove", "Author"))
 
-	reg.Remove(2)
+	removeBookFromView(t, reg, d, 2)
 
 	fstest.NoChild(t, d, "Remove")
 	fstest.HasChild(t, d, "Keep")
@@ -82,7 +82,7 @@ func TestBooksDirSlashInTitleIsOneEntry(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
 
-	reg.Add(util.MakeBook(1, "Either/Or", "Author"))
+	reg.Load(util.MakeBook(1, "Either/Or", "Author"))
 
 	children := fstest.ChildNames(d)
 	if len(children) != 1 {
@@ -93,7 +93,7 @@ func TestBooksDirSlashInTitleIsOneEntry(t *testing.T) {
 	}
 
 	// The entries map can name a child that DeleteChild then cannot find.
-	reg.Remove(1)
+	removeBookFromView(t, reg, d, 1)
 	fstest.ChildCount(t, d, 0)
 }
 
@@ -111,21 +111,21 @@ func TestBooksDirDuplicateTitles(t *testing.T) {
 	b1 := makeBook(1, "Same Title", "Alice")
 	b2 := makeBook(2, "Same Title", "Bob")
 
-	reg.Add(wrapBook(b1))
+	reg.Load(wrapBook(b1))
 	fstest.HasChild(t, d, "Same Title")
 
-	reg.Add(wrapBook(b2))
+	reg.Load(wrapBook(b2))
 	fstest.HasChild(t, d, "Same Title")
 	fstest.HasChild(t, d, "Same Title (2)")
 	fstest.ChildCount(t, d, 2)
 
 	// Removing the first book leaves the second at its minted name.
-	reg.Remove(1)
+	removeBookFromView(t, reg, d, 1)
 	fstest.NoChild(t, d, "Same Title")
 	fstest.HasChild(t, d, "Same Title (2)")
 	fstest.ChildCount(t, d, 1)
 
-	reg.Remove(2)
+	removeBookFromView(t, reg, d, 2)
 	fstest.NoChild(t, d, "Same Title (2)")
 	fstest.ChildCount(t, d, 0)
 }
@@ -145,9 +145,9 @@ func TestBooksDirMintedNameCollidesWithLiteralTitle(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
 
-	reg.Add(wrapBook(makeBook(5, "Foo", "Alice")))   // takes the plain name
-	reg.Add(wrapBook(makeBook(1, "Foo (2)", "Bob"))) // literal title
-	reg.Add(wrapBook(makeBook(2, "Foo", "Carol")))   // mints "Foo (2)"
+	reg.Load(wrapBook(makeBook(5, "Foo", "Alice")))   // takes the plain name
+	reg.Load(wrapBook(makeBook(1, "Foo (2)", "Bob"))) // literal title
+	reg.Load(wrapBook(makeBook(2, "Foo", "Carol")))   // mints "Foo (2)"
 
 	fstest.ChildCount(t, d, 3)
 }

@@ -10,7 +10,7 @@ import (
 
 func TestNewInboxDir(t *testing.T) {
 	f := util.NewTestFS(t)
-	d := NewInboxDir(f, mock.Ingester{}, nil)
+	d := NewInboxDir(f, mock.Ingester{})
 
 	s := d.Stat()
 	if s.Name != "inbox" {

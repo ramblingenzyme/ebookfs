@@ -93,8 +93,8 @@ func TestSeriesEntryName_PadTriggeredByMaxIndex(t *testing.T) {
 	b2 := makeBook(2, "Tenth", "Author")
 	b2.Series = &library.Series{Name: "S", Index: "10"}
 
-	reg.Add(wrapBook(b1))
-	reg.Add(wrapBook(b2))
+	reg.Load(wrapBook(b1))
+	reg.Load(wrapBook(b2))
 
 	sd := fstest.ChildAs[*seriesBookListDir](t, d, "S")
 
@@ -113,7 +113,7 @@ func TestSeriesEntryName_PadWidensPast99(t *testing.T) {
 	for i, index := range []string{"9", "99", "100"} {
 		b := makeBook(int64(i+1), "Vol"+index, "Author")
 		b.Series = &library.Series{Name: "S", Index: index}
-		reg.Add(wrapBook(b))
+		reg.Load(wrapBook(b))
 	}
 
 	sd := fstest.ChildAs[*seriesBookListDir](t, d, "S")
@@ -128,7 +128,7 @@ func TestBySeriesDirRemoveNilSeriesNoOp(t *testing.T) {
 	d := NewBySeriesDir(reg)
 
 	b := util.MakeBook(1, "No Series", "Author")
-	bd := book.NewBookDir(newTestFS(t), mock.ContentReader{}, func(int64, library.Edits) error { return nil }, b)
+	bd := book.NewBookDir(newTestFS(t), mock.ContentReader{}, func(int64, library.Edits) (*library.Book, error) { return nil, nil }, b)
 
 	d.Remove(bd) // Should not panic — early return when Series is nil
 }

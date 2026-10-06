@@ -14,7 +14,7 @@ import (
 func TestCtlFileWriteExecutes(t *testing.T) {
 	called := false
 	search := mock.SearchDeleter{DeleteFn: func(int64) error { called = true; return nil }}
-	cf, _ := newTestCtl(t, search, mock.Editor{})
+	cf := newTestCtl(t, search, mock.Editor{})
 
 	// Reading returns a usage hint, not command output.
 	fid := fstest.Fid(t, cf, 1)

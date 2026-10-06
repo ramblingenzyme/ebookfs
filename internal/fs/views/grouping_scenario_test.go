@@ -132,7 +132,7 @@ func TestGroupNamesAreOneComponent(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			reg := newTestRegistry(t)
 			d := tc.dir(reg)
-			reg.Add(tc.book())
+			reg.Load(tc.book())
 
 			names := fstest.ChildNames(d)
 			if len(names) != 1 {
@@ -143,7 +143,7 @@ func TestGroupNamesAreOneComponent(t *testing.T) {
 			}
 
 			// Remove has to mint the same name or the group is orphaned.
-			reg.Remove(1)
+			removeBookFromView(t, reg, d, 1)
 			fstest.ChildCount(t, d, 0)
 		})
 	}
@@ -160,7 +160,7 @@ func TestGroupingViews(t *testing.T) {
 
 			t.Run("a book creates its group", func(t *testing.T) {
 				reg, d := setup(t)
-				reg.Add(v.withKeys(1, "My Book", "alpha"))
+				reg.Load(v.withKeys(1, "My Book", "alpha"))
 
 				want := []string{v.entry(1, "My Book")}
 				if got := mustGroupEntries(t, d, "alpha"); !slices.Equal(got, want) {
@@ -170,8 +170,8 @@ func TestGroupingViews(t *testing.T) {
 
 			t.Run("distinct keys make distinct groups", func(t *testing.T) {
 				reg, d := setup(t)
-				reg.Add(v.withKeys(1, "First", "alpha"))
-				reg.Add(v.withKeys(2, "Second", "beta"))
+				reg.Load(v.withKeys(1, "First", "alpha"))
+				reg.Load(v.withKeys(2, "Second", "beta"))
 
 				want := []string{v.entry(1, "First")}
 				if got := mustGroupEntries(t, d, "alpha"); !slices.Equal(got, want) {
@@ -185,8 +185,8 @@ func TestGroupingViews(t *testing.T) {
 
 			t.Run("one key gathers several books", func(t *testing.T) {
 				reg, d := setup(t)
-				reg.Add(v.withKeys(1, "Book A", "alpha"))
-				reg.Add(v.withKeys(2, "Book B", "alpha"))
+				reg.Load(v.withKeys(1, "Book A", "alpha"))
+				reg.Load(v.withKeys(2, "Book B", "alpha"))
 
 				want := []string{v.entry(1, "Book A"), v.entry(2, "Book B")}
 				slices.Sort(want)
@@ -197,8 +197,8 @@ func TestGroupingViews(t *testing.T) {
 
 			t.Run("the last book out prunes the group", func(t *testing.T) {
 				reg, d := setup(t)
-				reg.Add(v.withKeys(1, "Only Book", "alpha"))
-				reg.Remove(1)
+				reg.Load(v.withKeys(1, "Only Book", "alpha"))
+				removeBookFromView(t, reg, d, 1)
 
 				if _, ok := groupEntries(t, d, "alpha"); ok {
 					t.Errorf("alpha group outlived its last book; view holds %v", fstest.ChildNames(d))
@@ -207,9 +207,9 @@ func TestGroupingViews(t *testing.T) {
 
 			t.Run("removing one book leaves the rest", func(t *testing.T) {
 				reg, d := setup(t)
-				reg.Add(v.withKeys(1, "Keep", "alpha"))
-				reg.Add(v.withKeys(2, "Remove", "alpha"))
-				reg.Remove(2)
+				reg.Load(v.withKeys(1, "Keep", "alpha"))
+				reg.Load(v.withKeys(2, "Remove", "alpha"))
+				removeBookFromView(t, reg, d, 2)
 
 				want := []string{v.entry(1, "Keep")}
 				if got := mustGroupEntries(t, d, "alpha"); !slices.Equal(got, want) {
@@ -219,10 +219,11 @@ func TestGroupingViews(t *testing.T) {
 
 			t.Run("re-keying moves the book", func(t *testing.T) {
 				reg, d := setup(t)
-				reg.Add(v.withKeys(1, "Moved", "alpha"))
-				// An edit reaches the views as a remove followed by an add.
-				reg.Remove(1)
-				reg.Add(v.withKeys(1, "Moved", "beta"))
+				reg.Load(v.withKeys(1, "Moved", "alpha"))
+				// The view sees the old and new snapshot around Remove/Add.
+				dir := removeBookFromView(t, reg, d, 1)
+				dir.SetSnapshot(v.withKeys(1, "Moved", "beta"))
+				d.(registry.BookView).Add(dir)
 
 				if _, ok := groupEntries(t, d, "alpha"); ok {
 					t.Errorf("alpha group outlived the re-key; view holds %v", fstest.ChildNames(d))
@@ -236,7 +237,7 @@ func TestGroupingViews(t *testing.T) {
 			if v.multiKey {
 				t.Run("a book joins every group it keys into", func(t *testing.T) {
 					reg, d := setup(t)
-					reg.Add(v.withKeys(1, "Joint Work", "alpha", "beta"))
+					reg.Load(v.withKeys(1, "Joint Work", "alpha", "beta"))
 
 					want := []string{v.entry(1, "Joint Work")}
 					for _, key := range []string{"alpha", "beta"} {
@@ -250,15 +251,15 @@ func TestGroupingViews(t *testing.T) {
 			if v.keyless != nil {
 				t.Run("a book with no key joins nothing", func(t *testing.T) {
 					reg, d := setup(t)
-					reg.Add(v.keyless(1, "Unfiled"))
+					reg.Load(v.keyless(1, "Unfiled"))
 
 					fstest.ChildCount(t, d, 0)
 				})
 
 				t.Run("removing a book with no key is a no-op", func(t *testing.T) {
-					reg, _ := setup(t)
-					reg.Add(v.keyless(1, "Unfiled"))
-					reg.Remove(1) // must not panic
+					reg, d := setup(t)
+					reg.Load(v.keyless(1, "Unfiled"))
+					removeBookFromView(t, reg, d, 1)
 				})
 			}
 		})

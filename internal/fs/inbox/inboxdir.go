@@ -1,6 +1,6 @@
 // Package inbox implements the write-only inbox/ directory. A client creating
-// and writing a file there streams it through the library's ingest handle, and
-// on close the book is ingested and handed to the registry.
+// and writing a file there streams it through the library's ingest handle; the
+// library notifies registered hooks when ingestion commits.
 package inbox
 
 import (
@@ -22,15 +22,13 @@ const creatableDir = vfile.CreatableDirMode
 
 type InboxDir struct {
 	fs.StaticDir
-	lib      Ingester
-	onIngest func(*library.Book)
+	lib Ingester
 }
 
-func NewInboxDir(f *fs.FS, lib Ingester, onIngest func(*library.Book)) *InboxDir {
+func NewInboxDir(f *fs.FS, lib Ingester) *InboxDir {
 	return &InboxDir{
 		StaticDir: *fs.NewStaticDir(newStat(f, "inbox", creatableDir)),
 		lib:       lib,
-		onIngest:  onIngest,
 	}
 }
 
@@ -38,7 +36,7 @@ func NewInboxDir(f *fs.FS, lib Ingester, onIngest func(*library.Book)) *InboxDir
 // creation here, so this package owns its own policy and not the tree's.
 func (d *InboxDir) Create(f *fs.FS, name string, perm uint32, mode uint8) (fs.File, error) {
 	slog.Debug("inbox: create", "name", name, "perm", perm, "mode", mode)
-	file := NewInboxFile(f, d.lib, name, perm, d.onIngest)
+	file := NewInboxFile(f, d.lib, name, perm)
 	d.DeleteChild(name)
 	if err := d.AddChild(file); err != nil {
 		slog.Error("inbox: AddChild failed", "name", name, "error", err)

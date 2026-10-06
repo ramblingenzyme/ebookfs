@@ -12,7 +12,7 @@ func TestByTagDirTagWithSlash(t *testing.T) {
 
 	b := makeBook(1, "Slash Tag", "Author")
 	b.Meta.Tags = []string{"a/b"}
-	reg.Add(wrapBook(b))
+	reg.Load(wrapBook(b))
 
 	fstest.HasChild(t, d, "a-b")
 
@@ -26,8 +26,8 @@ func TestByTagDirRemoveWithSlashTag(t *testing.T) {
 
 	b := makeBook(1, "Slash Tag", "Author")
 	b.Meta.Tags = []string{"x/y"}
-	reg.Add(wrapBook(b))
-	reg.Remove(1)
+	reg.Load(wrapBook(b))
+	removeBookFromView(t, reg, d, 1)
 
 	fstest.NoChild(t, d, "x-y")
 }

@@ -19,8 +19,8 @@ func TestRecentDirOrdersNewestFirst(t *testing.T) {
 	b2 := makeBook(2, "Newest", "Author")
 	b2.Meta.DateAdded = base
 
-	reg.Add(wrapBook(b1))
-	reg.Add(wrapBook(b2))
+	reg.Load(wrapBook(b1))
+	reg.Load(wrapBook(b2))
 
 	fstest.ChildCount(t, d, 2)
 	fstest.HasChild(t, d, "Newest")
@@ -40,7 +40,7 @@ func TestRecentDirCapsAtLimitAndBackfillsOnRemove(t *testing.T) {
 
 	// Removing the newest book should backfill with the next-most-recent,
 	// which was previously evicted (id 1).
-	reg.Remove(int64(recentLimit) + 1)
+	removeBookFromView(t, reg, d, int64(recentLimit)+1)
 
 	if len(d.visible) != recentLimit {
 		t.Fatalf("expected %d visible books after remove, got %d: %v", recentLimit, len(d.visible), d.visible)
@@ -58,7 +58,7 @@ func TestRecentDirRemoveNotVisibleNoOp(t *testing.T) {
 
 	// id 1 is the oldest and should not be visible; removing it should not
 	// change the visible set.
-	reg.Remove(1)
+	removeBookFromView(t, reg, d, 1)
 
 	fstest.ChildCount(t, d, len(before))
 }
@@ -77,7 +77,7 @@ func TestRecentDirOutOfOrderArrival(t *testing.T) {
 	for _, id := range []int64{4, 1, 8, 6, 2, 7, 3, 5} {
 		b := makeBook(id, fmt.Sprintf("Title %d", id), "Author")
 		b.Meta.DateAdded = base.Add(time.Duration(id) * time.Minute)
-		reg.Add(wrapBook(b))
+		reg.Load(wrapBook(b))
 	}
 
 	if len(d.visible) != recentLimit {
@@ -112,7 +112,7 @@ func overfilledRecentDir(t *testing.T) (*registry.BookRegistry, *recentDir) {
 	for i := int64(1); i <= int64(recentLimit)+1; i++ {
 		b := makeBook(i, fmt.Sprintf("Title %d", i), "Author")
 		b.Meta.DateAdded = base.Add(time.Duration(i) * time.Minute)
-		reg.Add(wrapBook(b))
+		reg.Load(wrapBook(b))
 	}
 	return reg, d
 }

@@ -6,16 +6,13 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
-
-	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 )
 
-// The returned registry is for filing books in; the log is f.cmdLog.
-func newTestCtl(t *testing.T, search SearchDeleter, edit registry.Editor) (*CtlFile, *registry.BookRegistry) {
+func newTestCtl(t *testing.T, search mock.SearchDeleter, edit mock.Editor) *CtlFile {
 	t.Helper()
 	fsys := util.NewTestFS(t)
-	reg := registry.NewBookRegistry(fsys, edit)
-	return NewCtlFile(fsys, search, reg, NewCommandLog(10)), reg
+	lib := mock.Library{Editor: edit, SearchDeleter: search}
+	return NewCtlFile(fsys, lib, NewCommandLog(10))
 }
 
 func taggedBook(id int64, tags ...string) *library.Book {
@@ -28,6 +25,5 @@ func taggedBook(id int64, tags ...string) *library.Book {
 // name reaches.
 func ctlFor(t *testing.T) *CtlFile {
 	t.Helper()
-	f, _ := newTestCtl(t, mock.SearchDeleter{}, mock.Editor{})
-	return f
+	return newTestCtl(t, mock.SearchDeleter{}, mock.Editor{})
 }

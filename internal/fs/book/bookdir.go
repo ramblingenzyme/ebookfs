@@ -55,7 +55,7 @@ func (d *BookDir) Stat() proto.Stat {
 	return s
 }
 
-func NewBookDir(f *fs.FS, lib ContentReader, edit func(int64, library.Edits) error, book *library.Book) *BookDir {
+func NewBookDir(f *fs.FS, lib ContentReader, edit func(int64, library.Edits) (*library.Book, error), book *library.Book) *BookDir {
 	d := &BookDir{
 		StaticDir: *fs.NewStaticDir(newDirStat(f, naming.PathSafe(book.Title()))),
 	}
@@ -90,7 +90,8 @@ func NewBookDir(f *fs.FS, lib ContentReader, edit func(int64, library.Edits) err
 			if err != nil {
 				return err
 			}
-			return edit(d.Book().ID(), edits)
+			_, err = edit(d.Book().ID(), edits)
+			return err
 		}
 		d.StaticDir.AddChild(newFieldFile(newStat(f, name, 0644), get, set))
 	}
