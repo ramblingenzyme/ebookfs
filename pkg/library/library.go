@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"slices"
 	"sync"
 	"time"
@@ -221,4 +222,54 @@ func bookFromBib(bib book.Bib, meta book.Meta, loc book.Location, obs drift.Path
 	b := book.NewBook(bib, meta, loc)
 	b.EpubSize = obs.Size
 	return b
+}
+
+// WithSidecars calls fn with an os.Root scoped to the book's .sidecar/
+// directory. The per-book lock is held for the duration — Edit and Delete
+// block until fn returns. The Root is closed after fn returns.
+//
+// The caller should not escape file handles from the callback: on Linux the
+// Root tracks the directory via fd, so escaped handles remain valid after a
+// rename, but the lock is released and the handle may observe a stale state.
+func (l *Library) WithSidecars(id int64, fn func(*os.Root) error) error {
+	l.mutateMu.RLock()
+	defer l.mutateMu.RUnlock()
+
+	mu := l.bookMu.For(id)
+	mu.Lock()
+	defer mu.Unlock()
+
+	b, err := l.get(id)
+	if err != nil {
+		return err
+	}
+	root, err := l.store.OpenSidecars(b.Location)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	return fn(root)
+}
+
+// ReadSidecar reads a sidecar file. The per-book lock is held for the read.
+func (l *Library) ReadSidecar(id int64, name string) ([]byte, error) {
+	var data []byte
+	err := l.WithSidecars(id, func(root *os.Root) error {
+		var err error
+		data, err = root.ReadFile(name)
+		return err
+	})
+	return data, err
+}
+
+// WriteSidecar writes a sidecar file atomically (temp file + rename). The
+// per-book lock is held for the write.
+func (l *Library) WriteSidecar(id int64, name string, data []byte) error {
+	return l.WithSidecars(id, func(root *os.Root) error {
+		tmpName := "." + name + ".tmp"
+		if err := root.WriteFile(tmpName, data, 0644); err != nil {
+			return err
+		}
+		return root.Rename(tmpName, name)
+	})
 }

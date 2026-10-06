@@ -35,7 +35,6 @@ type SearchConfig struct {
 type ReaderConfig struct {
 	Statuses []string `toml:"statuses"`
 	Convert  bool     `toml:"convert"`
-	CacheDir string   `toml:"cache_dir"`
 }
 
 // OPDSConfig configures the OPDS catalog. An empty Listen disables it, which
@@ -45,8 +44,8 @@ type OPDSConfig struct {
 	BaseURL string `toml:"base_url"` // absolute, scheme://host; trailing slashes are stripped
 
 	// Convert is the catalog's rendition choice, separate from [reader]'s.
-	// There is no opds.cache_dir: both convert into reader.cache_dir, since a
-	// book's kepub is the same file whoever asked for it.
+	// Both convert into each book's .sidecar/ directory, since a book's kepub
+	// is the same file whoever asked for it.
 	Convert bool `toml:"convert"`
 }
 
@@ -89,7 +88,6 @@ func defaults() *Config {
 		Reader: ReaderConfig{
 			Statuses: []string{book.StatusUnread, book.StatusReading},
 			Convert:  false,
-			CacheDir: "/var/lib/ebookfs/kepub-cache",
 		},
 		Server: ServerConfig{
 			Listen: "0.0.0.0:5640",
@@ -124,8 +122,7 @@ func (c *Config) validateReader() error {
 	return nil
 }
 
-// validateOPDS leaves the cache-dir rules to library.Exporter, which enforces
-// them on the exporter the catalog asks for.
+// validateOPDS checks the catalog's base URL.
 func (c *Config) validateOPDS() error {
 	if c.OPDS.BaseURL == "" {
 		return nil

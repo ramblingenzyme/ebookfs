@@ -1,14 +1,9 @@
 package library
 
 import (
-	"errors"
-	"fmt"
 	"io"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"slices"
-	"strings"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/internal/util/naming"
@@ -16,29 +11,11 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/kepub"
 )
 
-func (l *Library) validateReaderConfig(cfg ReaderConfig) error {
-	if !cfg.Convert {
-		return nil
-	}
-	if cfg.CacheDir == "" {
-		return errors.New("reader config: cache dir is required when converting")
-	}
-	root := filepath.Clean(l.store.Root())
-	dir := filepath.Clean(cfg.CacheDir)
-	if dir == root || strings.HasPrefix(dir, root+string(filepath.Separator)) {
-		return fmt.Errorf("reader config: cache dir %q must be outside the library root %q", dir, root)
-	}
-	return nil
-}
-
 func newExporter(cfg ReaderConfig, lib *Library) (Exporter, error) {
 	if cfg.Convert {
-		if err := os.MkdirAll(cfg.CacheDir, 0755); err != nil {
-			return nil, fmt.Errorf("creating kepub cache dir: %w", err)
-		}
 		return &kepubCache{
 			readerPolicy: readerPolicy{statuses: cfg.Statuses},
-			Cache:        kepub.NewCache(cfg.CacheDir, lib),
+			Cache:        kepub.NewCache(lib),
 		}, nil
 	}
 	return epubExporter{readerPolicy: readerPolicy{statuses: cfg.Statuses}, lib: lib}, nil
@@ -84,9 +61,6 @@ func (e epubExporter) Filename(b *Book) string { return b.Filename() }
 // Exporter creates the rendition for a reader view. Library.Close releases it,
 // so the caller has nothing to close.
 func (l *Library) Exporter(cfg ReaderConfig) (Exporter, error) {
-	if err := l.validateReaderConfig(cfg); err != nil {
-		return nil, err
-	}
 	e, err := newExporter(cfg, l)
 	if err != nil {
 		return nil, err

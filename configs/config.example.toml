@@ -8,11 +8,8 @@ index_path = "/var/lib/ebookfs/library/.index.db"
 # reading statuses, grouped by author.
 statuses = ["unread", "reading"]  # subset of unread | reading | read | abandoned
 # Convert epubs to Kobo's kepub format on the way out. false serves the original
-# epub (works on any e-reader); true converts and caches per book.
+# epub (works on any e-reader); true converts and caches per book in .sidecar/.
 convert = false
-# Where converted kepubs are cached. MUST be outside library.root so the library
-# walk never treats cached files as books. Only used when convert = true.
-cache_dir = "/var/lib/ebookfs/kepub-cache"
 
 [search]
 # handle_ttl controls how long a search handle lives without activity before the
@@ -35,8 +32,8 @@ listen = ""  # e.g. "0.0.0.0:8080"
 # Host and X-Forwarded-* headers.
 base_url = ""  # e.g. "https://books.example.com"
 # Separate from [reader]'s convert: reader/ is rsynced to one known device,
-# the catalog serves whichever app holds the URL. Conversions land in
-# reader.cache_dir either way.
+# the catalog serves whichever app holds the URL. Conversions land in each
+# book's .sidecar/ directory either way.
 convert = false
 
 [log]

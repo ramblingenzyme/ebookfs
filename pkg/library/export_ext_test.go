@@ -3,7 +3,6 @@ package library_test
 import (
 	"bytes"
 	"io"
-	"path/filepath"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
@@ -33,55 +32,11 @@ func TestLibraryImplExporter(t *testing.T) {
 	}
 }
 
-func TestLibraryImplExporterConvertRequiresCacheDir(t *testing.T) {
-	lib := openTestLibrary(t)
-
-	e, err := lib.Exporter(library.ReaderConfig{
-		Statuses: []string{"unread", "reading"},
-		Convert:  true,
-		CacheDir: t.TempDir(),
-	})
-	if err != nil {
-		t.Fatalf("Exporter with convert: %v", err)
-	}
-	if e == nil {
-		t.Fatal("Exporter returned nil")
-	}
-}
-
-// A ReaderConfig built in Go gets the same checks as one loaded from TOML.
-func TestExporterRejectsBadReaderConfig(t *testing.T) {
-	t.Run("convert without a cache dir", func(t *testing.T) {
-		lib := openTestLibrary(t)
-		if _, err := lib.Exporter(library.ReaderConfig{Convert: true}); err == nil {
-			t.Error("Exporter accepted convert with no cache dir")
-		}
-	})
-
-	t.Run("cache dir inside the library root", func(t *testing.T) {
-		cfg := testConfig(t)
-		lib := openLib(t, cfg)
-		inside := filepath.Join(cfg.Root, "kepub-cache")
-		if _, err := lib.Exporter(library.ReaderConfig{Convert: true, CacheDir: inside}); err == nil {
-			t.Error("Exporter accepted a cache dir the store walk would index")
-		}
-	})
-
-	t.Run("cache dir outside the library root", func(t *testing.T) {
-		cfg := testConfig(t)
-		lib := openLib(t, cfg)
-		if _, err := lib.Exporter(library.ReaderConfig{Convert: true, CacheDir: t.TempDir()}); err != nil {
-			t.Errorf("Exporter rejected a valid cache dir: %v", err)
-		}
-	})
-}
-
 func TestKepubCacheDelegates(t *testing.T) {
 	lib := openTestLibrary(t)
 	exp, err := lib.Exporter(library.ReaderConfig{
 		Statuses: []string{"reading"},
 		Convert:  true,
-		CacheDir: t.TempDir(),
 	})
 	if err != nil {
 		t.Fatalf("Exporter: %v", err)

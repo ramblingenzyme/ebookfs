@@ -19,7 +19,7 @@ func (noopSource) Content(int64) (epub.EpubReader, error) {
 }
 
 func TestCacheClose(t *testing.T) {
-	c := NewCache(t.TempDir(), noopSource{})
+	c := NewCache(&fakeHost{dir: t.TempDir()})
 
 	if err := c.Close(); err != nil {
 		t.Errorf("Close: %v", err)
@@ -30,7 +30,7 @@ func TestCacheClose(t *testing.T) {
 // test gets one running.
 func TestCacheCloseCancelsConversion(t *testing.T) {
 	dir := t.TempDir()
-	c := NewCache(dir, fakeSource{t: t, dir: dir})
+	c := NewCache(&fakeHost{dir: dir})
 	started := make(chan struct{})
 	c.convertFn = func(ctx context.Context, w io.Writer, _ io.ReaderAt, _ int64) error {
 		close(started)
@@ -60,7 +60,7 @@ func TestCacheCloseCancelsConversion(t *testing.T) {
 }
 
 func TestCacheFilename(t *testing.T) {
-	c := NewCache(t.TempDir(), noopSource{})
+	c := NewCache(&fakeHost{dir: t.TempDir()})
 
 	tests := []struct {
 		name     string
@@ -85,7 +85,7 @@ func TestCacheFilename(t *testing.T) {
 
 func TestCacheSize(t *testing.T) {
 	dir := t.TempDir()
-	c := NewCache(dir, noopSource{})
+	c := NewCache(&fakeHost{dir: dir})
 	b := makeBook(1, "Test", "Alice")
 
 	_, ok := c.Size(wrapBook(b))
@@ -93,7 +93,10 @@ func TestCacheSize(t *testing.T) {
 		t.Error("Size should report cold for missing cache file")
 	}
 
-	cachePath := filepath.Join(dir, "1.kepub.epub")
+	cachePath := filepath.Join(dir, "1", ".sidecar", "kepub.epub")
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(cachePath, []byte("kepub-data"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +122,7 @@ func TestCacheEnsureCreatesFile(t *testing.T) {
 		t.Fatalf("Ensure: %v", err)
 	}
 
-	cachePath := filepath.Join(dir, "1.kepub.epub")
+	cachePath := filepath.Join(dir, "1", ".sidecar", "kepub.epub")
 	data, err := os.ReadFile(cachePath)
 	if err != nil {
 		t.Fatalf("cache file not created: %v", err)
@@ -131,8 +134,7 @@ func TestCacheEnsureCreatesFile(t *testing.T) {
 
 func TestCacheEnsureFreshIsNoop(t *testing.T) {
 	dir := t.TempDir()
-	src := fakeSource{t: t, dir: dir}
-	c := NewCache(dir, src)
+	c := NewCache(&fakeHost{dir: dir})
 	var convertCalls int
 	c.convertFn = func(_ context.Context, w io.Writer, _ io.ReaderAt, _ int64) error {
 		convertCalls++
@@ -145,7 +147,10 @@ func TestCacheEnsureFreshIsNoop(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cachePath := filepath.Join(dir, "1.kepub.epub")
+	cachePath := filepath.Join(dir, "1", ".sidecar", "kepub.epub")
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(cachePath, []byte("fresh-cache"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +173,7 @@ func TestCacheEnsureFreshIsNoop(t *testing.T) {
 }
 
 func TestCacheEnsureWithZeroDateModified(t *testing.T) {
-	c, _ := newTestCache(t, "kepub-content")
+	c, dir := newTestCache(t, "kepub-content")
 
 	b := makeBook(1, "Test", "Alice")
 	b.EpubSize = 9
@@ -176,7 +181,8 @@ func TestCacheEnsureWithZeroDateModified(t *testing.T) {
 	if err := c.Ensure(wrapBook(b)); err != nil {
 		t.Fatalf("Ensure: %v", err)
 	}
-	data, err := os.ReadFile(c.path(wrapBook(b)))
+	path := filepath.Join(dir, "1", ".sidecar", "kepub.epub")
+	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}

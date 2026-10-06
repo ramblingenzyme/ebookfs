@@ -22,7 +22,7 @@ func TestCacheWarmProducesFile(t *testing.T) {
 
 	c.Warm(wrapBook(b))
 
-	cachePath := filepath.Join(dir, "1.kepub.epub")
+	cachePath := filepath.Join(dir, "1", ".sidecar", "kepub.epub")
 	if !waitForWarm(t, func() bool {
 		_, err := os.Stat(cachePath)
 		return err == nil
@@ -43,8 +43,8 @@ func TestWarmerWarmsMultipleBooks(t *testing.T) {
 	c.Warm(wrapBook(b))
 
 	if !waitForWarm(t, func() bool {
-		_, err1 := os.Stat(filepath.Join(dir, "1.kepub.epub"))
-		_, err2 := os.Stat(filepath.Join(dir, "2.kepub.epub"))
+		_, err1 := os.Stat(filepath.Join(dir, "1", ".sidecar", "kepub.epub"))
+		_, err2 := os.Stat(filepath.Join(dir, "2", ".sidecar", "kepub.epub"))
 		return err1 == nil && err2 == nil
 	}) {
 		t.Fatal("timed out waiting for both warms")
@@ -91,7 +91,8 @@ func TestWarmAfterCloseDoesNotConvert(t *testing.T) {
 	if converted.Load() {
 		t.Error("Warm after Close reached the converter")
 	}
-	if _, err := os.Stat(filepath.Join(dir, "1.kepub.epub")); err == nil {
+	cachePath := filepath.Join(dir, "1", ".sidecar", "kepub.epub")
+	if _, err := os.Stat(cachePath); err == nil {
 		t.Error("Warm after Close produced a cache file")
 	}
 }

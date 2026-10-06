@@ -164,3 +164,14 @@ func (s *Store) Update(oldLoc, newLoc book.Location, meta *book.Meta) (drift.Pat
 	}
 	return s.Stat(newLoc)
 }
+
+// OpenSidecars returns an os.Root scoped to the book's .sidecar/ subdirectory,
+// creating it on demand. Sidecar files are carried along by Move and removed
+// by Delete.
+func (s *Store) OpenSidecars(loc book.Location) (*os.Root, error) {
+	dir := filepath.Join(s.AbsPath(loc.Dir()), ".sidecar")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, err
+	}
+	return os.OpenRoot(dir)
+}
