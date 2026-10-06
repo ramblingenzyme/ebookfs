@@ -30,6 +30,13 @@ func OpenFile(path string) (_ *File, err error) {
 		}
 	}()
 
+	return OpenFromFile(f, path)
+}
+
+// OpenFromFile opens the epub from an already-open file. The caller retains
+// ownership of f; on error, f is left open. The path is used only for error
+// messages and may be empty.
+func OpenFromFile(f *os.File, path string) (_ *File, err error) {
 	fi, err := f.Stat()
 	if err != nil {
 		return nil, err

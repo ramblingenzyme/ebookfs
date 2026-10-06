@@ -13,16 +13,9 @@ import (
 
 func newExporter(cfg ReaderConfig, lib *Library) (Exporter, error) {
 	if cfg.Convert {
-		pathFn := func(id int64, name string) (string, error) {
-			b, err := lib.get(id)
-			if err != nil {
-				return "", err
-			}
-			return lib.store.SidecarPath(b.Location, name)
-		}
 		return &kepubCache{
 			readerPolicy: readerPolicy{statuses: cfg.Statuses},
-			Cache:        kepub.NewCache(pathFn, lib),
+			Cache:        kepub.NewCache(lib),
 		}, nil
 	}
 	return epubExporter{readerPolicy: readerPolicy{statuses: cfg.Statuses}, lib: lib}, nil

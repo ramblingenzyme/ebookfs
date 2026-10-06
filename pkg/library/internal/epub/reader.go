@@ -2,6 +2,7 @@ package epub
 
 import (
 	"io"
+	"os"
 
 	epubfile "github.com/ramblingenzyme/ebookfs/pkg/epub"
 )
@@ -38,6 +39,17 @@ func OpenReader(epubPath, coverPath string) (EpubReader, error) {
 		return nil, err
 	}
 	return &reader{File: f, coverPath: coverPath}, nil
+}
+
+// OpenReaderFromFile opens the epub from an already-open file. The caller
+// retains ownership of f; on error, f is left open. The path is used only for
+// error messages and may be empty.
+func OpenReaderFromFile(f *os.File, path, coverPath string) (EpubReader, error) {
+	ef, err := epubfile.OpenFromFile(f, path)
+	if err != nil {
+		return nil, err
+	}
+	return &reader{File: ef, coverPath: coverPath}, nil
 }
 
 func (r *reader) OPF() ([]byte, error) { return r.ReadEntry(r.PackagePath()) }
