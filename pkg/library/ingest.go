@@ -47,8 +47,21 @@ func (l *Library) CreateIngest() (IngestHandle, error) {
 }
 
 func (l *Library) ingestPath(epubPath string) (*Book, error) {
+	// Create a temp directory for PreParse hooks. Cleaned up after ingest completes.
+	hookTempDir, err := os.MkdirTemp(l.inboxTemp, "hooks-*")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(hookTempDir)
+
+	// Run PreParse hooks before parsing
+	processedPath, err := l.hooks.preParse(epubPath, hookTempDir)
+	if err != nil {
+		return nil, fmt.Errorf("pre-parse hook: %w", err)
+	}
+
 	// Parsed before ingestMu is taken, so bulk uploads parse in parallel.
-	bib, err := epub.Parse(epubPath)
+	bib, err := epub.Parse(processedPath)
 	if err != nil {
 		return nil, err
 	}
@@ -58,6 +71,12 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 
 	l.ingestMu.Lock()
 	defer l.ingestMu.Unlock()
+
+	// Hooks may amend the bibliographic fields used for duplicate detection
+	// and filing, so run them before checking those fields.
+	if err := l.hooks.preCommit(bib); err != nil {
+		return nil, fmt.Errorf("pre-commit hook: %w", err)
+	}
 
 	dupe, err := l.index.Exists(bib.Title, authorNames(bib.Authors))
 	if err != nil {
@@ -90,7 +109,7 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 	}
 
 	b, err := func() (*Book, error) {
-		mt, err := l.store.Ingest(epubPath, loc, &meta)
+		mt, err := l.store.Ingest(processedPath, loc, &meta)
 		if err != nil {
 			return nil, err
 		}
@@ -115,6 +134,13 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 	}
 
 	slog.Info("ingest: book added", "book_id", b.ID(), "title", b.Title(), "authors", book.JoinAuthors(b.Authors(), ", "))
+
+	// Serialize the event with later edits and deletes of this newly indexed book.
+	mu := l.bookMu.For(b.ID())
+	mu.Lock()
+	l.hooks.onIngested(l, b, loc)
+	mu.Unlock()
+
 	return b, nil
 }
 

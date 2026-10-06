@@ -53,6 +53,8 @@ type Library struct {
 	// for reading, Reindex for writing. Always taken before bookMu and
 	// ingestMu.
 	mutateMu sync.RWMutex
+
+	hooks hookSet
 }
 
 func (l *Library) Close() error {
@@ -167,7 +169,12 @@ func (l *Library) Edit(id int64, e Edits) (*Book, error) {
 	if err := op.Put(updated, mt); err != nil {
 		return nil, err
 	}
-	return book.NewImmutableBook(updated), nil
+
+	// Fire OnEdited hook while still holding the per-book lock
+	immutable := book.NewImmutableBook(updated)
+	l.hooks.onEdited(l, immutable, location)
+
+	return immutable, nil
 }
 
 func (l *Library) Delete(id int64) error {
@@ -197,6 +204,10 @@ func (l *Library) Delete(id int64) error {
 		return err
 	}
 	slog.Info("delete: book removed", "book_id", id, "title", b.Title)
+
+	// Fire OnDeleted hook while still holding the per-book lock
+	l.hooks.onDeleted(id)
+
 	return nil
 }
 
