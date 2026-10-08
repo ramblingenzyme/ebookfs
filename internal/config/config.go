@@ -60,7 +60,7 @@ type KOSyncConfig struct {
 	Enable           bool    `toml:"enable"`            // explicit toggle to enable/disable kosync
 	MappingPath      string  `toml:"mapping_path"`      // path to mapping directory (default: <library_root>/.kosync)
 	Username         string  `toml:"username"`          // pre-provisioned username
-	Credential       string  `toml:"credential"`        // pre-provisioned credential (MD5 of password)
+	Password         string  `toml:"password"`          // pre-provisioned password (plaintext, hashed to MD5 at startup)
 	ReadingThreshold float64 `toml:"reading_threshold"` // percentage to mark as "reading" (default: 0.05)
 	ReadThreshold    float64 `toml:"read_threshold"`    // percentage to mark as "read" (default: 0.95)
 }
@@ -178,12 +178,12 @@ func (c *Config) validateKOSync() error {
 	if !c.KOSync.Enable {
 		return nil
 	}
-	// kosync is enabled, so username and credential are required
+	// kosync is enabled, so username and password are required
 	if c.KOSync.Username == "" {
 		return fmt.Errorf("kosync.username is required when kosync.enable is true")
 	}
-	if c.KOSync.Credential == "" {
-		return fmt.Errorf("kosync.credential is required when kosync.enable is true")
+	if c.KOSync.Password == "" {
+		return fmt.Errorf("kosync.password is required when kosync.enable is true")
 	}
 
 	// Validate thresholds

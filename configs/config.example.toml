@@ -25,9 +25,11 @@ listen = "0.0.0.0:5640"
 # at startup until it is wired into the 9P server.
 auth = "none"
 
+[http]
+listen = "0.0.0.0:8080"
+
 [opds]
-# Mounted at /opds. An empty listen means no catalog and no open port.
-listen = ""  # e.g. "0.0.0.0:8080"
+enable = false
 # Without it, absolute URLs in served documents come from the client's own
 # Host and X-Forwarded-* headers.
 base_url = ""  # e.g. "https://books.example.com"
@@ -37,10 +39,11 @@ base_url = ""  # e.g. "https://books.example.com"
 convert = false
 
 [kosync]
-# KOReader reading progress sync. Enabled when both username and credential are
-# set. Runs on the shared HTTP listener at /sync/ alongside /opds/.
+enable = false
+# KOReader reading progress sync. Runs on the shared HTTP listener at /sync/.
+# mapping_path = ""  # default: <library.root>/.kosync
 username = ""  # pre-provisioned username
-credential = ""  # MD5 hash of password (lowercase hex), same as x-auth-key
+password = ""  # plaintext password (hashed to MD5 at startup)
 # Thresholds for automatic status updates based on progress percentage.
 # A book at >= reading_threshold is marked "reading"; at >= read_threshold is "read".
 # Once marked "read", a book stays read even if progress drops.

@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/md5"
 	"flag"
+	"fmt"
 	"log"
 	"log/slog"
 	"os"
@@ -116,11 +118,14 @@ func main() {
 
 	// Register kosync as HTTPFrontend if enabled
 	if cfg.KOSync.Enable {
+		// Compute MD5 hash of plaintext password
+		passwordHash := fmt.Sprintf("%x", md5.Sum([]byte(cfg.KOSync.Password)))
+
 		// Create kosync server (handles mapping and hook setup internally)
 		kosyncSrv, err := kosync.New(lib, kosync.Config{
 			MappingPath:      cfg.KOSync.MappingPath,
 			Username:         cfg.KOSync.Username,
-			PasswordHash:     cfg.KOSync.Credential,
+			PasswordHash:     passwordHash,
 			PathPrefix:       "/sync",
 			ReadingThreshold: cfg.KOSync.ReadingThreshold,
 			ReadThreshold:    cfg.KOSync.ReadThreshold,
