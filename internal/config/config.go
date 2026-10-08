@@ -13,7 +13,9 @@ type Config struct {
 	Library LibraryConfig `toml:"library"`
 	Reader  ReaderConfig  `toml:"reader"`
 	Server  ServerConfig  `toml:"server"`
+	HTTP    HTTPConfig    `toml:"http"`
 	OPDS    OPDSConfig    `toml:"opds"`
+	KOSync  KOSyncConfig  `toml:"kosync"`
 	Search  SearchConfig  `toml:"search"`
 	Log     LogConfig     `toml:"log"`
 }
@@ -37,16 +39,28 @@ type ReaderConfig struct {
 	Convert  bool     `toml:"convert"`
 }
 
-// OPDSConfig configures the OPDS catalog. An empty Listen disables it, which
-// is the default.
+// HTTPConfig configures the shared HTTP listener.
+type HTTPConfig struct {
+	Listen string `toml:"listen"` // e.g. "0.0.0.0:8080"
+}
+
+// OPDSConfig configures the OPDS catalog. Enabled by default when HTTP is configured.
 type OPDSConfig struct {
-	Listen  string `toml:"listen"`   // e.g. "0.0.0.0:8080"
 	BaseURL string `toml:"base_url"` // absolute, scheme://host; trailing slashes are stripped
 
 	// Convert is the catalog's rendition choice, separate from [reader]'s.
 	// Both convert into each book's .sidecar/ directory, since a book's kepub
 	// is the same file whoever asked for it.
 	Convert bool `toml:"convert"`
+}
+
+// KOSyncConfig configures the kosync progress sync server. Enabled when
+// username and credential are set.
+type KOSyncConfig struct {
+	Username         string  `toml:"username"`          // pre-provisioned username
+	Credential       string  `toml:"credential"`        // pre-provisioned credential (MD5 of password)
+	ReadingThreshold float64 `toml:"reading_threshold"` // percentage to mark as "reading" (default: 0.05)
+	ReadThreshold    float64 `toml:"read_threshold"`    // percentage to mark as "read" (default: 0.95)
 }
 
 type ServerConfig struct {
@@ -92,6 +106,10 @@ func defaults() *Config {
 		Server: ServerConfig{
 			Listen: "0.0.0.0:5640",
 			Auth:   "none",
+		},
+		KOSync: KOSyncConfig{
+			ReadingThreshold: 0.05,
+			ReadThreshold:    0.95,
 		},
 		Log: LogConfig{
 			Level:  "info",
@@ -149,6 +167,33 @@ func (c *Config) validateSearch() error {
 	return nil
 }
 
+func (c *Config) validateKOSync() error {
+	// kosync is enabled when both username and credential are set
+	if c.KOSync.Username == "" && c.KOSync.Credential == "" {
+		return nil // disabled
+	}
+	if c.KOSync.Username == "" {
+		return fmt.Errorf("kosync.username is required when kosync is enabled")
+	}
+	if c.KOSync.Credential == "" {
+		return fmt.Errorf("kosync.credential is required when kosync is enabled")
+	}
+
+	// Validate thresholds
+	if c.KOSync.ReadingThreshold < 0 || c.KOSync.ReadingThreshold > 1 {
+		return fmt.Errorf("kosync.reading_threshold must be between 0 and 1, got %f", c.KOSync.ReadingThreshold)
+	}
+	if c.KOSync.ReadThreshold < 0 || c.KOSync.ReadThreshold > 1 {
+		return fmt.Errorf("kosync.read_threshold must be between 0 and 1, got %f", c.KOSync.ReadThreshold)
+	}
+	if c.KOSync.ReadingThreshold >= c.KOSync.ReadThreshold {
+		return fmt.Errorf("kosync.reading_threshold (%f) must be less than read_threshold (%f)",
+			c.KOSync.ReadingThreshold, c.KOSync.ReadThreshold)
+	}
+
+	return nil
+}
+
 func (c *Config) validate() error {
 	if c.Library.Root == "" {
 		return fmt.Errorf("library.root is required")
@@ -169,6 +214,10 @@ func (c *Config) validate() error {
 	}
 
 	if err := c.validateOPDS(); err != nil {
+		return err
+	}
+
+	if err := c.validateKOSync(); err != nil {
 		return err
 	}
 

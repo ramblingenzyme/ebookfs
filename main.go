@@ -13,6 +13,8 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/config"
 	"github.com/ramblingenzyme/ebookfs/internal/frontend"
 	"github.com/ramblingenzyme/ebookfs/internal/fs"
+	"github.com/ramblingenzyme/ebookfs/internal/httpfrontend"
+	"github.com/ramblingenzyme/ebookfs/internal/kosync"
 	"github.com/ramblingenzyme/ebookfs/internal/opds"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
@@ -92,17 +94,55 @@ func main() {
 	}
 	frontends := []frontend.Frontend{srv}
 
-	if cfg.OPDS.Listen != "" {
+	if cfg.HTTP.Listen != "" {
+		httpSrv := httpfrontend.New(httpfrontend.Config{
+			Listen: cfg.HTTP.Listen,
+		})
+
+		// Register OPDS handler
 		opdsExp, err := opdsExporter(lib, cfg, exp)
 		if err != nil {
 			fatal("creating OPDS exporter", err)
 		}
-		frontends = append(frontends, opds.New(lib, opdsExp, opds.Config{
-			Listen:  cfg.OPDS.Listen,
-			BaseURL: cfg.OPDS.BaseURL,
-		}))
+		opdsHandler := opds.NewHandler(lib, opdsExp, cfg.OPDS.BaseURL)
+		httpSrv.Handle("/opds/", opdsHandler)
+		slog.Info("OPDS catalog enabled", "path", "/opds/")
+
+		// Register kosync handler if credentials are configured
+		if cfg.KOSync.Username != "" && cfg.KOSync.Credential != "" {
+			// Initialize kosync mapping and hook
+			kosyncDir := cfg.Library.Root + "/.kosync"
+			mapping, err := kosync.LoadMapping(kosyncDir)
+			if err != nil {
+				slog.Warn("kosync mapping corrupt or missing, rebuilding", "error", err)
+				// Create an empty mapping and rebuild it from the library
+				mapping = kosync.NewEmptyMapping(kosyncDir)
+				if err := mapping.Rebuild(lib); err != nil {
+					fatal("rebuilding kosync mapping", err)
+				}
+			}
+
+			// Register kosync hook to compute document IDs
+			hook := kosync.NewHook(mapping)
+			lib.AddHook(hook)
+
+			// Create kosync HTTP handler
+			kosyncHandler := kosync.NewHandler(lib, mapping, kosync.Config{
+				Username:         cfg.KOSync.Username,
+				PasswordHash:     cfg.KOSync.Credential,
+				PathPrefix:       "/sync",
+				ReadingThreshold: cfg.KOSync.ReadingThreshold,
+				ReadThreshold:    cfg.KOSync.ReadThreshold,
+			})
+			httpSrv.Handle("/sync/", kosyncHandler)
+			slog.Info("kosync enabled", "path", "/sync/")
+		} else {
+			slog.Info("kosync disabled", "reason", "credentials not configured")
+		}
+
+		frontends = append(frontends, httpSrv)
 	} else {
-		slog.Info("OPDS catalog disabled", "reason", "opds.listen is empty")
+		slog.Info("HTTP server disabled", "reason", "http.listen is empty")
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

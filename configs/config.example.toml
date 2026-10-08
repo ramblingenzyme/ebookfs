@@ -36,6 +36,17 @@ base_url = ""  # e.g. "https://books.example.com"
 # book's .sidecar/ directory either way.
 convert = false
 
+[kosync]
+# KOReader reading progress sync. Enabled when both username and credential are
+# set. Runs on the shared HTTP listener at /sync/ alongside /opds/.
+username = ""  # pre-provisioned username
+credential = ""  # MD5 hash of password (lowercase hex), same as x-auth-key
+# Thresholds for automatic status updates based on progress percentage.
+# A book at >= reading_threshold is marked "reading"; at >= read_threshold is "read".
+# Once marked "read", a book stays read even if progress drops.
+reading_threshold = 0.05  # 5%
+read_threshold = 0.95     # 95%
+
 [log]
 level = "info"   # debug | info | warn | error
 format = "text"  # text | json
