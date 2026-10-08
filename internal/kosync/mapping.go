@@ -2,7 +2,9 @@ package kosync
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -63,6 +65,13 @@ func LoadMapping(kosyncDir string) (*MappingFile, error) {
 	return m, nil
 }
 
+// IsEmpty returns true if the mapping has no entries.
+func (m *MappingFile) IsEmpty() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return len(m.data) == 0
+}
+
 // Get returns the book_id for a document_id, or 0 if not found.
 func (m *MappingFile) Get(documentID string) (int64, bool) {
 	m.mu.RLock()
@@ -84,6 +93,7 @@ func (m *MappingFile) Set(documentID string, bookID int64) {
 // Rebuild reconstructs the mapping from all book sidecars.
 // It reads the kosync.json sidecar from each book in the library and
 // rebuilds the document_id → book_id mapping atomically.
+// If a sidecar doesn't exist, it computes the document ID and creates one.
 func (m *MappingFile) Rebuild(lib *library.Library) error {
 	// Get all books using empty query (matches everything)
 	books, err := lib.Search(library.Query{})
@@ -95,6 +105,7 @@ func (m *MappingFile) Rebuild(lib *library.Library) error {
 	newData := make(map[string]int64)
 	booksScanned := 0
 	booksWithSidecar := 0
+	booksSidecarCreated := 0
 
 	for _, book := range books {
 		booksScanned++
@@ -102,6 +113,16 @@ func (m *MappingFile) Rebuild(lib *library.Library) error {
 		// Read the kosync.json sidecar
 		sidecarData, err := lib.ReadSidecar(book.ID(), "kosync.json")
 		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				// Sidecar doesn't exist — compute document ID and create it
+				if err := m.createSidecarForBook(lib, book, newData); err != nil {
+					slog.Error("kosync: failed to create sidecar during rebuild", "book_id", book.ID(), "error", err)
+					continue
+				}
+				booksSidecarCreated++
+				continue
+			}
+			slog.Warn("kosync: failed to read sidecar during rebuild", "book_id", book.ID(), "error", err)
 			continue
 		}
 
@@ -130,6 +151,40 @@ func (m *MappingFile) Rebuild(lib *library.Library) error {
 		return fmt.Errorf("saving rebuilt mapping: %w", err)
 	}
 
+	slog.Info("kosync: rebuild complete", "books_scanned", booksScanned, "books_with_sidecar", booksWithSidecar, "books_sidecar_created", booksSidecarCreated)
+	return nil
+}
+
+// createSidecarForBook computes the document ID for a book and writes its sidecar.
+// It adds the mapping entry to the provided map (caller must not hold the lock).
+func (m *MappingFile) createSidecarForBook(lib *library.Library, book *library.Book, mappingData map[string]int64) error {
+	// Open epub to compute document ID
+	epub, err := lib.Content(book.ID())
+	if err != nil {
+		return fmt.Errorf("opening epub: %w", err)
+	}
+	defer epub.Close()
+
+	docID, err := PartialMD5(epub, book.EpubSize())
+	if err != nil {
+		return fmt.Errorf("computing document ID: %w", err)
+	}
+
+	// Create sidecar with document ID and empty progress
+	sidecar := SidecarData{
+		DocumentIDs: []string{docID},
+		Progress:    Progress{},
+	}
+	sidecarJSON, err := json.Marshal(sidecar)
+	if err != nil {
+		return fmt.Errorf("marshaling sidecar: %w", err)
+	}
+
+	if err := lib.WriteSidecar(book.ID(), "kosync.json", sidecarJSON); err != nil {
+		return fmt.Errorf("writing sidecar: %w", err)
+	}
+
+	mappingData[docID] = book.ID()
 	return nil
 }
 

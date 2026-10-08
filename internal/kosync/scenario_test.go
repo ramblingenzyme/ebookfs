@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"testing"
+
+	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
 // TestProgressTransitions verifies that PUT progress at various percentages
@@ -331,5 +334,98 @@ func TestMetadataAcceptance(t *testing.T) {
 	}
 	if _, ok := resp["timestamp"]; !ok {
 		t.Error("timestamp field missing")
+	}
+}
+
+// TestKosyncStartupCreatesMissingSidecars verifies that kosync.New() creates
+// sidecars and populates the mapping for books that existed before kosync
+// was enabled.
+func TestKosyncStartupCreatesMissingSidecars(t *testing.T) {
+	// Create a library and ingest books WITHOUT kosync hook registered
+	lib := openTestLibrary(t)
+
+	book1 := ingestTestEpub(t, lib.Library, buildTestEpub(t, "Book One", "Alice"))
+	book2 := ingestTestEpub(t, lib.Library, buildTestEpub(t, "Book Two", "Bob"))
+
+	// Verify no sidecars were created (kosync wasn't enabled)
+	for _, book := range []*library.Book{book1, book2} {
+		_, err := lib.Library.ReadSidecar(book.ID(), "kosync.json")
+		if err == nil {
+			t.Fatalf("book %d has sidecar before kosync.New()", book.ID())
+		}
+	}
+
+	// Now enable kosync by calling New() with a fresh mapping path
+	kosyncDir := t.TempDir()
+	cfg := Config{
+		MappingPath:      kosyncDir,
+		Username:         "testuser",
+		PasswordHash:     "testhash",
+		PathPrefix:       "/sync",
+		ReadingThreshold: 0.05,
+		ReadThreshold:    0.95,
+	}
+
+	srv, err := New(lib.Library, cfg)
+	if err != nil {
+		t.Fatalf("kosync.New(): %v", err)
+	}
+	if srv == nil {
+		t.Fatal("kosync.New() returned nil server")
+	}
+
+	// Verify sidecars were created for both books
+	for _, book := range []*library.Book{book1, book2} {
+		data, err := lib.Library.ReadSidecar(book.ID(), "kosync.json")
+		if err != nil {
+			t.Fatalf("reading sidecar for book %d: %v", book.ID(), err)
+		}
+
+		var sidecar SidecarData
+		if err := json.Unmarshal(data, &sidecar); err != nil {
+			t.Fatalf("unmarshaling sidecar for book %d: %v", book.ID(), err)
+		}
+
+		if len(sidecar.DocumentIDs) != 1 {
+			t.Errorf("book %d: expected 1 document ID, got %d", book.ID(), len(sidecar.DocumentIDs))
+		}
+		if sidecar.DocumentIDs[0] == "" {
+			t.Errorf("book %d: document ID is empty", book.ID())
+		}
+	}
+
+	// Verify mapping file was created and populated
+	mappingPath := kosyncDir + "/mapping.json"
+	if _, err := os.Stat(mappingPath); err != nil {
+		t.Fatalf("mapping file not created: %v", err)
+	}
+
+	mappingData, err := os.ReadFile(mappingPath)
+	if err != nil {
+		t.Fatalf("reading mapping file: %v", err)
+	}
+
+	var mapping map[string]int64
+	if err := json.Unmarshal(mappingData, &mapping); err != nil {
+		t.Fatalf("unmarshaling mapping: %v", err)
+	}
+
+	if len(mapping) != 2 {
+		t.Errorf("mapping has %d entries, want 2", len(mapping))
+	}
+
+	// Verify each book's document ID is in the mapping
+	for _, book := range []*library.Book{book1, book2} {
+		data, _ := lib.Library.ReadSidecar(book.ID(), "kosync.json")
+		var sidecar SidecarData
+		json.Unmarshal(data, &sidecar)
+
+		bookID, ok := mapping[sidecar.DocumentIDs[0]]
+		if !ok {
+			t.Errorf("book %d document ID not in mapping", book.ID())
+		}
+		if bookID != book.ID() {
+			t.Errorf("mapping[docID] = %d, want %d", bookID, book.ID())
+		}
 	}
 }

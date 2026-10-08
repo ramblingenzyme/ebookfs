@@ -58,6 +58,10 @@ func New(lib *library.Library, cfg Config) (*Server, error) {
 	if err != nil {
 		slog.Warn("kosync mapping corrupt or missing, rebuilding", "error", err)
 		mapping = NewEmptyMapping(cfg.MappingPath)
+	}
+
+	// Rebuild if mapping is empty (first run, after corruption, or all books deleted)
+	if mapping.IsEmpty() {
 		if err := mapping.Rebuild(lib); err != nil {
 			return nil, fmt.Errorf("rebuilding kosync mapping: %w", err)
 		}
