@@ -78,7 +78,7 @@ func NewHandler(lib *library.Library, mapping *MappingFile, cfg Config) http.Han
 	mux := http.NewServeMux()
 	h := newHandler(lib, mapping, cfg)
 	h.registerRoutes(mux)
-	return checkAcceptHeader(mux)
+	return logRequest(checkAcceptHeader(mux))
 }
 
 // Name returns the frontend name.
@@ -132,6 +132,33 @@ func checkAcceptHeader(next http.Handler) http.Handler {
 }
 
 var acceptHeaderPattern = regexp.MustCompile(`^application/vnd\.koreader\.v(\d+).*json$`)
+
+// statusWriter captures the status code written by the handler.
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusWriter) WriteHeader(code int) {
+	w.status = code
+	w.ResponseWriter.WriteHeader(code)
+}
+
+// logRequest logs method, path, status, duration, and authenticated user.
+func logRequest(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(sw, r)
+		slog.Info("kosync request",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", sw.status,
+			"duration", time.Since(start),
+			"user", r.Header.Get("X-Auth-User"),
+		)
+	})
+}
 
 type handler struct {
 	lib     *library.Library
