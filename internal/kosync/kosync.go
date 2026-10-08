@@ -170,13 +170,13 @@ func (h *handler) writeServerError(w http.ResponseWriter, msg string, bookID int
 // registerRoutes sets up the kosync HTTP endpoints using Go 1.22+ method-specific routing.
 // PUT /syncs/progress reads document from the request body (per spec §5.4).
 // GET /syncs/progress/{docID} reads document from the URL path (per spec §5.5).
+// Routes are relative — the caller mounts the handler at the configured prefix.
 func (h *handler) registerRoutes(mux *http.ServeMux) {
-	prefix := strings.TrimSuffix(h.cfg.PathPrefix, "/")
-	mux.HandleFunc("GET "+prefix+"/healthcheck", h.healthcheck)
-	mux.HandleFunc("GET "+prefix+"/users/auth", h.auth)
-	mux.HandleFunc("POST "+prefix+"/users/create", h.usersCreate)
-	mux.HandleFunc("GET "+prefix+"/syncs/progress/{docID}", h.getProgress)
-	mux.HandleFunc("PUT "+prefix+"/syncs/progress", h.putProgress)
+	mux.HandleFunc("GET /healthcheck", h.healthcheck)
+	mux.HandleFunc("GET /users/auth", h.auth)
+	mux.HandleFunc("POST /users/create", h.usersCreate)
+	mux.HandleFunc("GET /syncs/progress/{docID}", h.getProgress)
+	mux.HandleFunc("PUT /syncs/progress", h.putProgress)
 }
 
 func (h *handler) authenticate(r *http.Request) bool {
