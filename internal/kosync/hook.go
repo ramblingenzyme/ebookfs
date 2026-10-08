@@ -100,10 +100,6 @@ func (h *Hook) OnDeleting(book *library.Book, sidecars *os.Root, openEpub func()
 		h.mapping.Delete(docID)
 	}
 
-	if err := h.mapping.Save(); err != nil {
-		slog.Error("kosync: failed to save mapping after deletion", "error", err)
-	}
-
 	slog.Info("kosync: removed document IDs from mapping", "book_id", book.ID(), "count", len(data.DocumentIDs))
 }
 
@@ -144,20 +140,7 @@ func (h *Hook) writeSidecar(sidecars *os.Root, data SidecarData) error {
 	return json.NewEncoder(f).Encode(data)
 }
 
-// setMapping sets a document ID mapping and saves with error handling.
+// setMapping sets a document ID mapping.
 func (h *Hook) setMapping(docID string, bookID int64) {
 	h.mapping.Set(docID, bookID)
-	if err := h.mapping.Save(); err != nil {
-		slog.Error("kosync: failed to save mapping", "error", err)
-	}
-}
-
-// deleteMappings deletes multiple document ID mappings and saves with error handling.
-func (h *Hook) deleteMappings(docIDs []string) {
-	for _, docID := range docIDs {
-		h.mapping.Delete(docID)
-	}
-	if err := h.mapping.Save(); err != nil {
-		slog.Error("kosync: failed to save mapping after deletion", "error", err)
-	}
 }

@@ -118,7 +118,7 @@ func setupEnv(t *testing.T, cfg Config) *testEnv {
 func (e *testEnv) putProgress(t *testing.T, body map[string]any) (map[string]any, int) {
 	t.Helper()
 	bodyBytes, _ := json.Marshal(body)
-	req := httptest.NewRequest(http.MethodPut, "/sync/syncs/progress", bytes.NewReader(bodyBytes))
+	req := httptest.NewRequest(http.MethodPut, "/syncs/progress", bytes.NewReader(bodyBytes))
 	req.Header.Set("Accept", "application/vnd.koreader.v1+json")
 	req.Header.Set("X-Auth-User", "testuser")
 	req.Header.Set("X-Auth-Key", "testhash")
@@ -133,7 +133,7 @@ func (e *testEnv) putProgress(t *testing.T, body map[string]any) (map[string]any
 // getProgress sends a GET /syncs/progress/{docID}.
 func (e *testEnv) getProgress(t *testing.T, docID string) (map[string]any, int) {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodGet, "/sync/syncs/progress/"+docID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/syncs/progress/"+docID, nil)
 	req.Header.Set("Accept", "application/vnd.koreader.v1+json")
 	req.Header.Set("X-Auth-User", "testuser")
 	req.Header.Set("X-Auth-Key", "testhash")

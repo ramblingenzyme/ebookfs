@@ -71,11 +71,14 @@ func (m *MappingFile) Get(documentID string) (int64, bool) {
 	return bookID, ok
 }
 
-// Set adds or updates a mapping from document_id to book_id.
+// Set adds or updates a mapping from document_id to book_id and persists to disk.
 func (m *MappingFile) Set(documentID string, bookID int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.data[documentID] = bookID
+	if err := m.save(); err != nil {
+		slog.Error("kosync: failed to save mapping after set", "error", err)
+	}
 }
 
 // Rebuild reconstructs the mapping from all book sidecars.
@@ -119,35 +122,30 @@ func (m *MappingFile) Rebuild(lib *library.Library) error {
 		booksWithSidecar++
 	}
 
-	// Atomic swap: acquire write lock and replace the map
+	// Atomic swap and persist: acquire write lock, replace the map, and save
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.data = newData
-	m.mu.Unlock()
-
-	slog.Info("kosync: mapping rebuilt",
-		"books_scanned", booksScanned,
-		"books_with_sidecar", booksWithSidecar,
-		"document_ids", len(newData))
-
-	// Save the rebuilt mapping
-	if err := m.Save(); err != nil {
+	if err := m.save(); err != nil {
 		return fmt.Errorf("saving rebuilt mapping: %w", err)
 	}
 
 	return nil
 }
 
-// Delete removes a document_id from the mapping.
+// Delete removes a document_id from the mapping and persists to disk.
 func (m *MappingFile) Delete(documentID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.data, documentID)
+	if err := m.save(); err != nil {
+		slog.Error("kosync: failed to save mapping after delete", "error", err)
+	}
 }
 
-// Save writes the mapping to disk atomically.
-func (m *MappingFile) Save() error {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+// save writes the mapping to disk atomically.
+// Caller must hold the write lock.
+func (m *MappingFile) save() error {
 
 	// Write to temp file first
 	tmpPath := m.path + ".tmp"

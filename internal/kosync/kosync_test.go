@@ -15,7 +15,7 @@ func TestHealthcheck(t *testing.T) {
 	}
 	handler := NewHandler(nil, nil, cfg)
 
-	req := httptest.NewRequest("GET", "/sync/healthcheck", nil)
+	req := httptest.NewRequest("GET", "/healthcheck", nil)
 	req.Header.Set("Accept", "application/vnd.koreader.v1+json")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -55,7 +55,7 @@ func TestAuth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/sync/users/auth", nil)
+			req := httptest.NewRequest("GET", "/users/auth", nil)
 			req.Header.Set("Accept", "application/vnd.koreader.v1+json")
 			if tt.username != "" {
 				req.Header.Set("x-auth-user", tt.username)
@@ -91,7 +91,7 @@ func TestRegister(t *testing.T) {
 	}
 	handler := NewHandler(nil, nil, cfg)
 
-	req := httptest.NewRequest("POST", "/sync/users/create", nil)
+	req := httptest.NewRequest("POST", "/users/create", nil)
 	req.Header.Set("Accept", "application/vnd.koreader.v1+json")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
