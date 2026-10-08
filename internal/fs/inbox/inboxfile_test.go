@@ -19,7 +19,7 @@ func TestInboxFileOpenCreateIngestError(t *testing.T) {
 			return nil, errors.New("CreateIngest failed")
 		},
 	}
-	inf := NewInboxFile(f, lib, "test.epub", 0644, nil)
+	inf := NewInboxFile(f, lib, "test.epub", 0644)
 
 	err := inf.Open(1, proto.Mode(0))
 	if err == nil {
@@ -29,7 +29,7 @@ func TestInboxFileOpenCreateIngestError(t *testing.T) {
 
 func TestInboxFileDoubleOpenRejected(t *testing.T) {
 	f := util.NewTestFS(t)
-	inf := NewInboxFile(f, mock.Ingester{}, "test.epub", 0644, nil)
+	inf := NewInboxFile(f, mock.Ingester{}, "test.epub", 0644)
 
 	fstest.Fid(t, inf, 1).Open(proto.Mode(0))
 
@@ -41,7 +41,7 @@ func TestInboxFileDoubleOpenRejected(t *testing.T) {
 
 func TestInboxFileOpenWithFidZero(t *testing.T) {
 	f := util.NewTestFS(t)
-	inf := NewInboxFile(f, mock.Ingester{}, "test.epub", 0644, nil)
+	inf := NewInboxFile(f, mock.Ingester{}, "test.epub", 0644)
 
 	// Open with fid 0, a legal fid that used to be rejected as "already open"
 	// because the check was i.fid != 0 instead of i.handle != nil.
@@ -56,7 +56,7 @@ func TestInboxFileOpenWithFidZero(t *testing.T) {
 
 func TestInboxFileWriteWithoutOpen(t *testing.T) {
 	f := util.NewTestFS(t)
-	inf := NewInboxFile(f, mock.Ingester{}, "test.epub", 0644, nil)
+	inf := NewInboxFile(f, mock.Ingester{}, "test.epub", 0644)
 
 	_, err := inf.Write(1, 0, []byte("data"))
 	if err == nil {
@@ -66,7 +66,7 @@ func TestInboxFileWriteWithoutOpen(t *testing.T) {
 
 func TestInboxFileCloseWithoutOpen(t *testing.T) {
 	f := util.NewTestFS(t)
-	inf := NewInboxFile(f, mock.Ingester{}, "test.epub", 0644, nil)
+	inf := NewInboxFile(f, mock.Ingester{}, "test.epub", 0644)
 
 	fstest.Fid(t, inf, 1).Close()
 }
@@ -81,8 +81,7 @@ func TestInboxFileReopenAfterClose(t *testing.T) {
 		},
 	}
 
-	noop := func(b *library.Book) {}
-	inf := NewInboxFile(f, lib, "test.epub", 0644, noop)
+	inf := NewInboxFile(f, lib, "test.epub", 0644)
 
 	fstest.Fid(t, inf, 1).Set(proto.Mode(0), "first")
 
@@ -101,7 +100,6 @@ func TestInboxFileReopenAfterClose(t *testing.T) {
 // lock through DeleteChild, which called SetParent on the removed child and
 // tried to take the same lock.
 func TestInboxFileCloseWithParentDeadlockRegression(t *testing.T) {
-	ingested := make(chan *library.Book, 1)
 	f := util.NewTestFS(t)
 	lib := mock.Ingester{
 		IngestFn: func(_ string) (*library.Book, error) {
@@ -109,9 +107,7 @@ func TestInboxFileCloseWithParentDeadlockRegression(t *testing.T) {
 		},
 	}
 
-	dir := NewInboxDir(f, lib, func(b *library.Book) {
-		ingested <- b
-	})
+	dir := NewInboxDir(f, lib)
 
 	file, err := dir.Create(f, "test.epub", 0644, 0)
 	if err != nil {
@@ -138,12 +134,4 @@ func TestInboxFileCloseWithParentDeadlockRegression(t *testing.T) {
 		t.Fatal("Close deadlocked")
 	}
 
-	select {
-	case b := <-ingested:
-		if b.ID() != 42 {
-			t.Errorf("ingested book id = %d, want 42", b.ID())
-		}
-	default:
-		t.Fatal("onIngest was not called")
-	}
 }

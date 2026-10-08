@@ -167,6 +167,17 @@ type Library struct {
 	SearchDeleter
 	Ingester
 	StatsReader
+	AddHookFn func(library.Hook)
+}
+
+func (l Library) AddHook(h library.Hook) {
+	if l.AddHookFn != nil {
+		l.AddHookFn(h)
+	}
+}
+
+func (l Library) Edit(id int64, edits library.Edits) (*library.Book, error) {
+	return l.Editor.Edit(id, edits)
 }
 
 type Getter struct {

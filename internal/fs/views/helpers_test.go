@@ -5,11 +5,15 @@ import (
 	"testing"
 	"time"
 
+	go9pfs "github.com/knusbaum/go9p/fs"
+
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 
+	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
 )
 
 var (
@@ -34,14 +38,37 @@ func padAt(n int) *padWidth {
 
 func newTestRegistry(t *testing.T) *registry.BookRegistry {
 	t.Helper()
-	return registry.NewBookRegistry(newTestFS(t), nil)
+	return registry.NewBookRegistry(newTestFS(t), mock.Editor{})
+}
+
+func removeBookFromView(t *testing.T, reg *registry.BookRegistry, view go9pfs.Dir, id int64) *book.BookDir {
+	t.Helper()
+	bookView, ok := view.(registry.BookView)
+	if !ok {
+		t.Fatalf("view %T does not implement registry.BookView", view)
+	}
+	allBooks := NewAllBooksDir(reg)
+	for _, child := range allBooks.Children() {
+		var dir *book.BookDir
+		switch child := child.(type) {
+		case *book.BookDir:
+			dir = child
+		case *namedBookDir:
+			dir = child.BookDir
+		}
+		if dir != nil && dir.Book().ID() == id {
+			bookView.Remove(dir)
+			return dir
+		}
+	}
+	return nil
 }
 
 // A non-zero ttl or maxHandles starts the cleanup goroutine, hence the Close.
 func newTestSearchDir(t *testing.T, ttl time.Duration, maxHandles int) (*registry.BookRegistry, *searchDir) {
 	t.Helper()
 	f := newTestFS(t)
-	reg := registry.NewBookRegistry(f, nil)
+	reg := registry.NewBookRegistry(f, mock.Editor{})
 	sd := NewSearchDir(f, reg, ttl, maxHandles)
 	t.Cleanup(sd.Close)
 	return reg, sd

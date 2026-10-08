@@ -17,6 +17,8 @@ type ValidationError = book.ValidationError
 type FieldError = book.FieldError
 type Query = index.Query
 type Order = index.Order
+
+type Bib = book.Bib
 type Stats = index.Stats
 type Facet = index.Facet
 type Author = book.Author

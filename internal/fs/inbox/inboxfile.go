@@ -11,17 +11,15 @@ import (
 
 type InboxFile struct {
 	fs.BaseFile
-	fid      uint64
-	handle   library.IngestHandle
-	lib      Ingester
-	onIngest func(*library.Book)
+	fid    uint64
+	handle library.IngestHandle
+	lib    Ingester
 }
 
-func NewInboxFile(f *fs.FS, lib Ingester, name string, perm uint32, onIngest func(*library.Book)) *InboxFile {
+func NewInboxFile(f *fs.FS, lib Ingester, name string, perm uint32) *InboxFile {
 	return &InboxFile{
 		BaseFile: *fs.NewBaseFile(newStat(f, name, perm)),
 		lib:      lib,
-		onIngest: onIngest,
 	}
 }
 
@@ -88,7 +86,6 @@ func (i *InboxFile) Close(fid uint64) error {
 		slog.Error("inbox: ingest failed", "name", i.Stat().Name, "error", err)
 		return err
 	}
-	i.onIngest(b)
 	slog.Info("inbox: ingested", "name", i.Stat().Name, "book_id", b.ID())
 	return nil
 }

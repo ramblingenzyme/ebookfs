@@ -14,7 +14,7 @@ import (
 
 func newTestBookDir(t *testing.T, b *library.Book) *BookDir {
 	t.Helper()
-	return NewBookDir(util.NewTestFS(t), mock.ContentReader{}, func(int64, library.Edits) error { return nil }, b)
+	return NewBookDir(util.NewTestFS(t), mock.ContentReader{}, func(int64, library.Edits) (*library.Book, error) { return nil, nil }, b)
 }
 
 func TestNewBookDirCreatesCoverChild(t *testing.T) {

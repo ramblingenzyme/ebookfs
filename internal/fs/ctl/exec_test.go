@@ -71,8 +71,7 @@ func TestAddTag(t *testing.T) {
 		},
 	}
 
-	cf, reg := newTestCtl(t, search, edit)
-	reg.Add(util.WrapBook(book))
+	cf := newTestCtl(t, search, edit)
 
 	result := cf.execute(`add-tag "newtag" *`)
 	if result != "ok: 1 books edited" {
@@ -100,8 +99,7 @@ func TestRemoveTag(t *testing.T) {
 		},
 	}
 
-	cf, reg := newTestCtl(t, search, edit)
-	reg.Add(util.WrapBook(book))
+	cf := newTestCtl(t, search, edit)
 
 	result := cf.execute(`remove-tag "remove" *`)
 	if result != "ok: 1 books edited" {
@@ -113,8 +111,6 @@ func TestRemoveTag(t *testing.T) {
 // "not found" when the filter excludes it: the book exists, it just did not
 // match. Only a bare id-spec ("1,2,3") gets the typo-catching walk.
 func TestAddTagFilteredQueryDoesNotReportNotFound(t *testing.T) {
-	book := util.MakeBook(1, "Title", "Author")
-
 	search := mock.SearchDeleter{
 		SearchFn: func(q library.Query) ([]*library.Book, error) {
 			return nil, nil // book 1 exists but is filtered out by status:read
@@ -127,8 +123,7 @@ func TestAddTagFilteredQueryDoesNotReportNotFound(t *testing.T) {
 		},
 	}
 
-	cf, reg := newTestCtl(t, search, edit)
-	reg.Add(book)
+	cf := newTestCtl(t, search, edit)
 
 	result := cf.execute("add-tag foo id:1+status:read")
 	if strings.Contains(result, "not found") {
@@ -155,8 +150,7 @@ func TestSetStatus(t *testing.T) {
 		},
 	}
 
-	cf, reg := newTestCtl(t, search, edit)
-	reg.Add(book)
+	cf := newTestCtl(t, search, edit)
 
 	result := cf.execute("set-status reading *")
 	if result != "ok: 1 books edited" {
@@ -182,8 +176,7 @@ func TestSetRatingUnchanged(t *testing.T) {
 		},
 	}
 
-	cf, reg := newTestCtl(t, search, edit)
-	reg.Add(util.WrapBook(book))
+	cf := newTestCtl(t, search, edit)
 
 	result := cf.execute("set-rating 4 *")
 	if result != "ok: no books edited\n1 skipped" {
@@ -192,8 +185,6 @@ func TestSetRatingUnchanged(t *testing.T) {
 }
 
 func TestEditUnknownID(t *testing.T) {
-	book := util.MakeBook(1, "Title", "Author")
-
 	search := mock.SearchDeleter{
 		SearchFn: func(q library.Query) ([]*library.Book, error) {
 			return nil, nil // no book matches id 999
@@ -206,8 +197,7 @@ func TestEditUnknownID(t *testing.T) {
 		},
 	}
 
-	cf, reg := newTestCtl(t, search, edit)
-	reg.Add(book)
+	cf := newTestCtl(t, search, edit)
 
 	result := cf.execute("add-tag foo 999")
 	if !strings.Contains(result, "book 999: not found") {
@@ -235,8 +225,7 @@ func TestRenameTag(t *testing.T) {
 		},
 	}
 
-	cf, reg := newTestCtl(t, search, edit)
-	reg.Add(util.WrapBook(book))
+	cf := newTestCtl(t, search, edit)
 
 	result := cf.execute(`rename-tag "scifi" "sci-fi"`)
 	if result != "ok: 1 books renamed" {
@@ -264,8 +253,7 @@ func TestRenameTagBothTags(t *testing.T) {
 		},
 	}
 
-	cf, reg := newTestCtl(t, search, edit)
-	reg.Add(util.WrapBook(book))
+	cf := newTestCtl(t, search, edit)
 
 	result := cf.execute(`rename-tag "old" "new"`)
 	if result != "ok: 1 books renamed" {
@@ -299,8 +287,7 @@ func TestRenameAuthor(t *testing.T) {
 		},
 	}
 
-	cf, reg := newTestCtl(t, search, edit)
-	reg.Add(book)
+	cf := newTestCtl(t, search, edit)
 
 	result := cf.execute(`rename-author "Asimov" "Isaac Asimov|Asimov, Isaac"`)
 	if result != "ok: 1 books renamed" {
@@ -335,8 +322,7 @@ func TestRenameAuthorMatchSortName(t *testing.T) {
 		},
 	}
 
-	cf, reg := newTestCtl(t, search, edit)
-	reg.Add(util.WrapBook(book))
+	cf := newTestCtl(t, search, edit)
 
 	result := cf.execute(`rename-author "Asimov, Isaac" "I. Asimov"`)
 	if result != "ok: 1 books renamed" {
@@ -362,8 +348,7 @@ func TestRenameAuthorReportsABookTheSnapshotDoesNotMatch(t *testing.T) {
 		},
 	}
 
-	cf, reg := newTestCtl(t, search, edit)
-	reg.Add(util.WrapBook(book))
+	cf := newTestCtl(t, search, edit)
 
 	result := cf.execute(`rename-author "Isaac Asimov" "I. Asimov"`)
 	const want = "ok: no books renamed\n1 skipped"
@@ -400,8 +385,7 @@ func TestRenameAuthorMerge(t *testing.T) {
 		},
 	}
 
-	cf, reg := newTestCtl(t, search, edit)
-	reg.Add(util.WrapBook(book))
+	cf := newTestCtl(t, search, edit)
 
 	result := cf.execute(`rename-author "Paul French" "Isaac Asimov"`)
 	if result != "ok: 1 books renamed" {
@@ -429,8 +413,7 @@ func TestRenameSeries(t *testing.T) {
 		},
 	}
 
-	cf, reg := newTestCtl(t, search, edit)
-	reg.Add(util.WrapBook(book))
+	cf := newTestCtl(t, search, edit)
 
 	result := cf.execute(`rename-series "Old" "New"`)
 	if result != "ok: 1 books renamed" {
@@ -488,7 +471,7 @@ func TestCommandRejections(t *testing.T) {
 					return nil, nil
 				},
 			}
-			cf, _ := newTestCtl(t, search, edit)
+			cf := newTestCtl(t, search, edit)
 
 			if got := cf.execute(tc.cmd); got != tc.want {
 				t.Errorf("execute(%q) = %q, want %q", tc.cmd, got, tc.want)
@@ -578,10 +561,7 @@ func TestCommandSuccessStrings(t *testing.T) {
 					return nil, fmt.Errorf("no book %d", id)
 				},
 			}
-			cf, reg := newTestCtl(t, search, edit)
-			for _, b := range tc.books {
-				reg.Add(b)
-			}
+			cf := newTestCtl(t, search, edit)
 
 			if got := cf.execute(tc.cmd); got != tc.want {
 				t.Errorf("execute(%q) = %q, want %q", tc.cmd, got, tc.want)
@@ -610,10 +590,7 @@ func TestCommandFailureStrings(t *testing.T) {
 				return util.WrapBook(updated), nil
 			},
 		}
-		cf, reg := newTestCtl(t, search, edit)
-		for _, b := range books {
-			reg.Add(b)
-		}
+		cf := newTestCtl(t, search, edit)
 
 		got := cf.execute(`add-tag "new" *`)
 
@@ -627,7 +604,7 @@ func TestCommandFailureStrings(t *testing.T) {
 		search := mock.SearchDeleter{
 			SearchFn: func(library.Query) ([]*library.Book, error) { return nil, errors.New("index closed") },
 		}
-		cf, _ := newTestCtl(t, search, mock.Editor{})
+		cf := newTestCtl(t, search, mock.Editor{})
 
 		if got := cf.execute(`add-tag "new" *`); got != "error: query failed: index closed" {
 			t.Errorf("execute = %q, want the query failure surfaced", got)
@@ -636,7 +613,7 @@ func TestCommandFailureStrings(t *testing.T) {
 
 	t.Run("delete fails", func(t *testing.T) {
 		search := mock.SearchDeleter{DeleteFn: func(int64) error { return errors.New("still open") }}
-		cf, _ := newTestCtl(t, search, mock.Editor{})
+		cf := newTestCtl(t, search, mock.Editor{})
 
 		if got := cf.execute("delete 7"); got != "error: book 7: still open" {
 			t.Errorf("execute = %q, want the delete failure surfaced", got)
@@ -647,7 +624,7 @@ func TestCommandFailureStrings(t *testing.T) {
 		search := mock.SearchDeleter{
 			SearchFn: func(library.Query) ([]*library.Book, error) { return nil, errors.New("index closed") },
 		}
-		cf, _ := newTestCtl(t, search, mock.Editor{})
+		cf := newTestCtl(t, search, mock.Editor{})
 
 		for _, cmd := range []string{`rename-tag "a" "b"`, `rename-author "a" "b"`, `rename-series "a" "b"`} {
 			if got := cf.execute(cmd); got != "error: query failed: index closed" {
@@ -662,7 +639,7 @@ func TestSingleBookCommandSuccessStrings(t *testing.T) {
 	t.Run("delete", func(t *testing.T) {
 		var deleted int64
 		search := mock.SearchDeleter{DeleteFn: func(id int64) error { deleted = id; return nil }}
-		cf, _ := newTestCtl(t, search, mock.Editor{})
+		cf := newTestCtl(t, search, mock.Editor{})
 
 		if got := cf.execute("delete 7"); got != "ok: book 7 deleted" {
 			t.Errorf("execute = %q, want %q", got, "ok: book 7 deleted")

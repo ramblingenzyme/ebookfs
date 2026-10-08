@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`identifiers` file in each book directory.** Read-only, one `scheme=value` line per identifier, sorted by scheme. Identifiers were parsed and indexed before but never surfaced anywhere.
 
+- **Ingest hooks.** `library.Hook` is a unified interface for observing and amending library operations. Embed `library.HookBase` and override only the phases you need. Pipeline phases (`PreParse`, `PreCommit`) run during ingest; `PreParse` fires before parsing (outside `ingestMu`, so bulk uploads parse in parallel), `PreCommit` fires under the ingest lock and can amend bibliographic data; both return an error to abort. Event phases (`OnIngested`, `OnEdited`, `OnDeleting`, `OnDeleted`) fire under the per-book lock after the operation commits (or before, for `OnDeleting`). They receive a `*os.Root` scoped to `.sidecar/` and a lazy `openEpub` closure; panics are recovered so one hook cannot block the rest. Register with `Library.AddHook(h Hook)`; hooks run in registration order.
+
 ### Fixed
 
 - **`ReaderConfig` is validated by the library that owns it.** The rules (a cache dir is required when converting, and it must sit outside the library root or the store walk indexes converted kepubs as books) were enforced only in `internal/config`, so a caller building the struct in Go got neither. `Library.Exporter` now checks both, and the TOML layer no longer repeats them.

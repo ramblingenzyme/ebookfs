@@ -10,7 +10,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-func newTestCoverFile(t *testing.T, lib ContentReader, edit func(int64, library.Edits) error) *coverFile {
+func newTestCoverFile(t *testing.T, lib ContentReader, edit func(int64, library.Edits) (*library.Book, error)) *coverFile {
 	t.Helper()
 	book := util.MakeMutableBook(1, "Test", "Author")
 	book.CoverSize = 16
@@ -18,7 +18,7 @@ func newTestCoverFile(t *testing.T, lib ContentReader, edit func(int64, library.
 }
 
 func TestCoverFileStatLength(t *testing.T) {
-	cf := newTestCoverFile(t, mock.ContentReader{}, func(int64, library.Edits) error { return nil })
+	cf := newTestCoverFile(t, mock.ContentReader{}, func(int64, library.Edits) (*library.Book, error) { return nil, nil })
 
 	fstest.StatLength(t, cf, 16)
 }
@@ -26,7 +26,7 @@ func TestCoverFileStatLength(t *testing.T) {
 func TestCoverFileStatLengthNilLib(t *testing.T) {
 	f := util.NewTestFS(t)
 	book := util.MakeBook(1, "Test", "Author")
-	cf := newCoverFile(newStat(f, "cover.jpg", 0644), nil, func(int64, library.Edits) error { return nil }, util.Fixed(book))
+	cf := newCoverFile(newStat(f, "cover.jpg", 0644), nil, func(int64, library.Edits) (*library.Book, error) { return nil, nil }, util.Fixed(book))
 
 	if s := cf.Stat(); s.Length != 0 {
 		t.Errorf("Stat().Length with nil lib = %d, want 0", s.Length)
@@ -39,7 +39,7 @@ func TestCoverFileOpenRead(t *testing.T) {
 			return &mock.EpubReader{CoverFn: func() ([]byte, error) { return []byte("cover image data"), nil }}, nil
 		},
 	}
-	cf := newTestCoverFile(t, lib, func(int64, library.Edits) error { return nil })
+	cf := newTestCoverFile(t, lib, func(int64, library.Edits) (*library.Book, error) { return nil, nil })
 
 	if got := fstest.Fid(t, cf, 1).Get(proto.Mode(0), 50); got != "cover image data" {
 		t.Errorf("Read = %q, want %q", got, "cover image data")
@@ -53,9 +53,9 @@ func TestCoverFileWriteClose(t *testing.T) {
 			return &mock.EpubReader{CoverFn: func() ([]byte, error) { return []byte("original"), nil }}, nil
 		},
 	}
-	cf := newTestCoverFile(t, lib, func(id int64, edits library.Edits) error {
+	cf := newTestCoverFile(t, lib, func(id int64, edits library.Edits) (*library.Book, error) {
 		written = edits.Cover
-		return nil
+		return nil, nil
 	})
 
 	fstest.Fid(t, cf, 1).Set(proto.Mode(0), "new cover")
@@ -72,9 +72,9 @@ func TestCoverFileWriteEmptyDoesNotCallEdit(t *testing.T) {
 			return &mock.EpubReader{CoverFn: func() ([]byte, error) { return []byte("original"), nil }}, nil
 		},
 	}
-	cf := newTestCoverFile(t, lib, func(int64, library.Edits) error {
+	cf := newTestCoverFile(t, lib, func(int64, library.Edits) (*library.Book, error) {
 		called = true
-		return nil
+		return nil, nil
 	})
 
 	fid := fstest.Fid(t, cf, 1)
@@ -92,7 +92,7 @@ func TestCoverFilePerFidBuffers(t *testing.T) {
 			return &mock.EpubReader{CoverFn: func() ([]byte, error) { return []byte("shared"), nil }}, nil
 		},
 	}
-	cf := newTestCoverFile(t, lib, func(int64, library.Edits) error { return nil })
+	cf := newTestCoverFile(t, lib, func(int64, library.Edits) (*library.Book, error) { return nil, nil })
 
 	fid1, fid2 := fstest.Fid(t, cf, 1), fstest.Fid(t, cf, 2)
 	fid1.Open(proto.Mode(0))
@@ -113,7 +113,7 @@ func TestCoverFileWriteErrorPassesThrough(t *testing.T) {
 			return &mock.EpubReader{CoverFn: func() ([]byte, error) { return []byte("original"), nil }}, nil
 		},
 	}
-	cf := newTestCoverFile(t, lib, func(int64, library.Edits) error { return util.ErrTest })
+	cf := newTestCoverFile(t, lib, func(int64, library.Edits) (*library.Book, error) { return nil, util.ErrTest })
 
 	fid := fstest.Fid(t, cf, 1)
 	fid.Open(proto.Mode(0))

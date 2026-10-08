@@ -68,8 +68,8 @@ func TestIDEntryName_PadTriggeredByMaxID(t *testing.T) {
 	b1 := makeBook(1, "First", "Author")
 	b2 := makeBook(10, "Tenth", "Author")
 
-	reg.Add(wrapBook(b1))
-	reg.Add(wrapBook(b2))
+	reg.Load(wrapBook(b1))
+	reg.Load(wrapBook(b2))
 
 	fstest.ChildCount(t, d, 2)
 	fstest.HasChild(t, d, "01. First")
@@ -83,8 +83,8 @@ func TestIDEntryName_PadThreeDigits(t *testing.T) {
 	b1 := makeBook(1, "First", "Author")
 	b2 := makeBook(100, "Hundredth", "Author")
 
-	reg.Add(wrapBook(b1))
-	reg.Add(wrapBook(b2))
+	reg.Load(wrapBook(b1))
+	reg.Load(wrapBook(b2))
 
 	fstest.ChildCount(t, d, 2)
 	fstest.HasChild(t, d, "001. First")
@@ -96,7 +96,7 @@ func TestByIDDirAdd(t *testing.T) {
 	d := NewByIDDir(reg)
 
 	b := makeBook(1, "Test", "Author")
-	reg.Add(wrapBook(b))
+	reg.Load(wrapBook(b))
 
 	fstest.HasChild(t, d, "1. Test")
 }
@@ -106,8 +106,8 @@ func TestByIDDirRemove(t *testing.T) {
 	d := NewByIDDir(reg)
 
 	b := makeBook(1, "Test", "Author")
-	reg.Add(wrapBook(b))
-	reg.Remove(1)
+	reg.Load(wrapBook(b))
+	removeBookFromView(t, reg, d, 1)
 
 	fstest.NoChild(t, d, "1. Test")
 }
@@ -116,8 +116,8 @@ func TestByIDDirMultipleBooks(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewByIDDir(reg)
 
-	reg.Add(util.MakeBook(1, "Alpha", "Author"))
-	reg.Add(util.MakeBook(2, "Beta", "Author"))
+	reg.Load(util.MakeBook(1, "Alpha", "Author"))
+	reg.Load(util.MakeBook(2, "Beta", "Author"))
 
 	fstest.ChildCount(t, d, 2)
 }
@@ -127,9 +127,9 @@ func TestByIDDirMultipleBooks(t *testing.T) {
 func TestByIDDirRemoveUnknown(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewByIDDir(reg)
-	reg.Add(util.MakeBook(1, "Kept", "Author"))
+	reg.Load(util.MakeBook(1, "Kept", "Author"))
 
-	reg.Remove(999)
+	removeBookFromView(t, reg, d, 999)
 
 	fstest.HasChild(t, d, "1. Kept")
 }
@@ -139,14 +139,15 @@ func TestByIDDirTitleChangeReflected(t *testing.T) {
 	d := NewByIDDir(reg)
 
 	b := makeBook(1, "Original", "Author")
-	reg.Add(wrapBook(b))
+	reg.Load(wrapBook(b))
 
 	fstest.HasChild(t, d, "1. Original")
 
-	// Remove and re-add with different title (simulating an edit)
-	reg.Remove(1)
+	// The view removes the old snapshot before receiving the updated one.
+	dir := removeBookFromView(t, reg, d, 1)
 	b2 := makeBook(1, "Updated", "Author")
-	reg.Add(wrapBook(b2))
+	dir.SetSnapshot(wrapBook(b2))
+	d.Add(dir)
 
 	fstest.HasChild(t, d, "1. Updated")
 	fstest.NoChild(t, d, "1. Original")
