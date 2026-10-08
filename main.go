@@ -105,7 +105,7 @@ func main() {
 		}
 
 		opdsSrv := opds.New(lib, opdsExp, opds.Config{
-			BaseURL: cfg.OPDS.BaseURL,
+			BaseURL: cfg.HTTP.BaseURL,
 		})
 		if err := runner.RegisterHTTP(opdsSrv); err != nil {
 			fatal("registering OPDS", err)

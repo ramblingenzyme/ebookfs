@@ -27,12 +27,12 @@ auth = "none"
 
 [http]
 listen = "0.0.0.0:8080"
-
-[opds]
-enable = false
 # Without it, absolute URLs in served documents come from the client's own
 # Host and X-Forwarded-* headers.
 base_url = ""  # e.g. "https://books.example.com"
+
+[opds]
+enable = false
 # Separate from [reader]'s convert: reader/ is rsynced to one known device,
 # the catalog serves whichever app holds the URL. Conversions land in each
 # book's .sidecar/ directory either way.

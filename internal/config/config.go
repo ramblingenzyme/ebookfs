@@ -41,13 +41,13 @@ type ReaderConfig struct {
 
 // HTTPConfig configures the shared HTTP listener.
 type HTTPConfig struct {
-	Listen string `toml:"listen"` // e.g. "0.0.0.0:8080"
+	Listen  string `toml:"listen"`   // e.g. "0.0.0.0:8080"
+	BaseURL string `toml:"base_url"` // absolute URL for generating links; e.g. "http://192.168.1.100:8080"
 }
 
 // OPDSConfig configures the OPDS catalog.
 type OPDSConfig struct {
-	Enable  bool   `toml:"enable"`   // explicit toggle to enable/disable OPDS
-	BaseURL string `toml:"base_url"` // absolute, scheme://host; trailing slashes are stripped
+	Enable bool `toml:"enable"` // explicit toggle to enable/disable OPDS
 
 	// Convert is the catalog's rendition choice, separate from [reader]'s.
 	// Both convert into each book's .sidecar/ directory, since a book's kepub
@@ -147,17 +147,17 @@ func (c *Config) validateReader() error {
 	return nil
 }
 
-// validateOPDS checks the catalog's base URL.
-func (c *Config) validateOPDS() error {
-	if c.OPDS.BaseURL == "" {
+// validateHTTP checks the HTTP base URL.
+func (c *Config) validateHTTP() error {
+	if c.HTTP.BaseURL == "" {
 		return nil
 	}
-	u, err := url.Parse(c.OPDS.BaseURL)
+	u, err := url.Parse(c.HTTP.BaseURL)
 	if err != nil {
-		return fmt.Errorf("opds.base_url is not a URL: %w", err)
+		return fmt.Errorf("http.base_url is not a URL: %w", err)
 	}
 	if u.Scheme == "" || u.Host == "" {
-		return fmt.Errorf("opds.base_url must be absolute (scheme://host), got %q", c.OPDS.BaseURL)
+		return fmt.Errorf("http.base_url must be absolute (scheme://host), got %q", c.HTTP.BaseURL)
 	}
 	return nil
 }
@@ -220,7 +220,7 @@ func (c *Config) validate() error {
 		return err
 	}
 
-	if err := c.validateOPDS(); err != nil {
+	if err := c.validateHTTP(); err != nil {
 		return err
 	}
 
