@@ -10,20 +10,17 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/ophymx/opds"
 	"github.com/ophymx/opds/opdshttp"
 )
 
 type Server struct {
-	http *http.Server
-	base string // kept only for the startup log
+	handler http.Handler
+	base    string // kept only for the startup log
 }
 
 type Config struct {
-	Listen string
-
 	// BaseURL is the catalog's canonical absolute URL, scheme://host. Trailing
 	// slashes are stripped. An empty one leaves the handler deriving a base per
 	// request from client-controlled headers, which is safe only behind a
@@ -32,14 +29,14 @@ type Config struct {
 }
 
 func New(lib Library, rend Renderer, cfg Config) *Server {
-	return &Server{base: cfg.BaseURL, http: &http.Server{
-		Addr:    cfg.Listen,
-		Handler: NewHandler(lib, rend, cfg.BaseURL),
-		// No WriteTimeout: a response is a whole epub, and a slow client on a
-		// slow link would have its download cut off mid-file.
-		ReadHeaderTimeout: 10 * time.Second,
-		IdleTimeout:       60 * time.Second,
-	}}
+	handler := NewHandler(lib, rend, cfg.BaseURL)
+	if cfg.BaseURL == "" {
+		slog.Warn("opds.base_url is unset; absolute URLs in served documents follow the client's Host and X-Forwarded-* headers")
+	}
+	return &Server{
+		handler: handler,
+		base:    cfg.BaseURL,
+	}
 }
 
 // NewHandler mounts the OPDS handler at Prefix with the two content routes
@@ -70,17 +67,10 @@ func NewHandler(lib Library, rend Renderer, baseURL string) http.Handler {
 
 func (s *Server) Name() string { return "OPDS" }
 
-func (s *Server) Serve() error {
-	slog.Info("serving OPDS", "listen", s.http.Addr, "prefix", Prefix, "base_url", s.base)
-	if s.base == "" {
-		slog.Warn("opds.base_url is unset; absolute URLs in served documents follow the client's Host and X-Forwarded-* headers")
-	}
-	if err := s.http.ListenAndServe(); err != http.ErrServerClosed {
-		return err
-	}
-	return nil
-}
+func (s *Server) Prefix() string { return Prefix }
+
+func (s *Server) Handler() http.Handler { return s.handler }
 
 func (s *Server) Shutdown(ctx context.Context) error {
-	return s.http.Shutdown(ctx)
+	return nil
 }

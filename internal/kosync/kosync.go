@@ -1,6 +1,7 @@
 package kosync
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,11 +37,40 @@ const (
 
 // Config holds kosync configuration.
 type Config struct {
+	MappingPath      string  // path to mapping directory (default: <library_root>/.kosync)
 	Username         string  // pre-provisioned username
 	PasswordHash     string  // MD5 hash of password (lowercase hex)
 	PathPrefix       string  // URL path prefix (e.g., "/sync")
 	ReadingThreshold float64 // percentage to mark as "reading" (default: 0.05)
 	ReadThreshold    float64 // percentage to mark as "read" (default: 0.95)
+}
+
+// Server implements HTTPFrontend for kosync.
+type Server struct {
+	handler http.Handler
+	prefix  string
+}
+
+// New creates a kosync server, handling mapping initialization and hook registration.
+func New(lib *library.Library, cfg Config) (*Server, error) {
+	// Load or create mapping
+	mapping, err := LoadMapping(cfg.MappingPath)
+	if err != nil {
+		slog.Warn("kosync mapping corrupt or missing, rebuilding", "error", err)
+		mapping = NewEmptyMapping(cfg.MappingPath)
+		if err := mapping.Rebuild(lib); err != nil {
+			return nil, fmt.Errorf("rebuilding kosync mapping: %w", err)
+		}
+	}
+
+	// Create and register hook
+	hook := NewHook(mapping)
+	lib.AddHook(hook)
+
+	return &Server{
+		handler: NewHandler(lib, mapping, cfg),
+		prefix:  cfg.PathPrefix,
+	}, nil
 }
 
 // NewHandler creates a kosync HTTP handler.
@@ -50,6 +80,18 @@ func NewHandler(lib *library.Library, mapping *MappingFile, cfg Config) http.Han
 	h.registerRoutes(mux)
 	return checkAcceptHeader(mux)
 }
+
+// Name returns the frontend name.
+func (s *Server) Name() string { return "kosync" }
+
+// Prefix returns the URL path prefix.
+func (s *Server) Prefix() string { return s.prefix }
+
+// Handler returns the HTTP handler.
+func (s *Server) Handler() http.Handler { return s.handler }
+
+// Shutdown is a no-op for kosync.
+func (s *Server) Shutdown(ctx context.Context) error { return nil }
 
 // writeAcceptError writes a 412 Precondition Failed response with the given error code and message.
 func writeAcceptError(w http.ResponseWriter, code int, message string) {

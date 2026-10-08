@@ -44,8 +44,9 @@ type HTTPConfig struct {
 	Listen string `toml:"listen"` // e.g. "0.0.0.0:8080"
 }
 
-// OPDSConfig configures the OPDS catalog. Enabled by default when HTTP is configured.
+// OPDSConfig configures the OPDS catalog.
 type OPDSConfig struct {
+	Enable  bool   `toml:"enable"`   // explicit toggle to enable/disable OPDS
 	BaseURL string `toml:"base_url"` // absolute, scheme://host; trailing slashes are stripped
 
 	// Convert is the catalog's rendition choice, separate from [reader]'s.
@@ -54,9 +55,10 @@ type OPDSConfig struct {
 	Convert bool `toml:"convert"`
 }
 
-// KOSyncConfig configures the kosync progress sync server. Enabled when
-// username and credential are set.
+// KOSyncConfig configures the kosync progress sync server.
 type KOSyncConfig struct {
+	Enable           bool    `toml:"enable"`            // explicit toggle to enable/disable kosync
+	MappingPath      string  `toml:"mapping_path"`      // path to mapping directory (default: <library_root>/.kosync)
 	Username         string  `toml:"username"`          // pre-provisioned username
 	Credential       string  `toml:"credential"`        // pre-provisioned credential (MD5 of password)
 	ReadingThreshold float64 `toml:"reading_threshold"` // percentage to mark as "reading" (default: 0.05)
@@ -79,6 +81,11 @@ func Load(path string) (*Config, error) {
 
 	if _, err := toml.DecodeFile(path, cfg); err != nil {
 		return nil, fmt.Errorf("parsing config %s: %w", path, err)
+	}
+
+	// Apply defaults that depend on other config values
+	if cfg.KOSync.MappingPath == "" {
+		cfg.KOSync.MappingPath = cfg.Library.Root + "/.kosync"
 	}
 
 	if err := cfg.validate(); err != nil {
@@ -168,15 +175,15 @@ func (c *Config) validateSearch() error {
 }
 
 func (c *Config) validateKOSync() error {
-	// kosync is enabled when both username and credential are set
-	if c.KOSync.Username == "" && c.KOSync.Credential == "" {
-		return nil // disabled
+	if !c.KOSync.Enable {
+		return nil
 	}
+	// kosync is enabled, so username and credential are required
 	if c.KOSync.Username == "" {
-		return fmt.Errorf("kosync.username is required when kosync is enabled")
+		return fmt.Errorf("kosync.username is required when kosync.enable is true")
 	}
 	if c.KOSync.Credential == "" {
-		return fmt.Errorf("kosync.credential is required when kosync is enabled")
+		return fmt.Errorf("kosync.credential is required when kosync.enable is true")
 	}
 
 	// Validate thresholds
