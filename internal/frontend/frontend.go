@@ -101,6 +101,7 @@ func (r *Runner) Run(ctx context.Context, timeout time.Duration) error {
 				handler = http.StripPrefix(fe.Prefix(), handler)
 			}
 			mux.Handle(fe.Prefix(), handler)
+			mux.Handle(fe.Prefix()+"/", handler)
 		}
 		httpServer = &http.Server{
 			Addr:              r.httpListen,
