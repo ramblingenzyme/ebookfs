@@ -47,7 +47,8 @@ func (l *Library) CreateIngest() (IngestHandle, error) {
 }
 
 func (l *Library) ingestPath(epubPath string) (*Book, error) {
-	// Create a temp directory for PreParse hooks. Cleaned up after ingest completes.
+	// Create a temp directory for PreParse hooks. returned path from hooks can be inside,
+	// so it can't be cleaned up until after ingest completes.
 	hookTempDir, err := os.MkdirTemp(l.inboxTemp, "hooks-*")
 	if err != nil {
 		return nil, err

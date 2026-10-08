@@ -120,55 +120,39 @@ func (s *hookSet) preCommit(bib *Bib) error {
 	return nil
 }
 
-func (s *hookSet) onIngested(l *Library, b *Book, loc book.Location) {
+func (s *hookSet) dispatchEvent(l *Library, b *Book, loc book.Location, name string, call func(Hook, *os.Root, func() (EpubReader, error))) {
 	hooks := s.snapshot()
 	if len(hooks) == 0 {
 		return
 	}
 	root, err := l.store.OpenSidecars(loc)
 	if err != nil {
-		slog.Error("hook OnIngested: failed to open sidecars", "book_id", b.ID(), "error", err)
+		slog.Error("hook "+name+": failed to open sidecars", "book_id", b.ID(), "error", err)
 		return
 	}
 	defer root.Close()
 	openEpub := func() (EpubReader, error) { return l.Content(b.ID()) }
 	for _, h := range hooks {
-		invokeEvent("OnIngested", h, func() { h.OnIngested(b, root, openEpub) })
+		invokeEvent(name, h, func() { call(h, root, openEpub) })
 	}
+}
+
+func (s *hookSet) onIngested(l *Library, b *Book, loc book.Location) {
+	s.dispatchEvent(l, b, loc, "OnIngested", func(h Hook, root *os.Root, openEpub func() (EpubReader, error)) {
+		h.OnIngested(b, root, openEpub)
+	})
 }
 
 func (s *hookSet) onEdited(l *Library, b *Book, loc book.Location) {
-	hooks := s.snapshot()
-	if len(hooks) == 0 {
-		return
-	}
-	root, err := l.store.OpenSidecars(loc)
-	if err != nil {
-		slog.Error("hook OnEdited: failed to open sidecars", "book_id", b.ID(), "error", err)
-		return
-	}
-	defer root.Close()
-	openEpub := func() (EpubReader, error) { return l.Content(b.ID()) }
-	for _, h := range hooks {
-		invokeEvent("OnEdited", h, func() { h.OnEdited(b, root, openEpub) })
-	}
+	s.dispatchEvent(l, b, loc, "OnEdited", func(h Hook, root *os.Root, openEpub func() (EpubReader, error)) {
+		h.OnEdited(b, root, openEpub)
+	})
 }
 
 func (s *hookSet) onDeleting(l *Library, b *Book, loc book.Location) {
-	hooks := s.snapshot()
-	if len(hooks) == 0 {
-		return
-	}
-	root, err := l.store.OpenSidecars(loc)
-	if err != nil {
-		slog.Error("hook OnDeleting: failed to open sidecars", "book_id", b.ID(), "error", err)
-		return
-	}
-	defer root.Close()
-	openEpub := func() (EpubReader, error) { return l.Content(b.ID()) }
-	for _, h := range hooks {
-		invokeEvent("OnDeleting", h, func() { h.OnDeleting(b, root, openEpub) })
-	}
+	s.dispatchEvent(l, b, loc, "OnDeleting", func(h Hook, root *os.Root, openEpub func() (EpubReader, error)) {
+		h.OnDeleting(b, root, openEpub)
+	})
 }
 
 func (s *hookSet) onDeleted(bookID int64) {
