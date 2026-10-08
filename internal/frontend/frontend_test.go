@@ -61,6 +61,7 @@ func (f *fakeHTTP) Name() string                   { return f.name }
 func (f *fakeHTTP) Prefix() string                 { return f.prefix }
 func (f *fakeHTTP) Handler() http.Handler          { return f.handler }
 func (f *fakeHTTP) Shutdown(context.Context) error { f.stops++; return nil }
+func (f *fakeHTTP) StripPrefix() bool              { return false }
 
 func TestRunnerOnSignal(t *testing.T) {
 	a, b := newFake("a"), newFake("b")

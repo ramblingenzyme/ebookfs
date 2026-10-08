@@ -93,6 +93,9 @@ func (s *Server) Handler() http.Handler { return s.handler }
 // Shutdown is a no-op for kosync.
 func (s *Server) Shutdown(ctx context.Context) error { return nil }
 
+// StripPrefix returns true because kosync uses relative routes.
+func (s *Server) StripPrefix() bool { return true }
+
 // writeAcceptError writes a 412 Precondition Failed response with the given error code and message.
 func writeAcceptError(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")

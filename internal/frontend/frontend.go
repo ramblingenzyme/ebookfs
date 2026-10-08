@@ -26,6 +26,10 @@ type HTTPFrontend interface {
 	Prefix() string
 	Handler() http.Handler
 	Shutdown(ctx context.Context) error
+	// StripPrefix reports whether the runner should strip the prefix before
+	// passing requests to the handler. Frontends using relative routes
+	// return true; those with absolute routes return false.
+	StripPrefix() bool
 }
 
 type exit struct {
@@ -92,7 +96,11 @@ func (r *Runner) Run(ctx context.Context, timeout time.Duration) error {
 	if len(r.httpFrontends) > 0 {
 		mux := http.NewServeMux()
 		for _, fe := range r.httpFrontends {
-			mux.Handle(fe.Prefix(), fe.Handler())
+			handler := fe.Handler()
+			if fe.StripPrefix() {
+				handler = http.StripPrefix(fe.Prefix(), handler)
+			}
+			mux.Handle(fe.Prefix(), handler)
 		}
 		httpServer = &http.Server{
 			Addr:              r.httpListen,

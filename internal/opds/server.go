@@ -74,3 +74,5 @@ func (s *Server) Handler() http.Handler { return s.handler }
 func (s *Server) Shutdown(ctx context.Context) error {
 	return nil
 }
+
+func (s *Server) StripPrefix() bool { return false }
