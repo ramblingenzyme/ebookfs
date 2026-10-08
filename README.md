@@ -51,6 +51,7 @@ sudo umount /mnt/ebookfs
 - **Live search**: Plan 9 clone-style API under `search/`: allocate a handle, write a query (`title:`, `author:`, `tag:`, `series:`, `status:`, `id:`, combinable with `+`), read live results back
 - **Bulk operations via `ctl`**: a root control file for renaming/merging authors, tags, and series, and for tagging or setting status/rating across many books at once, without a round-trip per book. `log` keeps a timestamped history of past commands and results; `help` documents every command
 - **OPDS catalog**: an optional read-only OPDS 1.2 / 2.0 feed at `/opds`, off by default, for ebook reader apps that browse, search and download over HTTP
+- **KOReader progress sync**: optional kosync-compatible server at `/sync/` for syncing reading progress with KOReader devices. Pre-provisioned credentials only (no registration), automatic status updates based on configurable thresholds, and document ID computation via partial MD5 matching KOReader's algorithm
 - **KEPUB conversion**: optional on-the-fly conversion for Kobo e-readers via [kepubify](https://github.com/pgaskin/kepubify)
 - **Zero runtime deps**: single static binary, clean ARM cross-compile, ~15 MB Docker image
 
@@ -58,6 +59,7 @@ sudo umount /mnt/ebookfs
 - No PDF, mobi, cbz support, only epub
 - No DRM removal
 - No authentication or transport encryption. See [docs/security.md](./docs/security.md) before exposing the server beyond a trusted network
+- Kosync supports one pre-provisioned account only; multi-user sync is not planned
 - Renaming an author does not carry third-party refinements (e.g. Calibre's alternate-script) over to the new name. Adding, removing and reordering authors keep them
 
 ### Planned

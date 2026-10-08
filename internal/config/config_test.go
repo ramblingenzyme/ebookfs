@@ -227,7 +227,7 @@ index_path = ""
 // A relative opds.base_url is rejected at startup. Serving it would build
 // every absolute URL the catalog embeds from client-controlled headers, which
 // is what setting the field prevents. An empty one is the default.
-func TestOPDSBaseURLMustBeAbsolute(t *testing.T) {
+func TestHTTPBaseURLMustBeAbsolute(t *testing.T) {
 	tests := []struct {
 		base    string
 		wantErr bool
@@ -239,7 +239,7 @@ func TestOPDSBaseURLMustBeAbsolute(t *testing.T) {
 		{"/opds", true},
 	}
 	for _, tt := range tests {
-		path := writeConfig(t, reqLibSection+"[opds]\nbase_url = \""+tt.base+"\"\n")
+		path := writeConfig(t, reqLibSection+"[http]\nbase_url = \""+tt.base+"\"\n")
 		_, err := Load(path)
 		if (err != nil) != tt.wantErr {
 			t.Errorf("base_url = %q: err = %v, wantErr %v", tt.base, err, tt.wantErr)

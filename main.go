@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/md5"
 	"flag"
+	"fmt"
 	"log"
 	"log/slog"
 	"os"
@@ -13,6 +15,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/config"
 	"github.com/ramblingenzyme/ebookfs/internal/frontend"
 	"github.com/ramblingenzyme/ebookfs/internal/fs"
+	"github.com/ramblingenzyme/ebookfs/internal/kosync"
 	"github.com/ramblingenzyme/ebookfs/internal/opds"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
@@ -82,7 +85,7 @@ func main() {
 		fatal("creating exporter", err)
 	}
 
-	srv, err := fs.New(lib, exp, fs.Config{
+	ninepSrv, err := fs.New(lib, exp, fs.Config{
 		Listen:           cfg.Server.Listen,
 		SearchTTL:        cfg.Search.HandleTTL,
 		SearchMaxHandles: cfg.Search.MaxHandles,
@@ -90,19 +93,54 @@ func main() {
 	if err != nil {
 		fatal("setting up server", err)
 	}
-	frontends := []frontend.Frontend{srv}
 
-	if cfg.OPDS.Listen != "" {
+	runner := frontend.NewRunner(cfg.HTTP.Listen)
+	runner.Register(ninepSrv)
+
+	// Register OPDS as HTTPFrontend if enabled
+	if cfg.OPDS.Enable {
 		opdsExp, err := opdsExporter(lib, cfg, exp)
 		if err != nil {
 			fatal("creating OPDS exporter", err)
 		}
-		frontends = append(frontends, opds.New(lib, opdsExp, opds.Config{
-			Listen:  cfg.OPDS.Listen,
-			BaseURL: cfg.OPDS.BaseURL,
-		}))
+
+		opdsSrv := opds.New(lib, opdsExp, opds.Config{
+			BaseURL: cfg.HTTP.BaseURL,
+		})
+		if err := runner.RegisterHTTP(opdsSrv); err != nil {
+			fatal("registering OPDS", err)
+		}
+
+		slog.Info("OPDS catalog enabled", "prefix", opdsSrv.Prefix())
 	} else {
-		slog.Info("OPDS catalog disabled", "reason", "opds.listen is empty")
+		slog.Info("OPDS catalog disabled", "reason", "opds.enable is false")
+	}
+
+	// Register kosync as HTTPFrontend if enabled
+	if cfg.KOSync.Enable {
+		// Compute MD5 hash of plaintext password
+		passwordHash := fmt.Sprintf("%x", md5.Sum([]byte(cfg.KOSync.Password)))
+
+		// Create kosync server (handles mapping and hook setup internally)
+		kosyncSrv, err := kosync.New(lib, kosync.Config{
+			MappingPath:      cfg.KOSync.MappingPath,
+			Username:         cfg.KOSync.Username,
+			PasswordHash:     passwordHash,
+			PathPrefix:       "/sync",
+			ReadingThreshold: cfg.KOSync.ReadingThreshold,
+			ReadThreshold:    cfg.KOSync.ReadThreshold,
+		})
+		if err != nil {
+			fatal("initializing kosync", err)
+		}
+
+		if err := runner.RegisterHTTP(kosyncSrv); err != nil {
+			fatal("registering kosync", err)
+		}
+
+		slog.Info("kosync enabled", "prefix", kosyncSrv.Prefix())
+	} else {
+		slog.Info("kosync disabled", "reason", "kosync.enable is false")
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -110,7 +148,7 @@ func main() {
 
 	// The library closes before the exit status is reported, so a frontend
 	// failure still leaves the index shut down cleanly.
-	runErr := frontend.Run(ctx, 10*time.Second, frontends...)
+	runErr := runner.Run(ctx, 10*time.Second)
 	if err := lib.Close(); err != nil {
 		slog.Error("closing library", "error", err)
 	}
