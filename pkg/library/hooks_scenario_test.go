@@ -226,7 +226,6 @@ func TestIngestHookErrorsAbortIngest(t *testing.T) {
 
 type epubReadingHook struct {
 	library.HookBase
-	t            *testing.T
 	epubReadable bool
 }
 
@@ -255,7 +254,7 @@ func (h *epubReadingHook) OnDeleting(book *library.Book, sidecars *os.Root, open
 
 func TestOnDeletingHookCanReadEpub(t *testing.T) {
 	lib := openTestLibrary(t)
-	hook := &epubReadingHook{t: t}
+	hook := &epubReadingHook{}
 	lib.AddHook(hook)
 
 	data := buildTestEpub(t, "Readable Book", "Alice")
