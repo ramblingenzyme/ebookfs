@@ -528,18 +528,23 @@ func TestSpecSlashInAValueIsNotRewritten(t *testing.T) {
 		t.Errorf("authors = %v, want [AC/DC] as written", got)
 	}
 
-	// Passing the authors back, as library.Edit does, would write any read-side
-	// substitution to the file.
-	desc := "A new description."
-	if _, err := save(t, path, func(b *epub.Book) { b.Description = desc; b.Authors = bib.Authors }); err != nil {
+	// Save skips a field equal to what it read. Adding an author makes it write
+	// AC/DC back, carrying any read-side substitution into the file. A title is
+	// written only when it changes, so it gets a new one.
+	authors := append(slices.Clone(bib.Authors), epub.Author{Name: "Bon Scott"})
+	title := "Either/Or, Part Two"
+	if _, err := save(t, path, func(b *epub.Book) { b.Authors = authors; b.Title = title }); err != nil {
 		t.Fatal(err)
+	}
+	if got := authorNames(open(t, path)); !slices.Equal(got, []string{"AC/DC", "Bon Scott"}) {
+		t.Fatalf("authors after the edit = %v, want [AC/DC Bon Scott]", got)
 	}
 	raw := string(epubtest.ReadEntry(t, path, epubtest.OPFPath))
 	if !strings.Contains(raw, "AC/DC") {
 		t.Errorf("the creator no longer says AC/DC:\n%s", raw)
 	}
-	if !strings.Contains(raw, "Either/Or") {
-		t.Errorf("the title no longer says Either/Or:\n%s", raw)
+	if !strings.Contains(raw, title) {
+		t.Errorf("the title does not say %s:\n%s", title, raw)
 	}
 }
 
@@ -588,9 +593,12 @@ func TestSpecMultipleRoleRefines(t *testing.T) {
 				t.Fatalf("authors = %v, want [Maurice Sendak]", got)
 			}
 
-			authors := []epub.Author{{Name: "Maurice Sendak"}}
+			authors := []epub.Author{{Name: "Maurice Sendak", SortName: "Sendak, Maurice"}}
 			if _, err := save(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
 				t.Fatal(err)
+			}
+			if got := open(t, path).Authors; !slices.Equal(got, authors) {
+				t.Fatalf("authors after the edit = %v, want %v", got, authors)
 			}
 			md := epubtest.Metadata(t, path)
 			var roles []string
@@ -599,8 +607,8 @@ func TestSpecMultipleRoleRefines(t *testing.T) {
 					roles = append(roles, m.Text())
 				}
 			}
-			if !slices.Contains(roles, "ill") {
-				t.Errorf("roles after a no-op edit = %v, want the ill credit kept", roles)
+			if !slices.Equal(roles, order[:]) {
+				t.Errorf("roles after a sort-name edit = %v, want %v unchanged", roles, order)
 			}
 		})
 	}
@@ -1119,17 +1127,22 @@ func TestSubjectsEmpty(t *testing.T) {
 // §5.5.3.2.1 makes dc:subject repeatable. Ours: a written list reads back
 // unchanged, in order.
 func TestSubjectsWrite(t *testing.T) {
-	path := epubtest.Build(t, epubtest.EPUB3(`    <dc:subject>Old Subject</dc:subject>`))
-	newSubjects := []string{"New Subject 1", "New Subject 2"}
-	if _, err := save(t, path, func(b *epub.Book) { b.Subjects = newSubjects }); err != nil {
-		t.Fatal(err)
-	}
-	bib, err := parse(t, path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !slices.Equal(bib.Subjects, newSubjects) {
-		t.Errorf("subjects = %v, want %v", bib.Subjects, newSubjects)
+	for _, tc := range []struct {
+		name     string
+		subjects []string
+	}{
+		{"replaced", []string{"New Subject 1", "New Subject 2"}},
+		{"kept one moved behind a new one", []string{"New Subject", "Old Subject"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := epubtest.Build(t, epubtest.EPUB3(`    <dc:subject>Old Subject</dc:subject>`))
+			if _, err := save(t, path, func(b *epub.Book) { b.Subjects = tc.subjects }); err != nil {
+				t.Fatal(err)
+			}
+			if got := open(t, path).Subjects; !slices.Equal(got, tc.subjects) {
+				t.Errorf("subjects = %v, want %v", got, tc.subjects)
+			}
+		})
 	}
 }
 

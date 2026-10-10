@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"path"
 	"strconv"
+	"strings"
 
 	"github.com/beevik/etree"
 	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/xml"
@@ -53,8 +54,14 @@ func (d *Doc) FitCover(coverPath string, width, height int) bool {
 	before, _ := d.Bytes()
 
 	for _, img := range d.coverImages(coverPath) {
-		slot(img, "width").set(strconv.Itoa(width))
-		slot(img, "height").set(strconv.Itoa(height))
+		// A percentage already fits any image, and pixels would overflow a
+		// small screen.
+		if !strings.HasSuffix(img.SelectAttrValue("width", ""), "%") {
+			slot(img, "width").set(strconv.Itoa(width))
+		}
+		if !strings.HasSuffix(img.SelectAttrValue("height", ""), "%") {
+			slot(img, "height").set(strconv.Itoa(height))
+		}
 
 		// The nearest ancestor, since a nested svg has its own coordinate
 		// space.

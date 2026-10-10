@@ -368,3 +368,28 @@ func TestClosedEpubReaderIsErrClosed(t *testing.T) {
 		})
 	}
 }
+
+func TestWriteSidecarOverwrites(t *testing.T) {
+	lib := openTestLibrary(t)
+	data := buildTestEpub(t, "Test Book", "Author")
+	ingested := ingestTestEpub(t, lib, data)
+
+	// Write initial content
+	if err := lib.WriteSidecar(ingested.ID(), "data.txt", []byte("original")); err != nil {
+		t.Fatalf("WriteSidecar: %v", err)
+	}
+
+	// Overwrite it
+	if err := lib.WriteSidecar(ingested.ID(), "data.txt", []byte("updated")); err != nil {
+		t.Fatalf("WriteSidecar: %v", err)
+	}
+
+	// Should see the updated content
+	got, err := lib.ReadSidecar(ingested.ID(), "data.txt")
+	if err != nil {
+		t.Fatalf("ReadSidecar: %v", err)
+	}
+	if string(got) != "updated" {
+		t.Errorf("ReadSidecar = %q, want %q", got, "updated")
+	}
+}

@@ -3,6 +3,7 @@ package frontend
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -46,6 +47,7 @@ type fakeHTTP struct {
 	name    string
 	prefix  string
 	handler http.Handler
+	strip   bool
 	stops   int
 }
 
@@ -61,7 +63,7 @@ func (f *fakeHTTP) Name() string                   { return f.name }
 func (f *fakeHTTP) Prefix() string                 { return f.prefix }
 func (f *fakeHTTP) Handler() http.Handler          { return f.handler }
 func (f *fakeHTTP) Shutdown(context.Context) error { f.stops++; return nil }
-func (f *fakeHTTP) StripPrefix() bool              { return false }
+func (f *fakeHTTP) StripPrefix() bool              { return f.strip }
 
 func TestRunnerOnSignal(t *testing.T) {
 	a, b := newFake("a"), newFake("b")
@@ -211,52 +213,39 @@ func TestRunnerWithHTTPFrontends(t *testing.T) {
 	}
 }
 
-func TestRunnerNoHTTPFrontendsNoListener(t *testing.T) {
-	// This test verifies that when no HTTP frontends are registered,
-	// no HTTP listener is started (even if http.listen is configured)
-	runner := NewRunner(":8080")
-	a := newFake("a")
-	runner.Register(a)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	if err := runner.Run(ctx, time.Second); err != nil {
-		t.Fatalf("Run: %v", err)
+func TestRunnerRoutesHTTPFrontends(t *testing.T) {
+	echoPath := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, r.URL.Path) })
+	runner := NewRunner(":0")
+	for _, fe := range []*fakeHTTP{
+		{name: "sync", prefix: "/sync", handler: echoPath, strip: true},
+		{name: "opds", prefix: "/opds", handler: echoPath},
+	} {
+		if err := runner.RegisterHTTP(fe); err != nil {
+			t.Fatalf("RegisterHTTP(%s): %v", fe.name, err)
+		}
 	}
 
-	// If we got here without hanging, the HTTP listener wasn't started
-	// (a real listener on :8080 would have been fine, but this verifies
-	// the code path that skips HTTP server creation)
-	if a.stops != 1 {
-		t.Errorf("Shutdown calls: %d, want 1", a.stops)
-	}
-}
-
-func TestRunnerHTTPServerLifecycle(t *testing.T) {
-	// Use httptest to verify the HTTP server actually works
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("test"))
-	})
-
-	fe := &fakeHTTP{
-		name:    "test",
-		prefix:  "/api",
-		handler: handler,
-	}
-
-	// Create a test server to verify the handler works
-	ts := httptest.NewServer(fe.Handler())
-	defer ts.Close()
-
-	resp, err := http.Get(ts.URL + "/api")
-	if err != nil {
-		t.Fatalf("GET: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("StatusCode: %d, want %d", resp.StatusCode, http.StatusOK)
+	for _, tc := range []struct {
+		path, wantPath, wantLocation string
+		wantCode                     int
+	}{
+		{path: "/sync/healthcheck", wantCode: http.StatusOK, wantPath: "/healthcheck"},
+		{path: "/sync", wantCode: http.StatusMovedPermanently, wantLocation: "/sync/"},
+		{path: "/opds/feed", wantCode: http.StatusOK, wantPath: "/opds/feed"},
+		{path: "/opds", wantCode: http.StatusOK, wantPath: "/opds"},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			runner.httpHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tc.path, nil))
+			if rec.Code != tc.wantCode {
+				t.Fatalf("status = %d, want %d", rec.Code, tc.wantCode)
+			}
+			if got := rec.Header().Get("Location"); got != tc.wantLocation {
+				t.Errorf("Location = %q, want %q", got, tc.wantLocation)
+			}
+			if tc.wantPath != "" && rec.Body.String() != tc.wantPath {
+				t.Errorf("handler saw path %q, want %q", rec.Body.String(), tc.wantPath)
+			}
+		})
 	}
 }

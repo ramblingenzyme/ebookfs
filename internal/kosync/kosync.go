@@ -53,6 +53,12 @@ type Server struct {
 }
 
 // New creates a kosync server, handling mapping initialization and hook registration.
+//
+// ponytail: Rebuild runs only on an empty mapping. A book that arrives through
+// a startup reindex, or while kosync is off, never gets a document ID, so its
+// PUTs are dropped. An entry for a book removed outside ebookfs stays and
+// answers 502. Rebuilding on every startup fixes both for one sidecar read per
+// book.
 func New(lib *library.Library, cfg Config) (*Server, error) {
 	// Load or create mapping
 	mapping, err := LoadMapping(cfg.MappingPath)
@@ -368,6 +374,11 @@ func (h *handler) putProgress(w http.ResponseWriter, r *http.Request) {
 // updateBookStatus updates the book's reading status based on progress percentage.
 // Transitions are configurable via ReadingThreshold and ReadThreshold.
 // Once a book is marked as "read", it stays read even if percentage drops.
+//
+// ponytail: only read is protected. A sync below ReadingThreshold turns
+// reading back into unread, and any sync overwrites abandoned. With
+// reader.statuses = ["reading"] the book leaves reader/, and the next
+// rsync --delete removes it from the device. Promoting only would close it.
 func (h *handler) updateBookStatus(bookID int64, percentage float64) error {
 	// Get current book
 	b, err := h.lib.Get(bookID)

@@ -10,38 +10,29 @@ ordinary path. Low: an edge case or a cosmetic problem.
 ## Status
 
 Fixed: the three `pkg/epub` bugs (Save closing the Book, contributor roles,
-same-name contributors), 32 of the 48 test-code entries, and part of a 33rd.
+same-name contributors), repeated list entries bricking startup, five Low code
+bugs (ctl's "ok" on total failure, percentage cover sizes, subject order,
+publication dates, unknown config keys), five more Low code bugs (sidecar
+directories, package-document size, bare `/sync`, CHANGELOG, derived paths),
+and 46 of the 48 test-code entries.
 
 Open, highest first:
 
-- **Code, High:** repeated list entries brick startup; more than 32,766 books
-  will not start.
-- **Code, Medium:** long names cannot be ingested; reader/ stats wait behind
-  kepub conversions; rejected 9P writes look like success on Linux; 9P
-  rename and chmod rewrite the tree in memory; three kosync items that need a
-  decision.
-- **Code, Low:** the rest of the code section.
-- **Tests, agreed to drop:** `TestStoreFailureKeepsPending`,
-  `TestPreStoreRefusalKeepsNoRow`, `TestCacheEnsureWithZeroDateModified` with
-  `noopSource`, `TestPartialMD5_LowercaseHex`, the byte-256 half of
-  `TestPartialMD5_FirstOffsetIsZero`, `TestRunnerNoHTTPFrontendsNoListener`,
-  `TestRecentDirOrdersNewestFirst`, `TestReaderDirWithConvertEnabled`,
-  `TestCoverFileStatLengthNilLib`.
-- **Tests, hard:** a seam in `frontend.Runner` so routing can be tested;
-  `TestWriteSidecarAtomic`; a real "store failure keeps the pending row" test.
-- **Tests, open with no blocker:** `TestSpecMultipleRoleRefines` and the second
-  half of `TestSpecSlashInAValueIsNotRewritten` still write nothing; the skip
-  message on `TestBooksDirMintedNameCollidesWithLiteralTitle`.
-- **Needs a decision:** clearing a series while setting its index; an empty
-  language; `TestAuthorRenameDropsRefinements` against the checklist's "data
-  loss"; whether to bump the index schema so existing books pick up every
-  contributor role.
+- **Code:** every remaining entry is deferred with a `ponytail:` comment that
+  names the fix. High: more than 32,766 books will not start. Medium: long
+  names cannot be ingested; reader/ stats wait behind kepub conversions; three
+  kosync items; rejected 9P writes look like success on Linux; 9P rename and
+  chmod rewrite the tree in memory. Low: the rest.
+- **Tests, hard:** a real "store failure keeps the pending row" test.
+- **Needs a decision:** `TestAuthorRenameDropsRefinements` against the
+  checklist's "data loss"; whether to bump the index schema so existing books
+  pick up every contributor role.
 
 ## pkg/library/internal/index
 
 ### High: a repeated tag, subject or contributor bricks startup
 
-**Narrowed, not fixed.** A contributor edit can no longer produce the duplicate in either version: EPUB 3 gathers a person into one element, EPUB 2 drops exact duplicate entries, and reads report a role once per element. Tag and subject edits still can, and so can a file that already repeats one person in one role across two elements.
+**Fixed.** `book.Validate` rejects a repeated tag, subject or contributor-in-role in an edit, as it already did authors. An epub or a hand-edited `meta.toml` never passes `Validate`, so reading either keeps the first of each repeat. That also keeps a repeated author out of the book's directory name.
 
 Reproduced. `putRelations` writes each list into a join table keyed
 `(book_id, x_id)` with a plain `INSERT`, and nothing upstream removes
@@ -65,6 +56,8 @@ in `book.Validate` as well would give the 9P client a readable error.
 
 ### High: a library of more than 32,766 books will not start
 
+**Deferred.** A `ponytail:` comment on `hydrateBooks` records the limit and the fix. Libraries that size are not a target yet.
+
 Reproduced at the query level. `hydrateBooks` loads authors, tags and the
 rest with `WHERE book_id IN (sqlc.slice(...))`, which binds one variable per
 book. SQLite's limit is 32,766, so 32,767 ids fail with `too many SQL
@@ -76,6 +69,8 @@ back.
 
 ### Low: title search folds case differently in search/ and everywhere else
 
+**Deferred.** A `ponytail:` comment on the index's title search records the gap and the fix.
+
 `Query.Titles` promises a case-insensitive substring match. SQLite's `LIKE`
 folds ASCII only, so `title:émile` misses "Émile Zola" in `ctl` and OPDS.
 The 9P `search/` handles match in Go with `strings.ToLower`, which folds
@@ -86,6 +81,8 @@ needs a decision.
 ## pkg/library/internal/store
 
 ### Medium: a long title or author list cannot be ingested
+
+**Deferred.** A `ponytail:` comment on the store's layout records the limit and the fix.
 
 Reproduced. `Layout` names the book directory `title (id)` and the epub
 `title - authors.epub`, and caps neither at the 255-byte `NAME_MAX`. A
@@ -99,6 +96,8 @@ rewritten, leaving the index stale until the next startup's reindex.
 
 ### Medium: a stat in reader/ waits behind that book's kepub conversion
 
+**Deferred.** A `ponytail:` comment on `Cache.Ensure` records the gap and the fix.
+
 `Cache.Ensure` runs the whole conversion inside `WithSidecars`, which holds
 the library's per-book lock. `Cache.Size` takes the same lock, and
 `ReaderFile.Stat` calls it on every 9P stat. Startup queues a warm for every
@@ -110,6 +109,8 @@ rename.
 
 ### Low: a warm queued before an edit fails with a zip error
 
+**Deferred.** A `ponytail:` comment on the kepub cache's write records the gap and the fix.
+
 `Ensure` opens the book's current epub but passes the queued snapshot's
 `EpubSize` to `zip.NewReader`. If an edit resized the file in between, the
 central directory lands at the wrong offset, and the warmer logs a spurious
@@ -119,6 +120,8 @@ Taking the size from the opened file would close the gap.
 ## pkg/library
 
 ### Low: sidecar access recreates a vanished book directory
+
+**Fixed.** `OpenSidecars` creates only `.sidecar/`, so a missing book directory fails with `fs.ErrNotExist`. A kosync PUT for such a book now answers 502 instead of writing into a recreated directory, which the deferred stale-entry fix would turn into "unknown document".
 
 `Store.OpenSidecars` calls `MkdirAll` on `Author/Title (id)/.sidecar`. If the
 directory was removed outside ebookfs, the next `WithSidecars`, kepub stat or
@@ -142,6 +145,8 @@ touches the file again. Any other importer of `pkg/epub` hits this.
 
 ### Low: replacing a cover fixes a percentage width to pixels
 
+**Fixed.** `FitCover` leaves a `width` or `height` ending in `%` alone.
+
 `content.Doc.FitCover` rewrites any existing `width` and `height` on the
 cover `<img>` or `<image>`. An HTML cover page with `<img width="100%">`
 becomes `width="1200"`, which overflows the screen on a small reader. The SVG
@@ -150,12 +155,16 @@ that end in `%` would cover it.
 
 ### Low: a subject reorder is lost
 
+**Fixed.** A reused subject is placed in the order given, as authors and contributors are.
+
 Found while fixing contributors. `subjectsField.set` never calls `Place` on a
 subject it reuses, so writing `[New, Fiction]` over a file holding `[Fiction]`
 reads back as `[Fiction, New]`. Authors and contributors reposition their
 elements. The index sorts subjects by name, so nothing in ebookfs shows it.
 
 ### Low: an entry's declared size is trusted when reading it
+
+**Fixed.** `epub.Open` refuses a package document that declares more than 16 MiB. `archive/zip` already fails a read past the declared size, so the check bounds memory before the read.
 
 `archive.read` reads an entry with `io.ReadAll`. A small upload whose package
 document inflates to gigabytes holds all of it in memory while parsing.
@@ -193,6 +202,8 @@ drops the second.
 
 ### Medium: kosync can move a book's status backwards
 
+**Deferred.** A `ponytail:` comment on `updateBookStatus` records the gap and the fix.
+
 `updateBookStatus` only protects `read`. A sync below `reading_threshold`
 turns `reading` back into `unread`, and any sync overwrites `abandoned`. If
 `reader.statuses` is `["reading"]`, the book leaves `reader/`, and the next
@@ -202,6 +213,8 @@ only?
 
 ### Medium: books that arrive while the mapping is non-empty never get a document ID
 
+**Deferred.** A `ponytail:` comment on `kosync.New`, shared with the stale-entry bug below, records the gap and the fix.
+
 `kosync.New` calls `Rebuild` only when the mapping is empty. A book that
 arrives through a startup reindex, or was ingested while kosync was disabled,
 never gets a sidecar or a mapping entry. KOReader's PUTs for it get a 200 and
@@ -210,11 +223,15 @@ per book.
 
 ### Medium: progress for a kepub rendition never matches
 
+**Deferred.** A `ponytail:` comment on the hook's document-ID hash records the gap and the fix.
+
 With `reader.convert = true` the device holds the `.kepub.epub`. Its partial
 MD5 differs from the epub's, so every PUT is for an unknown document and gets
 dropped. Fixing it would mean mapping the kepub's hash as well.
 
 ### Low: a stale mapping entry answers 502 forever
+
+**Deferred.** A `ponytail:` comment on `kosync.New`, shared with the missing-ID bug above, records the gap and the fix.
 
 If a book is removed outside ebookfs, or `OnDeleting` cannot read the sidecar,
 its document IDs stay mapped. GET and PUT then fail on `ErrBookNotFound` with
@@ -225,6 +242,8 @@ clear them while the mapping is non-empty.
 
 ### Low: a bare `/sync` redirects off the prefix
 
+**Fixed.** A frontend whose prefix is stripped gets its bare prefix redirected to the prefix with a slash. The mux is built in a method a test can call.
+
 `Runner.Run` strips `/sync`, which leaves an empty path. kosync's inner
 `ServeMux` cleans that to `/` and answers with a redirect to `/`, the site
 root, rather than `/sync/`. No KOReader request hits the bare prefix.
@@ -232,6 +251,8 @@ root, rather than `/sync/`. No KOReader request hits the bare prefix.
 ## internal/fs
 
 ### Medium: a rejected write looks like success on a Linux mount
+
+**Deferred.** A `ponytail:` comment on `vfile.WriteBuffer` records the gap and the fix.
 
 Every writable file commits on clunk: field files, `cover.*`, `inbox/`
 uploads and `ctl`. A failure comes back as an `Rclunk` error. Linux v9fs
@@ -247,6 +268,8 @@ recorded in `log`, would make failures visible.
 
 ### Medium: a 9P rename or chmod rewrites the served tree in memory
 
+**Deferred.** A `ponytail:` comment on `fs.New` records the gap and the fix.
+
 go9p's `Wstat` writes the client's new name, mode and length into the node
 through `WriteStat`. `fs.New` builds the tree with `IgnorePermissions`, so
 every check passes, and no node in `internal/fs` overrides `WriteStat`. `mv
@@ -259,12 +282,16 @@ file are safe, since their `Stat` recomputes the name. Fix: reject
 
 ### Low: emptying a field file with `: >` does nothing
 
+**Deferred.** A `ponytail:` comment on the field file's close records the gap and the fix. Linux sends the same length-0 Twstat before every `>` redirect's write, so committing on it would break ordinary edits.
+
 `fieldFile.Close` commits only if the fid wrote bytes. A truncating open with
 no write sends a `Twstat` length of 0, which go9p stores in the stat and
 nothing reads. `: > description` leaves the description in place, while
 `echo > description` clears it.
 
 ### Low: a book directory has one parent across every view
+
+**Deferred.** A `ponytail:` comment on `BookDir` records the gap and the fix.
 
 go9p's `AddChild` sets the child's parent, and the same `*BookDir` is added
 to `books/`, each `by-x/` group, `recent/` and every search result, so the
@@ -274,6 +301,8 @@ the handle is closed. `fs.FullPath` in go9p's error messages names the same
 wrong path. Most clients resolve `..` themselves, which hides it.
 
 ### Low: colliding reader/ names drop a book, and removing one removes both
+
+**Deferred.** A `ponytail:` comment on `readerDir.Add` records the gap and the fix.
 
 `readerDir.Add` ignores the error from `AddChild`, which refuses a second
 child of the same name. Two books by the same authors, whose titles differ
@@ -285,6 +314,8 @@ takes the survivor out too.
 
 ### Low: ctl reports "ok" when every book failed
 
+**Fixed.** A result where every matched book failed opens with `error:`, like ctl's other failures. A partial failure still opens with `ok:`.
+
 `formatResult` always opens with `ok:`, even when `affected` is 0 and every
 book is in `errs`. A script that checks the first word of the log line
 treats a total failure as success.
@@ -292,6 +323,8 @@ treats a total failure as success.
 ## Docs
 
 ### Low: CHANGELOG.md does not mention kosync
+
+**Fixed.** An `[Unreleased]` Added entry describes the server. The fixes to it landed before any release, so they need no Fixed entries.
 
 The kosync server shipped in the last five commits, with its config section,
 endpoints and sidecars, and `[Unreleased]` has no entry for it. The three
@@ -301,6 +334,8 @@ kosync fixes from this session are not listed either.
 
 ### Low: some common publication dates are dropped
 
+**Fixed.** `published` also accepts the zoneless datetime and `2006-01`.
+
 `published` accepts RFC 3339, `2006-01-02` and `2006`. calibre and other
 producers also write `2010-01-01T00:00:00` with no zone and `2010-05` with
 no day. Those parse as nothing, and the feed omits the date.
@@ -308,6 +343,8 @@ no day. Those parse as nothing, and the feed omits the date.
 ## internal/config
 
 ### Low: inbox_temp and index_path do not follow library.root
+
+**Fixed.** An unset or empty `inbox_temp` or `index_path` is derived from the configured root, as `kosync.mapping_path` already was.
 
 `defaults` fixes both under `/var/lib/ebookfs/library`. `Load` derives
 `kosync.mapping_path` from the configured root, but not these two. A config
@@ -317,6 +354,8 @@ with "inbox_temp must be on the same filesystem as library.root", which names
 a path the user never set.
 
 ### Low: unknown config keys are dropped without a word
+
+**Fixed.** `Load` records the keys no field reads, and main logs a warning for each once logging is configured.
 
 `Load` discards the `toml.MetaData` that `Undecoded()` would read. A typo such
 as `enabled = true` silently leaves a frontend off. The local `config.toml`
@@ -371,7 +410,7 @@ any other reason pass as long as one succeeds.
 
 ### Low: TestWriteSidecarAtomic does not test atomicity
 
-**Open, hard.** Proving atomicity needs a failure between write and rename, which nothing can inject. Agreed fallback: rename to `TestWriteSidecarOverwrites` and move it into `library_ext_test.go`.
+**Fixed** by the agreed fallback: renamed `TestWriteSidecarOverwrites` and moved into `library_ext_test.go`. Proving atomicity needs a failure between write and rename, which nothing can inject.
 
 `sidecar_test.go`. It writes twice and reads back the second value. Nothing
 checks the temp-file-and-rename, or that a failed write leaves the old
@@ -437,7 +476,7 @@ also missing from the table.
 
 ### Low: TestStoreFailureKeepsPending and TestPreStoreRefusalKeepsNoRow test only MarkPending
 
-**Open, agreed to drop.** The other pending-row tests in `op_test.go` cover what they check. A real store-failure test is in the hard list.
+**Fixed.** Dropped. The other pending-row tests in `op_test.go` cover what they check. A real store-failure test is in the hard list.
 
 `op_test.go`. Neither drives a store write or a refusal. One calls
 `MarkPending` and counts one row, the other calls `BeginOp` and counts none.
@@ -481,7 +520,7 @@ as `two` or `1.`, is never parsed.
 
 ### Low: TestCacheEnsureWithZeroDateModified has a current date
 
-**Open, agreed to drop,** with `noopSource`. It duplicates `TestCacheEnsureCreatesFile`.
+**Fixed.** Dropped with `noopSource`. It duplicated `TestCacheEnsureCreatesFile`.
 
 `cache_test.go`. `util.MakeMutableBook` goes through `book.NewBook`, which
 stamps `DateModified` with `time.Now()`. The zero-date path is never reached.
@@ -493,7 +532,7 @@ stale". The file also declares `noopSource`, which nothing uses.
 
 ### Low: a doc comment names a test that does not exist
 
-**Open, agreed to drop** `TestPartialMD5_LowercaseHex`. The golden vectors already compare exact lowercase hashes.
+**Fixed.** Dropped `TestPartialMD5_LowercaseHex`. The golden vectors already compare exact lowercase hashes.
 
 `hash_test.go`. The comment above `TestPartialMD5_LowercaseHex` describes
 `TestPartialMD5_FullFileHash`, "a hash that depends on all 12 samples". The
@@ -501,7 +540,7 @@ test checks only the format of the output.
 
 ### Low: half of TestPartialMD5_FirstOffsetIsZero cannot fail
 
-**Open, agreed to drop** the byte-256 half.
+**Fixed.** Dropped the byte-256 half.
 
 `hash_test.go`. The byte-256 half passes whether the first sample starts at 0
 or at 256, so it proves nothing about the offset. The byte-0 half carries the
@@ -511,7 +550,7 @@ test.
 
 ### Low: TestRunnerHTTPServerLifecycle never builds a Runner
 
-**Open, hard.** `Runner.Run` builds its mux inside and never exposes the bound address. Extracting the mux into a method a test can call would cover `StripPrefix` and the bare `/sync` redirect.
+**Fixed.** Replaced by `TestRunnerRoutesHTTPFrontends`, which drives the extracted mux through a stripped and an unstripped frontend.
 
 `frontend_test.go`. It serves the fake's handler through `httptest` and
 checks for a 200. No test drives a request through `Runner.Run`, so the
@@ -519,7 +558,7 @@ prefix mounting and `StripPrefix` from 1e85631 have no coverage.
 
 ### Low: TestRunnerNoHTTPFrontendsNoListener cannot see a listener
 
-**Open, agreed to drop.**
+**Fixed.** Dropped.
 
 `frontend_test.go`. Its own comment concedes "a real listener on :8080 would
 have been fine". It asserts only that `Shutdown` ran once.
@@ -552,7 +591,7 @@ expected value as if it were the actual one. The check itself is right.
 
 ### Low: an index set while clearing the series is accepted
 
-**Open, needs a decision** on whether `book.Validate` should reject it.
+**Fixed.** `book.Validate` rejects a series index sent with an empty series, as it does one on a book with no series.
 
 `edits_test.go`. "book has series, empty series edit" expects no error for
 `Series: ""` plus `SeriesIndex: "1"`. The series is removed and the index is
@@ -560,7 +599,7 @@ dropped without a word, while "no series anywhere" rejects the same index.
 
 ### Low: "empty unset" language writes an empty dc:language
 
-**Open, needs a decision** on whether an empty language should be rejected.
+**Fixed.** `book.Validate` rejects an empty or blank language, since both specs require the element.
 
 `edits_test.go`. The name says it unsets the language. `SetLanguage("")`
 blanks the element instead. §5.5.2 requires a non-empty value, and EPUB 3
@@ -570,7 +609,7 @@ requires a `dc:language`.
 
 ### Medium: three "preserves refinements" tests never rewrite the file
 
-**Partly fixed.** The subjects and contributors reconcile tests now change the list and check that the write landed. `TestSpecMultipleRoleRefines` and the second half of `TestSpecSlashInAValueIsNotRewritten` still write nothing.
+**Fixed.** Each test now changes the list and checks that the write landed. `TestSpecMultipleRoleRefines` sets a sort name and wants the roles unchanged. `TestSpecSlashInAValueIsNotRewritten` adds an author and sets a new title with a slash, since an unchanged title is never written.
 
 `spec_ext_test.go`. `TestSubjectsReconcilePreservesRefinements` and
 `TestContributorsReconcilePreservesRefinements` write back exactly the list
@@ -662,7 +701,7 @@ sits in `metadata_test.go`, while `dcPrefix` lives in `ns.go`.
 
 ### Low: three tests pin behaviour recorded above as a bug
 
-**Open.** Change each test together with its bug.
+**Open** for `TestFieldFileOtruncNoWriteDoesNotCallSet`, which changes when the deferred `: >` fix lands. `TestDispatch` changed with the ctl fix.
 
 `TestFieldFileOtruncNoWriteDoesNotCallSet` (`book/file_fields_test.go`) asserts
 that a truncating open with no write leaves the field alone, the `: >` case in
@@ -672,7 +711,7 @@ book failed" entry. Fixing either bug means changing its test.
 
 ### Low: the skipped TestBooksDirMintedNameCollidesWithLiteralTitle misdescribes the failure
 
-**Open.** Correct the skip message, or fix the bug (mint until free, check `AddChild`'s error) and unskip.
+**Fixed.** The skip message now describes the reproduced failure. The bug itself stays open: mint until free, check `AddChild`'s error, and unskip.
 
 `views/booklist_test.go`. The skip says the minted entry replaces the literal
 one. Reproduced: go9p's `AddChild` refuses the duplicate name, so the literal
@@ -683,7 +722,7 @@ error, the same gap as the `reader/` entry.
 
 ### Low: TestRecentDirOrdersNewestFirst checks membership, not order
 
-**Open, agreed to drop.**
+**Fixed.** Dropped.
 
 `views/view_recent_test.go`. A directory listing has no order to check, and
 the test asserts only that both books are present. The ordering is covered by
@@ -691,7 +730,7 @@ the test asserts only that both books are present. The ordering is covered by
 
 ### Low: TestReaderDirWithConvertEnabled has nothing converted
 
-**Open, agreed to drop.**
+**Fixed.** Dropped.
 
 `views/reader_test.go`. The mock exporter has no convert setting, and the test
 expects the plain `Convert.epub` name. It is the same test as
@@ -727,7 +766,7 @@ the index replaced.
 
 ### Low: TestCoverFileStatLengthNilLib has nothing to do with the lib
 
-**Open, agreed to drop.**
+**Fixed.** Dropped.
 
 `book/file_cover_test.go`. `coverFile.Stat` reads `CoverSize` from the book
 and never touches the lib. The length is 0 because `MakeBook` leaves

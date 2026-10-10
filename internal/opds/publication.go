@@ -89,9 +89,10 @@ func toPublication(b *library.Book, filename string) opds.Publication {
 	return *p
 }
 
-// published accepts the three date shapes real epubs carry.
+// published accepts the date shapes real epubs carry. calibre writes the
+// zoneless datetime.
 func published(s string) (time.Time, bool) {
-	for _, layout := range []string{time.RFC3339, "2006-01-02", "2006"} {
+	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02", "2006-01", "2006"} {
 		if t, err := time.Parse(layout, s); err == nil {
 			return t, true
 		}

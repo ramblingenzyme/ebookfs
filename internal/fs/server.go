@@ -62,6 +62,13 @@ type Config struct {
 
 // New wires everything without starting the listener, so the wiring can be
 // tested without blocking.
+//
+// ponytail: go9p's Wstat writes a client's new name and mode into the node,
+// IgnorePermissions passes every check, and no synthetic node overrides
+// WriteStat. `mv by-tag/sf by-tag/sci-fi` renames the listing without changing
+// any book's tags, and the registry drifts from it until restart. Reject
+// WriteStat on the synthetic nodes, or accept only a length change, once a
+// client is seen doing it.
 func New(lib Library, exp library.Exporter, cfg Config) (*Server, error) {
 	ebookfs, root := fs.NewFS("glenda", "glenda", 0555, fs.IgnorePermissions())
 	reg := registry.NewBookRegistry(ebookfs, lib)

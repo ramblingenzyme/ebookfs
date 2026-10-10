@@ -7,6 +7,10 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index/dbsqlc"
 )
 
+// ponytail: SQLite's LIKE folds ASCII only, so title "émile" misses "Émile
+// Zola" here, though the 9P search/ handler folds in Go and finds it. Store a
+// title folded with strings.ToLower, match the folded term against it, and
+// unskip the non-ASCII parity cases once such a search matters.
 func (idx *Index) Search(q Query) ([]*book.Book, error) {
 	bq := &bookQuery{order: orderClause(q.Order), limit: q.Limit}
 

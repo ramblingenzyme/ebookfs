@@ -70,6 +70,11 @@ func main() {
 		log.Fatalf("loading config: %v", err)
 	}
 	setupLogging(cfg.Log)
+	// Warned rather than refused, so a config naming a key a later version
+	// removed still loads.
+	for _, k := range cfg.UnknownKeys {
+		slog.Warn("config: unknown key ignored", "key", k)
+	}
 
 	var opts []library.Option
 	if *forceReindex {

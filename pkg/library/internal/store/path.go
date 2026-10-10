@@ -13,6 +13,13 @@ import (
 // Layout is the single source of the naming convention, and ingest and move
 // both lay books down through it. Only EpubPath is set, relative to the
 // library root; the Store resolves it when it touches the filesystem.
+//
+// ponytail: neither component is capped at NAME_MAX's 255 bytes, so a
+// 90-character CJK title or a long author list fails ingest with "file name
+// too long". An edit that lengthens a title fails after the epub is rewritten,
+// which leaves the index stale until the next startup. naming.ForFAT has the
+// same gap for the export filename. Truncate each component on a rune
+// boundary, keeping the " (id)" and ".epub" suffixes, once a real book hits it.
 func (s *Store) Layout(authors []book.Author, title string, id int64) book.Location {
 	libPath := canonicalDir(authors, title, id)
 	filename := epubFilename(authors, title)

@@ -103,6 +103,10 @@ func (h *Hook) OnDeleting(book *library.Book, sidecars *os.Root, openEpub func()
 	slog.Info("kosync: removed document IDs from mapping", "book_id", book.ID(), "count", len(data.DocumentIDs))
 }
 
+// ponytail: only the epub is hashed. With reader.convert the device holds the
+// kepub, whose hash maps to nothing, so its progress is dropped. Map the
+// kepub's hash too, refreshed on each reconversion, if convert and kosync are
+// used together.
 func (h *Hook) computeDocumentID(book *library.Book, openEpub func() (library.EpubReader, error)) (string, error) {
 	epub, err := openEpub()
 	if err != nil {

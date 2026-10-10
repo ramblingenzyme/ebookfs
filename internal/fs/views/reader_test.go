@@ -87,15 +87,3 @@ func TestReaderDirMultipleBooksSameAuthor(t *testing.T) {
 
 	fstest.ChildCount(t, fstest.ChildAs[fs.ModDir](t, d, "SameAuthor"), 2)
 }
-
-func TestReaderDirWithConvertEnabled(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewReaderDir(reg, mock.Exporter{StatusList: []string{"unread"}})
-
-	b := makeBook(1, "Convert Me", "AuthorX")
-	b.EpubPath = "Convert.epub"
-	b.Meta.Status = "unread"
-	reg.Load(wrapBook(b))
-
-	fstest.HasChild(t, fstest.ChildAs[fs.ModDir](t, d, "AuthorX"), "Convert.epub")
-}

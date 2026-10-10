@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -502,6 +503,31 @@ func TestCorruptEpubDoesNotReindexForever(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].Title() != "Repaired" {
 		t.Errorf("after repair got %d books (%v), want the repaired book indexed", len(got), got)
+	}
+}
+
+// meta.toml is hand-editable, so a repeated tag can reach the rebuild without
+// passing Validate. Inside the rebuild's one transaction, a constraint error
+// fails every startup.
+func TestRepeatedTagInMetaDoesNotFailOpen(t *testing.T) {
+	cfg := testConfig(t)
+	lib := openLib(t, cfg)
+	book := ingestTestEpub(t, lib, buildTestEpub(t, "Echo"))
+	if err := lib.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	edited := fmt.Sprintf("id = %d\ncustom_tags = [\"a\", \"b\", \"a\"]\n", book.ID())
+	if err := os.WriteFile(metaPathOf(book, cfg.Root), []byte(edited), 0644); err != nil {
+		t.Fatalf("write meta.toml: %v", err)
+	}
+
+	got, err := openLib(t, cfg).Get(book.ID())
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if want := []string{"a", "b"}; !slices.Equal(got.Tags(), want) {
+		t.Errorf("tags = %v, want %v", got.Tags(), want)
 	}
 }
 

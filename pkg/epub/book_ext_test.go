@@ -4,11 +4,21 @@ import (
 	"bytes"
 	"maps"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testing/epubtest"
 	"github.com/ramblingenzyme/ebookfs/pkg/epub"
 )
+
+// The padding deflates to about 17 KB, as a crafted upload would.
+func TestOpenRefusesAnOversizedPackageDocument(t *testing.T) {
+	padding := "\n<!--" + strings.Repeat(" ", 17<<20) + "-->"
+	path := epubtest.Build(t, epubtest.OPF3+epubtest.PackageDoc(padding))
+	if _, err := parse(t, path); err == nil || !strings.Contains(err.Error(), "limit") {
+		t.Fatalf("Open err = %v, want the package document refused for its size", err)
+	}
+}
 
 func TestOpenResolvesEncodedCoverHref(t *testing.T) {
 	opfEncoded := epubtest.Pkg{Meta: `    <dc:creator id="creator1">Jane Doe</dc:creator>

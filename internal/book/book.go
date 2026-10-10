@@ -161,6 +161,17 @@ func NewBook(bib Bib, meta Meta, loc Location) *Book {
 	return &Book{Location: loc, Bib: bib, Meta: meta}
 }
 
+// FirstOf returns a copy of xs that keeps only the first element for each key.
+func FirstOf[T any, K comparable](xs []T, key func(T) K) []T {
+	seen := make(map[K]bool, len(xs))
+	return slices.DeleteFunc(slices.Clone(xs), func(x T) bool {
+		k := key(x)
+		repeat := seen[k]
+		seen[k] = true
+		return repeat
+	})
+}
+
 func (b *Book) HasSeries() bool {
 	return b != nil && b.Series != nil
 }

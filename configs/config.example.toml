@@ -1,7 +1,7 @@
 [library]
 root = "/var/lib/ebookfs/library"
-inbox_temp = "/var/lib/ebookfs/library/.inbox-tmp"  # must be on same filesystem as root
-index_path = "/var/lib/ebookfs/library/.index.db"
+# inbox_temp = ""  # default: <library.root>/.inbox-tmp; must be on same filesystem as root
+# index_path = ""  # default: <library.root>/.index.db
 
 [reader]
 # The reader/ directory is an rsync source for an e-reader: books in the listed

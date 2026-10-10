@@ -12,11 +12,30 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
+func TestFormatResultStatus(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		affected int64
+		errs     []string
+		want     string
+	}{
+		{"nothing matched", 0, nil, "ok: no books edited"},
+		{"every book failed", 0, []string{"book 1: boom"}, "error: no books edited\nerrors: 1 book(s)\n  book 1: boom"},
+		{"some books failed", 1, []string{"book 2: boom"}, "ok: 1 books edited\nerrors: 1 book(s)\n  book 2: boom"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := formatResult("edited", tc.affected, 0, tc.errs); got != tc.want {
+				t.Errorf("formatResult = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // Every command name routes to its handler rather than the unknown-command
 // default. Against an empty library each result is determinate, so a name that
 // silently stopped being routed would otherwise still look fine.
 func TestDispatch(t *testing.T) {
-	const notFound = "ok: no books edited\nerrors: 1 book(s)\n  book 1: not found"
+	const notFound = "error: no books edited\nerrors: 1 book(s)\n  book 1: not found"
 
 	tests := []struct {
 		cmd  string

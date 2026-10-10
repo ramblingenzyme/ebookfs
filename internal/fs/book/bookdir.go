@@ -28,6 +28,13 @@ var (
 // stored as an atomic.Pointer since 9P handlers run on concurrent goroutines
 // without a shared lock for registry commits. Snapshots must remain immutable.
 // Edits cause the pointer to be swapped.
+//
+// ponytail: go9p's AddChild sets a single parent, and one BookDir sits in
+// books/, every by-x/ group, recent/ and each search result. The last AddChild
+// wins and DeleteChild clears it, so `..` and fs.FullPath can name a search
+// directory long after it closed. Most clients resolve `..` themselves. Give
+// each view its own wrapper, or track the parent per walk in the go9p fork, if
+// a client trips on it.
 type BookDir struct {
 	fs.StaticDir
 	book atomic.Pointer[library.Book]

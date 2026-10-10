@@ -1616,6 +1616,11 @@ func TestCoverPageUntouched(t *testing.T) {
 <head><title>Cover</title><style>img { width: 100%; }</style></head>
 <body><img src="cover.jpg" alt="Cover"/></body>
 </html>`
+	const percentDimensions = `<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>Cover</title></head>
+<body><img src="cover.jpg" width="100%" height="100%" alt="Cover"/></body>
+</html>`
 
 	for _, tc := range []struct {
 		name string
@@ -1625,6 +1630,8 @@ func TestCoverPageUntouched(t *testing.T) {
 		{"draws something else", strings.Replace(epubtest.SVGCoverPage, "cover.jpg", "frontispiece.jpg", 1), 1200, 1600},
 
 		{"states no dimensions", noStatedDimensions, 1200, 1600},
+
+		{"states percentages", percentDimensions, 1200, 1600},
 
 		{"replacement is the same size", epubtest.SVGCoverPage, 600, 800},
 	} {

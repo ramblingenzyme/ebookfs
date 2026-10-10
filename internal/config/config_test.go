@@ -13,12 +13,6 @@ func TestDefaults(t *testing.T) {
 	if cfg.Library.Root != "/var/lib/ebookfs/library" {
 		t.Errorf("Library.Root = %q, want %q", cfg.Library.Root, "/var/lib/ebookfs/library")
 	}
-	if cfg.Library.InboxTemp != "/var/lib/ebookfs/library/.inbox-tmp" {
-		t.Errorf("Library.InboxTemp = %q, want %q", cfg.Library.InboxTemp, "/var/lib/ebookfs/library/.inbox-tmp")
-	}
-	if cfg.Library.IndexPath != "/var/lib/ebookfs/library/.index.db" {
-		t.Errorf("Library.IndexPath = %q, want %q", cfg.Library.IndexPath, "/var/lib/ebookfs/library/.index.db")
-	}
 	if cfg.Reader.Convert {
 		t.Errorf("Reader.Convert = true, want false")
 	}
@@ -199,31 +193,36 @@ index_path = "/i"
 		}
 	})
 
-	t.Run("missing inbox temp", func(t *testing.T) {
+	// An unset path and an empty one both follow the root, as
+	// kosync.mapping_path does.
+	t.Run("paths follow root", func(t *testing.T) {
 		path := writeConfig(t, `
 [library]
-root = "/l"
+root = "/srv/books"
 inbox_temp = ""
-index_path = "/i"
 `)
-		_, err := Load(path)
-		if err == nil {
-			t.Fatal("expected error: inbox_temp required")
+		cfg, err := Load(path)
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if cfg.Library.InboxTemp != "/srv/books/.inbox-tmp" {
+			t.Errorf("Library.InboxTemp = %q, want %q", cfg.Library.InboxTemp, "/srv/books/.inbox-tmp")
+		}
+		if cfg.Library.IndexPath != "/srv/books/.index.db" {
+			t.Errorf("Library.IndexPath = %q, want %q", cfg.Library.IndexPath, "/srv/books/.index.db")
 		}
 	})
+}
 
-	t.Run("missing index path", func(t *testing.T) {
-		path := writeConfig(t, `
-[library]
-root = "/l"
-inbox_temp = "/t"
-index_path = ""
-`)
-		_, err := Load(path)
-		if err == nil {
-			t.Fatal("expected error: index_path required")
-		}
-	})
+func TestLoadListsUnknownKeys(t *testing.T) {
+	path := writeConfig(t, reqLibSection+"[reader]\nconvert = true\ncache_dir = \"/c\"\n\n[opds]\nenabeld = true\n")
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if want := []string{"reader.cache_dir", "opds.enabeld"}; !slices.Equal(cfg.UnknownKeys, want) {
+		t.Errorf("UnknownKeys = %v, want %v", cfg.UnknownKeys, want)
+	}
 }
 
 // A relative http.base_url is rejected at startup. Serving it would build
