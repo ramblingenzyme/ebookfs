@@ -128,26 +128,27 @@ func TestValidateAuthors(t *testing.T) {
 
 func TestValidateLanguage(t *testing.T) {
 	for _, tc := range []struct {
-		name    string
-		lang    string
-		wantErr bool
+		name   string
+		lang   string
+		errMsg string
 	}{
-		{"english", "en", false},
-		{"french", "fr", false},
-		{"bcp47", "en-US", false},
-		{"empty unset", "", false},
-		{"whitespace unset", "   ", false},
-		{"invalid", "123", true},
-		{"gibberish", "xyz123abc", true},
+		{"english", "en", ""},
+		{"french", "fr", ""},
+		{"bcp47", "en-US", ""},
+		{"empty", "", "language must not be empty"},
+		{"whitespace", "   ", "language must not be empty"},
+		{"invalid", "123", "not a recognised"},
+		{"gibberish", "xyz123abc", "not a recognised"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e := Edits{Language: new(tc.lang)}
 			err := Validate(e, testBook("", nil))
-			if (err != nil) != tc.wantErr {
-				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
+			if (err != nil) != (tc.errMsg != "") {
+				t.Fatalf("Validate() error = %v, want %q", err, tc.errMsg)
 			}
 			if err != nil {
 				assertSingleFieldError(t, err, "language")
+				assertHasFieldError(t, err, "language", tc.errMsg)
 			}
 		})
 	}
@@ -176,6 +177,8 @@ func TestValidateTags(t *testing.T) {
 		{"leading dot", &[]string{".hidden", "v1.2"}, false},
 		// A '/' becomes '-' rather than trimming away, so it still names a group.
 		{"slash", &[]string{"sci/fi"}, false},
+		{"duplicate", &[]string{"fiction", "sci-fi", "fiction"}, true},
+		{"duplicate after trimming", &[]string{"fiction", " fiction "}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e := Edits{Tags: tc.tags}
@@ -185,6 +188,53 @@ func TestValidateTags(t *testing.T) {
 			}
 			if err != nil {
 				assertHasFieldError(t, err, "tags", "")
+			}
+		})
+	}
+}
+
+func TestValidateSubjects(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		subjects *[]string
+		errMsg   string
+	}{
+		{"nil untouched", nil, ""},
+		{"distinct", &[]string{"Fiction", "History"}, ""},
+		{"duplicate", &[]string{"Fiction", "History", "Fiction"}, `subject 3 duplicates "Fiction"`},
+		{"duplicate after trimming", &[]string{"Fiction", " Fiction "}, `subject 2 duplicates "Fiction"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := Validate(Edits{Subjects: tc.subjects}, testBook("", nil))
+			if (err != nil) != (tc.errMsg != "") {
+				t.Fatalf("Validate() error = %v, want %q", err, tc.errMsg)
+			}
+			if err != nil {
+				assertHasFieldError(t, err, "subjects", tc.errMsg)
+			}
+		})
+	}
+}
+
+func TestValidateContributors(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		contributors *[]Contributor
+		errMsg       string
+	}{
+		{"nil untouched", nil, ""},
+		{"one person in two roles", &[]Contributor{{Name: "Jane Doe", Role: "trl"}, {Name: "Jane Doe", Role: "edt"}}, ""},
+		{"two people in one role", &[]Contributor{{Name: "Jane Doe", Role: "trl"}, {Name: "John Roe", Role: "trl"}}, ""},
+		{"duplicate", &[]Contributor{{Name: "Jane Doe", Role: "trl"}, {Name: "Jane Doe", Role: "trl"}}, `contributor 2 duplicates "Jane Doe" as trl`},
+		{"duplicate without a role", &[]Contributor{{Name: "Jane Doe", Role: ""}, {Name: "Jane Doe", Role: ""}}, `contributor 2 duplicates "Jane Doe"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := Validate(Edits{Contributors: tc.contributors}, testBook("", nil))
+			if (err != nil) != (tc.errMsg != "") {
+				t.Fatalf("Validate() error = %v, want %q", err, tc.errMsg)
+			}
+			if err != nil {
+				assertHasFieldError(t, err, "contributors", tc.errMsg)
 			}
 		})
 	}
@@ -201,7 +251,8 @@ func TestValidateSeriesIndex(t *testing.T) {
 		{"with series in edits", nil, Edits{Series: new("New Series"), SeriesIndex: new("1")}, false},
 		{"book has series, nil in edits", &SeriesRef{Name: "Existing"}, Edits{SeriesIndex: new("2.5")}, false},
 		{"no series anywhere", nil, Edits{SeriesIndex: new("1")}, true},
-		{"book has series, empty series edit", &SeriesRef{Name: "Existing"}, Edits{Series: new(string), SeriesIndex: new("1")}, false},
+		{"book has series, empty series edit", &SeriesRef{Name: "Existing"}, Edits{Series: new(string), SeriesIndex: new("1")}, true},
+		{"no series, empty series edit", nil, Edits{Series: new(string), SeriesIndex: new("1")}, true},
 
 		// D.3.7's grammar: "A single xsd:unsignedInt or series of
 		// decimal-separated numbers (e.g., 1 or 2.2.1)."
@@ -366,7 +417,9 @@ func TestEditsNormalized(t *testing.T) {
 		// Ratings are stored to 2 decimal places.
 		{"rating rounds down", Edits{Rating: new(4.564)}, new(4.56), nil},
 		{"rating rounds up", Edits{Rating: new(4.567)}, new(4.57), nil},
-		{"rating at the halfway point rounds away from zero", Edits{Rating: new(4.565)}, new(4.57), nil},
+		// 0.125 is exact in binary, so 12.5 is a true tie. 4.565 is stored as
+		// 4.56500000000000039, above its tie, so it rounds up under any rule.
+		{"rating at the halfway point rounds away from zero", Edits{Rating: new(0.125)}, new(0.13), nil},
 		{"rating already exact", Edits{Rating: new(4.5)}, new(4.5), nil},
 		{"rating zero", Edits{Rating: new(0.0)}, new(0.0), nil},
 

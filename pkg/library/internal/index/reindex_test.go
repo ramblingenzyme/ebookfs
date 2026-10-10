@@ -198,7 +198,7 @@ func TestRebuildClearsLeakedRows(t *testing.T) {
 }
 
 // Rebuild both clears leaked rows and inserts the given books, exercising the
-// full path through dropAllTables, insertBook, and the version stamp.
+// full path through rebuildTx's row deletes, insertBook, and the version stamp.
 func TestRebuildClearsLeakedRowsAndInsertsBooks(t *testing.T) {
 	idx := openTestIndex(t)
 

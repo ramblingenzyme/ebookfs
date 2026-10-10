@@ -39,7 +39,7 @@ func (h *Hook) OnIngested(book *library.Book, sidecars *os.Root, openEpub func()
 		Progress:    Progress{},
 	}
 
-	if err := h.writeSidecar(sidecars, data); err != nil {
+	if err := writeSidecar(sidecars, data); err != nil {
 		slog.Error("kosync: failed to write sidecar", "book_id", book.ID(), "error", err)
 		return
 	}
@@ -59,7 +59,7 @@ func (h *Hook) OnEdited(book *library.Book, sidecars *os.Root, openEpub func() (
 	}
 
 	// Read existing sidecar
-	data, err := h.readSidecar(sidecars)
+	data, err := readSidecar(sidecars)
 	if err != nil {
 		slog.Error("kosync: failed to read sidecar", "book_id", book.ID(), "error", err)
 		return
@@ -75,7 +75,7 @@ func (h *Hook) OnEdited(book *library.Book, sidecars *os.Root, openEpub func() (
 	data.DocumentIDs = append([]string{newDocID}, data.DocumentIDs...)
 
 	// Write updated sidecar
-	if err := h.writeSidecar(sidecars, *data); err != nil {
+	if err := writeSidecar(sidecars, *data); err != nil {
 		slog.Error("kosync: failed to write sidecar", "book_id", book.ID(), "error", err)
 		return
 	}
@@ -89,7 +89,7 @@ func (h *Hook) OnEdited(book *library.Book, sidecars *os.Root, openEpub func() (
 // OnDeleting removes document IDs from the mapping before deletion.
 func (h *Hook) OnDeleting(book *library.Book, sidecars *os.Root, openEpub func() (library.EpubReader, error)) {
 	// Read sidecar to get all document IDs
-	data, err := h.readSidecar(sidecars)
+	data, err := readSidecar(sidecars)
 	if err != nil {
 		slog.Error("kosync: failed to read sidecar for deletion", "book_id", book.ID(), "error", err)
 		return
@@ -103,6 +103,10 @@ func (h *Hook) OnDeleting(book *library.Book, sidecars *os.Root, openEpub func()
 	slog.Info("kosync: removed document IDs from mapping", "book_id", book.ID(), "count", len(data.DocumentIDs))
 }
 
+// ponytail: only the epub is hashed. With reader.convert the device holds the
+// kepub, whose hash maps to nothing, so its progress is dropped. Map the
+// kepub's hash too, refreshed on each reconversion, if convert and kosync are
+// used together.
 func (h *Hook) computeDocumentID(book *library.Book, openEpub func() (library.EpubReader, error)) (string, error) {
 	epub, err := openEpub()
 	if err != nil {
@@ -113,7 +117,7 @@ func (h *Hook) computeDocumentID(book *library.Book, openEpub func() (library.Ep
 	return PartialMD5(epub, book.EpubSize())
 }
 
-func (h *Hook) readSidecar(sidecars *os.Root) (*SidecarData, error) {
+func readSidecar(sidecars *os.Root) (*SidecarData, error) {
 	f, err := sidecars.Open("kosync.json")
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -130,14 +134,18 @@ func (h *Hook) readSidecar(sidecars *os.Root) (*SidecarData, error) {
 	return &data, nil
 }
 
-func (h *Hook) writeSidecar(sidecars *os.Root, data SidecarData) error {
-	f, err := sidecars.Create("kosync.json")
+// writeSidecar renames into place. A truncated kosync.json fails to parse,
+// which loses the progress and fails every later PUT for the book.
+func writeSidecar(sidecars *os.Root, data SidecarData) error {
+	raw, err := json.Marshal(data)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-
-	return json.NewEncoder(f).Encode(data)
+	const tmpName = ".kosync.json.tmp"
+	if err := sidecars.WriteFile(tmpName, raw, 0644); err != nil {
+		return err
+	}
+	return sidecars.Rename(tmpName, "kosync.json")
 }
 
 // setMapping sets a document ID mapping.

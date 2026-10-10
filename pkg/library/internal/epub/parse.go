@@ -1,5 +1,5 @@
 // Package epub translates between pkg/epub and the library's book model. It
-// also applies three rules of ebookfs's own:
+// also applies four rules of ebookfs's own:
 //
 //   - A book needs a title and at least one author, because the store builds
 //     every path from them.
@@ -7,6 +7,9 @@
 //     changed.
 //   - Changing a book's title clears its sort title, which described the old
 //     title.
+//   - A repeated author, subject or contributor-in-role is read once. The
+//     index keys each on (book, entry), and the store would name a repeated
+//     author twice in the book's directory.
 package epub
 
 import (
@@ -38,7 +41,7 @@ func bib(b *epubfile.Book) (*book.Bib, error) {
 		Publisher:   b.Publisher,
 		Rights:      b.Rights,
 		Pubdate:     b.Pubdate(),
-		Subjects:    b.Subjects,
+		Subjects:    book.FirstOf(b.Subjects, func(s string) string { return s }),
 		Identifiers: b.Identifiers(),
 		CoverPath:   b.CoverPath(),
 		// EpubSize is left to the library, which already stats the file.
@@ -47,9 +50,11 @@ func bib(b *epubfile.Book) (*book.Bib, error) {
 	for _, a := range b.Authors {
 		bib.Authors = append(bib.Authors, book.Author{Name: a.Name, SortName: a.SortName})
 	}
+	bib.Authors = book.FirstOf(bib.Authors, func(a book.Author) string { return a.Name })
 	for _, c := range b.Contributors {
 		bib.Contributors = append(bib.Contributors, book.Contributor{Name: c.Name, Role: c.Role})
 	}
+	bib.Contributors = book.FirstOf(bib.Contributors, func(c book.Contributor) book.Contributor { return c })
 	if bib.CoverPath != "" {
 		bib.CoverSize = b.Size(bib.CoverPath)
 	}

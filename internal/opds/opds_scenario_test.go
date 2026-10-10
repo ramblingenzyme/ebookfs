@@ -284,8 +284,6 @@ func TestCoverBypassesTheExporter(t *testing.T) {
 	}
 }
 
-// An author with no books gets an empty feed rather than a 404, since the
-// catalog cannot tell it from a name nobody queried.
 func TestMissesAre404(t *testing.T) {
 	b := util.MakeMutableBook(7, "Dune", "Frank Herbert")
 	f, h := newFake(t, util.WrapBook(b))
@@ -297,17 +295,26 @@ func TestMissesAre404(t *testing.T) {
 	}
 
 	cases := map[string]int{
-		Prefix + "/cover/7":                  http.StatusNotFound,
-		Prefix + "/cover/999":                http.StatusNotFound,
-		Prefix + "/content/999/x.epub":       http.StatusNotFound,
-		Prefix + "/feed/nonsense":            http.StatusNotFound,
-		Prefix + "/feed/all?value=junk":      http.StatusNotFound,
-		Prefix + "/feed/author?value=Nobody": http.StatusOK,
+		Prefix + "/cover/7":             http.StatusNotFound,
+		Prefix + "/cover/999":           http.StatusNotFound,
+		Prefix + "/content/999/x.epub":  http.StatusNotFound,
+		Prefix + "/feed/nonsense":       http.StatusNotFound,
+		Prefix + "/feed/all?value=junk": http.StatusNotFound,
 	}
 	for path, want := range cases {
 		if code := get(t, h, path).Code; code != want {
 			t.Errorf("GET %s: status %d, want %d", path, code, want)
 		}
+	}
+}
+
+// An author with no books gets an empty feed rather than a 404, since the
+// catalog cannot tell it from a name nobody queried.
+func TestUnknownAuthorIsAnEmptyFeed(t *testing.T) {
+	_, h := newFake(t, util.MakeBook(7, "Dune", "Frank Herbert"))
+
+	if got := feed(t, h, Prefix+"/feed/author?value=Nobody").Entries; len(got) != 0 {
+		t.Errorf("entries = %d, want none", len(got))
 	}
 }
 

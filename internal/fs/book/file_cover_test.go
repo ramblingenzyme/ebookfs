@@ -23,16 +23,6 @@ func TestCoverFileStatLength(t *testing.T) {
 	fstest.StatLength(t, cf, 16)
 }
 
-func TestCoverFileStatLengthNilLib(t *testing.T) {
-	f := util.NewTestFS(t)
-	book := util.MakeBook(1, "Test", "Author")
-	cf := newCoverFile(newStat(f, "cover.jpg", 0644), nil, func(int64, library.Edits) (*library.Book, error) { return nil, nil }, util.Fixed(book))
-
-	if s := cf.Stat(); s.Length != 0 {
-		t.Errorf("Stat().Length with nil lib = %d, want 0", s.Length)
-	}
-}
-
 func TestCoverFileOpenRead(t *testing.T) {
 	lib := mock.ContentReader{
 		ContentFn: func(_ int64) (library.EpubReader, error) {

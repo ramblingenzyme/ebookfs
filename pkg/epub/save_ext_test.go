@@ -2,7 +2,9 @@ package epub_test
 
 import (
 	"bytes"
+	"errors"
 	"image"
+	"image/gif"
 	"image/jpeg"
 	"image/png"
 	"slices"
@@ -969,11 +971,8 @@ func TestSaveSeriesRoundTrip(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if book.Series == nil || book.Series.Name != "The Saga" {
-				t.Errorf("series = %v, want The Saga", book.Series)
-			}
-			if book.Series == nil || book.Series.Index != "1.5" {
-				t.Errorf("series index = %v, want 1.5", book.Series.Index)
+			if book.Series == nil || book.Series.Name != "The Saga" || book.Series.Index != "1.5" {
+				t.Errorf("series = %+v, want The Saga at 1.5", book.Series)
 			}
 
 			book, err = save(t, path, func(b *epub.Book) { rename(b, "") })
@@ -1053,7 +1052,7 @@ func TestSortTitleForEPUB2UsesTheCalibreMeta(t *testing.T) {
 	}
 	opf, _ = epubtest.ReadEntryFromFile(t, path, "OEBPS/content.opf")
 	if bytes.Contains(opf, []byte("calibre:title_sort")) {
-		t.Errorf("a title change left a stale calibre:title_sort:\n%s", opf)
+		t.Errorf("clearing the sort title left a stale calibre:title_sort:\n%s", opf)
 	}
 }
 
@@ -1151,17 +1150,47 @@ func TestSetCoverRefusesEncrypted(t *testing.T) {
 	}
 }
 
-func TestSetCoverRefusesNonRaster(t *testing.T) {
-	path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
-	if _, err := setCover(t, path, []byte("<svg/>")); err == nil {
-		t.Fatal("expected refusal on non-raster cover format, got nil")
+// An SVG entry never becomes the cover, so a GIF is what reaches the format
+// rule. The data is a valid GIF, which leaves that rule as the only refusal.
+func TestSetCoverRefusesAGIFEntry(t *testing.T) {
+	opf := epubtest.Pkg{Manifest: `<item id="cover-img" href="cover.gif" media-type="image/gif" properties="cover-image"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`}.EPUB3()
+	path := epubtest.WriteEpub(t, []epubtest.Entry{
+		{Name: "mimetype", Data: []byte(epubtest.MimetypeValue), Store: true},
+		{Name: "META-INF/container.xml", Data: []byte(epubtest.ContainerXML)},
+		{Name: "OEBPS/content.opf", Data: []byte(opf)},
+		{Name: "OEBPS/cover.gif", Data: epubtest.CoverBytes},
+		{Name: "OEBPS/chapter1.xhtml", Data: epubtest.ChapterBytes},
+	})
+
+	var img bytes.Buffer
+	if err := gif.Encode(&img, image.NewRGBA(image.Rect(0, 0, 1, 1)), nil); err != nil {
+		t.Fatal(err)
+	}
+	_, err := setCover(t, path, img.Bytes())
+	if err == nil || !strings.Contains(err.Error(), "not replaceable in place") {
+		t.Fatalf("err = %v, want the GIF entry refused as not replaceable in place", err)
 	}
 }
 
 func TestSetCoverRejectsNonImage(t *testing.T) {
-	path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
-	if _, err := setCover(t, path, []byte("definitely not an image")); err == nil {
-		t.Fatal("expected rejection of non-image cover data, got nil")
+	for _, tc := range []struct{ name, data string }{
+		{"text", "definitely not an image"},
+		{"svg markup", "<svg/>"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
+			if _, err := setCover(t, path, []byte(tc.data)); err == nil {
+				t.Fatal("expected rejection of non-image cover data, got nil")
+			}
+		})
+	}
+}
+
+func TestSetCoverWithNoCoverIsErrNoCover(t *testing.T) {
+	path := epubtest.Build(t, epubtest.Pkg{Manifest: epubtest.ChapterOnlyManifest}.EPUB3())
+	if _, err := setCover(t, path, tinyJPEG(t)); !errors.Is(err, epub.ErrNoCover) {
+		t.Fatalf("err = %v, want ErrNoCover", err)
 	}
 }
 
@@ -1184,7 +1213,7 @@ func TestSeriesEditPreservesExistingIndex(t *testing.T) {
 	}
 
 	if book.Series == nil || book.Series.Index != "3" {
-		t.Errorf("series index = %v, want 3.0 (preserved from before rename)", book.Series.Index)
+		t.Errorf("series = %+v, want index 3 preserved from before the rename", book.Series)
 	}
 }
 
@@ -1336,6 +1365,148 @@ func TestAuthorsReuseBookkeeping(t *testing.T) {
 	})
 }
 
+// Save hands the Book the rewritten file, so it reads and saves again without
+// being reopened.
+func TestBookStaysUsableAfterSave(t *testing.T) {
+	path := epubtest.Build(t, epubtest.OPF3)
+	b := open(t, path)
+
+	b.Title = "First Edit"
+	if err := b.Save(); err != nil {
+		t.Fatal(err)
+	}
+	opf, err := b.ReadEntry(b.PackagePath())
+	if err != nil {
+		t.Fatalf("ReadEntry after Save: %v", err)
+	}
+	if !bytes.Contains(opf, []byte("First Edit")) {
+		t.Errorf("package document read after Save lacks the edit:\n%s", opf)
+	}
+
+	b.Title = "Second Edit"
+	if err := b.Save(); err != nil {
+		t.Fatalf("second Save: %v", err)
+	}
+	if got := open(t, path).Title; got != "Second Edit" {
+		t.Errorf("title on disk = %q, want Second Edit", got)
+	}
+}
+
+// The read takes a legacy opf:role first and then the first role refinement, so
+// a role change has to replace that one. The surviving file-as shows the element
+// was reused.
+func TestContributorRoleChangeIsWritten(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		opf  epubtest.PackageDoc
+	}{
+		{"epub3", epubtest.EPUB3(`    <dc:contributor id="c1">John Editor</dc:contributor>
+    <meta refines="#c1" property="role" scheme="marc:relators">edt</meta>
+    <meta refines="#c1" property="file-as">Editor, John</meta>`)},
+		{"epub2", epubtest.EPUB2(`    <dc:contributor opf:role="edt" opf:file-as="Editor, John">John Editor</dc:contributor>`)},
+		{"epub3 with a legacy opf:role", epubtest.Pkg{
+			Attrs: `xmlns:opf="http://www.idpf.org/2007/opf"`,
+			Meta: `    <dc:contributor id="c1" opf:role="edt">John Editor</dc:contributor>
+    <meta refines="#c1" property="file-as">Editor, John</meta>`,
+		}.EPUB3()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := epubtest.Build(t, tc.opf)
+			want := []epub.Contributor{{Name: "John Editor", Role: "trl"}}
+			if _, err := save(t, path, func(b *epub.Book) { b.Contributors = want }); err != nil {
+				t.Fatal(err)
+			}
+			if got := open(t, path).Contributors; !slices.Equal(got, want) {
+				t.Errorf("contributors = %v, want %v", got, want)
+			}
+			if !bytes.Contains(epubtest.ReadEntry(t, path, epubtest.OPFPath), []byte("Editor, John")) {
+				t.Error("file-as was dropped, so the role change replaced the contributor")
+			}
+		})
+	}
+}
+
+// EPUB 3 gives a person one element with a role refinement per credit (D.3.10).
+// EPUB 2's opf:role holds one value, so there each credit is its own element.
+// Either way the person's existing element is reused.
+func TestContributorCreditedTwice(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		opf      epubtest.PackageDoc
+		elements int
+	}{
+		{"epub3", epubtest.EPUB3(`    <dc:contributor id="c1">Jane Doe</dc:contributor>
+    <meta refines="#c1" property="role" scheme="marc:relators">edt</meta>
+    <meta refines="#c1" property="file-as">Doe, Jane</meta>`), 1},
+		{"epub3 with a legacy opf:role", epubtest.Pkg{
+			Attrs: `xmlns:opf="http://www.idpf.org/2007/opf"`,
+			Meta: `    <dc:contributor id="c1" opf:role="edt">Jane Doe</dc:contributor>
+    <meta refines="#c1" property="file-as">Doe, Jane</meta>`,
+		}.EPUB3(), 1},
+		{"epub2", epubtest.EPUB2(`    <dc:contributor opf:role="edt" opf:file-as="Doe, Jane">Jane Doe</dc:contributor>`), 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := epubtest.Build(t, tc.opf)
+			want := []epub.Contributor{{Name: "Jane Doe", Role: "edt"}, {Name: "Jane Doe", Role: "trl"}}
+			if _, err := save(t, path, func(b *epub.Book) { b.Contributors = want }); err != nil {
+				t.Fatal(err)
+			}
+			if got := open(t, path).Contributors; !slices.Equal(got, want) {
+				t.Errorf("contributors = %v, want %v", got, want)
+			}
+			if n := len(epubtest.Metadata(t, path).FindElements("//contributor")); n != tc.elements {
+				t.Errorf("dc:contributor count = %d, want %d", n, tc.elements)
+			}
+			if !bytes.Contains(epubtest.ReadEntry(t, path, epubtest.OPFPath), []byte("Doe, Jane")) {
+				t.Error("file-as was dropped, so the person's element was not reused")
+			}
+		})
+	}
+}
+
+// Ours: one element cannot sit in two places, so a person's later entries join
+// the element written for their first.
+func TestContributorEntriesGatherByPersonInEPUB3(t *testing.T) {
+	path := epubtest.Build(t, epubtest.EPUB3(``))
+	written := []epub.Contributor{
+		{Name: "Jane Doe", Role: "edt"},
+		{Name: "Bo Li", Role: "ill"},
+		{Name: "Jane Doe", Role: "trl"},
+	}
+	if _, err := save(t, path, func(b *epub.Book) { b.Contributors = written }); err != nil {
+		t.Fatal(err)
+	}
+	want := []epub.Contributor{written[0], written[2], written[1]}
+	if got := open(t, path).Contributors; !slices.Equal(got, want) {
+		t.Errorf("contributors = %v, want %v", got, want)
+	}
+}
+
+// Rewriting a person's roles reuses their refinements in order and removes the
+// rest, which also repairs a role repeated by an earlier writer.
+func TestContributorWriteLeavesOneRefinementPerRole(t *testing.T) {
+	path := epubtest.Build(t, epubtest.EPUB3(`    <dc:contributor id="c1">Jane Doe</dc:contributor>
+    <meta refines="#c1" property="role" scheme="marc:relators">edt</meta>
+    <meta refines="#c1" property="role" scheme="marc:relators">edt</meta>
+    <meta refines="#c1" property="role" scheme="marc:relators">trl</meta>
+    <meta refines="#c1" property="role" scheme="marc:relators">edt</meta>`))
+	if _, err := save(t, path, func(b *epub.Book) {
+		b.Contributors = []epub.Contributor{{Name: "Jane Doe", Role: "trl"}}
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var roles []string
+	for _, m := range epubtest.Metadata(t, path).SelectElements("meta") {
+		if m.SelectAttrValue("refines", "") == "#c1" && m.SelectAttrValue("property", "") == "role" {
+			roles = append(roles, m.Text())
+		}
+	}
+	if !slices.Equal(roles, []string{"trl"}) {
+		t.Errorf("role refinements = %v, want [trl] once", roles)
+	}
+}
+
 // synctest's clock moves only when the test sleeps, so the stamp can be checked exactly.
 func TestModifiedStampIsWrittenOnlyForARealChange(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
@@ -1445,6 +1616,11 @@ func TestCoverPageUntouched(t *testing.T) {
 <head><title>Cover</title><style>img { width: 100%; }</style></head>
 <body><img src="cover.jpg" alt="Cover"/></body>
 </html>`
+	const percentDimensions = `<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>Cover</title></head>
+<body><img src="cover.jpg" width="100%" height="100%" alt="Cover"/></body>
+</html>`
 
 	for _, tc := range []struct {
 		name string
@@ -1454,6 +1630,8 @@ func TestCoverPageUntouched(t *testing.T) {
 		{"draws something else", strings.Replace(epubtest.SVGCoverPage, "cover.jpg", "frontispiece.jpg", 1), 1200, 1600},
 
 		{"states no dimensions", noStatedDimensions, 1200, 1600},
+
+		{"states percentages", percentDimensions, 1200, 1600},
 
 		{"replacement is the same size", epubtest.SVGCoverPage, 600, 800},
 	} {
@@ -1502,19 +1680,22 @@ func TestRefusesToEditASignedEpub(t *testing.T) {
 
 	title := "New Title"
 	cover := tinyJPEG(t)
+	// The closure runs inside t.Run, where the outer t's Fatal would panic, so
+	// the subtest checks the error instead.
+	var coverErr error
 	for _, tc := range []struct {
 		name string
 		e    func(*epub.Book)
 	}{
 		{"bib edit", func(b *epub.Book) { b.Title = title }},
-		{"cover edit", func(b *epub.Book) {
-			if err := b.SetCover(cover); err != nil {
-				t.Fatal(err)
-			}
-		}},
+		{"cover edit", func(b *epub.Book) { coverErr = b.SetCover(cover) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := save(t, path, tc.e); err == nil {
+			_, err := save(t, path, tc.e)
+			if coverErr != nil {
+				t.Fatalf("SetCover: %v", coverErr)
+			}
+			if err == nil {
 				t.Fatal("expected a refusal")
 			}
 		})

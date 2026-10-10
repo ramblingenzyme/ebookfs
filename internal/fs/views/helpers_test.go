@@ -47,7 +47,9 @@ func removeBookFromView(t *testing.T, reg *registry.BookRegistry, view go9pfs.Di
 	if !ok {
 		t.Fatalf("view %T does not implement registry.BookView", view)
 	}
+	// Built only to find the BookDir, so it must not go on receiving events.
 	allBooks := NewAllBooksDir(reg)
+	defer reg.RemoveView(allBooks)
 	for _, child := range allBooks.Children() {
 		var dir *book.BookDir
 		switch child := child.(type) {

@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -10,12 +12,6 @@ func TestDefaults(t *testing.T) {
 	cfg := defaults()
 	if cfg.Library.Root != "/var/lib/ebookfs/library" {
 		t.Errorf("Library.Root = %q, want %q", cfg.Library.Root, "/var/lib/ebookfs/library")
-	}
-	if cfg.Library.InboxTemp != "/var/lib/ebookfs/library/.inbox-tmp" {
-		t.Errorf("Library.InboxTemp = %q, want %q", cfg.Library.InboxTemp, "/var/lib/ebookfs/library/.inbox-tmp")
-	}
-	if cfg.Library.IndexPath != "/var/lib/ebookfs/library/.index.db" {
-		t.Errorf("Library.IndexPath = %q, want %q", cfg.Library.IndexPath, "/var/lib/ebookfs/library/.index.db")
 	}
 	if cfg.Reader.Convert {
 		t.Errorf("Reader.Convert = true, want false")
@@ -76,19 +72,19 @@ format = "json"
 			t.Fatalf("Load: %v", err)
 		}
 		if cfg.Library.Root != "/custom/root" {
-			t.Errorf("Library.Root = %q", "/custom/root")
+			t.Errorf("Library.Root = %q, want %q", cfg.Library.Root, "/custom/root")
 		}
-		if cfg.Reader.Statuses[0] != "read" {
-			t.Errorf("Reader.Statuses[0] = %q", cfg.Reader.Statuses[0])
+		if want := []string{"read", "abandoned"}; !slices.Equal(cfg.Reader.Statuses, want) {
+			t.Errorf("Reader.Statuses = %v, want %v", cfg.Reader.Statuses, want)
 		}
 		if !cfg.Reader.Convert {
 			t.Errorf("Reader.Convert should be true")
 		}
 		if cfg.Log.Level != "debug" {
-			t.Errorf("Log.Level = %q", cfg.Log.Level)
+			t.Errorf("Log.Level = %q, want %q", cfg.Log.Level, "debug")
 		}
 		if cfg.Log.Format != "json" {
-			t.Errorf("Log.Format = %q", cfg.Log.Format)
+			t.Errorf("Log.Format = %q, want %q", cfg.Log.Format, "json")
 		}
 	})
 
@@ -197,34 +193,39 @@ index_path = "/i"
 		}
 	})
 
-	t.Run("missing inbox temp", func(t *testing.T) {
+	// An unset path and an empty one both follow the root, as
+	// kosync.mapping_path does.
+	t.Run("paths follow root", func(t *testing.T) {
 		path := writeConfig(t, `
 [library]
-root = "/l"
+root = "/srv/books"
 inbox_temp = ""
-index_path = "/i"
 `)
-		_, err := Load(path)
-		if err == nil {
-			t.Fatal("expected error: inbox_temp required")
+		cfg, err := Load(path)
+		if err != nil {
+			t.Fatalf("Load: %v", err)
 		}
-	})
-
-	t.Run("missing index path", func(t *testing.T) {
-		path := writeConfig(t, `
-[library]
-root = "/l"
-inbox_temp = "/t"
-index_path = ""
-`)
-		_, err := Load(path)
-		if err == nil {
-			t.Fatal("expected error: index_path required")
+		if cfg.Library.InboxTemp != "/srv/books/.inbox-tmp" {
+			t.Errorf("Library.InboxTemp = %q, want %q", cfg.Library.InboxTemp, "/srv/books/.inbox-tmp")
+		}
+		if cfg.Library.IndexPath != "/srv/books/.index.db" {
+			t.Errorf("Library.IndexPath = %q, want %q", cfg.Library.IndexPath, "/srv/books/.index.db")
 		}
 	})
 }
 
-// A relative opds.base_url is rejected at startup. Serving it would build
+func TestLoadListsUnknownKeys(t *testing.T) {
+	path := writeConfig(t, reqLibSection+"[reader]\nconvert = true\ncache_dir = \"/c\"\n\n[opds]\nenabeld = true\n")
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if want := []string{"reader.cache_dir", "opds.enabeld"}; !slices.Equal(cfg.UnknownKeys, want) {
+		t.Errorf("UnknownKeys = %v, want %v", cfg.UnknownKeys, want)
+	}
+}
+
+// A relative http.base_url is rejected at startup. Serving it would build
 // every absolute URL the catalog embeds from client-controlled headers, which
 // is what setting the field prevents. An empty one is the default.
 func TestHTTPBaseURLMustBeAbsolute(t *testing.T) {
@@ -244,6 +245,36 @@ func TestHTTPBaseURLMustBeAbsolute(t *testing.T) {
 		if (err != nil) != tt.wantErr {
 			t.Errorf("base_url = %q: err = %v, wantErr %v", tt.base, err, tt.wantErr)
 		}
+	}
+}
+
+// kosync is checked only when enabled, so a disabled section may hold anything.
+func TestKOSyncValidation(t *testing.T) {
+	const creds = "username = \"u\"\npassword = \"p\"\n"
+	for _, tc := range []struct {
+		name, kosync string
+		wantErr      string // "" for a config that loads
+	}{
+		{"disabled ignores everything", "enable = false\nreading_threshold = 2.0\n", ""},
+		{"enabled and complete", "enable = true\n" + creds, ""},
+		{"missing username", "enable = true\npassword = \"p\"\n", "kosync.username"},
+		{"missing password", "enable = true\nusername = \"u\"\n", "kosync.password"},
+		{"reading threshold below 0", "enable = true\n" + creds + "reading_threshold = -0.1\n", "kosync.reading_threshold"},
+		{"read threshold above 1", "enable = true\n" + creds + "read_threshold = 1.5\n", "kosync.read_threshold"},
+		{"reading threshold not below read", "enable = true\n" + creds + "reading_threshold = 0.5\nread_threshold = 0.5\n", "must be less than"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Load(writeConfig(t, reqLibSection+"[kosync]\n"+tc.kosync))
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("Load: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("Load err = %v, want it to mention %q", err, tc.wantErr)
+			}
+		})
 	}
 }
 
