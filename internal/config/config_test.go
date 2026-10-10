@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -76,19 +78,19 @@ format = "json"
 			t.Fatalf("Load: %v", err)
 		}
 		if cfg.Library.Root != "/custom/root" {
-			t.Errorf("Library.Root = %q", "/custom/root")
+			t.Errorf("Library.Root = %q, want %q", cfg.Library.Root, "/custom/root")
 		}
-		if cfg.Reader.Statuses[0] != "read" {
-			t.Errorf("Reader.Statuses[0] = %q", cfg.Reader.Statuses[0])
+		if want := []string{"read", "abandoned"}; !slices.Equal(cfg.Reader.Statuses, want) {
+			t.Errorf("Reader.Statuses = %v, want %v", cfg.Reader.Statuses, want)
 		}
 		if !cfg.Reader.Convert {
 			t.Errorf("Reader.Convert should be true")
 		}
 		if cfg.Log.Level != "debug" {
-			t.Errorf("Log.Level = %q", cfg.Log.Level)
+			t.Errorf("Log.Level = %q, want %q", cfg.Log.Level, "debug")
 		}
 		if cfg.Log.Format != "json" {
-			t.Errorf("Log.Format = %q", cfg.Log.Format)
+			t.Errorf("Log.Format = %q, want %q", cfg.Log.Format, "json")
 		}
 	})
 
@@ -224,7 +226,7 @@ index_path = ""
 	})
 }
 
-// A relative opds.base_url is rejected at startup. Serving it would build
+// A relative http.base_url is rejected at startup. Serving it would build
 // every absolute URL the catalog embeds from client-controlled headers, which
 // is what setting the field prevents. An empty one is the default.
 func TestHTTPBaseURLMustBeAbsolute(t *testing.T) {
@@ -244,6 +246,36 @@ func TestHTTPBaseURLMustBeAbsolute(t *testing.T) {
 		if (err != nil) != tt.wantErr {
 			t.Errorf("base_url = %q: err = %v, wantErr %v", tt.base, err, tt.wantErr)
 		}
+	}
+}
+
+// kosync is checked only when enabled, so a disabled section may hold anything.
+func TestKOSyncValidation(t *testing.T) {
+	const creds = "username = \"u\"\npassword = \"p\"\n"
+	for _, tc := range []struct {
+		name, kosync string
+		wantErr      string // "" for a config that loads
+	}{
+		{"disabled ignores everything", "enable = false\nreading_threshold = 2.0\n", ""},
+		{"enabled and complete", "enable = true\n" + creds, ""},
+		{"missing username", "enable = true\npassword = \"p\"\n", "kosync.username"},
+		{"missing password", "enable = true\nusername = \"u\"\n", "kosync.password"},
+		{"reading threshold below 0", "enable = true\n" + creds + "reading_threshold = -0.1\n", "kosync.reading_threshold"},
+		{"read threshold above 1", "enable = true\n" + creds + "read_threshold = 1.5\n", "kosync.read_threshold"},
+		{"reading threshold not below read", "enable = true\n" + creds + "reading_threshold = 0.5\nread_threshold = 0.5\n", "must be less than"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Load(writeConfig(t, reqLibSection+"[kosync]\n"+tc.kosync))
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("Load: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("Load err = %v, want it to mention %q", err, tc.wantErr)
+			}
+		})
 	}
 }
 

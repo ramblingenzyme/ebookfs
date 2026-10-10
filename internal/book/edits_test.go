@@ -366,7 +366,9 @@ func TestEditsNormalized(t *testing.T) {
 		// Ratings are stored to 2 decimal places.
 		{"rating rounds down", Edits{Rating: new(4.564)}, new(4.56), nil},
 		{"rating rounds up", Edits{Rating: new(4.567)}, new(4.57), nil},
-		{"rating at the halfway point rounds away from zero", Edits{Rating: new(4.565)}, new(4.57), nil},
+		// 0.125 is exact in binary, so 12.5 is a true tie. 4.565 is stored as
+		// 4.56500000000000039, above its tie, so it rounds up under any rule.
+		{"rating at the halfway point rounds away from zero", Edits{Rating: new(0.125)}, new(0.13), nil},
 		{"rating already exact", Edits{Rating: new(4.5)}, new(4.5), nil},
 		{"rating zero", Edits{Rating: new(0.0)}, new(0.0), nil},
 

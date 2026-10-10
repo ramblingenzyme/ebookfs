@@ -634,7 +634,8 @@ func TestCommandFailureStrings(t *testing.T) {
 	})
 }
 
-// The two commands that report on one book rather than a selection.
+// delete is the one command that reports on a single book rather than a
+// selection.
 func TestSingleBookCommandSuccessStrings(t *testing.T) {
 	t.Run("delete", func(t *testing.T) {
 		var deleted int64

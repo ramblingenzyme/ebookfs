@@ -49,7 +49,7 @@ func TestReadReturnsTheContent(t *testing.T) {
 
 // Tests that exist to prove per-fid isolation depend on this.
 func TestTwoFidsAreIndependent(t *testing.T) {
-	f := staticFile(t, "x", "hello")
+	f := &fidFile{File: staticFile(t, "x", "hello"), open: map[uint64]bool{}}
 
 	fid1, fid2 := fstest.Fid(t, f, 1), fstest.Fid(t, f, 2)
 	fid1.Open(proto.Mode(0))

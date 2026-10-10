@@ -8,7 +8,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 )
 
-func TestRegistryAddAndRemove(t *testing.T) {
+func TestBooksDirAddAndRemove(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
 
@@ -25,7 +25,7 @@ func TestRegistryAddAndRemove(t *testing.T) {
 // Removing an id that was never added is distinguishable from removing
 // everything: a real book stays registered, so against an empty registry a
 // Remove that cleared the whole view would look identical.
-func TestRegistryRemoveUnknownID(t *testing.T) {
+func TestBooksDirRemoveUnknownID(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
 	reg.Load(util.MakeBook(1, "Kept", "Author"))
