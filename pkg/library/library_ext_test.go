@@ -249,16 +249,20 @@ func TestDeleteRemovesBook(t *testing.T) {
 }
 
 func TestDeleteRemovesOnDisk(t *testing.T) {
-	lib := openTestLibrary(t)
+	cfg := testConfig(t)
+	lib := openLib(t, cfg)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "Delete On Disk"))
-	id := book.ID()
+	dir := filepath.Join(cfg.Root, filepath.Dir(book.EpubPath()))
+	if _, err := os.Stat(dir); err != nil {
+		t.Fatalf("book directory missing before delete: %v", err)
+	}
 
-	if err := lib.Delete(id); err != nil {
+	if err := lib.Delete(book.ID()); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 
-	if _, err := os.Stat(book.EpubPath()); !os.IsNotExist(err) {
-		t.Errorf("epub should be removed after delete, stat err = %v", err)
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Errorf("book directory should be removed after delete, stat err = %v", err)
 	}
 }
 
@@ -285,7 +289,14 @@ func TestEditMissingBookIsErrBookNotFound(t *testing.T) {
 // must never mutate one it handed out.
 func TestSearchSnapshotsAreImmutable(t *testing.T) {
 	lib := openTestLibrary(t)
-	ingestTestEpub(t, lib, buildTestEpub(t, "Before", "Alice"))
+	b := ingestTestEpub(t, lib, buildTestEpub(t, "Before", "Alice"))
+	if _, err := lib.Edit(b.ID(), library.Edits{
+		Tags:        &[]string{"kept"},
+		Series:      new("Saga"),
+		SeriesIndex: new("1"),
+	}); err != nil {
+		t.Fatalf("Edit tags and series: %v", err)
+	}
 
 	got, err := lib.Search(library.Query{})
 	if err != nil {
@@ -308,20 +319,21 @@ func TestSearchSnapshotsAreImmutable(t *testing.T) {
 		t.Error("Authors() handed out the book's own slice; mutating it changed the snapshot")
 	}
 	tags := held.Tags()
-	tags = append(tags, "injected")
-	_ = tags
-	if len(held.Tags()) != 0 {
-		t.Error("Tags() handed out the book's own slice")
+	tags[0] = "injected"
+	if held.Tags()[0] != "kept" {
+		t.Error("Tags() handed out the book's own slice; mutating it changed the snapshot")
 	}
 
 	// Series is a pointer, so its getter must copy the value. SortTitle is here
 	// because nothing else reaches it.
 	_ = held.SortTitle()
-	if s := held.Series(); s != nil {
-		s.Name = "Injected"
-		if held.Series().Name == "Injected" {
-			t.Error("Series() handed out the book's own SeriesRef; mutating it changed the snapshot")
-		}
+	s := held.Series()
+	if s == nil {
+		t.Fatal("Series() = nil, want the series set before the search")
+	}
+	s.Name = "Injected"
+	if held.Series().Name != "Saga" {
+		t.Error("Series() handed out the book's own SeriesRef; mutating it changed the snapshot")
 	}
 }
 

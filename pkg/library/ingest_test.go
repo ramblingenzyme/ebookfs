@@ -36,6 +36,9 @@ func TestIngestRejectsUnindexedBookOnDisk(t *testing.T) {
 }
 
 func TestCreateIngestReadOnlyDir(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
 	lib := openTestLibrary(t)
 
 	if err := os.Chmod(lib.inboxTemp, 0444); err != nil {

@@ -29,7 +29,7 @@ var legacyLayouts = []struct {
 	{
 		// Author directories used the sort name. The epub filename always used
 		// the display name, so it needs no rename here.
-		name: "sort-name directory", title: "The Title", authors: []string{"Alice"},
+		name: "sort-name directory", title: "The Title", authors: []string{"Alice Smith"},
 		legacyAuthorDir: "Smith, Alice", legacyEpub: "",
 	},
 }

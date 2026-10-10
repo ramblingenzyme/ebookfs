@@ -64,6 +64,9 @@ func TestReadMetaInvalidTOML(t *testing.T) {
 }
 
 func TestWriteMetaReadOnlyDir(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
 	dir := t.TempDir()
 	if err := os.Chmod(dir, 0444); err != nil {
 		t.Skip("cannot chmod temp dir:", err)

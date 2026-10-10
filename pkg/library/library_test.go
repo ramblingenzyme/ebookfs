@@ -26,7 +26,7 @@ func TestApplyMeta(t *testing.T) {
 		{"rating only", Edits{Rating: new(4.5)}, "unread", 4.5, []string{"keep"}},
 		{"tags only", Edits{Tags: new([]string{"new", "tags"})}, "unread", 2.5, []string{"new", "tags"}},
 		// Clearing tags is a set edit to an empty slice, not an absent one.
-		{"tags cleared", Edits{Tags: new([]string{})}, "unread", 2.5, nil},
+		{"tags cleared", Edits{Tags: new([]string{})}, "unread", 2.5, []string{}},
 		{
 			"all fields",
 			Edits{Status: new("read"), Rating: new(5.0), Tags: new([]string{"all"})},
@@ -44,8 +44,8 @@ func TestApplyMeta(t *testing.T) {
 			if updated.Rating != tc.rating {
 				t.Errorf("Rating = %g, want %g", updated.Rating, tc.rating)
 			}
-			if !slices.Equal(updated.Tags, tc.tags) {
-				t.Errorf("Tags = %v, want %v", updated.Tags, tc.tags)
+			if !slices.Equal(updated.Tags, tc.tags) || (updated.Tags == nil) != (tc.tags == nil) {
+				t.Errorf("Tags = %#v, want %#v", updated.Tags, tc.tags)
 			}
 			if updated.ID != start.ID {
 				t.Errorf("ID = %d, want %d — applyMeta must not touch identity", updated.ID, start.ID)

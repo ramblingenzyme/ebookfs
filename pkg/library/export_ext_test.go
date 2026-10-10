@@ -42,7 +42,7 @@ func TestKepubCacheDelegates(t *testing.T) {
 		t.Fatalf("Exporter: %v", err)
 	}
 
-	b := makeBook(1, "Test", "Alice")
+	b := makeBook(99, "Test", "Alice")
 	b.EpubPath = "mybook.epub"
 
 	b.Meta.Status = "reading"
@@ -62,7 +62,9 @@ func TestKepubCacheDelegates(t *testing.T) {
 		t.Errorf("Dirname = %q, want %q", dn, "Alice")
 	}
 
-	if _, ok := exp.Size(util.WrapBook(b)); ok {
+	// Size reads the sidecar directory, so it needs a book the library holds.
+	held := ingestTestEpub(t, lib, buildTestEpub(t, "Held", "Alice"))
+	if _, ok := exp.Size(held); ok {
 		t.Error("Size should report cold for a book with no cached conversion")
 	}
 

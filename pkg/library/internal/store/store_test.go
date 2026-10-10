@@ -88,9 +88,8 @@ func TestMoveKeepsOldAuthorDirWithRemainingBooks(t *testing.T) {
 	}
 }
 
-// The defensive no-op branch: Move must not error or touch the filesystem when
-// from and to are identical, even though Edit's guard currently never calls Move
-// in that case.
+// Move must not error or touch the filesystem when from and to are identical.
+// Every meta-only edit lands here, since Update calls Move unconditionally.
 func TestMoveSameLocationNoop(t *testing.T) {
 	s, root := newStore(t)
 
@@ -184,6 +183,9 @@ func TestDeleteRemovesBookDir(t *testing.T) {
 }
 
 func TestDeleteWithReadOnlyDirError(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
 	s, root := newStore(t)
 
 	dir := filepath.Join(root, "Author, A", "Test (1)")
