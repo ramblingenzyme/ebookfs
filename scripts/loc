@@ -1,0 +1,37 @@
+#!/bin/sh
+# Lines of Go, split three ways: what ships, what tests it, and the scaffolding
+# the tests are built on.
+#
+# Test helper code is the two shapes it takes here: a helpers*_test.go beside
+# the tests it serves, and a whole support package (internal/testutil, fstest,
+# libtest) that other packages' tests import. A support package's own tests
+# count as helpers too, since they test the scaffolding rather than the product.
+#
+# Fixture data under testdata/ is helper code that stopped being Go, so it gets
+# its own line: moving a document out of a string literal and into a file is a
+# relocation, and without this it reads as a deletion. It is raw lines rather
+# than a gocloc row because gocloc knows .xml but not .opf or .xhtml.
+[ $# -eq 0 ] && set -- .
+
+support='(^|/)internal/testing/'
+helper="(helpers[^/]*_test\.go\$|$support)"
+
+echo "=== Source Go ==="
+gocloc --fullpath --match='\.go$' --not-match="(_test\.go\$|$support)" "$@"
+
+echo
+echo "=== Test Go ==="
+gocloc --fullpath --match='_test\.go$' --not-match="$helper" "$@"
+
+echo
+echo "=== Test helper Go ==="
+gocloc --fullpath --match="$helper" --not-match='testdata' "$@"
+
+echo
+echo "=== Test fixture data ==="
+find "$@" -path '*/testdata/*' -type f -print0 2>/dev/null |
+	xargs -0 -r wc -l |
+	grep -v ' total$' |
+	awk '{n++; s+=$1} END{printf "%d files, %d lines\n", n, s}'
+
+echo
