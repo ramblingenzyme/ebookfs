@@ -1,56 +1,38 @@
 package vfile
 
 import (
+	"errors"
 	"math"
+	"slices"
 	"testing"
 )
+
+func mustWrite(t *testing.T, w *WriteBuffer, fid uint64, offset uint64, data string, seed func() []byte) {
+	t.Helper()
+	if _, err := w.Write(fid, offset, []byte(data), seed); err != nil {
+		t.Fatalf("Write fid %d at %d: %v", fid, offset, err)
+	}
+}
 
 // The shape of one fid's buffered writes: a 9P client sends a file's contents
 // as a sequence of offset writes, and the buffer has to reassemble them before
 // the embedding file commits on clunk.
 func TestWriteBufferAccumulates(t *testing.T) {
+	type write struct {
+		offset uint64
+		data   string
+	}
 	tests := []struct {
 		name   string
-		writes []struct {
-			offset uint64
-			data   string
-		}
-		want string
+		writes []write
+		want   string
 	}{
-		{
-			"single write",
-			[]struct {
-				offset uint64
-				data   string
-			}{{0, "hello"}},
-			"hello",
-		},
-		{
-			"sequential writes append",
-			[]struct {
-				offset uint64
-				data   string
-			}{{0, "hello "}, {6, "world"}},
-			"hello world",
-		},
-		{
-			"a later write overwrites in place",
-			[]struct {
-				offset uint64
-				data   string
-			}{{0, "hello world"}, {6, "WORLD"}},
-			"hello WORLD",
-		},
-		{
-			// A gap is zero-filled rather than rejected: 9P offsets are
-			// client-chosen and need not be contiguous.
-			"a gap is zero-filled",
-			[]struct {
-				offset uint64
-				data   string
-			}{{0, "ab"}, {4, "cd"}},
-			"ab\x00\x00cd",
-		},
+		{"single write", []write{{0, "hello"}}, "hello"},
+		{"sequential writes append", []write{{0, "hello "}, {6, "world"}}, "hello world"},
+		{"a later write overwrites in place", []write{{0, "hello world"}, {6, "WORLD"}}, "hello WORLD"},
+		// A gap is zero-filled rather than rejected: 9P offsets are
+		// client-chosen and need not be contiguous.
+		{"a gap is zero-filled", []write{{0, "ab"}, {4, "cd"}}, "ab\x00\x00cd"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -64,7 +46,7 @@ func TestWriteBufferAccumulates(t *testing.T) {
 					t.Errorf("Write returned %d, want %d — 9P treats a short count as a partial write", n, len(wr.data))
 				}
 			}
-			if got := string(w.Take(1)); got != tc.want {
+			if got := string(w.take(1)); got != tc.want {
 				t.Errorf("buffer = %q, want %q", got, tc.want)
 			}
 		})
@@ -78,10 +60,8 @@ func TestWriteBufferSeed(t *testing.T) {
 
 	t.Run("a mid-file write edits the seeded content", func(t *testing.T) {
 		w := NewWriteBuffer(4096)
-		if _, err := w.Write(1, 4, []byte("XXXX"), seed); err != nil {
-			t.Fatalf("Write: %v", err)
-		}
-		if got := string(w.Take(1)); got != "origXXXX" {
+		mustWrite(t, &w, 1, 4, "XXXX", seed)
+		if got := string(w.take(1)); got != "origXXXX" {
 			t.Errorf("buffer = %q, want %q", got, "origXXXX")
 		}
 	})
@@ -91,10 +71,8 @@ func TestWriteBufferSeed(t *testing.T) {
 		// arrives as a plain write at 0. Without the truncation the tail of the
 		// old value would survive: "new" over "original" would read "newginal".
 		w := NewWriteBuffer(4096)
-		if _, err := w.Write(1, 0, []byte("new"), seed); err != nil {
-			t.Fatalf("Write: %v", err)
-		}
-		if got := string(w.Take(1)); got != "new" {
+		mustWrite(t, &w, 1, 0, "new", seed)
+		if got := string(w.take(1)); got != "new" {
 			t.Errorf("buffer = %q, want %q — residual seed content leaked through", got, "new")
 		}
 	})
@@ -105,9 +83,7 @@ func TestWriteBufferSeed(t *testing.T) {
 
 		w := NewWriteBuffer(4096)
 		for _, off := range []uint64{0, 8, 16} {
-			if _, err := w.Write(1, off, []byte("xxxxxxxx"), counting); err != nil {
-				t.Fatalf("Write at %d: %v", off, err)
-			}
+			mustWrite(t, &w, 1, off, "xxxxxxxx", counting)
 		}
 		if calls != 1 {
 			t.Errorf("seed called %d times, want 1 — later writes must build on the accumulated buffer", calls)
@@ -124,21 +100,17 @@ func TestWriteBufferEmptyWrite(t *testing.T) {
 	if err != nil || n != 0 {
 		t.Errorf("Write(nil) = (%d, %v), want (0, nil)", n, err)
 	}
-	if got := w.Take(1); got != nil {
-		t.Errorf("Take = %q, want nil — an empty write must not create a buffer", got)
+	if got := w.take(1); got != nil {
+		t.Errorf("take = %q, want nil — an empty write must not create a buffer", got)
 	}
 
 	// The consequence that makes the early return load-bearing: recording the
 	// fid would mark it as already seeded, so the next real write would build
 	// on an empty buffer instead of the file's current value.
 	seeded := NewWriteBuffer(4096)
-	if _, err := seeded.Write(1, 0, nil, nil); err != nil {
-		t.Fatalf("empty Write: %v", err)
-	}
-	if _, err := seeded.Write(1, 4, []byte("XXXX"), func() []byte { return []byte("original") }); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
-	if got := string(seeded.Take(1)); got != "origXXXX" {
+	mustWrite(t, &seeded, 1, 0, "", nil)
+	mustWrite(t, &seeded, 1, 4, "XXXX", func() []byte { return []byte("original") })
+	if got := string(seeded.take(1)); got != "origXXXX" {
 		t.Errorf("buffer = %q, want %q — the empty write consumed the seed", got, "origXXXX")
 	}
 }
@@ -179,27 +151,77 @@ func TestWriteBufferEnforcesLimit(t *testing.T) {
 	}
 }
 
-// The handoff to the committing file.
-func TestWriteBufferTake(t *testing.T) {
-	t.Run("a fid that never wrote yields nil", func(t *testing.T) {
-		w := NewWriteBuffer(4096)
-		if got := w.Take(1); got != nil {
-			t.Errorf("Take = %q, want nil so the caller can tell no write happened", got)
-		}
-	})
+// Commit hands the buffer to the commit callback, but only if the fid wrote,
+// and only once.
+func TestWriteBufferCommit(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		write   string
+		commits int
+		want    []string
+	}{
+		{"a fid that never wrote does not call commit", "", 1, nil},
+		{"a fid that wrote calls commit with its data", "data", 1, []string{"data"}},
+		{"a second Commit does not call commit", "data", 2, []string{"data"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := NewWriteBuffer(4096)
+			if tc.write != "" {
+				mustWrite(t, &w, 1, 0, tc.write, nil)
+			}
+			var got []string
+			for range tc.commits {
+				if err := w.Commit(1, func(data []byte) error {
+					got = append(got, string(data))
+					return nil
+				}); err != nil {
+					t.Fatalf("Commit: %v", err)
+				}
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("commit called with %q, want %q", got, tc.want)
+			}
+		})
+	}
 
-	t.Run("taking twice yields nil the second time", func(t *testing.T) {
+	t.Run("commit returns the callback's error", func(t *testing.T) {
 		w := NewWriteBuffer(4096)
-		if _, err := w.Write(1, 0, []byte("data"), nil); err != nil {
-			t.Fatalf("Write: %v", err)
-		}
-		if got := string(w.Take(1)); got != "data" {
-			t.Fatalf("first Take = %q, want %q", got, "data")
-		}
-		if got := w.Take(1); got != nil {
-			t.Errorf("second Take = %q, want nil — the buffer must not commit twice", got)
+		mustWrite(t, &w, 1, 0, "data", nil)
+		wantErr := errors.New("commit failed")
+		if err := w.Commit(1, func([]byte) error { return wantErr }); err != wantErr {
+			t.Errorf("Commit returned %v, want %v", err, wantErr)
 		}
 	})
+}
+
+// CommitText is for command-line files: it trims whitespace and skips commit if empty.
+func TestWriteBufferCommitText(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		write string
+		want  []string
+	}{
+		{"a fid that never wrote does not call commit", "", nil},
+		{"a fid that wrote only whitespace does not call commit", "  \n", nil},
+		{"a fid that wrote a command calls commit with the trimmed text", "  cmd \n", []string{"cmd"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := NewWriteBuffer(4096)
+			if tc.write != "" {
+				mustWrite(t, &w, 1, 0, tc.write, nil)
+			}
+			var got []string
+			if err := w.CommitText(1, func(s string) error {
+				got = append(got, s)
+				return nil
+			}); err != nil {
+				t.Errorf("CommitText: %v", err)
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("commit called with %q, want %q", got, tc.want)
+			}
+		})
+	}
 }
 
 // Two clients writing the same file concurrently accumulate separately. They
@@ -208,17 +230,13 @@ func TestWriteBufferTake(t *testing.T) {
 func TestWriteBufferPerFidIsolation(t *testing.T) {
 	w := NewWriteBuffer(4096)
 
-	if _, err := w.Write(1, 0, []byte("first"), nil); err != nil {
-		t.Fatalf("Write fid 1: %v", err)
-	}
-	if _, err := w.Write(2, 0, []byte("second"), nil); err != nil {
-		t.Fatalf("Write fid 2: %v", err)
-	}
+	mustWrite(t, &w, 1, 0, "first", nil)
+	mustWrite(t, &w, 2, 0, "second", nil)
 
-	if got := string(w.Take(1)); got != "first" {
+	if got := string(w.take(1)); got != "first" {
 		t.Errorf("fid 1 buffer = %q, want %q", got, "first")
 	}
-	if got := string(w.Take(2)); got != "second" {
+	if got := string(w.take(2)); got != "second" {
 		t.Errorf("fid 2 buffer = %q, want %q — taking one fid disturbed the other", got, "second")
 	}
 }

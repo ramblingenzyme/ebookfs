@@ -3,6 +3,7 @@ package library
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -14,92 +15,35 @@ func entryNames(entries []os.DirEntry) []string {
 	return names
 }
 
-func TestCleanInboxTempRemovesStaleEpub(t *testing.T) {
+// Only regular files ending .epub go. A directory with that suffix stays, so
+// the type check is what keeps it.
+func TestCleanInboxTemp(t *testing.T) {
 	dir := t.TempDir()
-
-	stale := filepath.Join(dir, "123456789.epub")
-	if err := os.WriteFile(stale, []byte("data"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := cleanInboxTemp(dir); err != nil {
-		t.Fatalf("cleanInboxTemp: %v", err)
-	}
-
-	if _, err := os.Stat(stale); !os.IsNotExist(err) {
-		t.Errorf("stale epub %q should have been removed", stale)
-	}
-}
-
-func TestCleanInboxTempLeavesNonEpub(t *testing.T) {
-	dir := t.TempDir()
-
-	kept := filepath.Join(dir, "readme.txt")
-	if err := os.WriteFile(kept, []byte("hello"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := cleanInboxTemp(dir); err != nil {
-		t.Fatalf("cleanInboxTemp: %v", err)
-	}
-
-	if _, err := os.Stat(kept); os.IsNotExist(err) {
-		t.Errorf("non-epub file %q should not have been removed", kept)
-	}
-}
-
-func TestCleanInboxTempLeavesDirectories(t *testing.T) {
-	dir := t.TempDir()
-
-	subdir := filepath.Join(dir, "subdir")
-	if err := os.Mkdir(subdir, 0755); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := cleanInboxTemp(dir); err != nil {
-		t.Fatalf("cleanInboxTemp: %v", err)
-	}
-
-	if _, err := os.Stat(subdir); os.IsNotExist(err) {
-		t.Errorf("subdirectory %q should not have been removed", subdir)
-	}
-}
-
-func TestCleanInboxTempEmptyDir(t *testing.T) {
-	dir := t.TempDir()
-
-	if err := cleanInboxTemp(dir); err != nil {
-		t.Fatalf("cleanInboxTemp on empty dir: %v", err)
-	}
-}
-
-func TestCleanInboxTempNonexistentDir(t *testing.T) {
-	err := cleanInboxTemp("/nonexistent-path-ebookfs-test")
-	if err == nil {
-		t.Fatal("expected error for nonexistent directory")
-	}
-}
-
-func TestCleanInboxTempRemovesMultiple(t *testing.T) {
-	dir := t.TempDir()
-
-	files := []string{"a.epub", "b.epub", "c.epub"}
-	for _, f := range files {
-		if err := os.WriteFile(filepath.Join(dir, f), []byte("data"), 0644); err != nil {
+	for _, name := range []string{"123.epub", "456.epub", "readme.txt"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("data"), 0644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(dir, "keep.me"), []byte("data"), 0644); err != nil {
+	if err := os.Mkdir(filepath.Join(dir, "nested.epub"), 0755); err != nil {
 		t.Fatal(err)
 	}
 
 	if err := cleanInboxTemp(dir); err != nil {
 		t.Fatalf("cleanInboxTemp: %v", err)
 	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := entryNames(entries), []string{"nested.epub", "readme.txt"}; !slices.Equal(got, want) {
+		t.Errorf("left %v, want %v", got, want)
+	}
 
-	entries, _ := os.ReadDir(dir)
-	if len(entries) != 1 || entries[0].Name() != "keep.me" {
-		t.Errorf("expected only 'keep.me' to remain, got %v", entryNames(entries))
+	if err := cleanInboxTemp(t.TempDir()); err != nil {
+		t.Errorf("cleanInboxTemp on an empty directory: %v", err)
+	}
+	if err := cleanInboxTemp(filepath.Join(dir, "missing")); err == nil {
+		t.Error("cleanInboxTemp on a missing directory: want an error")
 	}
 }
 

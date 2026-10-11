@@ -14,31 +14,40 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// The duplicate rule compares author sets, so either order is one book.
-// Regression: a path lookup filed "A & B" and "B & A" as two books.
-func TestIngestDuplicateIgnoresAuthorOrder(t *testing.T) {
-	lib := openTestLibrary(t)
+func TestIngestDuplicateRule(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		firstTitle    string
+		firstAuthors  []string
+		secondTitle   string
+		secondAuthors []string
+		want          error
+	}{
+		{
+			name:          "author order is ignored",
+			firstTitle:    "Good Omens",
+			firstAuthors:  []string{"Neil Gaiman", "Terry Pratchett"},
+			secondTitle:   "Good Omens",
+			secondAuthors: []string{"Terry Pratchett", "Neil Gaiman"},
+			want:          library.ErrDuplicate,
+		},
+		{
+			name:          "another author is another book",
+			firstTitle:    "Selected Poems",
+			firstAuthors:  []string{"Alice"},
+			secondTitle:   "Selected Poems",
+			secondAuthors: []string{"Bob"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			lib := openTestLibrary(t)
+			ingestTestEpub(t, lib, buildTestEpub(t, tc.firstTitle, tc.firstAuthors...))
 
-	ingestTestEpub(t, lib, buildTestEpub(t, "Good Omens", "Neil Gaiman", "Terry Pratchett"))
-
-	h, err := lib.CreateIngest()
-	if err != nil {
-		t.Fatalf("CreateIngest: %v", err)
+			if _, err := tryIngest(t, lib, buildTestEpub(t, tc.secondTitle, tc.secondAuthors...)); !errors.Is(err, tc.want) {
+				t.Fatalf("second ingest err = %v, want %v", err, tc.want)
+			}
+		})
 	}
-	if _, err := h.WriteAt(buildTestEpub(t, "Good Omens", "Terry Pratchett", "Neil Gaiman"), 0); err != nil {
-		t.Fatalf("WriteAt: %v", err)
-	}
-	if _, err := h.Ingest(); !errors.Is(err, library.ErrDuplicate) {
-		t.Fatalf("second ingest err = %v, want ErrDuplicate", err)
-	}
-}
-
-// The title query matches it; only the author set tells the two apart.
-func TestIngestSameTitleDifferentAuthors(t *testing.T) {
-	lib := openTestLibrary(t)
-
-	ingestTestEpub(t, lib, buildTestEpub(t, "Selected Poems", "Alice"))
-	ingestTestEpub(t, lib, buildTestEpub(t, "Selected Poems", "Bob"))
 }
 
 // A repeat fails the index's (book, entry) join-table keys. A repeated author
@@ -88,14 +97,7 @@ func TestIngestKeepsTheFirstOfRepeatedEntries(t *testing.T) {
 func TestIngestRejectsAFileThatIsNotAnEpub(t *testing.T) {
 	lib := openTestLibrary(t)
 
-	h, err := lib.CreateIngest()
-	if err != nil {
-		t.Fatalf("CreateIngest: %v", err)
-	}
-	if _, err := h.WriteAt([]byte("this is plainly not a zip archive"), 0); err != nil {
-		t.Fatalf("WriteAt: %v", err)
-	}
-	if _, err := h.Ingest(); !errors.Is(err, library.ErrNotEpub) {
+	if _, err := tryIngest(t, lib, []byte("this is plainly not a zip archive")); !errors.Is(err, library.ErrNotEpub) {
 		t.Fatalf("ingest err = %v, want ErrNotEpub", err)
 	}
 }

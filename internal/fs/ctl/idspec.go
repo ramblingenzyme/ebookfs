@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/ramblingenzyme/ebookfs/internal/fs/textfmt"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
@@ -37,13 +38,11 @@ func parseSelection(spec string) (library.Query, error) {
 }
 
 func parseIdList(spec string) (library.Query, error) {
-	parts := strings.Split(spec, ",")
+	parts := strings.FieldsFunc(spec, func(r rune) bool {
+		return r == ',' || unicode.IsSpace(r)
+	})
 	ids := make([]int64, 0, len(parts))
 	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
 		id, err := strconv.ParseInt(p, 10, 64)
 		if err != nil {
 			return library.Query{}, fmt.Errorf("invalid id %q in spec %q", p, spec)

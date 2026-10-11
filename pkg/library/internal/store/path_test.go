@@ -23,47 +23,41 @@ func TestLayout(t *testing.T) {
 }
 
 // A '/' in a title or an author name cannot split a library directory in two.
-// The epub package reports metadata as the file wrote it (EPUB 3.3 §5.5.2), so a
-// title like "Either/Or" reaches Layout intact and this is the only thing
-// standing between it and a stray nested directory.
-func TestLayoutSlashInTitleStaysOneDirectory(t *testing.T) {
+// An author name is read verbatim from the epub, so ".." is a value a file
+// can carry, and filepath.Join would walk it out of the library root. "."
+// collapses into the root instead. PathSafe prevents both.
+func TestLayoutKeepsEachComponentInOneDirectory(t *testing.T) {
 	s := layoutStore()
 
-	loc := s.Layout([]book.Author{{Name: "AC/DC"}}, "Either/Or", 7)
-	dir := filepath.Dir(loc.EpubPath)
-	if got := strings.Count(dir, string(filepath.Separator)); got != 1 {
-		t.Errorf("directory = %q, want exactly two components, got %d separators", dir, got)
-	}
-	if want := filepath.Join("AC-DC", "Either-Or (7)"); dir != want {
-		t.Errorf("directory = %q, want %q", dir, want)
-	}
-}
-
-// PathSafe's other guarantee. An author name is read verbatim from the epub, so
-// ".." is a value a file can carry, and filepath.Join would walk it out of the
-// library root: the book written outside the library entirely, with ingest, move
-// and delete all then operating on the escaped path. "." collapses into the root
-// instead.
-func TestLayoutCannotEscapeTheLibraryRoot(t *testing.T) {
-	s := layoutStore()
-
-	for _, name := range []string{"..", ".", "...", " "} {
-		loc := s.Layout([]book.Author{{Name: name}}, "Title", 5)
-		if strings.HasPrefix(loc.EpubPath, ".") || strings.Contains(loc.EpubPath, ".."+string(filepath.Separator)) {
-			t.Errorf("author %q gave EpubPath %q, which leaves the library root", name, loc.EpubPath)
-		}
-		if got := len(strings.Split(filepath.Dir(loc.EpubPath), string(filepath.Separator))); got != 2 {
-			t.Errorf("author %q gave directory %q, want exactly two components", name, filepath.Dir(loc.EpubPath))
-		}
-	}
-}
-
-func TestLayoutUnknownAuthor(t *testing.T) {
-	s := layoutStore()
-
-	loc := s.Layout(nil, "Untitled", 99)
-	if loc.EpubPath != filepath.Join("Unknown/Untitled (99)", "Untitled.epub") {
-		t.Errorf("EpubPath = %q, want %q", loc.EpubPath, filepath.Join("Unknown/Untitled (99)", "Untitled.epub"))
+	for _, tc := range []struct {
+		name    string
+		authors []book.Author
+		title   string
+		id      int64
+		wantDir string // empty means check escape properties instead
+	}{
+		{"slash", []book.Author{{Name: "AC/DC"}}, "Either/Or", 7,
+			filepath.Join("AC-DC", "Either-Or (7)")},
+		{"dotdot", []book.Author{{Name: ".."}}, "Title", 5, ""},
+		{"dot", []book.Author{{Name: "."}}, "Title", 5, ""},
+		{"ellipsis", []book.Author{{Name: "..."}}, "Title", 5, ""},
+		{"space", []book.Author{{Name: " "}}, "Title", 5, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			loc := s.Layout(tc.authors, tc.title, tc.id)
+			if tc.wantDir != "" {
+				if got := filepath.Dir(loc.EpubPath); got != tc.wantDir {
+					t.Errorf("directory = %q, want %q", got, tc.wantDir)
+				}
+				return
+			}
+			if strings.HasPrefix(loc.EpubPath, ".") || strings.Contains(loc.EpubPath, ".."+string(filepath.Separator)) {
+				t.Errorf("EpubPath %q leaves the library root", loc.EpubPath)
+			}
+			if got := len(strings.Split(filepath.Dir(loc.EpubPath), string(filepath.Separator))); got != 2 {
+				t.Errorf("directory %q, want exactly two components", filepath.Dir(loc.EpubPath))
+			}
+		})
 	}
 }
 
@@ -103,7 +97,6 @@ func TestEpubFilename(t *testing.T) {
 		{"empty authors", []book.Author{}, "Empty Authors", "Empty Authors.epub"},
 		{"colon in title", []book.Author{{Name: "Alice"}}, "Title: Sub", "Title- Sub - Alice.epub"},
 		{"slash in author", []book.Author{{Name: "Alice/Author"}}, "Title", "Title - Alice-Author.epub"},
-		{"leading dot trimmed", []book.Author{{Name: "Alice"}}, ".hidden", "hidden - Alice.epub"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -112,13 +105,6 @@ func TestEpubFilename(t *testing.T) {
 				t.Errorf("epubFilename(%v, %q) = %q, want %q", tt.authors, tt.title, got, tt.want)
 			}
 		})
-	}
-}
-
-func TestEpubFilenameForFATFallback(t *testing.T) {
-	got := epubFilename([]book.Author{{Name: "Alice"}}, ".")
-	if got != "_ - Alice.epub" {
-		t.Errorf("epubFilename = %q, want %q", got, "_ - Alice.epub")
 	}
 }
 

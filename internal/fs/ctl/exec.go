@@ -1,6 +1,7 @@
 package ctl
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -150,7 +151,7 @@ func deleteBook(f *CtlFile, args []string) string {
 	}
 
 	if err := f.lib.Delete(id64); err != nil {
-		return fmt.Sprintf("error: book %d: %v", id64, err)
+		return "error: " + bookError(id64, err)
 	}
 	return fmt.Sprintf("ok: book %d deleted", id64)
 }
@@ -296,7 +297,7 @@ func (f *CtlFile) editSelection(op string, query library.Query, editFn func(*lib
 			continue
 		}
 		if _, err := f.lib.Edit(id, *edits); err != nil {
-			errs = append(errs, fmt.Sprintf("book %d: %v", id, err))
+			errs = append(errs, bookError(id, err))
 		} else {
 			affected++
 		}
@@ -328,4 +329,17 @@ func formatResult(op string, affected, skipped int64, errs []string) string {
 		}
 	}
 	return strings.Join(parts, "\n")
+}
+
+// bookError names the book a library error is about. The library's own lookup
+// already names it, but errors from the store do not.
+func bookError(id int64, err error) string {
+	if errors.Is(err, library.ErrBookNotFound) {
+		return fmt.Sprintf("book %d: not found", id)
+	}
+	prefix := fmt.Sprintf("book %d: ", id)
+	if msg := err.Error(); strings.HasPrefix(msg, prefix) {
+		return msg
+	}
+	return prefix + err.Error()
 }

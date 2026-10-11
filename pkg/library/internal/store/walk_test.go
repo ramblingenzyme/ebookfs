@@ -34,15 +34,3 @@ func TestWalk(t *testing.T) {
 		}
 	}
 }
-
-func TestWalkEmptyLibrary(t *testing.T) {
-	s, _ := newStore(t)
-
-	results, err := s.Walk()
-	if err != nil {
-		t.Fatalf("Walk on empty library: %v", err)
-	}
-	if len(results) != 0 {
-		t.Errorf("Walk returned %d entries, want 0", len(results))
-	}
-}

@@ -20,7 +20,8 @@ Commands:
 
   *         all books
   42        single book
-  1,2,3     comma-separated list
+  1,2,3     list, split on commas or spaces; quote a
+            spaced list, as in "1 2 3"
   <query>   same syntax as the search view (see below)
 
 Query syntax:

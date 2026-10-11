@@ -1,115 +1,55 @@
 package book
 
 import (
+	"bytes"
+	"image"
+	"image/jpeg"
 	"testing"
 
 	"github.com/knusbaum/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
-	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
-	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-func newTestCoverFile(t *testing.T, lib ContentReader, edit func(int64, library.Edits) (*library.Book, error)) *coverFile {
-	t.Helper()
-	book := util.MakeMutableBook(1, "Test", "Author")
-	book.CoverSize = 16
-	return newCoverFile(newStat(util.NewTestFS(t), "cover.jpg", 0644), lib, edit, util.Fixed(util.WrapBook(book)))
-}
-
-func TestCoverFileStatLength(t *testing.T) {
-	cf := newTestCoverFile(t, mock.ContentReader{}, func(int64, library.Edits) (*library.Book, error) { return nil, nil })
-
-	fstest.StatLength(t, cf, 16)
-}
-
-func TestCoverFileOpenRead(t *testing.T) {
-	lib := mock.ContentReader{
-		ContentFn: func(_ int64) (library.EpubReader, error) {
-			return &mock.EpubReader{CoverFn: func() ([]byte, error) { return []byte("cover image data"), nil }}, nil
-		},
+// The written bytes reach the library as a cover edit, and the library's
+// refusal of bytes that are no image comes back from the clunk.
+func TestCoverFileWrite(t *testing.T) {
+	var jpg bytes.Buffer
+	if err := jpeg.Encode(&jpg, image.NewGray(image.Rect(0, 0, 1, 1)), nil); err != nil {
+		t.Fatal(err)
 	}
-	cf := newTestCoverFile(t, lib, func(int64, library.Edits) (*library.Book, error) { return nil, nil })
+	for _, tc := range []struct {
+		name    string
+		write   string
+		refused bool
+	}{
+		{"replaces", jpg.String(), false},
+		{"refusal reaches the clunk", "not an image", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			lib, b := ingestedBook(t)
 
-	if got := fstest.Fid(t, cf, 1).Get(proto.Mode(0), 50); got != "cover image data" {
-		t.Errorf("Read = %q, want %q", got, "cover image data")
-	}
-}
+			cf := newCoverFile(newStat(util.NewTestFS(t), "cover.jpg", 0644), lib, lib.Edit, util.Fixed(b))
+			fid := fstest.Fid(t, cf, 1)
+			fid.Open(proto.Mode(0))
+			fid.Write(0, tc.write)
 
-func TestCoverFileWriteClose(t *testing.T) {
-	var written *[]byte
-	lib := mock.ContentReader{
-		ContentFn: func(_ int64) (library.EpubReader, error) {
-			return &mock.EpubReader{CoverFn: func() ([]byte, error) { return []byte("original"), nil }}, nil
-		},
-	}
-	cf := newTestCoverFile(t, lib, func(id int64, edits library.Edits) (*library.Book, error) {
-		written = edits.Cover
-		return nil, nil
-	})
+			if tc.refused {
+				if err := fid.WantCloseError(); err == nil {
+					t.Error("Close succeeded, want the library's refusal")
+				}
+				return
+			}
+			fid.Close()
 
-	fstest.Fid(t, cf, 1).Set(proto.Mode(0), "new cover")
-
-	if string(*written) != "new cover" {
-		t.Errorf("edit called with %q, want %q", string(*written), "new cover")
-	}
-}
-
-func TestCoverFileWriteEmptyDoesNotCallEdit(t *testing.T) {
-	called := false
-	lib := mock.ContentReader{
-		ContentFn: func(_ int64) (library.EpubReader, error) {
-			return &mock.EpubReader{CoverFn: func() ([]byte, error) { return []byte("original"), nil }}, nil
-		},
-	}
-	cf := newTestCoverFile(t, lib, func(int64, library.Edits) (*library.Book, error) {
-		called = true
-		return nil, nil
-	})
-
-	fid := fstest.Fid(t, cf, 1)
-	fid.Open(proto.Mode(0))
-	fid.Close()
-
-	if called {
-		t.Error("edit should not be called when no data was written")
-	}
-}
-
-func TestCoverFilePerFidBuffers(t *testing.T) {
-	lib := mock.ContentReader{
-		ContentFn: func(_ int64) (library.EpubReader, error) {
-			return &mock.EpubReader{CoverFn: func() ([]byte, error) { return []byte("shared"), nil }}, nil
-		},
-	}
-	cf := newTestCoverFile(t, lib, func(int64, library.Edits) (*library.Book, error) { return nil, nil })
-
-	fid1, fid2 := fstest.Fid(t, cf, 1), fstest.Fid(t, cf, 2)
-	fid1.Open(proto.Mode(0))
-	fid2.Open(proto.Mode(0))
-
-	fid1.Write(0, "fid1 data")
-
-	// Reads return the Open snapshot regardless of writes to any fid.
-	data1, data2 := fid1.Read(0, 20), fid2.Read(0, 20)
-	if data1 != "shared" || data2 != "shared" {
-		t.Errorf("reads = %q/%q, want both %q", data1, data2, "shared")
-	}
-}
-
-func TestCoverFileWriteErrorPassesThrough(t *testing.T) {
-	lib := mock.ContentReader{
-		ContentFn: func(_ int64) (library.EpubReader, error) {
-			return &mock.EpubReader{CoverFn: func() ([]byte, error) { return []byte("original"), nil }}, nil
-		},
-	}
-	cf := newTestCoverFile(t, lib, func(int64, library.Edits) (*library.Book, error) { return nil, util.ErrTest })
-
-	fid := fstest.Fid(t, cf, 1)
-	fid.Open(proto.Mode(0))
-	fid.Write(0, "data")
-
-	if err := fid.WantCloseError(); err != util.ErrTest {
-		t.Errorf("Close error = %v, want %v", err, util.ErrTest)
+			r, err := lib.Content(b.ID())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer r.Close()
+			if got, err := r.Cover(); err != nil || string(got) != tc.write {
+				t.Errorf("cover = %d bytes (err %v), want the %d written", len(got), err, len(tc.write))
+			}
+		})
 	}
 }

@@ -8,59 +8,37 @@ import (
 	"testing"
 )
 
-func TestReadSidecar(t *testing.T) {
+func TestSidecarsRoundTrip(t *testing.T) {
 	lib := openTestLibrary(t)
-	data := buildTestEpub(t, "Test Book", "Author")
-	ingested := ingestTestEpub(t, lib, data)
+	id := ingestTestEpub(t, lib, buildTestEpub(t, "Test Book", "Author")).ID()
 
-	// Write a sidecar file
-	sidecarData := []byte("test sidecar content")
-	if err := lib.WriteSidecar(ingested.ID(), "notes.txt", sidecarData); err != nil {
-		t.Fatalf("WriteSidecar: %v", err)
+	read := func(name, want string) {
+		t.Helper()
+		got, err := lib.ReadSidecar(id, name)
+		if err != nil {
+			t.Fatalf("ReadSidecar(%q): %v", name, err)
+		}
+		if string(got) != want {
+			t.Errorf("ReadSidecar(%q) = %q, want %q", name, got, want)
+		}
 	}
 
-	// Read it back
-	got, err := lib.ReadSidecar(ingested.ID(), "notes.txt")
-	if err != nil {
-		t.Fatalf("ReadSidecar: %v", err)
+	for _, data := range []string{"original", "updated"} {
+		if err := lib.WriteSidecar(id, "notes.txt", []byte(data)); err != nil {
+			t.Fatalf("WriteSidecar: %v", err)
+		}
+		read("notes.txt", data)
 	}
-	if string(got) != string(sidecarData) {
-		t.Errorf("ReadSidecar = %q, want %q", got, sidecarData)
-	}
-}
 
-func TestWithSidecars(t *testing.T) {
-	lib := openTestLibrary(t)
-	data := buildTestEpub(t, "Test Book", "Author")
-	ingested := ingestTestEpub(t, lib, data)
-
-	// Use WithSidecars to write a file
-	err := lib.WithSidecars(ingested.ID(), func(r *os.Root) error {
+	if err := lib.WithSidecars(id, func(r *os.Root) error {
 		return r.WriteFile("custom.txt", []byte("custom content"), 0644)
-	})
-	if err != nil {
+	}); err != nil {
 		t.Fatalf("WithSidecars: %v", err)
 	}
+	read("custom.txt", "custom content")
 
-	// Read it back with ReadSidecar
-	got, err := lib.ReadSidecar(ingested.ID(), "custom.txt")
-	if err != nil {
-		t.Fatalf("ReadSidecar: %v", err)
-	}
-	if string(got) != "custom content" {
-		t.Errorf("ReadSidecar = %q, want %q", got, "custom content")
-	}
-}
-
-func TestSidecarNotFound(t *testing.T) {
-	lib := openTestLibrary(t)
-	data := buildTestEpub(t, "Test Book", "Author")
-	ingested := ingestTestEpub(t, lib, data)
-
-	// Try to read a non-existent sidecar
-	_, err := lib.ReadSidecar(ingested.ID(), "nonexistent.txt")
-	if err == nil {
-		t.Error("ReadSidecar should fail for non-existent file")
+	if _, err := lib.ReadSidecar(id, "nonexistent.txt"); err == nil {
+		t.Error("ReadSidecar should fail for a sidecar never written")
 	}
 }
 
@@ -79,17 +57,5 @@ func TestSidecarAccessDoesNotRecreateARemovedBookDirectory(t *testing.T) {
 	}
 	if _, err := os.Stat(dir); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("book directory exists again after sidecar access (stat err = %v)", err)
-	}
-}
-
-func TestSidecarBookNotFound(t *testing.T) {
-	lib := openTestLibrary(t)
-
-	// Try to access sidecars for a non-existent book
-	err := lib.WithSidecars(999, func(r *os.Root) error {
-		return nil
-	})
-	if err == nil {
-		t.Error("WithSidecars should fail for non-existent book")
 	}
 }

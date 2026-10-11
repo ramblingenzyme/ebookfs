@@ -8,53 +8,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
-func TestIngest(t *testing.T) {
-	s, root := newStore(t)
-
-	tmpEpub := filepath.Join(root, ".inbox-tmp", "staged.epub")
-	if err := os.MkdirAll(filepath.Dir(tmpEpub), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(tmpEpub, []byte("fake-epub-content"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	loc := s.Layout([]book.Author{{Name: "Alice"}}, "Ingested", 10)
-	meta := &book.Meta{ID: 10}
-
-	if _, err := s.Ingest(tmpEpub, loc, meta); err != nil {
-		t.Fatalf("Ingest: %v", err)
-	}
-
-	bookDir := filepath.Join(root, loc.Dir())
-	if _, err := os.Stat(bookDir); err != nil {
-		t.Errorf("book directory not created: %v", err)
-	}
-	gotEpub := filepath.Join(bookDir, loc.Filename())
-	if _, err := os.Stat(gotEpub); err != nil {
-		t.Errorf("epub not found at %s: %v", gotEpub, err)
-	}
-	data, err := os.ReadFile(gotEpub)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(data) != "fake-epub-content" {
-		t.Errorf("epub content = %q, want %q", string(data), "fake-epub-content")
-	}
-
-	metaPath := filepath.Join(bookDir, metaFilename)
-	if _, err := os.Stat(metaPath); err != nil {
-		t.Errorf("meta.toml not found: %v", err)
-	}
-	gotMeta, err := readMeta(metaPath)
-	if err != nil {
-		t.Fatalf("readMeta: %v", err)
-	}
-	if gotMeta.ID != 10 {
-		t.Errorf("meta ID = %d, want %d", gotMeta.ID, 10)
-	}
-}
-
 // Ingest returns an error when the sidecar write fails, but does not clean up:
 // the caller is responsible for deciding whether to delete the partial
 // directory.

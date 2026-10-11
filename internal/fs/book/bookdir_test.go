@@ -1,6 +1,7 @@
 package book
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
@@ -17,37 +18,31 @@ func newTestBookDir(t *testing.T, b *library.Book) *BookDir {
 	return NewBookDir(util.NewTestFS(t), mock.ContentReader{}, func(int64, library.Edits) (*library.Book, error) { return nil, nil }, b)
 }
 
-func TestNewBookDirCreatesCoverChild(t *testing.T) {
-	b := util.MakeMutableBook(1, "Has Cover", "Author")
-	b.CoverPath = "OEBPS/cover.jpg"
+func TestBookDirListing(t *testing.T) {
+	fields := []string{"authors", "contributors", "description", "id", "identifiers", "language",
+		"opf", "pubdate", "publisher", "rating", "rights", "series", "series_index", "status",
+		"subjects", "tags", "title"}
+	for _, tc := range []struct {
+		name  string
+		cover string
+		extra []string
+	}{
+		{"with a cover", "OEBPS/cover.jpg", []string{"cover.jpg"}},
+		{"without", "", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			b := util.MakeMutableBook(1, "Title", "Author")
+			b.CoverPath = tc.cover
+			b.EpubPath = "Author/Title (1)/Title - Author.epub"
 
-	d := newTestBookDir(t, util.WrapBook(b))
-
-	fstest.HasChild(t, d, "cover.jpg")
-}
-
-func TestNewBookDirNoCoverWhenEmpty(t *testing.T) {
-	b := util.MakeMutableBook(1, "No Cover", "Author")
-	b.CoverPath = ""
-
-	d := newTestBookDir(t, util.WrapBook(b))
-
-	fstest.NoChild(t, d, "cover.jpg")
-}
-
-func TestBookDirStatReportsTitle(t *testing.T) {
-	d := newTestBookDir(t, util.MakeBook(1, "My Title", "Author"))
-
-	s := d.Stat()
-	if s.Name != "My Title" {
-		t.Errorf("Stat.Name = %q, want %q", s.Name, "My Title")
+			want := append([]string{"Title - Author.epub"}, fields...)
+			want = append(want, tc.extra...)
+			slices.Sort(want)
+			if got := fstest.ChildNames(newTestBookDir(t, util.WrapBook(b))); !slices.Equal(got, want) {
+				t.Errorf("children = %q, want %q", got, want)
+			}
+		})
 	}
-}
-
-func TestBookDirHasIDChild(t *testing.T) {
-	d := newTestBookDir(t, util.MakeBook(1, "Test", "Author"))
-
-	fstest.ChildAs[*fs.StaticFile](t, d, "id")
 }
 
 // The rendering, including the sort: a map has no order, and a file that
@@ -70,15 +65,12 @@ func TestBookDirIdentifiersFile(t *testing.T) {
 	if got := readChild(t, d, "identifiers"); got != want {
 		t.Errorf("identifiers = %q, want %q", got, want)
 	}
-}
 
-// A book with no identifiers still gets the file, the way an unset pubdate does: present
-// and empty, so a client never has to tell "no identifiers" from "no such file".
-func TestBookDirIdentifiersFileEmpty(t *testing.T) {
-	d := newTestBookDir(t, util.MakeBook(1, "Test", "Author"))
-
-	if got := readChild(t, d, "identifiers"); got != "\n" {
-		t.Errorf("identifiers = %q, want a lone newline", got)
+	// A book with no identifiers still gets the file, the way an unset pubdate
+	// does, so a client never has to tell "no identifiers" from "no such file".
+	empty := newTestBookDir(t, util.MakeBook(2, "Test", "Author"))
+	if got := readChild(t, empty, "identifiers"); got != "\n" {
+		t.Errorf("identifiers with none = %q, want a lone newline", got)
 	}
 }
 

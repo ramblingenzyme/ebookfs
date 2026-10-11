@@ -3,6 +3,8 @@ package ctl
 import (
 	"strings"
 	"testing"
+
+	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
 )
 
 func TestHelpRendersEveryCommand(t *testing.T) {
@@ -28,7 +30,7 @@ func TestHelpRendersEveryCommand(t *testing.T) {
 func TestUsageMatchesTheDocumentedSignature(t *testing.T) {
 	for _, c := range commands {
 		t.Run(c.name, func(t *testing.T) {
-			got := ctlFor(t).dispatch(c.name, make([]string, c.arity()+1))
+			got := newTestCtl(t, mock.SearchDeleter{}, mock.Editor{}).dispatch(c.name, make([]string, c.arity()+1))
 			if want := c.usage(); got != want {
 				t.Errorf("wrong-arity result = %q, want %q", got, want)
 			}

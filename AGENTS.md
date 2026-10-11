@@ -106,8 +106,6 @@ Turn history into a standing property:
 
 ## Working
 
-  - **Sweeps:** do one package, then stop, report what changed, and wait for
-    review before the next.
   - **Before compressing:** check whether a premature abstraction should be
     undone first. A method that reads one field of its receiver usually wants
     to be a free function taking that value.

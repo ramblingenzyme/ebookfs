@@ -11,6 +11,9 @@ import (
 
 // Every case starts from the same Meta, so what a nil edit leaves alone is
 // checked alongside what a set one changes.
+//
+// Tags is the one field a value receiver does not copy. Element assignment
+// detects the sharing where append would not.
 func TestApplyMeta(t *testing.T) {
 	start := book.Meta{ID: 1, Status: "unread", Rating: 2.5, Tags: []string{"keep"}}
 
@@ -35,6 +38,10 @@ func TestApplyMeta(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			var editTags []string
+			if tc.edits.Tags != nil {
+				editTags = slices.Clone(*tc.edits.Tags)
+			}
 			before := time.Now()
 			updated := applyMeta(start, tc.edits)
 
@@ -55,42 +62,24 @@ func TestApplyMeta(t *testing.T) {
 			if updated.DateModified.Before(before) {
 				t.Errorf("DateModified = %v, want it stamped at or after %v", updated.DateModified, before)
 			}
+
+			if len(updated.Tags) > 0 {
+				updated.Tags[0] = "changed"
+			}
+			if !slices.Equal(start.Tags, []string{"keep"}) {
+				t.Fatalf("start Tags = %v, want [keep] — the result shares the argument's backing array", start.Tags)
+			}
+			if tc.edits.Tags != nil && !slices.Equal(*tc.edits.Tags, editTags) {
+				t.Errorf("edit Tags = %v, want %v — the result shares the edit's backing array", *tc.edits.Tags, editTags)
+			}
 		})
 	}
-}
 
-// Tags is the one field a value receiver does not copy. Element assignment
-// detects the sharing where append would not.
-func TestApplyMetaClonesTags(t *testing.T) {
-	t.Run("from the meta", func(t *testing.T) {
-		meta := book.Meta{ID: 1, Tags: []string{"keep"}}
-
-		updated := applyMeta(meta, Edits{})
-		updated.Tags[0] = "changed"
-
-		if meta.Tags[0] != "keep" {
-			t.Errorf("original Tags = %v, want [keep] — the result shares the argument's backing array", meta.Tags)
-		}
-	})
-
-	t.Run("from the edits", func(t *testing.T) {
-		tags := []string{"new"}
-
-		updated := applyMeta(book.Meta{ID: 1}, Edits{Tags: &tags})
-		updated.Tags[0] = "changed"
-
-		if tags[0] != "new" {
-			t.Errorf("edit Tags = %v, want [new] — the result shares the edit's backing array", tags)
-		}
-	})
-
-	t.Run("nil stays nil", func(t *testing.T) {
-		// Cloning must not turn an absent tag list into an empty one: the
-		// sidecar writer distinguishes them.
-		if got := applyMeta(book.Meta{ID: 1}, Edits{}).Tags; got != nil {
-			t.Errorf("Tags = %v, want nil", got)
-		}
-	})
+	// Cloning must not turn an absent tag list into an empty one: the sidecar
+	// writer distinguishes them.
+	if got := applyMeta(book.Meta{ID: 1}, Edits{}).Tags; got != nil {
+		t.Errorf("Tags = %v, want nil", got)
+	}
 }
 
 // Every Edits field must reach the epub rewrite, the cover, or the sidecar, and

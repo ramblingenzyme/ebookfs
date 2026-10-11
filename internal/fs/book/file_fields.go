@@ -76,16 +76,14 @@ func (f *fieldFile) Write(fid uint64, offset uint64, data []byte) (uint32, error
 // Record the truncate on the node and commit "" only if the next write-mode
 // close wrote nothing, once it can be checked against a kernel mount.
 func (f *fieldFile) Close(fid uint64) error {
-	data := f.writes.Take(fid)
 	f.Lock()
 	delete(f.truncated, fid)
 	f.Unlock()
 	f.SnapshotFile.Close(fid)
-	if len(data) == 0 {
-		return nil
-	}
-	if f.set == nil {
-		return errors.New("read-only")
-	}
-	return f.set(strings.TrimRight(string(data), "\n"))
+	return f.writes.Commit(fid, func(data []byte) error {
+		if f.set == nil {
+			return errors.New("read-only")
+		}
+		return f.set(strings.TrimRight(string(data), "\n"))
+	})
 }

@@ -31,18 +31,11 @@ func TestRecentDirCapsAtLimitAndBackfillsOnRemove(t *testing.T) {
 		t.Errorf("expected backfilled book (id 1) to become visible, got %v", d.visible)
 	}
 	fstest.HasChild(t, d, "Title 1")
-}
 
-func TestRecentDirRemoveNotVisibleNoOp(t *testing.T) {
-	reg, d := overfilledRecentDir(t)
-
-	before := fstest.ChildNames(d)
-
-	// id 1 is the oldest and should not be visible; removing it should not
-	// change the visible set.
+	// id 1 is the oldest and not shown, so removing it changes nothing.
+	reg, d = overfilledRecentDir(t)
 	removeBookFromView(t, reg, d, 1)
-
-	fstest.ChildCount(t, d, len(before))
+	fstest.ChildCount(t, d, recentLimit)
 }
 
 // Books arriving in an order unrelated to their DateAdded. The population is

@@ -203,14 +203,7 @@ func TestIngestHookErrorsAbortIngest(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			lib := openTestLibrary(t)
 			lib.AddHook(tc.hook)
-			handle, err := lib.CreateIngest()
-			if err != nil {
-				t.Fatalf("CreateIngest: %v", err)
-			}
-			if _, err := handle.WriteAt(buildTestEpub(t, "Rejected", "Alice"), 0); err != nil {
-				t.Fatalf("WriteAt: %v", err)
-			}
-			if _, err := handle.Ingest(); err == nil {
+			if _, err := tryIngest(t, lib, buildTestEpub(t, "Rejected", "Alice")); err == nil {
 				t.Fatal("Ingest succeeded despite hook error")
 			}
 			books, err := lib.Search(library.Query{})
@@ -266,5 +259,42 @@ func TestOnDeletingHookCanReadEpub(t *testing.T) {
 
 	if !hook.epubReadable {
 		t.Error("OnDeleting hook could not read epub content")
+	}
+}
+
+type panickingHook struct{ library.HookBase }
+
+func (panickingHook) OnEdited(*library.Book, *os.Root, func() (library.EpubReader, error)) {
+	panic("hook bug")
+}
+
+type editCountingHook struct {
+	library.HookBase
+	edits int
+}
+
+func (h *editCountingHook) OnEdited(*library.Book, *os.Root, func() (library.EpubReader, error)) {
+	h.edits++
+}
+
+// One hook's panic stays inside it: the edit commits, the hooks after it still
+// hear the event, and the library takes the next edit.
+func TestPanickingHookIsContained(t *testing.T) {
+	lib := openTestLibrary(t)
+	counter := &editCountingHook{}
+	lib.AddHook(panickingHook{})
+	lib.AddHook(counter)
+	b := ingestTestEpub(t, lib, buildTestEpub(t, "Dune", "Frank Herbert"))
+
+	for _, status := range []string{"reading", "read"} {
+		if _, err := lib.Edit(b.ID(), library.Edits{Status: new(status)}); err != nil {
+			t.Fatalf("Edit %s: %v", status, err)
+		}
+	}
+	if counter.edits != 2 {
+		t.Errorf("the hook after the panicking one heard %d edits, want 2", counter.edits)
+	}
+	if got, err := lib.Get(b.ID()); err != nil || got.Status() != "read" {
+		t.Errorf("Get = %v (err %v), want status read", got, err)
 	}
 }

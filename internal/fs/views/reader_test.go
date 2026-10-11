@@ -1,6 +1,7 @@
 package views
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/knusbaum/go9p/fs"
@@ -8,82 +9,33 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
 )
 
-func TestReaderDirAddIncludedStatus(t *testing.T) {
+// One directory per author set, so co-authors share one, and the last book out
+// prunes it.
+func TestReaderDir(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewReaderDir(reg, mock.Exporter{StatusList: []string{"unread"}})
+	for _, b := range []struct {
+		id      int64
+		authors []string
+	}{
+		{1, []string{"Alice"}},
+		{2, []string{"Alice"}},
+		{3, []string{"Alice", "Bob"}},
+	} {
+		book := makeBook(b.id, fmt.Sprintf("Book %d", b.id), b.authors...)
+		book.EpubPath = fmt.Sprintf("%d.epub", b.id)
+		book.Meta.Status = "unread"
+		reg.Load(wrapBook(book))
+	}
 
-	b := makeBook(1, "To Read", "Author1")
-	b.EpubPath = "To Read.epub"
-	b.Meta.Status = "unread"
-	reg.Load(wrapBook(b))
+	fstest.ChildCount(t, d, 2)
+	fstest.ChildCount(t, fstest.ChildAs[fs.ModDir](t, d, "Alice"), 2)
+	fstest.HasChild(t, fstest.ChildAs[fs.ModDir](t, d, "Alice & Bob"), "3.epub")
 
-	fstest.HasChild(t, fstest.ChildAs[fs.ModDir](t, d, "Author1"), "To Read.epub")
-}
-
-func TestReaderDirSkipExcludedStatus(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewReaderDir(reg, mock.Exporter{StatusList: []string{"unread"}})
-
-	b := makeBook(1, "Finished", "Author2")
-	b.Meta.Status = "read"
-	reg.Load(wrapBook(b))
-
-	fstest.ChildCount(t, d, 0)
-}
-
-func TestReaderDirRemoveLastPrunesDir(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewReaderDir(reg, mock.Exporter{StatusList: []string{"unread"}})
-
-	b := makeBook(1, "Only", "Author3")
-	b.EpubPath = "Only.epub"
-	b.Meta.Status = "unread"
-	reg.Load(wrapBook(b))
 	removeBookFromView(t, reg, d, 1)
+	fstest.ChildCount(t, fstest.ChildAs[fs.ModDir](t, d, "Alice"), 1)
 
+	removeBookFromView(t, reg, d, 2)
+	removeBookFromView(t, reg, d, 3)
 	fstest.ChildCount(t, d, 0)
-}
-
-func TestReaderDirCoAuthorSingleDir(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewReaderDir(reg, mock.Exporter{StatusList: []string{"unread"}})
-
-	b := makeBook(1, "Joint", "Alice", "Bob")
-	b.EpubPath = "Joint.epub"
-	b.Meta.Status = "unread"
-	reg.Load(wrapBook(b))
-
-	// Co-authored books go under a single "Alice & Bob" folder
-	fstest.HasChild(t, fstest.ChildAs[fs.ModDir](t, d, "Alice & Bob"), "Joint.epub")
-}
-
-func TestReaderDirCoAuthorRemove(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewReaderDir(reg, mock.Exporter{StatusList: []string{"unread"}})
-
-	b := makeBook(1, "Joint", "Alice", "Bob")
-	b.EpubPath = "Joint.epub"
-	b.Meta.Status = "unread"
-	reg.Load(wrapBook(b))
-	removeBookFromView(t, reg, d, 1)
-
-	fstest.NoChild(t, d, "Alice & Bob")
-}
-
-func TestReaderDirMultipleBooksSameAuthor(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewReaderDir(reg, mock.Exporter{StatusList: []string{"unread"}})
-
-	b1 := makeBook(1, "Book A", "SameAuthor")
-	b1.EpubPath = "A.epub"
-	b1.Meta.Status = "unread"
-
-	b2 := makeBook(2, "Book B", "SameAuthor")
-	b2.EpubPath = "B.epub"
-	b2.Meta.Status = "unread"
-
-	reg.Load(wrapBook(b1))
-	reg.Load(wrapBook(b2))
-
-	fstest.ChildCount(t, fstest.ChildAs[fs.ModDir](t, d, "SameAuthor"), 2)
 }

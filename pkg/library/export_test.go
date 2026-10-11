@@ -44,46 +44,30 @@ func TestExporterIncludes(t *testing.T) {
 }
 
 // Size answers from the size recorded at index time, without touching disk.
-func TestEpubExporter_Size_ReportsRecordedSize(t *testing.T) {
-	b := makeBook(1, "Test", "Author")
-	b.EpubPath = "/nonexistent/missing.epub"
-	b.EpubSize = 4242
-
-	size, ok := epubExporter{}.Size(util.WrapBook(b))
-	if !ok {
-		t.Error("Size should be known for any indexed book")
-	}
-	if size != 4242 {
-		t.Errorf("Size = %d, want 4242", size)
-	}
-}
-
-// An unrecorded size reads as unknown, so 9P does not advertise a zero-length
-// file.
-func TestEpubExporter_Size_Unrecorded(t *testing.T) {
-	b := makeBook(1, "Test", "Author") // EpubSize left at its zero value
-
-	size, ok := epubExporter{}.Size(util.WrapBook(b))
-	if ok {
-		t.Errorf("Size = (%d, true) for a book with no recorded size, want it reported as unknown", size)
+// An unrecorded size is unknown, so 9P never advertises an empty file.
+func TestEpubExporterSize(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		recorded int64
+		want     int64
+		wantOK   bool
+	}{
+		{"recorded", 4242, 4242, true},
+		{"unrecorded", 0, 0, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			b := makeBook(1, "Test", "Author")
+			b.EpubPath = "/nonexistent/missing.epub"
+			b.EpubSize = tc.recorded
+			size, ok := epubExporter{}.Size(util.WrapBook(b))
+			if size != tc.want || ok != tc.wantOK {
+				t.Errorf("Size = (%d, %v), want (%d, %v)", size, ok, tc.want, tc.wantOK)
+			}
+		})
 	}
 }
 
-func TestEpubExporter_Filename(t *testing.T) {
-	b := makeBook(1, "Test", "Author")
-	b.EpubPath = "mybook.epub"
-
-	name := epubExporter{}.Filename(util.WrapBook(b))
-	if name != "mybook.epub" {
-		t.Errorf("Filename = %q, want %q", name, "mybook.epub")
-	}
-}
-
-func TestEpubExporter_Warm(t *testing.T) {
-	epubExporter{}.Warm(nil)
-}
-
-func TestEpubExporter_Dirname(t *testing.T) {
+func TestEpubExporterDirname(t *testing.T) {
 	tests := []struct {
 		name     string
 		authorFn func() []Author

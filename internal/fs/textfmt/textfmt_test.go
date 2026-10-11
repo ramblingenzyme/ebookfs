@@ -9,6 +9,7 @@ func TestParseAuthor(t *testing.T) {
 		{"Name |", "Name", ""},
 		{"| Sort", "", "Sort"}, // blank name comes back for the caller to reject
 		{"", "", ""},
+		{"Bob|Jones, Bob", "Bob", "Jones, Bob"},
 	} {
 		a := ParseAuthor(tc.spec)
 		if a.Name != tc.name || a.SortName != tc.sort {

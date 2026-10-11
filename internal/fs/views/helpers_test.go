@@ -22,6 +22,12 @@ var (
 	wrapBook  = util.WrapBook
 )
 
+func makeBookWithTags(id int64, title, author string, tags ...string) *library.Book {
+	b := makeBook(id, title, author)
+	b.Meta.Tags = tags
+	return wrapBook(b)
+}
+
 func makeBookWithSeries(id int64, title, author string, seriesName, seriesIndex string) *library.Book {
 	b := makeBook(id, title, author)
 	b.Series = &library.Series{Name: seriesName, Index: seriesIndex}

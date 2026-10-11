@@ -8,70 +8,26 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 )
 
-func TestBooksDirAddAndRemove(t *testing.T) {
+// Removing an id that was never added leaves the registered books alone, which
+// against an empty view would look the same as removing everything.
+func TestBooksDir(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
-
-	b := makeBook(1, "Test Book", "Author")
-	reg.Load(wrapBook(b))
-
-	fstest.HasChild(t, d, "Test Book")
-
-	removeBookFromView(t, reg, d, 1)
-
-	fstest.NoChild(t, d, "Test Book")
-}
-
-// Removing an id that was never added is distinguishable from removing
-// everything: a real book stays registered, so against an empty registry a
-// Remove that cleared the whole view would look identical.
-func TestBooksDirRemoveUnknownID(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewAllBooksDir(reg)
-	reg.Load(util.MakeBook(1, "Kept", "Author"))
-
-	removeBookFromView(t, reg, d, 999)
-
-	fstest.HasChild(t, d, "Kept")
-}
-
-func TestRegistryAddSameIDTwiceUsesSameDir(t *testing.T) {
-	reg := newTestRegistry(t)
-	allBooks := NewAllBooksDir(reg)
-
-	b1 := makeBook(1, "First Title", "Author")
-	b2 := makeBook(1, "Second Title", "Author")
-
-	reg.Load(wrapBook(b1))
-	reg.Load(wrapBook(b2))
-
-	// dirLocked returns the existing dir and does not update the book pointer, so
-	// the first title persists. The caller is expected not to reuse IDs.
-	fstest.ChildCount(t, allBooks, 1)
-	fstest.HasChild(t, allBooks, "First Title")
-}
-
-func TestBooksDirMultipleBooks(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewAllBooksDir(reg)
-
-	reg.Load(util.MakeBook(1, "Alpha", "Author"))
-	reg.Load(util.MakeBook(2, "Beta", "Author"))
-
-	fstest.ChildCount(t, d, 2)
-}
-
-func TestBooksDirRemoveOnlyOne(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewAllBooksDir(reg)
+	fstest.ChildCount(t, d, 0)
 
 	reg.Load(util.MakeBook(1, "Keep", "Author"))
 	reg.Load(util.MakeBook(2, "Remove", "Author"))
+	fstest.ChildCount(t, d, 2)
+
+	removeBookFromView(t, reg, d, 999)
+	fstest.ChildCount(t, d, 2)
 
 	removeBookFromView(t, reg, d, 2)
-
 	fstest.NoChild(t, d, "Remove")
 	fstest.HasChild(t, d, "Keep")
+
+	removeBookFromView(t, reg, d, 1)
+	fstest.ChildCount(t, d, 0)
 }
 
 // A '/' in a title cannot become a path separator in a 9P entry name, and the
@@ -94,13 +50,6 @@ func TestBooksDirSlashInTitleIsOneEntry(t *testing.T) {
 
 	// The entries map can name a child that DeleteChild then cannot find.
 	removeBookFromView(t, reg, d, 1)
-	fstest.ChildCount(t, d, 0)
-}
-
-func TestBooksDirEmptyNilMap(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewAllBooksDir(reg)
-
 	fstest.ChildCount(t, d, 0)
 }
 

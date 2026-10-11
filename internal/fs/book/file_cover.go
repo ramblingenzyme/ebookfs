@@ -43,11 +43,9 @@ func (c *coverFile) Write(fid uint64, offset uint64, data []byte) (uint32, error
 }
 
 func (c *coverFile) Close(fid uint64) error {
-	data := c.writes.Take(fid)
 	c.SnapshotFile.Close(fid)
-	if len(data) == 0 {
-		return nil
-	}
-	_, err := c.edit(c.book().ID(), library.Edits{Cover: &data})
-	return err
+	return c.writes.Commit(fid, func(data []byte) error {
+		_, err := c.edit(c.book().ID(), library.Edits{Cover: &data})
+		return err
+	})
 }

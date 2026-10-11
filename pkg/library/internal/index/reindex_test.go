@@ -142,10 +142,11 @@ func TestRebuildRecordsSkippedPaths(t *testing.T) {
 	}
 }
 
-// A fresh index must force the first reindex even though pending_ops is empty
-// (an empty table is the normal clean state and cannot flag a fresh index);
-// Rebuild stamps the version, and a clean reopen must not reindex again.
-func TestFreshOpenForcesReindex(t *testing.T) {
+// A fresh index must force the first reindex even though pending_ops is empty,
+// since an empty table is also the normal clean state. Rebuild stamps the
+// version, so a clean reopen does not reindex again, and a stale version
+// forces one regardless of pending_ops.
+func TestNeedsReindex(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "index.db")
 
 	idx, err := Open(path)
@@ -166,40 +167,16 @@ func TestFreshOpenForcesReindex(t *testing.T) {
 	}
 	defer idx2.Close()
 	mustNeedReindex(t, idx2, false)
-}
 
-// A stale schema version forces a reindex regardless of pending_ops.
-func TestSchemaBumpForcesReindex(t *testing.T) {
-	idx := openTestIndex(t)
-	mustNeedReindex(t, idx, false)
-
-	if _, err := idx.db.Exec("PRAGMA user_version=6"); err != nil {
+	if _, err := idx2.db.Exec("PRAGMA user_version=6"); err != nil {
 		t.Fatalf("set user_version: %v", err)
 	}
-	mustNeedReindex(t, idx, true)
+	mustNeedReindex(t, idx2, true)
 }
 
-// Rebuild sweeps leaked pending rows (a crashed op's marker) clean.
-func TestRebuildClearsLeakedRows(t *testing.T) {
-	idx := openTestIndex(t)
-
-	if _, err := idx.db.Exec("INSERT INTO pending_ops (op_id) VALUES ('leaked')"); err != nil {
-		t.Fatalf("inject leaked row: %v", err)
-	}
-	mustNeedReindex(t, idx, true)
-
-	if err := idx.Rebuild(nil, nil, 0); err != nil {
-		t.Fatalf("rebuild: %v", err)
-	}
-	if n := pendingCount(t, idx); n != 0 {
-		t.Fatalf("pending_ops = %d, want 0", n)
-	}
-	mustNeedReindex(t, idx, false)
-}
-
-// Rebuild both clears leaked rows and inserts the given books, exercising the
-// full path through rebuildTx's row deletes, insertBook, and the version stamp.
-func TestRebuildClearsLeakedRowsAndInsertsBooks(t *testing.T) {
+// Rebuild writes books through its own insert, apart from Put's, so the series
+// check covers a column only this path maps.
+func TestRebuild(t *testing.T) {
 	idx := openTestIndex(t)
 
 	// Inject a leaked pending row and a stale book.
@@ -213,10 +190,9 @@ func TestRebuildClearsLeakedRowsAndInsertsBooks(t *testing.T) {
 	}
 	mustNeedReindex(t, idx, true)
 
-	fresh := []*book.Book{
-		newBook(10, "Fresh A"),
-		newBook(20, "Fresh B"),
-	}
+	withSeries := newBook(20, "Fresh B")
+	withSeries.Series = &book.SeriesRef{Name: "Series A", Index: "2"}
+	fresh := []*book.Book{newBook(10, "Fresh A"), withSeries}
 	if err := idx.Rebuild(bookPaths(fresh...), nil, 20); err != nil {
 		t.Fatalf("Rebuild: %v", err)
 	}
@@ -227,54 +203,13 @@ func TestRebuildClearsLeakedRowsAndInsertsBooks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
-	if len(all) != 2 {
-		t.Fatalf("len = %d, want 2", len(all))
+	if len(all) != 2 || all[0].Meta.ID != 10 || all[1].Meta.ID != 20 {
+		t.Fatalf("books = %v, want only the rebuilt 10 and 20", all)
 	}
 	if n := pendingCount(t, idx); n != 0 {
 		t.Fatalf("pending_ops = %d, want 0", n)
 	}
-}
-
-func TestRebuildWithMultipleBooks(t *testing.T) {
-	idx := openTestIndex(t)
-
-	books := []*book.Book{
-		book.NewBook(
-			book.Bib{Title: "First", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
-			book.Meta{ID: 1},
-			book.Location{EpubPath: "A/First (1)/book.epub"},
-		),
-		book.NewBook(
-			book.Bib{
-				Title:   "Second",
-				Authors: []book.Author{{Name: "Bob", SortName: "Bob"}},
-				Series:  &book.SeriesRef{Name: "Series A", Index: "2"},
-			},
-			book.Meta{ID: 2},
-			book.Location{EpubPath: "B/Second (2)/book.epub"},
-		),
-	}
-
-	if err := idx.Rebuild(bookPaths(books...), nil, 2); err != nil {
-		t.Fatalf("Rebuild: %v", err)
-	}
-
-	all, err := idx.Search(Query{})
-	if err != nil {
-		t.Fatalf("Query: %v", err)
-	}
-	if len(all) != 2 {
-		t.Fatalf("len = %d, want 2", len(all))
-	}
-	if all[0].Meta.ID != 1 || all[1].Meta.ID != 2 {
-		t.Errorf("books should be in sort order (by sort_title: %q, %q)", all[0].Title, all[1].Title)
-	}
-
-	got, err := idx.Get(2)
-	if err != nil {
-		t.Fatalf("Get(2): %v", err)
-	}
-	if got.Series == nil || got.Series.Name != "Series A" {
-		t.Errorf("book 2 series = %+v", got.Series)
+	if s := all[1].Series; s == nil || s.Name != "Series A" || s.Index != "2" {
+		t.Errorf("book 20 series = %+v, want Series A at 2", s)
 	}
 }

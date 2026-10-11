@@ -95,6 +95,9 @@ go test ./...
 CGO_ENABLED=0 go build -trimpath .
 ```
 
+[docs/test_suite.md](./docs/test_suite.md) lists the invariants the
+`internal/fs` and `pkg/library` suites pin, with their coverage.
+
 ## License
 
 MIT

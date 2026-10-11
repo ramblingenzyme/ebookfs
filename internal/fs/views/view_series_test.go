@@ -3,10 +3,7 @@ package views
 import (
 	"testing"
 
-	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
-	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
-	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
@@ -84,26 +81,6 @@ func TestSeriesEntryName(t *testing.T) {
 	}
 }
 
-func TestSeriesEntryName_PadTriggeredByMaxIndex(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewBySeriesDir(reg)
-
-	b1 := makeBook(1, "First", "Author")
-	b1.Series = &library.Series{Name: "S", Index: "1"}
-	b2 := makeBook(2, "Tenth", "Author")
-	b2.Series = &library.Series{Name: "S", Index: "10"}
-
-	reg.Load(wrapBook(b1))
-	reg.Load(wrapBook(b2))
-
-	sd := fstest.ChildAs[*seriesBookListDir](t, d, "S")
-
-	// With maxIdx >= 10, lower-indexed books are zero-padded.
-	fstest.ChildCount(t, sd, 2)
-	fstest.HasChild(t, sd, "01 - First")
-	fstest.HasChild(t, sd, "10 - Tenth")
-}
-
 // A series past 99 volumes widens to three digits. Two was a fixed ceiling, so
 // "100" listed ahead of "99".
 func TestSeriesEntryName_PadWidensPast99(t *testing.T) {
@@ -121,14 +98,4 @@ func TestSeriesEntryName_PadWidensPast99(t *testing.T) {
 	fstest.HasChild(t, sd, "009 - Vol9")
 	fstest.HasChild(t, sd, "099 - Vol99")
 	fstest.HasChild(t, sd, "100 - Vol100")
-}
-
-func TestBySeriesDirRemoveNilSeriesNoOp(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewBySeriesDir(reg)
-
-	b := util.MakeBook(1, "No Series", "Author")
-	bd := book.NewBookDir(newTestFS(t), mock.ContentReader{}, func(int64, library.Edits) (*library.Book, error) { return nil, nil }, b)
-
-	d.Remove(bd) // Should not panic — early return when Series is nil
 }

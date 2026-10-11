@@ -8,144 +8,8 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
-func TestSearch(t *testing.T) {
-	idx := openTestIndex(t)
-
-	b1 := makeTestBook(1, "Foundation", []string{"Isaac Asimov"}, "sci-fi", book.StatusRead)
-	b2 := makeTestBook(2, "Dune", []string{"Frank Herbert"}, "sci-fi", book.StatusUnread)
-	b3 := makeTestBook(3, "The Hobbit", []string{"J.R.R. Tolkien"}, "fantasy", book.StatusRead)
-	if err := idx.Rebuild(bookPaths(b1, b2, b3), nil, 3); err != nil {
-		t.Fatalf("Rebuild: %v", err)
-	}
-
-	t.Run("empty query returns all", func(t *testing.T) {
-		books, err := idx.Search(Query{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(books) != 3 {
-			t.Fatalf("got %d books, want 3", len(books))
-		}
-	})
-
-	t.Run("single tag", func(t *testing.T) {
-		books, err := idx.Search(Query{Tags: []string{"sci-fi"}})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(books) != 2 {
-			t.Fatalf("got %d books, want 2", len(books))
-		}
-	})
-
-	t.Run("multiple tags OR", func(t *testing.T) {
-		books, err := idx.Search(Query{Tags: []string{"sci-fi", "fantasy"}})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(books) != 3 {
-			t.Fatalf("got %d books, want 3", len(books))
-		}
-	})
-
-	t.Run("tag AND status", func(t *testing.T) {
-		books, err := idx.Search(Query{Tags: []string{"sci-fi"}, Status: []string{"unread"}})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(books) != 1 {
-			t.Fatalf("got %d books, want 1", len(books))
-		}
-		if books[0].Title != "Dune" {
-			t.Errorf("got %q, want Dune", books[0].Title)
-		}
-	})
-
-	t.Run("title substring", func(t *testing.T) {
-		books, err := idx.Search(Query{Titles: []string{"found"}})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(books) != 1 {
-			t.Fatalf("got %d books, want 1", len(books))
-		}
-		if books[0].Title != "Foundation" {
-			t.Errorf("got %q, want Foundation", books[0].Title)
-		}
-	})
-
-	// ExactTitles turns the substring match into equality, so the same value
-	// that found Foundation above finds nothing.
-	t.Run("title exact", func(t *testing.T) {
-		books, err := idx.Search(Query{Titles: []string{"found"}, ExactTitles: true})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(books) != 0 {
-			t.Fatalf("got %d books, want 0", len(books))
-		}
-
-		books, err = idx.Search(Query{Titles: []string{"Foundation"}, ExactTitles: true})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(books) != 1 || books[0].Title != "Foundation" {
-			t.Fatalf("got %d books, want Foundation", len(books))
-		}
-	})
-
-	t.Run("author name", func(t *testing.T) {
-		books, err := idx.Search(Query{Authors: []string{"Isaac Asimov"}})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(books) != 1 {
-			t.Fatalf("got %d books, want 1", len(books))
-		}
-	})
-
-	t.Run("no match", func(t *testing.T) {
-		books, err := idx.Search(Query{Tags: []string{"nonexistent"}})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(books) != 0 {
-			t.Fatalf("got %d books, want 0", len(books))
-		}
-	})
-}
-
-func TestSearchIDs(t *testing.T) {
-	idx := openTestIndex(t)
-
-	b1 := makeTestBook(1, "A", nil, "", "")
-	b2 := makeTestBook(2, "B", nil, "", "")
-	if err := idx.Rebuild(bookPaths(b1, b2), nil, 2); err != nil {
-		t.Fatalf("Rebuild: %v", err)
-	}
-
-	books, err := idx.Search(Query{IDs: []int64{1}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(books) != 1 {
-		t.Fatalf("got %d books, want 1", len(books))
-	}
-	if books[0].Meta.ID != 1 {
-		t.Errorf("got id %d, want 1", books[0].Meta.ID)
-	}
-
-	books, err = idx.Search(Query{IDs: []int64{1, 2}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(books) != 2 {
-		t.Fatalf("got %d books, want 2", len(books))
-	}
-}
-
-// The remaining orders, plus the sort-title tiebreaker that keeps a Limit from
-// slicing an arbitrary subset of tied rows.
+// Every order, plus the tiebreakers that keep a Limit from slicing an
+// arbitrary subset of tied rows.
 func TestSearchOrders(t *testing.T) {
 	idx := openTestIndex(t)
 
@@ -156,14 +20,23 @@ func TestSearchOrders(t *testing.T) {
 	top.Meta.Rating = 5
 	top.Pubdate = "2020-01-01"
 	// Rating 0 and no pubdate, so these two tie under every order but the
-	// title one, exercising the tiebreaker.
-	tied := newBook(3, "Charlie")
-	untied := newBook(4, "Delta")
+	// title one. Their titles run against their ids, so a missing tiebreak
+	// shows up as id order.
+	tied := newBook(3, "Delta")
+	untied := newBook(4, "Charlie")
 
 	// Leave sort_title unset on some books, so the title ordering has to fall
 	// back to the title rather than lump them into one NULL tie.
 	mid.SortTitle = "Bravo"
 	top.SortTitle = "Alpha"
+	// 1 and 2 share a second, which date_added (RFC3339) cannot split, so the
+	// id DESC tiebreak orders them. 4 is the oldest but has the highest id, so
+	// an order by id alone puts it first.
+	added := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	mid.Meta.DateAdded = added
+	top.Meta.DateAdded = added
+	tied.Meta.DateAdded = added.Add(-time.Hour)
+	untied.Meta.DateAdded = added.Add(-2 * time.Hour)
 	for _, b := range []*book.Book{mid, top, tied, untied} {
 		storeInIndex(t, idx, b)
 	}
@@ -171,17 +44,20 @@ func TestSearchOrders(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		order Order
+		limit int
 		want  []int64
 	}{
-		// 2 "Alpha" and 1 "Bravo" have sort titles; 3 "Charlie" and 4 "Delta"
+		// 2 "Alpha" and 1 "Bravo" have sort titles; 4 "Charlie" and 3 "Delta"
 		// do not and sort by their titles rather than ahead of everything.
-		{"sort title", OrderSortTitle, []int64{2, 1, 3, 4}},
-		{"rating", OrderRating, []int64{2, 1, 3, 4}}, // 5, 3, then the 0s by title
-		{"pubdate", OrderPubdate, []int64{2, 1, 3, 4}},
-		{"unknown order falls back to title", Order(99), []int64{2, 1, 3, 4}},
+		{"sort title", OrderSortTitle, 0, []int64{2, 1, 4, 3}},
+		{"rating", OrderRating, 0, []int64{2, 1, 4, 3}}, // 5, 3, then the 0s by title
+		{"pubdate", OrderPubdate, 0, []int64{2, 1, 4, 3}},
+		{"recently added", OrderDateAdded, 0, []int64{2, 1, 3, 4}},
+		{"unknown order falls back to title", Order(99), 0, []int64{2, 1, 4, 3}},
+		{"a limit cuts after the tiebreak", OrderRating, 3, []int64{2, 1, 4}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := idx.Search(Query{Order: tc.order})
+			got, err := idx.Search(Query{Order: tc.order, Limit: tc.limit})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -247,297 +123,5 @@ func TestExists(t *testing.T) {
 		if ok {
 			t.Errorf("Exists(%q, %q) = true, want false (%s)", tc.title, tc.names, tc.why)
 		}
-	}
-}
-
-func TestQueryAllReturnsAllBooks(t *testing.T) {
-	idx := openTestIndex(t)
-	storeInIndex(t, idx, newBook(1, "Alpha"))
-	storeInIndex(t, idx, newBook(2, "Beta"))
-	storeInIndex(t, idx, newBook(3, "Gamma"))
-
-	books, err := idx.Search(Query{})
-	if err != nil {
-		t.Fatalf("Query: %v", err)
-	}
-	if len(books) != 3 {
-		t.Fatalf("len = %d, want 3", len(books))
-	}
-}
-
-func TestQueryByID(t *testing.T) {
-	idx := openTestIndex(t)
-	storeInIndex(t, idx, newBook(1, "One"))
-	storeInIndex(t, idx, newBook(2, "Two"))
-
-	got, err := idx.Search(Query{IDs: []int64{2}})
-	if err != nil {
-		t.Fatalf("Query: %v", err)
-	}
-	if len(got) != 1 {
-		t.Fatalf("len = %d, want 1", len(got))
-	}
-	if got[0].Meta.ID != 2 {
-		t.Errorf("ID = %d, want 2", got[0].Meta.ID)
-	}
-}
-
-func TestQueryByAuthor(t *testing.T) {
-	idx := openTestIndex(t)
-
-	bob := book.NewBook(
-		book.Bib{Title: "Bob's Book", Authors: []book.Author{{Name: "Bob", SortName: "Bob"}}},
-		book.Meta{ID: 1},
-		book.Location{EpubPath: "Bob/Bob's Book (1)/book.epub"},
-	)
-	aliceBook := book.NewBook(
-		book.Bib{Title: "Alice's Book", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
-		book.Meta{ID: 2},
-		book.Location{EpubPath: "Alice/Alice's Book (2)/book.epub"},
-	)
-
-	storeInIndex(t, idx, bob)
-	storeInIndex(t, idx, aliceBook)
-
-	got, err := idx.Search(Query{Authors: []string{"Bob"}})
-	if err != nil {
-		t.Fatalf("Query: %v", err)
-	}
-	if len(got) != 1 {
-		t.Fatalf("len = %d, want 1", len(got))
-	}
-	if got[0].Title != "Bob's Book" {
-		t.Errorf("Title = %q, want %q", got[0].Title, "Bob's Book")
-	}
-}
-
-// The two-column author match. ctl's rename-author documents that <old> matches
-// display name OR sort name, and it relies on this query to find the books to
-// rewrite; if only a.name were matched, renaming by sort name would silently
-// rewrite nothing.
-func TestQueryByAuthorSortName(t *testing.T) {
-	idx := openTestIndex(t)
-
-	asimov := book.NewBook(
-		book.Bib{Title: "Foundation", Authors: []book.Author{{Name: "Isaac Asimov", SortName: "Asimov, Isaac"}}},
-		book.Meta{ID: 1},
-		book.Location{EpubPath: "Isaac Asimov/Foundation (1)/book.epub"},
-	)
-	other := book.NewBook(
-		book.Bib{Title: "Other", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
-		book.Meta{ID: 2},
-		book.Location{EpubPath: "Alice/Other (2)/book.epub"},
-	)
-	storeInIndex(t, idx, asimov)
-	storeInIndex(t, idx, other)
-
-	for _, name := range []string{"Asimov, Isaac", "Isaac Asimov"} {
-		got, err := idx.Search(Query{Authors: []string{name}})
-		if err != nil {
-			t.Fatalf("Search(%q): %v", name, err)
-		}
-		if len(got) != 1 || got[0].Title != "Foundation" {
-			t.Errorf("Search(%q) = %v, want just Foundation", name, got)
-		}
-	}
-}
-
-func TestQueryByStatus(t *testing.T) {
-	idx := openTestIndex(t)
-
-	readBook := book.NewBook(
-		book.Bib{Title: "Read Book", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
-		book.Meta{ID: 1, Status: "read"},
-		book.Location{EpubPath: "A/Read Book (1)/book.epub"},
-	)
-	unreadBook := book.NewBook(
-		book.Bib{Title: "Unread Book", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
-		book.Meta{ID: 2, Status: "unread"},
-		book.Location{EpubPath: "A/Unread Book (2)/book.epub"},
-	)
-
-	storeInIndex(t, idx, readBook)
-	storeInIndex(t, idx, unreadBook)
-
-	got, err := idx.Search(Query{Status: []string{"read"}})
-	if err != nil {
-		t.Fatalf("Query: %v", err)
-	}
-	if len(got) != 1 {
-		t.Fatalf("len = %d, want 1", len(got))
-	}
-	if got[0].Meta.ID != 1 {
-		t.Errorf("returned book id = %d, want 1", got[0].Meta.ID)
-	}
-}
-
-func TestQueryByTag(t *testing.T) {
-	idx := openTestIndex(t)
-
-	tagged := book.NewBook(
-		book.Bib{Title: "Tagged", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
-		book.Meta{ID: 1, Tags: []string{"sci-fi"}},
-		book.Location{EpubPath: "A/Tagged (1)/book.epub"},
-	)
-	untagged := book.NewBook(
-		book.Bib{Title: "Plain", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
-		book.Meta{ID: 2},
-		book.Location{EpubPath: "A/Plain (2)/book.epub"},
-	)
-
-	storeInIndex(t, idx, tagged)
-	storeInIndex(t, idx, untagged)
-
-	got, err := idx.Search(Query{Tags: []string{"sci-fi"}})
-	if err != nil {
-		t.Fatalf("Query: %v", err)
-	}
-	if len(got) != 1 {
-		t.Fatalf("len = %d, want 1", len(got))
-	}
-	if got[0].Meta.ID != 1 {
-		t.Errorf("returned book id = %d, want 1", got[0].Meta.ID)
-	}
-}
-
-func TestQueryBySeries(t *testing.T) {
-	idx := openTestIndex(t)
-
-	seriesBook := book.NewBook(
-		book.Bib{
-			Title: "Series Book", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}},
-			Series: &book.SeriesRef{Name: "My Series", Index: "1"},
-		},
-		book.Meta{ID: 1},
-		book.Location{EpubPath: "A/Series Book (1)/book.epub"},
-	)
-	standalone := book.NewBook(
-		book.Bib{Title: "Standalone", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
-		book.Meta{ID: 2},
-		book.Location{EpubPath: "A/Standalone (2)/book.epub"},
-	)
-
-	storeInIndex(t, idx, seriesBook)
-	storeInIndex(t, idx, standalone)
-
-	got, err := idx.Search(Query{Series: []string{"My Series"}})
-	if err != nil {
-		t.Fatalf("Query: %v", err)
-	}
-	if len(got) != 1 {
-		t.Fatalf("len = %d, want 1", len(got))
-	}
-	if got[0].Title != "Series Book" {
-		t.Errorf("Title = %q, want %q", got[0].Title, "Series Book")
-	}
-}
-
-func TestQueryMultipleFilters(t *testing.T) {
-	idx := openTestIndex(t)
-
-	bobRead := book.NewBook(
-		book.Bib{Title: "Bob Read", Authors: []book.Author{{Name: "Bob", SortName: "Bob"}}},
-		book.Meta{ID: 1, Status: "read"},
-		book.Location{EpubPath: "B/Bob Read (1)/book.epub"},
-	)
-	bobUnread := book.NewBook(
-		book.Bib{Title: "Bob Unread", Authors: []book.Author{{Name: "Bob", SortName: "Bob"}}},
-		book.Meta{ID: 2, Status: "unread"},
-		book.Location{EpubPath: "B/Bob Unread (2)/book.epub"},
-	)
-	aliceRead := book.NewBook(
-		book.Bib{Title: "Alice Read", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
-		book.Meta{ID: 3, Status: "read"},
-		book.Location{EpubPath: "A/Alice Read (3)/book.epub"},
-	)
-
-	storeInIndex(t, idx, bobRead)
-	storeInIndex(t, idx, bobUnread)
-	storeInIndex(t, idx, aliceRead)
-
-	got, err := idx.Search(Query{Authors: []string{"Bob"}, Status: []string{"read"}})
-	if err != nil {
-		t.Fatalf("Query: %v", err)
-	}
-	if len(got) != 1 {
-		t.Fatalf("len = %d, want 1", len(got))
-	}
-	if got[0].Title != "Bob Read" {
-		t.Errorf("Title = %q, want %q", got[0].Title, "Bob Read")
-	}
-}
-
-func TestQueryLimit(t *testing.T) {
-	idx := openTestIndex(t)
-	storeInIndex(t, idx, newBook(1, "Aardvark"))
-	storeInIndex(t, idx, newBook(2, "Beetle"))
-	storeInIndex(t, idx, newBook(3, "Cougar"))
-
-	got, err := idx.Search(Query{Limit: 2})
-	if err != nil {
-		t.Fatalf("Query: %v", err)
-	}
-	if len(got) != 2 {
-		t.Fatalf("len = %d, want 2", len(got))
-	}
-}
-
-func TestQueryRecentOrder(t *testing.T) {
-	idx := openTestIndex(t)
-
-	// Books 1 and 2 share a second, which date_added (RFC3339) cannot split, so
-	// the id DESC tiebreak orders them. Book 3 is the oldest but has the highest
-	// id, so an order by id alone puts it first.
-	added := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
-	for _, b := range []struct {
-		id    int64
-		title string
-		added time.Time
-	}{
-		{1, "Tied A", added},
-		{2, "Tied B", added},
-		{3, "Oldest", added.Add(-time.Hour)},
-	} {
-		bk := makeAuthoredBook(b.id, b.title, book.Author{Name: "Alice", SortName: "Alice"})
-		bk.Meta.DateAdded = b.added
-		storeInIndex(t, idx, bk)
-	}
-
-	got, err := idx.Search(Query{Order: OrderDateAdded})
-	if err != nil {
-		t.Fatalf("Query: %v", err)
-	}
-	ids := make([]int64, len(got))
-	for i, b := range got {
-		ids[i] = b.Meta.ID
-	}
-	if want := []int64{2, 1, 3}; !slices.Equal(ids, want) {
-		t.Errorf("ids = %v, want %v (newest first, ties by id descending)", ids, want)
-	}
-}
-
-func TestQueryEmptyResult(t *testing.T) {
-	idx := openTestIndex(t)
-	storeInIndex(t, idx, newBook(1, "Only Book"))
-
-	got, err := idx.Search(Query{Status: []string{"abandoned"}})
-	if err != nil {
-		t.Fatalf("Query: %v", err)
-	}
-	if len(got) != 0 {
-		t.Errorf("len = %d, want 0", len(got))
-	}
-}
-
-func TestQueryIDNotFound(t *testing.T) {
-	idx := openTestIndex(t)
-	storeInIndex(t, idx, newBook(1, "Only"))
-
-	got, err := idx.Search(Query{IDs: []int64{999}})
-	if err != nil {
-		t.Fatalf("Query: %v", err)
-	}
-	if len(got) != 0 {
-		t.Errorf("len = %d, want 0", len(got))
 	}
 }

@@ -33,58 +33,58 @@ func TestFormatStats(t *testing.T) {
 			t.Errorf("formatStats() = %q, want it to contain %q", got, want)
 		}
 	}
-}
 
-func TestFormatStatsZeroTimes(t *testing.T) {
-	got := formatStats(&library.Stats{})
-	if !strings.Contains(got, "last-added: \n") {
-		t.Errorf("formatStats() with zero LastAdded = %q, want empty last-added", got)
-	}
-	if !strings.Contains(got, "last-modified: \n") {
-		t.Errorf("formatStats() with zero LastModified = %q, want empty last-modified", got)
+	zero := formatStats(&library.Stats{})
+	for _, want := range []string{"last-added: \n", "last-modified: \n"} {
+		if !strings.Contains(zero, want) {
+			t.Errorf("formatStats() with zero times = %q, want it to contain %q", zero, want)
+		}
 	}
 }
 
-func TestStatsFileReadsLiveStats(t *testing.T) {
-	calls := 0
-	lib := mock.StatsReader{
-		StatsFn: func() (*library.Stats, error) {
-			calls++
-			return &library.Stats{Books: calls}, nil
-		},
-	}
-	f := NewStatsFile(util.NewTestFS(t), lib)
+func TestStatsFile(t *testing.T) {
+	t.Run("reads live stats", func(t *testing.T) {
+		calls := 0
+		lib := mock.StatsReader{
+			StatsFn: func() (*library.Stats, error) {
+				calls++
+				return &library.Stats{Books: calls}, nil
+			},
+		}
+		f := NewStatsFile(util.NewTestFS(t), lib)
 
-	if got := fstest.Fid(t, f, 1).Get(proto.Mode(0), 1024); !strings.Contains(got, "books: 1\n") {
-		t.Errorf("Read() = %q, want it to contain %q", got, "books: 1")
-	}
+		if got := fstest.Fid(t, f, 1).Get(proto.Mode(0), 1024); !strings.Contains(got, "books: 1\n") {
+			t.Errorf("Read() = %q, want it to contain %q", got, "books: 1")
+		}
 
-	// A second Open re-derives content, observing the updated stats.
-	if got := fstest.Fid(t, f, 2).Get(proto.Mode(0), 1024); !strings.Contains(got, "books: 2\n") {
-		t.Errorf("second Read() = %q, want it to contain %q", got, "books: 2")
-	}
-}
+		// A second Open re-derives content, observing the updated stats.
+		if got := fstest.Fid(t, f, 2).Get(proto.Mode(0), 1024); !strings.Contains(got, "books: 2\n") {
+			t.Errorf("second Read() = %q, want it to contain %q", got, "books: 2")
+		}
+	})
 
-func TestStatsFileStatReportsLength(t *testing.T) {
-	lib := mock.StatsReader{
-		StatsFn: func() (*library.Stats, error) {
-			return &library.Stats{Books: 7}, nil
-		},
-	}
-	f := NewStatsFile(util.NewTestFS(t), lib)
+	t.Run("stat reports length", func(t *testing.T) {
+		lib := mock.StatsReader{
+			StatsFn: func() (*library.Stats, error) {
+				return &library.Stats{Books: 7}, nil
+			},
+		}
+		f := NewStatsFile(util.NewTestFS(t), lib)
 
-	fstest.StatLength(t, f, uint64(len(formatStats(&library.Stats{Books: 7}))))
-}
+		fstest.StatLength(t, f, uint64(len(formatStats(&library.Stats{Books: 7}))))
+	})
 
-func TestStatsFileOpenPropagatesError(t *testing.T) {
-	lib := mock.StatsReader{
-		StatsFn: func() (*library.Stats, error) {
-			return nil, util.ErrTest
-		},
-	}
-	f := NewStatsFile(util.NewTestFS(t), lib)
+	// A closed library fails Stats.
+	t.Run("open propagates error", func(t *testing.T) {
+		lib, err := library.Open(library.Config(util.TestConfig(t)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		lib.Close()
+		f := NewStatsFile(util.NewTestFS(t), lib)
 
-	if err := f.Open(1, proto.Mode(0)); err != util.ErrTest {
-		t.Errorf("Open error = %v, want %v", err, util.ErrTest)
-	}
+		if err := f.Open(1, proto.Mode(0)); err == nil {
+			t.Error("Open over a closed library succeeded, want the Stats error")
+		}
+	})
 }
