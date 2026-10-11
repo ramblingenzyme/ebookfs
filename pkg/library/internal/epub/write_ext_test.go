@@ -222,4 +222,3 @@ func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 		t.Error("a real title change did not rewrite the epub")
 	}
 }
-
