@@ -106,8 +106,6 @@ Turn history into a standing property:
 
 ## Working
 
-  - **Sweeps:** do one package, then stop, report what changed, and wait for
-    review before the next.
   - **Before compressing:** check whether a premature abstraction should be
     undone first. A method that reads one field of its receiver usually wants
     to be a free function taking that value.
@@ -115,6 +113,10 @@ Turn history into a standing property:
     decisions choose strictness over availability and look like defects. If a
     decision covers it, honour it or raise the conflict and ask. Improving the
     diagnostics of a deliberate failure is usually welcome.
+  - **Before calling library API dead:** pkg/library is a feature-complete
+    abstraction, so its exported API is disconnected from usage. An exported
+    method with no caller outside tests is intended, not dead. Its
+    `_ext_test.go` is its only consumer, so give it a contract test there.
   - **Planning docs:** keep TODO.md and docs/DECISIONS.md at the design level.
     No file:line references and no internal Go symbols. Public names (9P paths,
     config fields, a proposed interface) are fine.

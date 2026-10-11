@@ -111,3 +111,40 @@ func TestRegister(t *testing.T) {
 		t.Errorf("register code = %v, want 2005", resp["code"])
 	}
 }
+
+// §3.3: every route answers 412 with a code naming what is wrong.
+func TestAcceptHeaderRejections(t *testing.T) {
+	handler := NewHandler(nil, nil, Config{PathPrefix: "/sync"})
+
+	tests := []struct {
+		name     string
+		accept   string
+		wantCode int
+	}{
+		{"missing", "", codeAcceptNotSet},
+		{"not koreader", "application/json", codeAcceptInvalid},
+		{"unsupported version", "application/vnd.koreader.v2+json", codeAcceptVersionUnsup},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/healthcheck", nil)
+			if tt.accept != "" {
+				req.Header.Set("Accept", tt.accept)
+			}
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+
+			if w.Code != http.StatusPreconditionFailed {
+				t.Errorf("status = %d, want %d", w.Code, http.StatusPreconditionFailed)
+			}
+			var resp struct{ Code int }
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("unmarshal %q: %v", w.Body.String(), err)
+			}
+			if resp.Code != tt.wantCode {
+				t.Errorf("code = %d, want %d", resp.Code, tt.wantCode)
+			}
+		})
+	}
+}

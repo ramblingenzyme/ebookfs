@@ -429,3 +429,52 @@ func TestKosyncStartupCreatesMissingSidecars(t *testing.T) {
 		}
 	}
 }
+
+// A title edit rewrites the epub, so the device's next hash is new. Progress
+// saved under the old hash must stay reachable from both.
+func TestEditKeepsProgressUnderBothDocumentIDs(t *testing.T) {
+	env := setupEnv(t, defaultCfg)
+	oldID := env.docID
+
+	if _, code := env.putProgress(t, map[string]any{
+		"document": oldID, "percentage": 0.5, "progress": "/body/chapter1", "device": "test-device",
+	}); code != http.StatusOK {
+		t.Fatalf("PUT: status = %d, want %d", code, http.StatusOK)
+	}
+	if _, err := env.lib.Edit(env.book.ID(), library.Edits{Title: new("Retitled")}); err != nil {
+		t.Fatalf("Edit: %v", err)
+	}
+
+	ids := env.documentIDs(t)
+	if len(ids) != 2 || ids[1] != oldID {
+		t.Fatalf("sidecar document IDs = %v, want [<new> %s]", ids, oldID)
+	}
+	for _, id := range ids {
+		if got, ok := env.mapping.Get(id); !ok || got != env.book.ID() {
+			t.Errorf("mapping[%s] = %d, %v, want %d", id, got, ok, env.book.ID())
+		}
+		if resp, _ := env.getProgress(t, id); resp["progress"] != "/body/chapter1" {
+			t.Errorf("GET %s = %v, want the saved progress", id, resp)
+		}
+	}
+}
+
+// Every document ID the book ever had leaves the mapping, or a later hash
+// collision would resolve to a book id that no longer exists.
+func TestDeleteDropsEveryDocumentID(t *testing.T) {
+	env := setupEnv(t, defaultCfg)
+	if _, err := env.lib.Edit(env.book.ID(), library.Edits{Title: new("Retitled")}); err != nil {
+		t.Fatalf("Edit: %v", err)
+	}
+	ids := env.documentIDs(t)
+	if len(ids) != 2 {
+		t.Fatalf("sidecar document IDs = %v, want two after a title edit", ids)
+	}
+
+	if err := env.lib.Delete(env.book.ID()); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if snap := env.mapping.Snapshot(); len(snap) != 0 {
+		t.Errorf("mapping after delete = %v, want empty", snap)
+	}
+}

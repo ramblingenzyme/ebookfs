@@ -113,21 +113,19 @@ func (f *searchCtlFile) Write(fid uint64, offset uint64, data []byte) (uint32, e
 }
 
 func (f *searchCtlFile) Close(fid uint64) error {
-	s := f.writes.TakeText(fid)
 	_ = f.SnapshotFile.Close(fid)
-	if s == "" {
+	return f.writes.CommitText(fid, func(s string) error {
+		if s == "close" {
+			f.handle.close()
+			return nil
+		}
+		q, err := textfmt.ParseQuery(s)
+		if err != nil {
+			return err
+		}
+		f.handle.executeSearch(q, s)
 		return nil
-	}
-	if s == "close" {
-		f.handle.close()
-		return nil
-	}
-	q, err := textfmt.ParseQuery(s)
-	if err != nil {
-		return err
-	}
-	f.handle.executeSearch(q, s)
-	return nil
+	})
 }
 
 // searchResultsDir is a bookListDir filtered by a predicate. It is a

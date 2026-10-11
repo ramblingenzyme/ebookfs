@@ -9,14 +9,6 @@ import (
 	"time"
 )
 
-func TestCacheClose(t *testing.T) {
-	c := NewCache(&fakeHost{dir: t.TempDir()})
-
-	if err := c.Close(); err != nil {
-		t.Errorf("Close: %v", err)
-	}
-}
-
 // Close must return with a conversion still in flight. Warm is only how this
 // test gets one running.
 func TestCacheCloseCancelsConversion(t *testing.T) {
@@ -101,64 +93,50 @@ func TestCacheSize(t *testing.T) {
 	}
 }
 
-func TestCacheEnsureCreatesFile(t *testing.T) {
-	c, dir := newTestCache(t, "fake-kepub")
+// A cache at least as new as the book's DateModified is fresh.
+func TestCacheEnsure(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		cached       bool
+		modified     time.Time
+		wantConverts int
+		want         string
+	}{
+		{"stale converts", false, time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC), 1, "converted"},
+		{"fresh is left", true, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), 0, "fresh-cache"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, dir := newTestCache(t, "converted")
+			converts := 0
+			convert := c.convertFn
+			c.convertFn = func(ctx context.Context, w io.Writer, r io.ReaderAt, n int64) error {
+				converts++
+				return convert(ctx, w, r, n)
+			}
 
-	// A future DateModified makes any cache stale.
-	b := makeBook(1, "Test", "Alice")
-	b.Meta.DateModified = time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)
-	b.EpubSize = int64(len("epub-data"))
+			cachePath := filepath.Join(dir, "1", ".sidecar", "kepub.epub")
+			if tc.cached {
+				if err := os.MkdirAll(filepath.Dir(cachePath), 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(cachePath, []byte("fresh-cache"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
 
-	if err := c.Ensure(wrapBook(b)); err != nil {
-		t.Fatalf("Ensure: %v", err)
-	}
+			b := makeBook(1, "Test", "Alice")
+			b.Meta.DateModified = tc.modified
+			b.EpubSize = int64(len("epub-data"))
+			if err := c.Ensure(wrapBook(b)); err != nil {
+				t.Fatalf("Ensure: %v", err)
+			}
 
-	cachePath := filepath.Join(dir, "1", ".sidecar", "kepub.epub")
-	data, err := os.ReadFile(cachePath)
-	if err != nil {
-		t.Fatalf("cache file not created: %v", err)
-	}
-	if string(data) != "fake-kepub" {
-		t.Errorf("cache content = %q, want %q", string(data), "fake-kepub")
-	}
-}
-
-func TestCacheEnsureFreshIsNoop(t *testing.T) {
-	dir := t.TempDir()
-	c := NewCache(&fakeHost{dir: dir})
-	var convertCalls int
-	c.convertFn = func(_ context.Context, w io.Writer, _ io.ReaderAt, _ int64) error {
-		convertCalls++
-		_, err := w.Write([]byte("modified"))
-		return err
-	}
-
-	srcPath := filepath.Join(dir, "source.epub")
-	if err := os.WriteFile(srcPath, []byte("epub-data"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	cachePath := filepath.Join(dir, "1", ".sidecar", "kepub.epub")
-	if err := os.MkdirAll(filepath.Dir(cachePath), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(cachePath, []byte("fresh-cache"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	// A past DateModified makes the just-created cache fresh.
-	b := makeBook(1, "Test", "Alice")
-	b.Meta.DateModified = time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
-	b.EpubSize = 9
-
-	if err := c.Ensure(wrapBook(b)); err != nil {
-		t.Fatalf("Ensure: %v", err)
-	}
-	if convertCalls != 0 {
-		t.Error("Ensure should not convert when cache is fresh")
-	}
-	data, _ := os.ReadFile(cachePath)
-	if string(data) != "fresh-cache" {
-		t.Errorf("cache content changed to %q, want %q", string(data), "fresh-cache")
+			if converts != tc.wantConverts {
+				t.Errorf("conversions = %d, want %d", converts, tc.wantConverts)
+			}
+			if data, err := os.ReadFile(cachePath); err != nil || string(data) != tc.want {
+				t.Errorf("cache content = %q (err %v), want %q", data, err, tc.want)
+			}
+		})
 	}
 }

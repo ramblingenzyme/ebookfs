@@ -24,10 +24,6 @@ func (s *Store) writeMeta(loc book.Location, meta *book.Meta) error {
 	return writeMeta(s.metaPath(loc), meta)
 }
 
-// readMeta and writeMeta take a path rather than a Location, which keeps the
-// file handling separable from the layout metaPath owns. Tests reach them
-// directly for a missing file, a malformed sidecar and an unwritable directory,
-// none of which is reachable through a Store worth building.
 func readMeta(path string) (*book.Meta, error) {
 	buf, err := os.ReadFile(path)
 	if err != nil {

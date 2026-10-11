@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -13,60 +14,37 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 )
 
-// The hint reaches a conversion at all.
-func TestCacheWarmProducesFile(t *testing.T) {
-	c, dir := newTestCache(t, "warm-content")
-
-	b := makeBook(1, "Warm", "Author")
-	b.EpubSize = 9
-
-	c.Warm(wrapBook(b))
-
-	cachePath := filepath.Join(dir, "1", ".sidecar", "kepub.epub")
-	if !waitForWarm(t, func() bool {
-		_, err := os.Stat(cachePath)
-		return err == nil
-	}) {
-		t.Error("cache file not created after warm")
-	}
-}
-
 // Driven through the cache, since the warmer's only conversion path is Ensure.
+// The first warmerGoroutines conversions fail, so the books after them convert
+// only if a goroutine carries on past its failure.
 func TestWarmerWarmsMultipleBooks(t *testing.T) {
 	c, dir := newTestCache(t, "warm-content")
+	convert := c.convertFn
+	var calls atomic.Int32
+	c.convertFn = func(ctx context.Context, w io.Writer, r io.ReaderAt, n int64) error {
+		if calls.Add(1) <= warmerGoroutines {
+			return util.ErrTest
+		}
+		return convert(ctx, w, r, n)
+	}
 
-	a := makeBook(1, "A", "Author")
-	a.EpubSize = 9
-	b := makeBook(2, "B", "Author")
-	b.EpubSize = 9
-	c.Warm(wrapBook(a))
-	c.Warm(wrapBook(b))
+	books := warmerGoroutines + 2
+	for id := int64(1); id <= int64(books); id++ {
+		b := makeBook(id, "Book", "Author")
+		b.EpubSize = 9
+		c.Warm(wrapBook(b))
+	}
 
 	if !waitForWarm(t, func() bool {
-		_, err1 := os.Stat(filepath.Join(dir, "1", ".sidecar", "kepub.epub"))
-		_, err2 := os.Stat(filepath.Join(dir, "2", ".sidecar", "kepub.epub"))
-		return err1 == nil && err2 == nil
+		warmed := 0
+		for id := 1; id <= books; id++ {
+			if _, err := os.Stat(filepath.Join(dir, strconv.Itoa(id), ".sidecar", "kepub.epub")); err == nil {
+				warmed++
+			}
+		}
+		return warmed == 2
 	}) {
-		t.Fatal("timed out waiting for both warms")
-	}
-}
-
-func TestWarmerErrorDoesNotPanic(t *testing.T) {
-	c, _ := newTestCache(t, "unused")
-	done := make(chan struct{})
-	c.convertFn = func(context.Context, io.Writer, io.ReaderAt, int64) error {
-		defer close(done)
-		return util.ErrTest
-	}
-
-	b := makeBook(1, "Test", "Author")
-	b.EpubSize = 9
-	c.Warm(wrapBook(b))
-
-	select {
-	case <-done:
-	case <-time.After(3 * time.Second):
-		t.Fatal("warmer goroutine did not convert")
+		t.Fatal("timed out waiting for the two books after the failures to warm")
 	}
 }
 

@@ -28,49 +28,60 @@ func reindexSeries(t *testing.T, path, series, index string) bookmodel.Bib {
 }
 
 // An index-only edit carries no series name, so the name is kept from the OPF.
-func TestWriteBibSeriesIndexOnlyKeepsName(t *testing.T) {
+// With no series in the OPF, the edit is dropped rather than creating an empty
+// one.
+func TestWriteBibSeriesIndexOnly(t *testing.T) {
 	for _, tc := range []struct {
-		name string
-		opf  epubtest.PackageDoc
-	}{{"epub3", epubtest.OPF3}, {"epub2", epubtest.OPF2}} {
+		name       string
+		opf        epubtest.PackageDoc
+		inOPF      bool
+		wantSeries bool
+	}{
+		{"epub3 with a series", epubtest.OPF3, true, true},
+		{"epub2 with a series", epubtest.OPF2, true, true},
+		{"no series in the OPF", epubtest.OPF3, false, false},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := epubtest.WriteEpub(t, epubtest.BaseEntries(tc.opf))
-			if _, err := writeBib(path, bookmodel.Edits{Series: new("The Saga"), SeriesIndex: new("1")}); err != nil {
-				t.Fatal(err)
+			if tc.inOPF {
+				if _, err := writeBib(path, bookmodel.Edits{Series: new("The Saga"), SeriesIndex: new("1")}); err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			book := reindexSeries(t, path, "The Saga", "4")
 
-			if book.Series == nil || book.Series.Name != "The Saga" || book.Series.Index != "4" {
+			switch {
+			case !tc.wantSeries && book.Series != nil:
+				t.Errorf("series = %+v, want nil — the OPF has none to carry over, and the edit must not invent one", book.Series)
+			case tc.wantSeries && (book.Series == nil || book.Series.Name != "The Saga" || book.Series.Index != "4"):
 				t.Errorf("series = %+v after an index-only edit, want The Saga at 4, the name carried over from the OPF", book.Series)
 			}
 		})
 	}
 }
 
-// The index says the book is in a series, but the epub has none. The edit is
-// dropped rather than creating an empty series.
-func TestWriteBibSeriesIndexOnlyWithoutSeriesInOPF(t *testing.T) {
-	path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
+func TestRewriteValidatesBeforeWriting(t *testing.T) {
+	authors := []bookmodel.Author{{Name: "Jane Doe"}, {Name: "Jane Doe"}}
 
-	book := reindexSeries(t, path, "Phantom Saga", "4")
+	for _, tc := range []struct {
+		name  string
+		edits bookmodel.Edits
+	}{
+		{"blank title", bookmodel.Edits{Title: new("   ")}},
+		{"duplicate authors", bookmodel.Edits{Authors: &authors}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := epubtest.Build(t, epubtest.RichOPF3)
+			before := epubtest.ReadEntry(t, path, epubtest.OPFPath)
 
-	if book.Series != nil {
-		t.Errorf("series = %+v, want nil — the OPF has none to carry over, and the edit must not invent one", book.Series)
-	}
-}
-
-func TestWriteBibBlankTitleRejected(t *testing.T) {
-	path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
-	if _, err := writeBib(path, bookmodel.Edits{Title: new("   ")}); err == nil {
-		t.Fatal("expected error blanking title, got nil")
-	}
-	book, err := epub.Parse(path)
-	if err != nil {
-		t.Fatalf("original epub broken after rejected edit: %v", err)
-	}
-	if book.Title != "Original Title" {
-		t.Errorf("title = %q, want Original Title (unchanged)", book.Title)
+			if _, err := writeBib(path, tc.edits); err == nil {
+				t.Fatal("expected validation error, got nil")
+			}
+			if !bytes.Equal(before, epubtest.ReadEntry(t, path, epubtest.OPFPath)) {
+				t.Error("the epub was rewritten by a refused edit")
+			}
+		})
 	}
 }
 
@@ -209,20 +220,5 @@ func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 	}
 	if os.SameFile(before, statOf()) {
 		t.Error("a real title change did not rewrite the epub")
-	}
-}
-
-// Two authors with the same name would be written to one creator element,
-// silently dropping one of them.
-func TestRewriteRefusesDuplicateAuthors(t *testing.T) {
-	path := epubtest.Build(t, epubtest.RichOPF3)
-	before := epubtest.ReadEntry(t, path, epubtest.OPFPath)
-
-	authors := []bookmodel.Author{{Name: "Jane Doe"}, {Name: "Jane Doe"}}
-	if _, err := writeBib(path, bookmodel.Edits{Authors: &authors}); err == nil {
-		t.Fatal("a duplicated author was accepted")
-	}
-	if !bytes.Equal(before, epubtest.ReadEntry(t, path, epubtest.OPFPath)) {
-		t.Error("the epub was rewritten by a refused edit")
 	}
 }

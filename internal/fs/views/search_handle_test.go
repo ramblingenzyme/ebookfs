@@ -2,22 +2,18 @@ package views
 
 import (
 	"fmt"
-	"github.com/knusbaum/go9p/proto"
-	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
-	"github.com/ramblingenzyme/ebookfs/pkg/library"
 	"sync"
 	"testing"
+
+	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
+	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
 func TestSearchHandleResyncRebuildsMembership(t *testing.T) {
 	reg, handle := newTestSearchHandle(t)
 
-	b1 := makeBook(1, "Foundation", "Isaac Asimov")
-	b1.Meta.Tags = []string{"sci-fi"}
-	b2 := makeBook(2, "The Hobbit", "J.R.R. Tolkien")
-	b2.Meta.Tags = []string{"fantasy"}
-	reg.Load(wrapBook(b1))
-	reg.Load(wrapBook(b2))
+	reg.Load(makeBookWithTags(1, "Foundation", "Isaac Asimov", "sci-fi"))
+	reg.Load(makeBookWithTags(2, "The Hobbit", "J.R.R. Tolkien", "fantasy"))
 
 	// Before any query the results dir lists nothing.
 	fstest.ChildCount(t, handle.results, 0)
@@ -30,9 +26,7 @@ func TestSearchHandleResyncRebuildsMembership(t *testing.T) {
 	}
 
 	// A matching book ingested after the query appears live.
-	b3 := makeBook(3, "Dune", "Frank Herbert")
-	b3.Meta.Tags = []string{"sci-fi"}
-	reg.Load(wrapBook(b3))
+	reg.Load(makeBookWithTags(3, "Dune", "Frank Herbert", "sci-fi"))
 	fstest.HasChild(t, handle.results, "Dune")
 
 	// Requerying rebuilds membership from scratch.
@@ -64,13 +58,11 @@ func TestSearchHandleConcurrentRequeryAndRegistryEvents(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := range 2 * perTag {
-			b := makeBook(int64(i+1), fmt.Sprintf("Book %d", i+1), "Author")
-			if i%2 == 0 {
-				b.Meta.Tags = []string{"sci-fi"}
-			} else {
-				b.Meta.Tags = []string{"fantasy"}
+			tag := "sci-fi"
+			if i%2 == 1 {
+				tag = "fantasy"
 			}
-			reg.Load(wrapBook(b))
+			reg.Load(makeBookWithTags(int64(i+1), fmt.Sprintf("Book %d", i+1), "Author", tag))
 		}
 	}()
 	go func() {
@@ -86,37 +78,6 @@ func TestSearchHandleConcurrentRequeryAndRegistryEvents(t *testing.T) {
 	fstest.ChildCount(t, handle.results, perTag)
 }
 
-func TestSearchCtlReadsCommittedQuery(t *testing.T) {
-	_, sd := newTestSearchDir(t, 0, 0)
-	handle := sd.allocateHandle()
-	ctl := ctlOf(t, handle)
-
-	readCtl := func(num uint64) string {
-		t.Helper()
-		return fstest.Fid(t, ctl, num).Get(proto.Oread, 4096)
-	}
-
-	if got := readCtl(1); got != "" {
-		t.Errorf("ctl read = %q on a handle that has run no query, want empty", got)
-	}
-
-	handle.executeSearch(library.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
-	if got := readCtl(2); got != "tag:sci-fi" {
-		t.Errorf("ctl read = %q, want the committed query %q", got, "tag:sci-fi")
-	}
-
-	// A fid opened before a requery keeps reporting its snapshot.
-	early := fstest.Fid(t, ctl, 3)
-	early.Open(proto.Oread)
-	handle.executeSearch(library.Query{Tags: []string{"fantasy"}}, "tag:fantasy")
-	if data := early.Read(0, 4096); data != "tag:sci-fi" {
-		t.Errorf("ctl read on a fid opened before the requery = %q, want its snapshot %q", data, "tag:sci-fi")
-	}
-	if got := readCtl(4); got != "tag:fantasy" {
-		t.Errorf("ctl read on a fid opened after the requery = %q, want %q", got, "tag:fantasy")
-	}
-}
-
 // The buffered-write contract: the query is accumulated by Write and only run at
 // clunk, so a client that writes in several chunks gets one search rather than a
 // partial one per write.
@@ -125,12 +86,8 @@ func TestSearchCtlExecutesQueryOnClunk(t *testing.T) {
 	handle := sd.allocateHandle()
 	ctl := ctlOf(t, handle)
 
-	b1 := makeBook(1, "Foundation", "Isaac Asimov")
-	b1.Meta.Tags = []string{"sci-fi"}
-	b2 := makeBook(2, "The Hobbit", "J.R.R. Tolkien")
-	b2.Meta.Tags = []string{"fantasy"}
-	reg.Load(wrapBook(b1))
-	reg.Load(wrapBook(b2))
+	reg.Load(makeBookWithTags(1, "Foundation", "Isaac Asimov", "sci-fi"))
+	reg.Load(makeBookWithTags(2, "The Hobbit", "J.R.R. Tolkien", "fantasy"))
 
 	// Split so the first chunk is a valid, matching query on its own: if the
 	// write path executed anything, results would be populated before the clunk
@@ -162,9 +119,7 @@ func TestSearchCtlRejectsUnparseableQuery(t *testing.T) {
 	handle := sd.allocateHandle()
 	ctl := ctlOf(t, handle)
 
-	b := makeBook(1, "Foundation", "Isaac Asimov")
-	b.Meta.Tags = []string{"sci-fi"}
-	reg.Load(wrapBook(b))
+	reg.Load(makeBookWithTags(1, "Foundation", "Isaac Asimov", "sci-fi"))
 	handle.executeSearch(library.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
 
 	fstest.Fid(t, ctl, 3).Write(0, "publisher:Tor")
@@ -179,39 +134,6 @@ func TestSearchCtlRejectsUnparseableQuery(t *testing.T) {
 	}
 }
 
-// The two no-op paths: a fid clunked without ever writing, and one that wrote
-// only whitespace. Neither may be treated as a query, or opening ctl to read it
-// would wipe the results.
-func TestSearchCtlIgnoresEmptyClunk(t *testing.T) {
-	reg, sd := newTestSearchDir(t, 0, 0)
-	handle := sd.allocateHandle()
-	ctl := ctlOf(t, handle)
-
-	b := makeBook(1, "Foundation", "Isaac Asimov")
-	b.Meta.Tags = []string{"sci-fi"}
-	reg.Load(wrapBook(b))
-	handle.executeSearch(library.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
-
-	tests := []struct {
-		name string
-		fid  uint64
-		data string
-	}{
-		{"never wrote", 11, ""},
-		{"whitespace only", 12, "  \n"},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			fid := fstest.Fid(t, ctl, tc.fid)
-			if tc.data != "" {
-				fid.Write(0, tc.data)
-			}
-			fid.Close()
-			fstest.HasChild(t, handle.results, "Foundation")
-		})
-	}
-}
-
 // The client-driven release path. Dropping the directory is only part of it:
 // the results dir must also come off the registry, or a handle no client can
 // reach goes on receiving every book event for the life of the process.
@@ -220,9 +142,7 @@ func TestSearchCtlCloseTearsDownHandle(t *testing.T) {
 	handle := sd.allocateHandle()
 	ctl := ctlOf(t, handle)
 
-	b := makeBook(1, "Foundation", "Isaac Asimov")
-	b.Meta.Tags = []string{"sci-fi"}
-	reg.Load(wrapBook(b))
+	reg.Load(makeBookWithTags(1, "Foundation", "Isaac Asimov", "sci-fi"))
 	handle.executeSearch(library.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
 	fstest.ChildCount(t, handle.results, 1)
 
@@ -234,9 +154,7 @@ func TestSearchCtlCloseTearsDownHandle(t *testing.T) {
 		t.Errorf(`handle %d still under search/ after writing "close", children: %v`, handle.id, fstest.ChildNames(sd))
 	}
 
-	later := makeBook(2, "Dune", "Frank Herbert")
-	later.Meta.Tags = []string{"sci-fi"}
-	reg.Load(wrapBook(later))
+	reg.Load(makeBookWithTags(2, "Dune", "Frank Herbert", "sci-fi"))
 	fstest.NoChild(t, handle.results, "Dune")
 
 	// A client that clunks a second ctl fid carrying "close" must not take a

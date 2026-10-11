@@ -163,3 +163,16 @@ func setupMapping(t *testing.T) (*testLibrary, *MappingFile) {
 	lib.AddHook(hook)
 	return lib, mapping
 }
+
+func (e *testEnv) documentIDs(t *testing.T) []string {
+	t.Helper()
+	data, err := e.lib.ReadSidecar(e.book.ID(), "kosync.json")
+	if err != nil {
+		t.Fatalf("ReadSidecar: %v", err)
+	}
+	var sidecar SidecarData
+	if err := json.Unmarshal(data, &sidecar); err != nil {
+		t.Fatalf("parse sidecar: %v", err)
+	}
+	return sidecar.DocumentIDs
+}

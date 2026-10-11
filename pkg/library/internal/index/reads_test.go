@@ -7,7 +7,9 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
-func TestStatsEmptyIndex(t *testing.T) {
+// One index taken from empty, to two books, to a book that drops a tag. The
+// last step checks a replaced tag is no longer counted.
+func TestStats(t *testing.T) {
 	idx := openTestIndex(t)
 
 	s, err := idx.Stats()
@@ -20,10 +22,6 @@ func TestStatsEmptyIndex(t *testing.T) {
 	if !s.LastAdded.IsZero() || !s.LastModified.IsZero() {
 		t.Errorf("Stats on empty index = %+v, want zero timestamps", s)
 	}
-}
-
-func TestStatsAggregates(t *testing.T) {
-	idx := openTestIndex(t)
 
 	b1 := book.NewBook(
 		book.Bib{
@@ -46,7 +44,7 @@ func TestStatsAggregates(t *testing.T) {
 	storeInIndexSized(t, idx, b1, 100)
 	storeInIndexSized(t, idx, b2, 250)
 
-	s, err := idx.Stats()
+	s, err = idx.Stats()
 	if err != nil {
 		t.Fatalf("Stats: %v", err)
 	}
@@ -68,37 +66,24 @@ func TestStatsAggregates(t *testing.T) {
 	if s.LastAdded.IsZero() || s.LastModified.IsZero() {
 		t.Errorf("Stats = %+v, want non-zero timestamps", s)
 	}
-}
 
-// Replacing a book's tags must not leave the old tag counted in Stats.
-func TestStatsExcludesOrphans(t *testing.T) {
-	idx := openTestIndex(t)
-
-	b := book.NewBook(
-		book.Bib{Title: "Book", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
-		book.Meta{ID: 1, Tags: []string{"stale"}},
-		book.Location{EpubPath: "A/Book (1)/book.epub"},
-	)
-	storeInIndex(t, idx, b)
-
-	updated := book.NewBook(
-		book.Bib{Title: "Book", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
-		book.Meta{ID: 1, Tags: []string{"fresh"}},
-		book.Location{EpubPath: "A/Book (1)/book.epub"},
-	)
-	storeInIndex(t, idx, updated)
-
-	s, err := idx.Stats()
+	b1.Meta.Tags = []string{"sci-fi"}
+	storeInIndexSized(t, idx, b1, 100)
+	s, err = idx.Stats()
 	if err != nil {
 		t.Fatalf("Stats: %v", err)
 	}
 	if s.Tags != 1 {
-		t.Errorf("Tags = %d, want 1 (stale tag should be swept)", s.Tags)
+		t.Errorf("Tags = %d, want 1 (space should be swept)", s.Tags)
 	}
 }
 
 // The sort names here are the reverse of the display names, so an authors
 // listing ordered by the wrong column fails.
+//
+// A value nothing points at is absent rather than a zero-count row, since the
+// listings join through the book tables. Every write path prunes orphans, so
+// these are inserted directly.
 func TestFacetListings(t *testing.T) {
 	idx := openTestIndex(t)
 
@@ -113,6 +98,15 @@ func TestFacetListings(t *testing.T) {
 
 	storeInIndex(t, idx, b1)
 	storeInIndex(t, idx, b2)
+	for _, stmt := range []string{
+		"INSERT INTO authors (name, sort_name) VALUES ('Nobody', 'Nobody')",
+		"INSERT INTO series (name) VALUES ('Lost')",
+		"INSERT INTO tags (name) VALUES ('orphan')",
+	} {
+		if _, err := idx.db.Exec(stmt); err != nil {
+			t.Fatalf("%s: %v", stmt, err)
+		}
+	}
 
 	tests := []struct {
 		name string
@@ -130,44 +124,6 @@ func TestFacetListings(t *testing.T) {
 		}
 		if !slices.Equal(got, tt.want) {
 			t.Errorf("%s = %v, want %v", tt.name, got, tt.want)
-		}
-	}
-}
-
-// A value nothing points at is absent rather than a zero-count row, since the
-// listings join through the book tables. Every write path prunes orphans, so
-// these are inserted directly.
-func TestFacetListingsSkipOrphans(t *testing.T) {
-	idx := openTestIndex(t)
-	b := makeTestBook(1, "Only", []string{"Alice"}, "sci-fi", book.StatusUnread)
-	b.Series = &book.SeriesRef{Name: "Saga", Index: "1"}
-	storeInIndex(t, idx, b)
-
-	for _, stmt := range []string{
-		"INSERT INTO authors (name, sort_name) VALUES ('Nobody', 'Nobody')",
-		"INSERT INTO series (name) VALUES ('Lost')",
-		"INSERT INTO tags (name) VALUES ('orphan')",
-	} {
-		if _, err := idx.db.Exec(stmt); err != nil {
-			t.Fatalf("%s: %v", stmt, err)
-		}
-	}
-
-	for _, tc := range []struct {
-		name string
-		list func() ([]Facet, error)
-		want []Facet
-	}{
-		{"authors", idx.ListAuthors, []Facet{{"Alice", 1}}},
-		{"series", idx.ListSeries, []Facet{{"Saga", 1}}},
-		{"tags", idx.ListTags, []Facet{{"sci-fi", 1}}},
-	} {
-		got, err := tc.list()
-		if err != nil {
-			t.Fatalf("%s: %v", tc.name, err)
-		}
-		if !slices.Equal(got, tc.want) {
-			t.Errorf("%s = %v, want %v", tc.name, got, tc.want)
 		}
 	}
 }

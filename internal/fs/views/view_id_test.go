@@ -61,22 +61,7 @@ func TestIDEntryName(t *testing.T) {
 	}
 }
 
-func TestIDEntryName_PadTriggeredByMaxID(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewByIDDir(reg)
-
-	b1 := makeBook(1, "First", "Author")
-	b2 := makeBook(10, "Tenth", "Author")
-
-	reg.Load(wrapBook(b1))
-	reg.Load(wrapBook(b2))
-
-	fstest.ChildCount(t, d, 2)
-	fstest.HasChild(t, d, "01. First")
-	fstest.HasChild(t, d, "10. Tenth")
-}
-
-func TestIDEntryName_PadThreeDigits(t *testing.T) {
+func TestByIDDirRepadsPast99(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewByIDDir(reg)
 
@@ -91,37 +76,6 @@ func TestIDEntryName_PadThreeDigits(t *testing.T) {
 	fstest.HasChild(t, d, "100. Hundredth")
 }
 
-func TestByIDDirAdd(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewByIDDir(reg)
-
-	b := makeBook(1, "Test", "Author")
-	reg.Load(wrapBook(b))
-
-	fstest.HasChild(t, d, "1. Test")
-}
-
-func TestByIDDirRemove(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewByIDDir(reg)
-
-	b := makeBook(1, "Test", "Author")
-	reg.Load(wrapBook(b))
-	removeBookFromView(t, reg, d, 1)
-
-	fstest.NoChild(t, d, "1. Test")
-}
-
-func TestByIDDirMultipleBooks(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewByIDDir(reg)
-
-	reg.Load(util.MakeBook(1, "Alpha", "Author"))
-	reg.Load(util.MakeBook(2, "Beta", "Author"))
-
-	fstest.ChildCount(t, d, 2)
-}
-
 // Removing an unknown id is a no-op. A book is registered so the no-op is
 // observable rather than inferred from the absence of a panic.
 func TestByIDDirRemoveUnknown(t *testing.T) {
@@ -132,23 +86,4 @@ func TestByIDDirRemoveUnknown(t *testing.T) {
 	removeBookFromView(t, reg, d, 999)
 
 	fstest.HasChild(t, d, "1. Kept")
-}
-
-func TestByIDDirTitleChangeReflected(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewByIDDir(reg)
-
-	b := makeBook(1, "Original", "Author")
-	reg.Load(wrapBook(b))
-
-	fstest.HasChild(t, d, "1. Original")
-
-	// The view removes the old snapshot before receiving the updated one.
-	dir := removeBookFromView(t, reg, d, 1)
-	b2 := makeBook(1, "Updated", "Author")
-	dir.SetSnapshot(wrapBook(b2))
-	d.Add(dir)
-
-	fstest.HasChild(t, d, "1. Updated")
-	fstest.NoChild(t, d, "1. Original")
 }

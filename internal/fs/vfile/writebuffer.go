@@ -63,8 +63,8 @@ func (w *WriteBuffer) Write(fid uint64, offset uint64, data []byte, seed func() 
 	return uint32(len(data)), nil
 }
 
-// Take removes and returns fid's accumulated buffer; nil if fid never wrote.
-func (w *WriteBuffer) Take(fid uint64) []byte {
+// take removes and returns fid's accumulated buffer; nil if fid never wrote.
+func (w *WriteBuffer) take(fid uint64) []byte {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	buf := w.bufs[fid]
@@ -72,10 +72,24 @@ func (w *WriteBuffer) Take(fid uint64) []byte {
 	return buf
 }
 
-// TakeText is Take for a file whose writes are a command line rather than
-// bytes: the buffer trimmed of surrounding whitespace. A fid that wrote nothing
-// and one that wrote only whitespace both come back "", so a caller checks the
-// result once instead of testing the buffer for nil and again for empty.
-func (w *WriteBuffer) TakeText(fid uint64) string {
-	return strings.TrimSpace(string(w.Take(fid)))
+// Commit hands the buffer to commit and returns its error, unless the fid
+// never wrote. The buffer is removed whether or not commit is called.
+func (w *WriteBuffer) Commit(fid uint64, commit func([]byte) error) error {
+	buf := w.take(fid)
+	if len(buf) == 0 {
+		return nil
+	}
+	return commit(buf)
+}
+
+// CommitText is Commit for a command line: the bytes are trimmed of
+// surrounding whitespace, and nothing is committed if that leaves "".
+func (w *WriteBuffer) CommitText(fid uint64, commit func(string) error) error {
+	return w.Commit(fid, func(buf []byte) error {
+		s := strings.TrimSpace(string(buf))
+		if s == "" {
+			return nil
+		}
+		return commit(s)
+	})
 }

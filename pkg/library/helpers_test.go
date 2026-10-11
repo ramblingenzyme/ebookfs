@@ -8,10 +8,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 )
 
-func buildTestEpub(t *testing.T, title string, authors ...string) []byte {
-	t.Helper()
-	return util.BuildTestEpub(t, title, authors...)
-}
+var buildTestEpub = util.BuildTestEpub
 
 func testConfig(t *testing.T) Config {
 	t.Helper()
@@ -94,6 +91,16 @@ func assertSettlesClean(t *testing.T, cfg Config) {
 }
 
 func ingestTestEpub(t *testing.T, lib *Library, data []byte) *Book {
+	t.Helper()
+	b, err := tryIngest(t, lib, data)
+	if err != nil {
+		t.Fatalf("Ingest: %v", err)
+	}
+	return b
+}
+
+// tryIngest returns Ingest's error, and fails the test on any earlier step.
+func tryIngest(t *testing.T, lib *Library, data []byte) (*Book, error) {
 	//goland:noinspection DuplicatedCode
 	t.Helper()
 	h, err := lib.CreateIngest()
@@ -103,9 +110,24 @@ func ingestTestEpub(t *testing.T, lib *Library, data []byte) *Book {
 	if _, err := h.WriteAt(data, 0); err != nil {
 		t.Fatalf("WriteAt: %v", err)
 	}
-	b, err := h.Ingest()
-	if err != nil {
-		t.Fatalf("Ingest: %v", err)
+	return h.Ingest()
+}
+
+// ingestStopped ingests a book into a library at cfg and closes it, so the
+// test can change the disk while no library holds it open.
+func ingestStopped(t *testing.T, cfg Config, title string, authors ...string) *Book {
+	t.Helper()
+	lib := openLib(t, cfg)
+	b := ingestTestEpub(t, lib, buildTestEpub(t, title, authors...))
+	if err := lib.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
 	}
 	return b
+}
+
+func writeFile(t *testing.T, path string, data []byte) {
+	t.Helper()
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
 }

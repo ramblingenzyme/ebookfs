@@ -9,10 +9,7 @@ import (
 
 var makeBook = util.MakeMutableBook
 
-func buildTestEpub(t *testing.T, title string, authors ...string) []byte {
-	t.Helper()
-	return util.BuildTestEpub(t, title, authors...)
-}
+var buildTestEpub = util.BuildTestEpub
 
 func testConfig(t *testing.T) library.Config {
 	t.Helper()
@@ -35,6 +32,16 @@ func openLib(t *testing.T, cfg library.Config, opts ...library.Option) *library.
 }
 
 func ingestTestEpub(t *testing.T, lib *library.Library, data []byte) *library.Book {
+	t.Helper()
+	b, err := tryIngest(t, lib, data)
+	if err != nil {
+		t.Fatalf("Ingest: %v", err)
+	}
+	return b
+}
+
+// tryIngest returns Ingest's error, and fails the test on any earlier step.
+func tryIngest(t *testing.T, lib *library.Library, data []byte) (*library.Book, error) {
 	//goland:noinspection DuplicatedCode
 	t.Helper()
 	h, err := lib.CreateIngest()
@@ -44,9 +51,5 @@ func ingestTestEpub(t *testing.T, lib *library.Library, data []byte) *library.Bo
 	if _, err := h.WriteAt(data, 0); err != nil {
 		t.Fatalf("WriteAt: %v", err)
 	}
-	b, err := h.Ingest()
-	if err != nil {
-		t.Fatalf("Ingest: %v", err)
-	}
-	return b
+	return h.Ingest()
 }

@@ -17,41 +17,64 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
+type parityBook struct {
+	title   string
+	authors []string
+	edits   library.Edits
+}
+
 func TestSearchMatcherAgreesWithSQL(t *testing.T) {
-	lib, all := parityBooks(t, [][2]string{
-		{"Findable", "Alice"},
-		{"Ünderland", "Bob"},
-		{"STRAÜSS", "Carol"},
-		{"Plain Book", "Alice"},
-	})
+	books := []parityBook{
+		{"Findable", []string{"Alice"}, library.Edits{Tags: &[]string{"sf"}, Status: new("reading"), Series: new("Saga"), SeriesIndex: new("1")}},
+		{"Plain Book", []string{"Alice"}, library.Edits{}},
+		{"Ünderland", []string{"Bob"}, library.Edits{Tags: &[]string{"fantasy"}, Status: new("read"), Series: new("Saga"), SeriesIndex: new("2"), Authors: &[]library.Author{{Name: "Bob", SortName: "Bobson, Bob"}}}},
+		{"STRAÜSS", []string{"Carol"}, library.Edits{}},
+		{"Good Omens", []string{"Neil Gaiman", "Terry Pratchett"}, library.Edits{}},
+		{"100% Wool", []string{"Dave"}, library.Edits{}},
+		{"1000 Ships", []string{"Dave"}, library.Edits{}},
+		{"x_y Files", []string{"Erin"}, library.Edits{}},
+		{"xzy Files", []string{"Erin"}, library.Edits{}},
+	}
+
+	lib, all := parityBooks(t, books)
 
 	for _, tc := range []struct {
 		name string
 		q    library.Query
-		// skip names the known divergence a case exercises. SQLite's LIKE folds case
-		// for ASCII only; makeMatchesFn uses strings.ToLower, which folds the whole
-		// of Unicode. Fixing it is a real choice, teaching SQLite a Unicode-aware
-		// comparison or stopping the Go side folding past ASCII, and the two give
-		// different behaviour. Drop the skip to see it fail.
+		want []string
 		skip string
 	}{
-		{name: "everything", q: library.Query{}},
-		{name: "title substring", q: library.Query{Titles: []string{"ind"}}},
-		{name: "title lowercased ascii", q: library.Query{Titles: []string{"findable"}}},
-		{name: "title exact", q: library.Query{Titles: []string{"Findable"}, ExactTitles: true}},
-		{name: "title exact wrong case", q: library.Query{Titles: []string{"findable"}, ExactTitles: true}},
-		{name: "author", q: library.Query{Authors: []string{"Alice"}}},
-		{name: "author and title", q: library.Query{Authors: []string{"Alice"}, Titles: []string{"Plain"}}},
-		{name: "no match", q: library.Query{Titles: []string{"nothing here"}}},
+		{"everything", library.Query{}, []string{"100% Wool", "1000 Ships", "Findable", "Good Omens", "Plain Book", "STRAÜSS", "x_y Files", "xzy Files", "Ünderland"}, ""},
+		{"title substring", library.Query{Titles: []string{"ind"}}, []string{"Findable"}, ""},
+		{"title lowercased ascii", library.Query{Titles: []string{"findable"}}, []string{"Findable"}, ""},
+		{"title exact", library.Query{Titles: []string{"Findable"}, ExactTitles: true}, []string{"Findable"}, ""},
+		{"title exact wrong case", library.Query{Titles: []string{"findable"}, ExactTitles: true}, nil, ""},
+		{"author", library.Query{Authors: []string{"Alice"}}, []string{"Findable", "Plain Book"}, ""},
+		{"co-author", library.Query{Authors: []string{"Terry Pratchett"}}, []string{"Good Omens"}, ""},
+		{"author by sort name", library.Query{Authors: []string{"Bobson, Bob"}}, []string{"Ünderland"}, ""},
+		{"author is not a substring", library.Query{Authors: []string{"Ali"}}, nil, ""},
+		{"author and title", library.Query{Authors: []string{"Alice"}, Titles: []string{"Plain"}}, []string{"Plain Book"}, ""},
+		{"tag", library.Query{Tags: []string{"sf"}}, []string{"Findable"}, ""},
+		{"tags OR", library.Query{Tags: []string{"sf", "fantasy"}}, []string{"Findable", "Ünderland"}, ""},
+		{"series", library.Query{Series: []string{"Saga"}}, []string{"Findable", "Ünderland"}, ""},
+		{"status", library.Query{Status: []string{"reading"}}, []string{"Findable"}, ""},
+		{"ids", library.Query{IDs: []int64{1, 3}}, []string{"Findable", "Ünderland"}, ""},
+		{"every field", library.Query{Authors: []string{"Alice"}, Tags: []string{"sf"}, Series: []string{"Saga"}, Status: []string{"reading"}, IDs: []int64{1}, Titles: []string{"find"}}, []string{"Findable"}, ""},
+		{"one field fails", library.Query{Tags: []string{"sf"}, Status: []string{"read"}}, nil, ""},
+		{"literal percent", library.Query{Titles: []string{"100%"}}, []string{"100% Wool"}, ""},
+		{"literal underscore", library.Query{Titles: []string{"x_y"}}, []string{"x_y Files"}, ""},
+		{"no match", library.Query{Titles: []string{"nothing here"}}, nil, ""},
 		{
-			name: "title lowercased non-ascii",
-			q:    library.Query{Titles: []string{"ünderland"}},
-			skip: "SQL misses Ünderland, Go finds it",
+			"title lowercased non-ascii",
+			library.Query{Titles: []string{"ünderland"}},
+			[]string{"Ünderland"},
+			"SQL misses Ünderland, Go finds it",
 		},
 		{
-			name: "title uppercased non-ascii",
-			q:    library.Query{Titles: []string{"straüss"}},
-			skip: "SQL misses STRAÜSS, Go finds it",
+			"title uppercased non-ascii",
+			library.Query{Titles: []string{"straüss"}},
+			[]string{"STRAÜSS"},
+			"SQL misses STRAÜSS, Go finds it",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -69,16 +92,21 @@ func TestSearchMatcherAgreesWithSQL(t *testing.T) {
 					fromGo = append(fromGo, b)
 				}
 			}
-			if sql, gos := titlesOf(fromSQL), titlesOf(fromGo); !slices.Equal(sql, gos) {
-				t.Errorf("matchers disagree for %+v\n  library.Search (SQL): %v\n  makeMatchesFn (Go):   %v", tc.q, sql, gos)
+			sqlTitles := titlesOf(fromSQL)
+			goTitles := titlesOf(fromGo)
+			if !slices.Equal(sqlTitles, tc.want) {
+				t.Errorf("SQL: got %v, want %v", sqlTitles, tc.want)
+			}
+			if !slices.Equal(goTitles, tc.want) {
+				t.Errorf("Go: got %v, want %v", goTitles, tc.want)
 			}
 		})
 	}
 }
 
-// parityBooks opens a library holding one book per title/author pair and
-// returns it with every book in it, which is the set the Go matcher filters.
-func parityBooks(t *testing.T, books [][2]string) (*library.Library, []*library.Book) {
+// parityBooks opens a library holding one book per entry and returns it with
+// every book in it, which is the set the Go matcher filters.
+func parityBooks(t *testing.T, books []parityBook) (*library.Library, []*library.Book) {
 	t.Helper()
 	lib, err := library.Open(library.Config(util.TestConfig(t)))
 	if err != nil {
@@ -86,16 +114,22 @@ func parityBooks(t *testing.T, books [][2]string) (*library.Library, []*library.
 	}
 	t.Cleanup(func() { lib.Close() })
 
-	for _, b := range books {
+	for i, b := range books {
 		h, err := lib.CreateIngest()
 		if err != nil {
 			t.Fatalf("CreateIngest: %v", err)
 		}
-		if _, err := h.WriteAt(util.BuildTestEpub(t, b[0], b[1]), 0); err != nil {
+		if _, err := h.WriteAt(util.BuildTestEpub(t, b.title, b.authors...), 0); err != nil {
 			t.Fatalf("WriteAt: %v", err)
 		}
-		if _, err := h.Ingest(); err != nil {
-			t.Fatalf("Ingest %q: %v", b[0], err)
+		book, err := h.Ingest()
+		if err != nil {
+			t.Fatalf("Ingest %q: %v", b.title, err)
+		}
+		if b.edits != (library.Edits{}) {
+			if _, err := lib.Edit(book.ID(), b.edits); err != nil {
+				t.Fatalf("Edit %d: %v", i+1, err)
+			}
 		}
 	}
 

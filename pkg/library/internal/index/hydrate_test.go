@@ -7,35 +7,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
-func TestQueryLoadsIdentifiers(t *testing.T) {
-	idx := openTestIndex(t)
-
-	b := book.NewBook(
-		book.Bib{
-			Title:       "Identified",
-			Authors:     []book.Author{{Name: "Alice", SortName: "Alice"}},
-			Identifiers: map[string]string{"isbn": "978-3-16-148410-0", "uuid": "abc-def"},
-		},
-		book.Meta{ID: 1},
-		book.Location{EpubPath: "A/Identified (1)/book.epub"},
-	)
-	storeInIndex(t, idx, b)
-
-	books, err := idx.Search(Query{IDs: []int64{1}})
-	if err != nil {
-		t.Fatalf("Query: %v", err)
-	}
-	if len(books) != 1 {
-		t.Fatalf("len = %d, want 1", len(books))
-	}
-	if books[0].Identifiers["isbn"] != "978-3-16-148410-0" {
-		t.Errorf("Identifier isbn = %q", books[0].Identifiers["isbn"])
-	}
-	if books[0].Identifiers["uuid"] != "abc-def" {
-		t.Errorf("Identifier uuid = %q", books[0].Identifiers["uuid"])
-	}
-}
-
 func TestQueryBatchLoadsMultipleBooks(t *testing.T) {
 	idx := openTestIndex(t)
 
@@ -121,28 +92,5 @@ func TestQueryBatchLoadsMultipleBooks(t *testing.T) {
 		default:
 			t.Errorf("unexpected book id %d", b.Meta.ID)
 		}
-	}
-}
-
-func TestGetReturnsIdentifiers(t *testing.T) {
-	idx := openTestIndex(t)
-
-	b := book.NewBook(
-		book.Bib{
-			Title:       "Getter",
-			Authors:     []book.Author{{Name: "Alice", SortName: "Alice"}},
-			Identifiers: map[string]string{"isbn": "978-1-234-56789-0"},
-		},
-		book.Meta{ID: 1},
-		book.Location{EpubPath: "A/Getter (1)/book.epub"},
-	)
-	storeInIndex(t, idx, b)
-
-	got, err := idx.Get(1)
-	if err != nil {
-		t.Fatalf("Get: %v", err)
-	}
-	if got.Identifiers["isbn"] != "978-1-234-56789-0" {
-		t.Errorf("Identifier isbn = %q", got.Identifiers["isbn"])
 	}
 }

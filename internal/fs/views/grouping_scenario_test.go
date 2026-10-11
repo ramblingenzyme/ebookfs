@@ -60,9 +60,7 @@ var groupingViews = []groupingView{
 		name:   "by-series",
 		newDir: func(reg *registry.BookRegistry) fs.Dir { return NewBySeriesDir(reg) },
 		withKeys: func(id int64, title string, keys ...string) *library.Book {
-			b := makeBook(id, title, "Author")
-			b.Series = &library.Series{Name: keys[0], Index: strconv.FormatInt(id, 10)}
-			return wrapBook(b)
+			return makeBookWithSeries(id, title, "Author", keys[0], strconv.FormatInt(id, 10))
 		},
 		keyless: func(id int64, title string) *library.Book { return util.MakeBook(id, title, "Author") },
 		// Series entries lead with the index so a plain readdir reads in order.
@@ -72,15 +70,9 @@ var groupingViews = []groupingView{
 		name:   "by-tag",
 		newDir: func(reg *registry.BookRegistry) fs.Dir { return NewByTagDir(reg) },
 		withKeys: func(id int64, title string, keys ...string) *library.Book {
-			b := makeBook(id, title, "Author")
-			b.Meta.Tags = keys
-			return wrapBook(b)
+			return makeBookWithTags(id, title, "Author", keys...)
 		},
-		keyless: func(id int64, title string) *library.Book {
-			b := makeBook(id, title, "Author")
-			b.Meta.Tags = nil
-			return wrapBook(b)
-		},
+		keyless:  func(id int64, title string) *library.Book { return makeBookWithTags(id, title, "Author") },
 		multiKey: true,
 	},
 	{
@@ -100,39 +92,15 @@ var groupingViews = []groupingView{
 // entry carrying it is one a 9P client can never walk to, which hides every
 // book filed under it. keyedDir.entryNames is the single place that guards it.
 func TestGroupNamesAreOneComponent(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		dir  func(*registry.BookRegistry) fs.Dir
-		book func() *library.Book
-	}{
-		{
-			name: "by-author",
-			dir:  func(reg *registry.BookRegistry) fs.Dir { return NewByAuthorDir(reg) },
-			book: func() *library.Book { return util.MakeBook(1, "Title", "Doe/Jane") },
-		},
-		{
-			name: "by-series",
-			dir:  func(reg *registry.BookRegistry) fs.Dir { return NewBySeriesDir(reg) },
-			book: func() *library.Book {
-				b := makeBook(1, "Title", "Author")
-				b.Series = &library.Series{Name: "Either/Or", Index: "1"}
-				return wrapBook(b)
-			},
-		},
-		{
-			name: "by-tag",
-			dir:  func(reg *registry.BookRegistry) fs.Dir { return NewByTagDir(reg) },
-			book: func() *library.Book {
-				b := makeBook(1, "Title", "Author")
-				b.Meta.Tags = []string{"sci/fi"}
-				return wrapBook(b)
-			},
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, v := range groupingViews {
+		// Statuses are a fixed set, so none carries a '/'.
+		if v.name == "by-status" {
+			continue
+		}
+		t.Run(v.name, func(t *testing.T) {
 			reg := newTestRegistry(t)
-			d := tc.dir(reg)
-			reg.Load(tc.book())
+			d := v.newDir(reg)
+			reg.Load(v.withKeys(1, "Title", "either/or"))
 
 			names := fstest.ChildNames(d)
 			if len(names) != 1 {
@@ -162,10 +130,7 @@ func TestGroupingViews(t *testing.T) {
 				reg, d := setup(t)
 				reg.Load(v.withKeys(1, "My Book", "alpha"))
 
-				want := []string{v.entry(1, "My Book")}
-				if got := mustGroupEntries(t, d, "alpha"); !slices.Equal(got, want) {
-					t.Errorf("alpha group = %v, want %v", got, want)
-				}
+				wantGroup(t, d, "alpha", v.entry(1, "My Book"))
 			})
 
 			t.Run("distinct keys make distinct groups", func(t *testing.T) {
@@ -173,14 +138,8 @@ func TestGroupingViews(t *testing.T) {
 				reg.Load(v.withKeys(1, "First", "alpha"))
 				reg.Load(v.withKeys(2, "Second", "beta"))
 
-				want := []string{v.entry(1, "First")}
-				if got := mustGroupEntries(t, d, "alpha"); !slices.Equal(got, want) {
-					t.Errorf("alpha group = %v, want %v", got, want)
-				}
-				want = []string{v.entry(2, "Second")}
-				if got := mustGroupEntries(t, d, "beta"); !slices.Equal(got, want) {
-					t.Errorf("beta group = %v, want %v", got, want)
-				}
+				wantGroup(t, d, "alpha", v.entry(1, "First"))
+				wantGroup(t, d, "beta", v.entry(2, "Second"))
 			})
 
 			t.Run("one key gathers several books", func(t *testing.T) {
@@ -188,11 +147,7 @@ func TestGroupingViews(t *testing.T) {
 				reg.Load(v.withKeys(1, "Book A", "alpha"))
 				reg.Load(v.withKeys(2, "Book B", "alpha"))
 
-				want := []string{v.entry(1, "Book A"), v.entry(2, "Book B")}
-				slices.Sort(want)
-				if got := mustGroupEntries(t, d, "alpha"); !slices.Equal(got, want) {
-					t.Errorf("alpha group = %v, want %v", got, want)
-				}
+				wantGroup(t, d, "alpha", v.entry(1, "Book A"), v.entry(2, "Book B"))
 			})
 
 			t.Run("the last book out prunes the group", func(t *testing.T) {
@@ -211,10 +166,7 @@ func TestGroupingViews(t *testing.T) {
 				reg.Load(v.withKeys(2, "Remove", "alpha"))
 				removeBookFromView(t, reg, d, 2)
 
-				want := []string{v.entry(1, "Keep")}
-				if got := mustGroupEntries(t, d, "alpha"); !slices.Equal(got, want) {
-					t.Errorf("alpha group = %v, want %v", got, want)
-				}
+				wantGroup(t, d, "alpha", v.entry(1, "Keep"))
 			})
 
 			t.Run("re-keying moves the book", func(t *testing.T) {
@@ -228,10 +180,7 @@ func TestGroupingViews(t *testing.T) {
 				if _, ok := groupEntries(t, d, "alpha"); ok {
 					t.Errorf("alpha group outlived the re-key; view holds %v", fstest.ChildNames(d))
 				}
-				want := []string{v.entry(1, "Moved")}
-				if got := mustGroupEntries(t, d, "beta"); !slices.Equal(got, want) {
-					t.Errorf("beta group = %v, want %v", got, want)
-				}
+				wantGroup(t, d, "beta", v.entry(1, "Moved"))
 			})
 
 			if v.multiKey {
@@ -239,12 +188,8 @@ func TestGroupingViews(t *testing.T) {
 					reg, d := setup(t)
 					reg.Load(v.withKeys(1, "Joint Work", "alpha", "beta"))
 
-					want := []string{v.entry(1, "Joint Work")}
-					for _, key := range []string{"alpha", "beta"} {
-						if got := mustGroupEntries(t, d, key); !slices.Equal(got, want) {
-							t.Errorf("%s group = %v, want %v", key, got, want)
-						}
-					}
+					wantGroup(t, d, "alpha", v.entry(1, "Joint Work"))
+					wantGroup(t, d, "beta", v.entry(1, "Joint Work"))
 				})
 			}
 
@@ -286,11 +231,15 @@ func groupEntries(t *testing.T, d fs.Dir, key string) ([]string, bool) {
 	return fstest.ChildNames(group), true
 }
 
-func mustGroupEntries(t *testing.T, d fs.Dir, key string) []string {
+// wantGroup checks the key's group lists exactly want, in any order.
+func wantGroup(t *testing.T, d fs.Dir, key string, want ...string) {
 	t.Helper()
-	names, ok := groupEntries(t, d, key)
+	got, ok := groupEntries(t, d, key)
 	if !ok {
 		t.Fatalf("no %q group; view holds %v", key, fstest.ChildNames(d))
 	}
-	return names
+	slices.Sort(want)
+	if !slices.Equal(got, want) {
+		t.Errorf("%s group = %v, want %v", key, got, want)
+	}
 }

@@ -39,10 +39,8 @@ func (f *CtlFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) 
 
 // Close runs what fid wrote. The result goes to the command log.
 func (f *CtlFile) Close(fid uint64) error {
-	s := f.writes.TakeText(fid)
-	if s == "" {
+	return f.writes.CommitText(fid, func(s string) error {
+		f.execute(s)
 		return nil
-	}
-	f.execute(s)
-	return nil
+	})
 }

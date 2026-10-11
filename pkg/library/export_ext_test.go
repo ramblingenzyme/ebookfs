@@ -9,29 +9,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-func TestLibraryImplExporter(t *testing.T) {
-	lib := openTestLibrary(t)
-
-	e, err := lib.Exporter(library.ReaderConfig{
-		Statuses: []string{"unread"},
-	})
-	if err != nil {
-		t.Fatalf("Exporter: %v", err)
-	}
-	if e == nil {
-		t.Fatal("Exporter returned nil")
-	}
-	book := makeBook(1, "Test", "Author")
-	book.Meta.Status = "unread"
-	if !e.Includes(util.WrapBook(book)) {
-		t.Errorf("Includes should return true for a book with status %q", book.Meta.Status)
-	}
-	book.Meta.Status = "read"
-	if e.Includes(util.WrapBook(book)) {
-		t.Errorf("Includes should return false for a book with status %q", book.Meta.Status)
-	}
-}
-
 func TestKepubCacheDelegates(t *testing.T) {
 	lib := openTestLibrary(t)
 	exp, err := lib.Exporter(library.ReaderConfig{
@@ -44,15 +21,6 @@ func TestKepubCacheDelegates(t *testing.T) {
 
 	b := makeBook(99, "Test", "Alice")
 	b.EpubPath = "mybook.epub"
-
-	b.Meta.Status = "reading"
-	if !exp.Includes(util.WrapBook(b)) {
-		t.Error("Includes should be true for the configured status")
-	}
-	b.Meta.Status = "read"
-	if exp.Includes(util.WrapBook(b)) {
-		t.Error("Includes should be false for an unconfigured status")
-	}
 
 	if fn := exp.Filename(util.WrapBook(b)); fn != "mybook.kepub.epub" {
 		t.Errorf("Filename = %q, want %q", fn, "mybook.kepub.epub")
