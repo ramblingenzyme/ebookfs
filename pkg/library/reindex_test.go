@@ -243,6 +243,47 @@ func TestOpenReindexesOnDrift(t *testing.T) {
 	}
 }
 
+// A same-size sidecar edit with the old mtime restored is invisible to the
+// drift check, so only WithForceReindex picks it up.
+func TestForceReindexSeesUndetectedDrift(t *testing.T) {
+	cfg := testConfig(t)
+
+	book := ingestStopped(t, cfg, "Test")
+	path := metaPathOf(book, cfg.Root)
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read meta: %v", err)
+	}
+	edited := bytes.Replace(data, []byte("rating = 0.0"), []byte("rating = 4.0"), 1)
+	if bytes.Equal(edited, data) {
+		t.Fatalf("meta.toml has no %q line:\n%s", "rating = 0.0", data)
+	}
+	writeFile(t, path, edited)
+	if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+
+	rating := func(opts ...Option) float64 {
+		lib := openLib(t, cfg, opts...)
+		defer lib.Close()
+		got, err := lib.Get(book.ID())
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		return got.Rating()
+	}
+	if got := rating(); got != 0 {
+		t.Fatalf("plain restart saw the edit (Rating = %v), so this test no longer reaches the forced path", got)
+	}
+	if got := rating(WithForceReindex()); got != 4 {
+		t.Errorf("Rating after a forced reindex = %v, want 4", got)
+	}
+}
+
 // A plain restart, no -reindex. File state is recorded before the canonical
 // move, and stays accurate after it because rename preserves size and mtime.
 func TestRestartReconcilesTheDisk(t *testing.T) {
