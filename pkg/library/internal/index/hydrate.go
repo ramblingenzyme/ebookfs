@@ -4,6 +4,10 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
+// ponytail: each load binds one SQLite variable per id, so hydrating more than
+// 32,766 books fails with "too many SQL variables" and the server will not
+// start. Hydrate in chunks, or join against the outer query, once a library
+// nears that size.
 func (idx *Index) hydrateBooks(books []*book.Book) error {
 	ids := make([]int64, len(books))
 	for i, b := range books {

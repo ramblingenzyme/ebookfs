@@ -37,6 +37,8 @@ func readMeta(path string) (*book.Meta, error) {
 	if err = toml.Unmarshal(buf, meta); err != nil {
 		return nil, err
 	}
+	// The file is hand-editable, and the index keys tags on (book, tag).
+	meta.Tags = book.FirstOf(meta.Tags, func(t string) string { return t })
 	return meta, nil
 }
 

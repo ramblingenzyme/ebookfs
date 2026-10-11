@@ -17,8 +17,9 @@ Enable kosync by adding credentials to your config file:
 
 ```toml
 [kosync]
+enable = true
 username = "myuser"
-credential = "5f4dcc3b5aa765d61d8327deb882cf99"
+password = "mypassword"
 reading_threshold = 0.05
 read_threshold = 0.95
 ```
@@ -28,17 +29,7 @@ read_threshold = 0.95
 Kosync uses pre-provisioned credentials only. User registration is disabled.
 
 - **username**: The username KOReader will use to authenticate
-- **credential**: The MD5 hash of the password (lowercase hex)
-
-To generate the credential:
-
-```bash
-# Using md5sum
-echo -n "mypassword" | md5sum | cut -d' ' -f1
-
-# Using Python
-python3 -c 'import hashlib; print(hashlib.md5(b"mypassword").hexdigest())'
-```
+- **password**: The password in plaintext. ebookfs hashes it to MD5 at startup, which is what KOReader sends
 
 Configure the same username and password in KOReader's kosync plugin settings.
 
@@ -55,11 +46,11 @@ Status transitions are one-way: once a book is marked "read", it will not be dow
 
 Kosync data is stored in two locations:
 
-1. **Per-book sidecars**: `{library_root}/books/{book_dir}/.sidecar/kosync.json`
+1. **Per-book sidecars**: `{library_root}/{author}/{title} ({id})/.sidecar/kosync.json`
    - Contains the document ID(s) and current progress
    - Document IDs are computed using a partial MD5 algorithm matching KOReader's specification
 
-2. **Mapping file**: `{library_root}/.kosync/mapping.json`
+2. **Mapping file**: `{mapping_path}/mapping.json`, where `mapping_path` defaults to `{library_root}/.kosync`
    - Maps document IDs to book IDs for efficient lookup
    - Can be rebuilt from sidecars if lost or corrupted
 
@@ -88,9 +79,9 @@ KOReader clients should work without modification when configured with the ebook
 ### Kosync not working
 
 1. **Check logs**: Look for "kosync: computed document ID" messages during book ingest
-2. **Verify credentials**: Ensure username and credential (MD5 hash) are correct in both ebookfs config and KOReader
-3. **Check mapping**: Look for "kosync: mapping rebuilt" in logs if the mapping was missing or corrupted
-4. **Verify sidecars**: Check that `{library_root}/books/{book_dir}/.sidecar/kosync.json` exists for books you're reading
+2. **Verify credentials**: Ensure `enable = true`, and that username and password match in both ebookfs config and KOReader
+3. **Check mapping**: Look for "kosync: rebuild complete" in logs if the mapping was missing or corrupted
+4. **Verify sidecars**: Check that `{library_root}/{author}/{title} ({id})/.sidecar/kosync.json` exists for books you're reading
 
 ### Progress not syncing between devices
 

@@ -2,16 +2,17 @@ package pkgdoc
 
 import "testing"
 
-// No fixture reaches the no-dc-element fallback, since it runs only while
-// creating the first one. Regression: it returned "dc" unconditionally, which
-// put a new element in no namespace when Dublin Core was bound elsewhere.
+// Corpus fixtures always carry a dc:title, so the fallback for a document
+// without one needs fixtures of its own. Regression: it returned "dc"
+// unconditionally, which put a new element in no namespace when Dublin Core was
+// bound elsewhere.
 func TestDCPrefix(t *testing.T) {
 	for _, tc := range []struct {
 		name, pkgAttrs, metadata, want string
 		declares                       string
 	}{
 		{
-			name:     "copies the prefix an existing dc element uses",
+			name:     "copies the prefix the dc:title uses",
 			metadata: `<dc:title>T</dc:title>`,
 			want:     "dc",
 		},
@@ -22,12 +23,12 @@ func TestDCPrefix(t *testing.T) {
 			want:     "dcx",
 		},
 		{
-			name:     "no dc element: takes the prefix the document declares",
+			name:     "no dc:title: takes the prefix <package> declares",
 			pkgAttrs: ` xmlns:dcx="http://purl.org/dc/elements/1.1/"`,
 			want:     "dcx",
 		},
 		{
-			name: "no dc element and no declaration: declares one",
+			name: "no dc:title and none on <package>: declares one there",
 			want: "dc", declares: "http://purl.org/dc/elements/1.1/",
 		},
 	} {

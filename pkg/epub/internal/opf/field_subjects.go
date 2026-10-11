@@ -21,7 +21,7 @@ func (f subjectsField) get() []string {
 
 // set reconciles subjects by text: elements with matching values are reused
 // (preserving their authority/term refinements), unmatched elements are removed,
-// and new values get new elements.
+// and new values get new elements. Every element is placed in the order given.
 func (f subjectsField) set(subjects []string) {
 	// Keyed by the text get reports, so a match is the element the caller was shown.
 	byText := map[string]*pkgdoc.Element{}
@@ -36,12 +36,13 @@ func (f subjectsField) set(subjects []string) {
 	}
 
 	for _, text := range subjects {
-		if el, reused := byText[text]; reused {
+		el, reused := byText[text]
+		if reused {
 			delete(unclaimed, el)
-			continue
+		} else {
+			el = f.d.NewDC("subject")
+			el.Set(text)
 		}
-		el := f.d.NewDC("subject")
-		el.Set(text)
 		el.Place()
 	}
 

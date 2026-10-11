@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **OPDS catalog, the second frontend.** An OPDS 1.2 / 2.0 feed at `/opds`, off unless `opds.listen` is set, built on [`github.com/ophymx/opds`](https://github.com/ophymx/opds). Reader apps browse all books, recently added, authors, series, tags and reading status, search over OpenSearch, and download through the configured exporter. Covers are served from the original epub, so browsing never triggers a kepub conversion. Read-only: 9P is still the only write path (DECISIONS.md #4). See [docs/security.md](./docs/security.md) before opening the port.
 
+- **kosync, KOReader reading-progress sync.** A kosync-compatible server on the shared HTTP listener at `/sync/`, off unless `kosync.enable` is set. One pre-provisioned account (`kosync.username` and `kosync.password`); registration is refused. Progress lives in each book's `.sidecar/kosync.json`, keyed by KOReader's partial-MD5 document ID, and each sync updates the book's status from the synced percentage using `reading_threshold` and `read_threshold`. A book marked read stays read. The document-ID mapping under `kosync.mapping_path` (default `<library.root>/.kosync`) is derived, and is rebuilt from the sidecars when it is missing, corrupt or empty. See [docs/kosync.md](./docs/kosync.md).
+
 - **`Library.Authors`, `Library.Series` and `Library.Tags`.** Each returns the distinct values of its field with the number of books behind it, counted in SQL. A frontend building browse navigation no longer loads every book to count them.
 
 - **`epub`, a public package for reading and writing EPUB metadata.** `github.com/ramblingenzyme/ebookfs/pkg/epub` imports nothing of ebookfs. `Open` parses a book's package document into exported fields; `Save` writes back only what moved, leaving the rest of the archive byte for byte. `OpenFile` stops at the zip and OCF container for callers that only need entries. See DECISIONS.md #25.
@@ -31,6 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`Library.Close` no longer converts the whole kepub backlog before returning.** Up to 4096 queued warm hints were converted on the way out, uncancellably. Close now cancels the converter's context and drops the queue. A warm is a hint; the read path still converts on demand.
 
 - **Identifiers are keyed by scheme rather than by the XML id.** A book indexed `pub-id` and `BookId` where it should have indexed `uuid` and `isbn`. The scheme now comes from `opf:scheme`, the `identifier-type` refinement, or the value's URN namespace, with the XML id as a last resort. The index schema version is bumped, so the first startup after upgrading reindexes and re-derives every identifier row. See DECISIONS.md #24.
+
+- **A repeated tag, author, subject or contributor no longer stops the server starting.** The index refused the repeat, so ingest failed with a raw SQL error, and a repeat already on disk failed the startup rebuild until someone edited the file by hand. Reading an epub or `meta.toml` now keeps the first of each, which also keeps a repeated author out of the book's directory name. An edit that repeats one is refused with a readable error.
+
+- **`ctl` reports a total failure as `error:`.** A command where every matched book failed still opened with `ok:`. A partial failure still opens with `ok:`, followed by the errors.
+
+- **Replacing a cover keeps percentage sizes.** An HTML cover page's `<img width="100%">` was rewritten to the new image's pixel width, which overflows a small screen.
+
+- **Sidecar access no longer recreates a deleted book directory.** A kepub stat or sidecar read for a book removed outside ebookfs left an empty `Author/Title (id)/.sidecar/` behind.
 
 ### Changed
 
@@ -51,6 +61,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Slices and maps returned by getters are cloned to prevent external mutation.
     - `Library.Search`, `Library.Edit`, and all `Exporter` methods return or accept `*library.Book`.
     - Callers must use the getter methods and re-fetch after mutations (via `Library.Search` or `Library.Edit` return value) to see updated state.
+
+- **`library.inbox_temp` and `library.index_path` default to paths under `library.root`.** They were fixed under `/var/lib/ebookfs/library`, so a config setting only `root` kept the index and upload temp dir there, and startup failed when the two sat on different filesystems. An unset or empty value now follows the configured root, as `kosync.mapping_path` already did.
+
+- **Unknown config keys log a warning.** A typo such as `enabeld = true` silently left a frontend off. Each key no field reads is logged at startup, and the config still loads.
+
+- **Edits that would leave invalid metadata are refused.** An empty language, which both EPUB versions require, and a series index sent with an empty series, whose index was silently dropped, now fail validation.
+
+- **Ingest refuses a package document over 16 MiB.** A zip entry's declared size is whatever the file says, so a small upload could inflate its package document to gigabytes in memory.
 
 ### Removed
 

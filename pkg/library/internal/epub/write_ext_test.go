@@ -41,11 +41,8 @@ func TestWriteBibSeriesIndexOnlyKeepsName(t *testing.T) {
 
 			book := reindexSeries(t, path, "The Saga", "4")
 
-			if book.Series == nil || book.Series.Name != "The Saga" {
-				t.Errorf("series = %v after an index-only edit, want it carried over from the OPF", book.Series)
-			}
-			if book.Series == nil || book.Series.Index != "4" {
-				t.Errorf("series index = %v, want 4", book.Series.Index)
+			if book.Series == nil || book.Series.Name != "The Saga" || book.Series.Index != "4" {
+				t.Errorf("series = %+v after an index-only edit, want The Saga at 4, the name carried over from the OPF", book.Series)
 			}
 		})
 	}

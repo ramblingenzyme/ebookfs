@@ -154,6 +154,23 @@ func (r *Refine) Set(value string) {
 	r.Add(value, "")
 }
 
+// SetValues makes the refinements carry values, in order. Existing ones are
+// rewritten in place, so they keep their attributes, and only the extra values
+// are added, under scheme.
+func (r *Refine) SetValues(values []string, scheme string) {
+	ms := r.elements()
+	for i, v := range values {
+		if i < len(ms) {
+			ms[i].SetText(v)
+			continue
+		}
+		r.Add(v, scheme)
+	}
+	for _, m := range ms[min(len(values), len(ms)):] {
+		detach(m)
+	}
+}
+
 func (r *Refine) Exists() bool { return len(r.elements()) > 0 }
 
 func (r *Refine) Clear() {

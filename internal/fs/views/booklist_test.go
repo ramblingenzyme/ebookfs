@@ -8,7 +8,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 )
 
-func TestRegistryAddAndRemove(t *testing.T) {
+func TestBooksDirAddAndRemove(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
 
@@ -25,7 +25,7 @@ func TestRegistryAddAndRemove(t *testing.T) {
 // Removing an id that was never added is distinguishable from removing
 // everything: a real book stays registered, so against an empty registry a
 // Remove that cleared the whole view would look identical.
-func TestRegistryRemoveUnknownID(t *testing.T) {
+func TestBooksDirRemoveUnknownID(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)
 	reg.Load(util.MakeBook(1, "Kept", "Author"))
@@ -137,10 +137,10 @@ func TestBooksDirDuplicateTitles(t *testing.T) {
 // Order matters: the literal has to be registered first, then the collision
 // that mints over it.
 func TestBooksDirMintedNameCollidesWithLiteralTitle(t *testing.T) {
-	t.Skip("known defect: the minted entry replaces the literal one, so a registered " +
-		"book vanishes from the listing, and entries then maps both ids to that name, " +
-		"so removing either deletes the other's entry too. The fix is to mint until the " +
-		"name is free rather than assume one pass suffices. Drop this line to see it fail.")
+	t.Skip("known defect: AddChild refuses the minted name, so the literal \"Foo (2)\" " +
+		"stays and book 2 never appears. entries still maps both ids to that name, so " +
+		"removing either deletes book 1's entry. The fix is to mint until the name is " +
+		"free and to check AddChild's error. Drop this line to see it fail.")
 
 	reg := newTestRegistry(t)
 	d := NewAllBooksDir(reg)

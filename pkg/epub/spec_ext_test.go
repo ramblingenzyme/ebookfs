@@ -201,8 +201,7 @@ func TestSpecFirstLanguageWins(t *testing.T) {
 		t.Errorf("language = %q, want the first of en, fr", bib.Language)
 	}
 
-	fr := "de"
-	if _, err := save(t, path, func(b *epub.Book) { b.Language = fr }); err != nil {
+	if _, err := save(t, path, func(b *epub.Book) { b.Language = "de" }); err != nil {
 		t.Fatal(err)
 	}
 	langs := epubtest.Metadata(t, path).SelectElements("language")
@@ -529,18 +528,23 @@ func TestSpecSlashInAValueIsNotRewritten(t *testing.T) {
 		t.Errorf("authors = %v, want [AC/DC] as written", got)
 	}
 
-	// Passing the authors back, as library.Edit does, would write any read-side
-	// substitution to the file.
-	desc := "A new description."
-	if _, err := save(t, path, func(b *epub.Book) { b.Description = desc; b.Authors = bib.Authors }); err != nil {
+	// Save skips a field equal to what it read. Adding an author makes it write
+	// AC/DC back, carrying any read-side substitution into the file. A title is
+	// written only when it changes, so it gets a new one.
+	authors := append(slices.Clone(bib.Authors), epub.Author{Name: "Bon Scott"})
+	title := "Either/Or, Part Two"
+	if _, err := save(t, path, func(b *epub.Book) { b.Authors = authors; b.Title = title }); err != nil {
 		t.Fatal(err)
+	}
+	if got := authorNames(open(t, path)); !slices.Equal(got, []string{"AC/DC", "Bon Scott"}) {
+		t.Fatalf("authors after the edit = %v, want [AC/DC Bon Scott]", got)
 	}
 	raw := string(epubtest.ReadEntry(t, path, epubtest.OPFPath))
 	if !strings.Contains(raw, "AC/DC") {
 		t.Errorf("the creator no longer says AC/DC:\n%s", raw)
 	}
-	if !strings.Contains(raw, "Either/Or") {
-		t.Errorf("the title no longer says Either/Or:\n%s", raw)
+	if !strings.Contains(raw, title) {
+		t.Errorf("the title does not say %s:\n%s", title, raw)
 	}
 }
 
@@ -589,9 +593,12 @@ func TestSpecMultipleRoleRefines(t *testing.T) {
 				t.Fatalf("authors = %v, want [Maurice Sendak]", got)
 			}
 
-			authors := []epub.Author{{Name: "Maurice Sendak"}}
+			authors := []epub.Author{{Name: "Maurice Sendak", SortName: "Sendak, Maurice"}}
 			if _, err := save(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
 				t.Fatal(err)
+			}
+			if got := open(t, path).Authors; !slices.Equal(got, authors) {
+				t.Fatalf("authors after the edit = %v, want %v", got, authors)
 			}
 			md := epubtest.Metadata(t, path)
 			var roles []string
@@ -600,8 +607,8 @@ func TestSpecMultipleRoleRefines(t *testing.T) {
 					roles = append(roles, m.Text())
 				}
 			}
-			if !slices.Contains(roles, "ill") {
-				t.Errorf("roles after a no-op edit = %v, want the ill credit kept", roles)
+			if !slices.Equal(roles, order[:]) {
+				t.Errorf("roles after a sort-name edit = %v, want %v unchanged", roles, order)
 			}
 		})
 	}
@@ -931,6 +938,8 @@ func TestSpecSeriesReportedIsSeriesWritable(t *testing.T) {
 
 // --- Publisher ---
 
+// §5.5.3.2.1 defines dc:publisher, and §5.5.2 makes its value the element's
+// text content.
 func TestPublisherReadEPUB3(t *testing.T) {
 	opf := epubtest.EPUB3(`    <dc:publisher>Test Publisher</dc:publisher>`)
 	bib, err := parse(t, epubtest.Build(t, opf))
@@ -942,6 +951,8 @@ func TestPublisherReadEPUB3(t *testing.T) {
 	}
 }
 
+// OPF 2.0 §2.2.5 defines publisher, and §2.2 represents each field by an
+// element "whose content is the field's value".
 func TestPublisherReadEPUB2(t *testing.T) {
 	opf := epubtest.EPUB2(`    <dc:publisher>Legacy Publisher</dc:publisher>`)
 	bib, err := parse(t, epubtest.Build(t, opf))
@@ -953,6 +964,8 @@ func TestPublisherReadEPUB2(t *testing.T) {
 	}
 }
 
+// §5.5.3.2.1 makes dc:publisher repeatable and names no primary. Ours: the
+// first wins (docs/DECISIONS.md #27).
 func TestPublisherFirstWins(t *testing.T) {
 	opf := epubtest.EPUB3(`    <dc:publisher>First Publisher</dc:publisher>
     <dc:publisher>Second Publisher</dc:publisher>`)
@@ -965,6 +978,7 @@ func TestPublisherFirstWins(t *testing.T) {
 	}
 }
 
+// §5.5.3.2.1 defines dc:publisher. Ours: a written value reads back unchanged.
 func TestPublisherWrite(t *testing.T) {
 	path := epubtest.Build(t, epubtest.EPUB3(``))
 	if _, err := save(t, path, func(b *epub.Book) { b.Publisher = "New Publisher" }); err != nil {
@@ -979,6 +993,8 @@ func TestPublisherWrite(t *testing.T) {
 	}
 }
 
+// §5.5.3.2.1 makes dc:publisher optional, so a package without one is valid.
+// Ours: it reads as "".
 func TestPublisherEmpty(t *testing.T) {
 	opf := epubtest.EPUB3(``)
 	bib, err := parse(t, epubtest.Build(t, opf))
@@ -992,6 +1008,8 @@ func TestPublisherEmpty(t *testing.T) {
 
 // --- Rights ---
 
+// §5.5.3.2.1 defines dc:rights, and §5.5.2 makes its value the element's text
+// content.
 func TestRightsReadEPUB3(t *testing.T) {
 	opf := epubtest.EPUB3(`    <dc:rights>Copyright 2024</dc:rights>`)
 	bib, err := parse(t, epubtest.Build(t, opf))
@@ -1003,6 +1021,8 @@ func TestRightsReadEPUB3(t *testing.T) {
 	}
 }
 
+// OPF 2.0 §2.2.15 defines rights, and §2.2 represents each field by an element
+// "whose content is the field's value".
 func TestRightsReadEPUB2(t *testing.T) {
 	opf := epubtest.EPUB2(`    <dc:rights>All rights reserved</dc:rights>`)
 	bib, err := parse(t, epubtest.Build(t, opf))
@@ -1014,6 +1034,8 @@ func TestRightsReadEPUB2(t *testing.T) {
 	}
 }
 
+// §5.5.3.2.1 makes dc:rights repeatable and names no primary. Ours: the first
+// wins (docs/DECISIONS.md #27).
 func TestRightsFirstWins(t *testing.T) {
 	opf := epubtest.EPUB3(`    <dc:rights>First rights</dc:rights>
     <dc:rights>Second rights</dc:rights>`)
@@ -1026,6 +1048,7 @@ func TestRightsFirstWins(t *testing.T) {
 	}
 }
 
+// §5.5.3.2.1 defines dc:rights. Ours: a written value reads back unchanged.
 func TestRightsWrite(t *testing.T) {
 	path := epubtest.Build(t, epubtest.EPUB3(``))
 	if _, err := save(t, path, func(b *epub.Book) { b.Rights = "New Rights" }); err != nil {
@@ -1040,6 +1063,8 @@ func TestRightsWrite(t *testing.T) {
 	}
 }
 
+// §5.5.3.2.1 makes dc:rights optional, so a package without one is valid.
+// Ours: it reads as "".
 func TestRightsEmpty(t *testing.T) {
 	opf := epubtest.EPUB3(``)
 	bib, err := parse(t, epubtest.Build(t, opf))
@@ -1053,6 +1078,8 @@ func TestRightsEmpty(t *testing.T) {
 
 // --- Subjects ---
 
+// §5.5.3.2.1 makes dc:subject repeatable. Ours: every value is reported, in
+// document order.
 func TestSubjectsReadEPUB3(t *testing.T) {
 	opf := epubtest.EPUB3(`    <dc:subject>Fiction</dc:subject>
     <dc:subject>Science Fiction</dc:subject>`)
@@ -1066,6 +1093,8 @@ func TestSubjectsReadEPUB3(t *testing.T) {
 	}
 }
 
+// OPF 2.0 §2.2.3: "Multiple instances of the subject element are supported".
+// Ours: every value is reported, in document order.
 func TestSubjectsReadEPUB2(t *testing.T) {
 	opf := epubtest.EPUB2(`    <dc:subject>Fantasy</dc:subject>
     <dc:subject>Adventure</dc:subject>`)
@@ -1079,6 +1108,8 @@ func TestSubjectsReadEPUB2(t *testing.T) {
 	}
 }
 
+// §5.5.3.2.1 makes dc:subject optional. Ours: none reads as an empty, non-nil
+// slice.
 func TestSubjectsEmpty(t *testing.T) {
 	opf := epubtest.EPUB3(``)
 	bib, err := parse(t, epubtest.Build(t, opf))
@@ -1093,21 +1124,31 @@ func TestSubjectsEmpty(t *testing.T) {
 	}
 }
 
+// §5.5.3.2.1 makes dc:subject repeatable. Ours: a written list reads back
+// unchanged, in order.
 func TestSubjectsWrite(t *testing.T) {
-	path := epubtest.Build(t, epubtest.EPUB3(`    <dc:subject>Old Subject</dc:subject>`))
-	newSubjects := []string{"New Subject 1", "New Subject 2"}
-	if _, err := save(t, path, func(b *epub.Book) { b.Subjects = newSubjects }); err != nil {
-		t.Fatal(err)
-	}
-	bib, err := parse(t, path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !slices.Equal(bib.Subjects, newSubjects) {
-		t.Errorf("subjects = %v, want %v", bib.Subjects, newSubjects)
+	for _, tc := range []struct {
+		name     string
+		subjects []string
+	}{
+		{"replaced", []string{"New Subject 1", "New Subject 2"}},
+		{"kept one moved behind a new one", []string{"New Subject", "Old Subject"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := epubtest.Build(t, epubtest.EPUB3(`    <dc:subject>Old Subject</dc:subject>`))
+			if _, err := save(t, path, func(b *epub.Book) { b.Subjects = tc.subjects }); err != nil {
+				t.Fatal(err)
+			}
+			if got := open(t, path).Subjects; !slices.Equal(got, tc.subjects) {
+				t.Errorf("subjects = %v, want %v", got, tc.subjects)
+			}
+		})
 	}
 }
 
+// §5.5.3.2.5: once an authority names the scheme, "EPUB creators MUST associate
+// a subject code using the term property", so a reused subject keeps both.
+// Ours: refinements survive an edit to the list.
 func TestSubjectsReconcilePreservesRefinements(t *testing.T) {
 	opf := epubtest.EPUB3(`    <dc:subject id="s1">Fiction</dc:subject>
     <meta refines="#s1" property="authority">LCSH</meta>
@@ -1115,11 +1156,13 @@ func TestSubjectsReconcilePreservesRefinements(t *testing.T) {
     <dc:subject>Science Fiction</dc:subject>`)
 	path := epubtest.Build(t, opf)
 
-	// Write the same subjects back; the refinements should survive.
-	if _, err := save(t, path, func(b *epub.Book) {
-		b.Subjects = []string{"Fiction", "Science Fiction"}
-	}); err != nil {
+	// Writing back the list as read would change nothing, so Save would skip it.
+	want := []string{"Fiction", "Science Fiction", "Space Opera"}
+	if _, err := save(t, path, func(b *epub.Book) { b.Subjects = want }); err != nil {
 		t.Fatal(err)
+	}
+	if got := open(t, path).Subjects; !slices.Equal(got, want) {
+		t.Fatalf("subjects = %v, want %v", got, want)
 	}
 
 	md := epubtest.Metadata(t, path)
@@ -1158,6 +1201,8 @@ func TestSubjectsReconcilePreservesRefinements(t *testing.T) {
 
 // --- Contributors ---
 
+// §5.5.3.2.2 gives dc:contributor the requirements of dc:creator, and D.3.10
+// attaches its role by refinement.
 func TestContributorsReadEPUB3(t *testing.T) {
 	opf := epubtest.EPUB3(`    <dc:contributor id="c1">John Editor</dc:contributor>
     <meta refines="#c1" property="role" scheme="marc:relators">edt</meta>
@@ -1176,6 +1221,8 @@ func TestContributorsReadEPUB3(t *testing.T) {
 	}
 }
 
+// OPF 2.0 §2.2.6 adds a role attribute to contributor, drawn from the MARC
+// relator codes.
 func TestContributorsReadEPUB2(t *testing.T) {
 	opf := epubtest.EPUB2(`    <dc:contributor opf:role="edt">Bob Editor</dc:contributor>`)
 	bib, err := parse(t, epubtest.Build(t, opf))
@@ -1188,6 +1235,8 @@ func TestContributorsReadEPUB2(t *testing.T) {
 	}
 }
 
+// §5.5.3.2.1 makes dc:contributor optional. Ours: none reads as an empty,
+// non-nil slice.
 func TestContributorsEmpty(t *testing.T) {
 	opf := epubtest.EPUB3(``)
 	bib, err := parse(t, epubtest.Build(t, opf))
@@ -1202,6 +1251,8 @@ func TestContributorsEmpty(t *testing.T) {
 	}
 }
 
+// D.3.10 attaches a contributor's role by refinement. Ours: a written list reads
+// back unchanged, roles included.
 func TestContributorsWrite(t *testing.T) {
 	path := epubtest.Build(t, epubtest.EPUB3(``))
 	newContribs := []epub.Contributor{
@@ -1220,53 +1271,51 @@ func TestContributorsWrite(t *testing.T) {
 	}
 }
 
+// D.3.6 gives file-as "Cardinality: zero or one", so a reused contributor keeps
+// exactly one. Ours: refinements survive an edit to the list, and the role is
+// written once rather than added again.
 func TestContributorsReconcilePreservesRefinements(t *testing.T) {
 	opf := epubtest.EPUB3(`    <dc:contributor id="c1">John Editor</dc:contributor>
     <meta refines="#c1" property="role" scheme="marc:relators">edt</meta>
     <meta refines="#c1" property="file-as">Editor, John</meta>`)
 	path := epubtest.Build(t, opf)
 
-	// Write the same contributor back; the refinements should survive.
-	if _, err := save(t, path, func(b *epub.Book) {
-		b.Contributors = []epub.Contributor{{Name: "John Editor", Role: "edt"}}
-	}); err != nil {
+	// Writing back the list as read would change nothing, so Save would skip it.
+	want := []epub.Contributor{{Name: "John Editor", Role: "edt"}, {Name: "Jane Translator", Role: "trl"}}
+	if _, err := save(t, path, func(b *epub.Book) { b.Contributors = want }); err != nil {
 		t.Fatal(err)
+	}
+	if got := open(t, path).Contributors; !slices.Equal(got, want) {
+		t.Fatalf("contributors = %v, want %v", got, want)
 	}
 
 	md := epubtest.Metadata(t, path)
-	// Find the contributor and check its refinements survived.
-	for _, contrib := range md.FindElements("//contributor") {
-		if contrib.Text() == "John Editor" {
-			id := contrib.SelectAttrValue("id", "")
-			if id == "" {
-				t.Fatal("contributor lost its id")
-			}
-			// Check refinements by iterating over meta elements
-			foundRole := false
-			foundFileAs := false
-			for _, m := range md.SelectElements("meta") {
-				if m.SelectAttrValue("refines", "") == "#"+id {
-					prop := m.SelectAttrValue("property", "")
-					if prop == "role" && m.Text() == "edt" {
-						foundRole = true
-					}
-					if prop == "file-as" && m.Text() == "Editor, John" {
-						foundFileAs = true
-					}
-				}
-			}
-			if !foundRole {
-				t.Errorf("role refinement lost or changed")
-			}
-			if !foundFileAs {
-				t.Errorf("file-as refinement lost or changed")
-			}
-			return
+	var id string
+	for _, c := range md.FindElements("//contributor") {
+		if c.Text() == "John Editor" {
+			id = c.SelectAttrValue("id", "")
 		}
 	}
-	t.Error("contributor not found after write")
+	if id == "" {
+		t.Fatal("the reused contributor lost its id")
+	}
+	refines := map[string][]string{}
+	for _, m := range md.SelectElements("meta") {
+		if m.SelectAttrValue("refines", "") == "#"+id {
+			prop := m.SelectAttrValue("property", "")
+			refines[prop] = append(refines[prop], m.Text())
+		}
+	}
+	if got := refines["role"]; !slices.Equal(got, []string{"edt"}) {
+		t.Errorf("role refinements = %v, want [edt] once", got)
+	}
+	if got := refines["file-as"]; !slices.Equal(got, []string{"Editor, John"}) {
+		t.Errorf("file-as refinements = %v, want [Editor, John] once", got)
+	}
 }
 
+// D.3.10 gives role "Cardinality: zero or more", so a contributor without one
+// is valid. Ours: it reads as Role "".
 func TestContributorNoRole(t *testing.T) {
 	opf := epubtest.EPUB3(`    <dc:contributor>Someone</dc:contributor>`)
 	bib, err := parse(t, epubtest.Build(t, opf))
@@ -1279,11 +1328,27 @@ func TestContributorNoRole(t *testing.T) {
 	}
 }
 
+// D.3.10: "the importance of the roles should match the document order of their
+// containing meta elements". Ours: each role reads as its own entry, in that
+// order.
+func TestSpecContributorRolesReadInOrder(t *testing.T) {
+	opf := epubtest.EPUB3(`    <dc:contributor id="c1">Jane Doe</dc:contributor>
+    <meta refines="#c1" property="role" scheme="marc:relators">trl</meta>
+    <meta refines="#c1" property="role" scheme="marc:relators">edt</meta>`)
+	bib, err := parse(t, epubtest.Build(t, opf))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []epub.Contributor{{Name: "Jane Doe", Role: "trl"}, {Name: "Jane Doe", Role: "edt"}}
+	if !slices.Equal(bib.Contributors, want) {
+		t.Errorf("contributors = %v, want %v", bib.Contributors, want)
+	}
+}
+
 // --- Repeatable-but-single-valued preservation tests ---
 
-// These tests verify that when we write to the primary element,
-// secondary elements survive untouched.
-
+// §5.5.3.2.1 makes dc:publisher repeatable. Ours: an edit rewrites the first
+// and keeps the rest (docs/DECISIONS.md #27).
 func TestPublisherSecondElementSurvivesWrite(t *testing.T) {
 	opf := epubtest.EPUB3(`    <dc:publisher>First Publisher</dc:publisher>
     <dc:publisher>Second Publisher</dc:publisher>`)
@@ -1307,6 +1372,8 @@ func TestPublisherSecondElementSurvivesWrite(t *testing.T) {
 	}
 }
 
+// §5.5.3.2.1 makes dc:rights repeatable. Ours: an edit rewrites the first and
+// keeps the rest (docs/DECISIONS.md #27).
 func TestRightsSecondElementSurvivesWrite(t *testing.T) {
 	opf := epubtest.EPUB3(`    <dc:rights>First Rights</dc:rights>
     <dc:rights>Second Rights</dc:rights>`)
@@ -1330,6 +1397,8 @@ func TestRightsSecondElementSurvivesWrite(t *testing.T) {
 	}
 }
 
+// §5.5.3.2.1 makes dc:description repeatable. Ours: an edit rewrites the first
+// and keeps the rest (docs/DECISIONS.md #27).
 func TestDescriptionSecondElementSurvivesWrite(t *testing.T) {
 	opf := epubtest.EPUB3(`    <dc:description>First Description</dc:description>
     <dc:description>Second Description</dc:description>`)
@@ -1350,28 +1419,5 @@ func TestDescriptionSecondElementSurvivesWrite(t *testing.T) {
 	}
 	if descriptions[1].Text() != "Second Description" {
 		t.Errorf("second description = %q, want %q (should survive write)", descriptions[1].Text(), "Second Description")
-	}
-}
-
-func TestLanguageSecondElementSurvivesWrite(t *testing.T) {
-	opf := epubtest.EPUB3(`    <dc:language>en</dc:language>
-    <dc:language>fr</dc:language>`)
-	path := epubtest.Build(t, opf)
-
-	// Write a new language
-	if _, err := save(t, path, func(b *epub.Book) { b.Language = "de" }); err != nil {
-		t.Fatal(err)
-	}
-
-	md := epubtest.Metadata(t, path)
-	languages := md.FindElements("//language")
-	if len(languages) != 2 {
-		t.Fatalf("language count = %d, want 2", len(languages))
-	}
-	if languages[0].Text() != "de" {
-		t.Errorf("first language = %q, want %q", languages[0].Text(), "de")
-	}
-	if languages[1].Text() != "fr" {
-		t.Errorf("second language = %q, want %q (should survive write)", languages[1].Text(), "fr")
 	}
 }

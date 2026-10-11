@@ -4,10 +4,21 @@ import (
 	"bytes"
 	"maps"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testing/epubtest"
+	"github.com/ramblingenzyme/ebookfs/pkg/epub"
 )
+
+// The padding deflates to about 17 KB, as a crafted upload would.
+func TestOpenRefusesAnOversizedPackageDocument(t *testing.T) {
+	padding := "\n<!--" + strings.Repeat(" ", 17<<20) + "-->"
+	path := epubtest.Build(t, epubtest.OPF3+epubtest.PackageDoc(padding))
+	if _, err := parse(t, path); err == nil || !strings.Contains(err.Error(), "limit") {
+		t.Fatalf("Open err = %v, want the package document refused for its size", err)
+	}
+}
 
 func TestOpenResolvesEncodedCoverHref(t *testing.T) {
 	opfEncoded := epubtest.Pkg{Meta: `    <dc:creator id="creator1">Jane Doe</dc:creator>
@@ -119,6 +130,24 @@ func TestUnrefinedMetaIsNotACreatorsSortName(t *testing.T) {
 	}
 	if len(bib.Authors) != 1 || bib.Authors[0].SortName != "" {
 		t.Errorf("authors = %+v, want no sort name", bib.Authors)
+	}
+}
+
+// Files saved by an earlier version of the contributor writer repeat a role on
+// one element. Reporting each copy would give the index two identical rows.
+func TestRepeatedContributorRoleReadsOnce(t *testing.T) {
+	opf := epubtest.EPUB3(`    <dc:contributor id="c1">Jane Doe</dc:contributor>
+    <meta refines="#c1" property="role" scheme="marc:relators">edt</meta>
+    <meta refines="#c1" property="role" scheme="marc:relators">edt</meta>
+    <meta refines="#c1" property="role" scheme="marc:relators">trl</meta>
+    <meta refines="#c1" property="role" scheme="marc:relators">edt</meta>`)
+	bib, err := parse(t, epubtest.Build(t, opf))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []epub.Contributor{{Name: "Jane Doe", Role: "edt"}, {Name: "Jane Doe", Role: "trl"}}
+	if !slices.Equal(bib.Contributors, want) {
+		t.Errorf("contributors = %v, want %v", bib.Contributors, want)
 	}
 }
 
@@ -283,11 +312,8 @@ func TestSetCollectionIsNotASeries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if book.Series == nil || book.Series.Name != "Real Series" {
-		t.Errorf("series = %v, want Real Series (set collection should be ignored)", book.Series)
-	}
-	if book.Series == nil || book.Series.Index != "3" {
-		t.Errorf("series index = %v, want 3", book.Series.Index)
+	if book.Series == nil || book.Series.Name != "Real Series" || book.Series.Index != "3" {
+		t.Errorf("series = %+v, want Real Series at 3 (set collection should be ignored)", book.Series)
 	}
 }
 
@@ -299,6 +325,22 @@ func TestCoverSkipsAMarkupCoverImage(t *testing.T) {
 	}
 	if book.CoverPath() != "OEBPS/cover.jpg" {
 		t.Errorf("cover path = %q, want OEBPS/cover.jpg (markup cover-image must be skipped)", book.CoverPath())
+	}
+}
+
+// The XHTML case above matches both halves of the media type check, so only
+// this one fails if the "xml" half goes.
+func TestCoverSkipsAnSVGCoverImage(t *testing.T) {
+	opf := epubtest.Pkg{Meta: `    <meta name="cover" content="real-cover"/>`, Manifest: `<item id="svg-cover" href="cover.svg" media-type="image/svg+xml" properties="cover-image"/>
+    <item id="real-cover" href="cover.jpg" media-type="image/jpeg"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`}.EPUB3()
+
+	book, err := parse(t, epubtest.Build(t, opf))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if book.CoverPath() != "OEBPS/cover.jpg" {
+		t.Errorf("cover path = %q, want OEBPS/cover.jpg (svg cover-image must be skipped)", book.CoverPath())
 	}
 }
 

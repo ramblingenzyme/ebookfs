@@ -1,6 +1,7 @@
 package epub
 
 import (
+	"fmt"
 	"path"
 	"slices"
 
@@ -40,6 +41,11 @@ type Book struct {
 	cover []byte
 }
 
+// maxPackageSize caps the package document Open reads whole. archive/zip stops
+// at an entry's declared size, but the declared size is whatever the file
+// claims, so a small upload could otherwise inflate to gigabytes in memory.
+const maxPackageSize = 16 << 20
+
 // Open opens the epub at path and parses its package document. A book is never
 // rejected for what its metadata says.
 func Open(p string) (_ *Book, err error) {
@@ -53,6 +59,9 @@ func Open(p string) (_ *Book, err error) {
 		}
 	}()
 
+	if size := f.Size(f.PackagePath()); size > maxPackageSize {
+		return nil, fmt.Errorf("package document declares %d bytes, over the %d-byte limit", size, maxPackageSize)
+	}
 	raw, err := f.ReadEntry(f.PackagePath())
 	if err != nil {
 		return nil, err

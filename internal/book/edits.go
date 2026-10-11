@@ -114,6 +114,8 @@ func Validate(e Edits, b *Book) *ValidationError {
 		{"title", e.validateTitle},
 		{"authors", e.validateAuthors},
 		{"tags", e.validateTags},
+		{"subjects", e.validateSubjects},
+		{"contributors", e.validateContributors},
 		{"language", e.validateLanguage},
 		{"cover", func() string { return e.validateCover(b) }},
 		{"series_index", func() string { return e.validateSeriesIndex(b) }},
@@ -166,16 +168,14 @@ func (e Edits) validateAuthors() string {
 	if len(*e.Authors) == 0 {
 		return "at least one author is required"
 	}
-	seen := map[string]bool{}
 	for i, a := range *e.Authors {
-		name := strings.TrimSpace(a.Name)
-		if name == "" {
+		if strings.TrimSpace(a.Name) == "" {
 			return fmt.Sprintf("author %d has an empty name", i+1)
 		}
-		if seen[name] {
-			return fmt.Sprintf("author %d duplicates %q", i+1, name)
-		}
-		seen[name] = true
+	}
+	name := func(a Author) string { return strings.TrimSpace(a.Name) }
+	if i := firstRepeat(*e.Authors, name); i >= 0 {
+		return fmt.Sprintf("author %d duplicates %q", i+1, name((*e.Authors)[i]))
 	}
 	return ""
 }
@@ -195,17 +195,66 @@ func (e Edits) validateTags() string {
 			return fmt.Sprintf("tag %d is %q, which cannot name a directory", i+1, t)
 		}
 	}
+	if i := firstRepeat(*e.Tags, strings.TrimSpace); i >= 0 {
+		return fmt.Sprintf("tag %d duplicates %q", i+1, strings.TrimSpace((*e.Tags)[i]))
+	}
 	return ""
 }
 
+func (e Edits) validateSubjects() string {
+	if e.Subjects == nil {
+		return ""
+	}
+	if i := firstRepeat(*e.Subjects, strings.TrimSpace); i >= 0 {
+		return fmt.Sprintf("subject %d duplicates %q", i+1, strings.TrimSpace((*e.Subjects)[i]))
+	}
+	return ""
+}
+
+// validateContributors rejects one person credited twice in the same role. A
+// person may hold several roles, so the key is the pair.
+func (e Edits) validateContributors() string {
+	if e.Contributors == nil {
+		return ""
+	}
+	cs := *e.Contributors
+	i := firstRepeat(cs, func(c Contributor) Contributor { return c })
+	switch {
+	case i < 0:
+		return ""
+	case cs[i].Role == "":
+		return fmt.Sprintf("contributor %d duplicates %q", i+1, cs[i].Name)
+	default:
+		return fmt.Sprintf("contributor %d duplicates %q as %s", i+1, cs[i].Name, cs[i].Role)
+	}
+}
+
+// firstRepeat returns the index of the first element whose key an earlier one
+// shares, or -1.
+func firstRepeat[T any, K comparable](xs []T, key func(T) K) int {
+	seen := make(map[K]bool, len(xs))
+	for i, x := range xs {
+		k := key(x)
+		if seen[k] {
+			return i
+		}
+		seen[k] = true
+	}
+	return -1
+}
+
+// validateLanguage rejects an empty value. EPUB 3.3 §5.5.3.1 and
+// OPF 2.0 §2.2.12 both require a dc:language, so empty cannot mean unset.
 func (e Edits) validateLanguage() string {
 	if e.Language == nil {
 		return ""
 	}
-	if v := strings.TrimSpace(*e.Language); v != "" {
-		if _, err := language.Parse(v); err != nil {
-			return fmt.Sprintf("language %q is not a recognised BCP 47 / ISO 639 code", *e.Language)
-		}
+	v := strings.TrimSpace(*e.Language)
+	if v == "" {
+		return "language must not be empty"
+	}
+	if _, err := language.Parse(v); err != nil {
+		return fmt.Sprintf("language %q is not a recognised BCP 47 / ISO 639 code", *e.Language)
 	}
 	return ""
 }
@@ -239,7 +288,10 @@ func (e Edits) validateSeriesIndex(b *Book) string {
 	if !ValidSeriesIndex(*e.SeriesIndex) {
 		return fmt.Sprintf("invalid series index %q: must be a number, or decimal-separated numbers such as 2.2.1", *e.SeriesIndex)
 	}
-	if e.Series == nil && b.Series == nil {
+	switch {
+	case e.Series != nil && *e.Series == "":
+		return "series index set while clearing the series"
+	case e.Series == nil && b.Series == nil:
 		return "book has no series to set an index on"
 	}
 	return ""

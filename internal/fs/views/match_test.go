@@ -89,7 +89,3 @@ func TestMakeMatchesFn(t *testing.T) {
 		})
 	}
 }
-
-// The value is snapshotted at open like every other file in the tree, so a fid
-// reports the query that was current when it opened rather than tracking later
-// requeries.

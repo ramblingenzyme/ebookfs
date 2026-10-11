@@ -305,12 +305,18 @@ func (f *CtlFile) editSelection(op string, query library.Query, editFn func(*lib
 	return formatResult(op, affected, skipped, errs)
 }
 
+// formatResult opens with "error:" only when every matched book failed. A
+// partial failure still changed something, so it opens with "ok:".
 func formatResult(op string, affected, skipped int64, errs []string) string {
+	status := "ok"
+	if affected == 0 && len(errs) > 0 {
+		status = "error"
+	}
 	var parts []string
 	if affected > 0 {
-		parts = append(parts, fmt.Sprintf("ok: %d books %s", affected, op))
+		parts = append(parts, fmt.Sprintf("%s: %d books %s", status, affected, op))
 	} else {
-		parts = append(parts, fmt.Sprintf("ok: no books %s", op))
+		parts = append(parts, fmt.Sprintf("%s: no books %s", status, op))
 	}
 	if skipped > 0 {
 		parts = append(parts, fmt.Sprintf("%d skipped", skipped))

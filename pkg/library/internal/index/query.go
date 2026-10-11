@@ -11,7 +11,7 @@ type Query struct {
 	Series  []string // exact name
 	Status  []string // exact
 	IDs     []int64
-	Titles  []string // case-insensitive substring, unless ExactTitles
+	Titles  []string // substring, ASCII case-insensitive, unless ExactTitles
 
 	// Exact is binary equality, so it is case-sensitive.
 	ExactTitles bool

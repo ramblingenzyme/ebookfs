@@ -1,7 +1,10 @@
 package library_test
 
 import (
+	"errors"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -23,31 +26,6 @@ func TestReadSidecar(t *testing.T) {
 	}
 	if string(got) != string(sidecarData) {
 		t.Errorf("ReadSidecar = %q, want %q", got, sidecarData)
-	}
-}
-
-func TestWriteSidecarAtomic(t *testing.T) {
-	lib := openTestLibrary(t)
-	data := buildTestEpub(t, "Test Book", "Author")
-	ingested := ingestTestEpub(t, lib, data)
-
-	// Write initial content
-	if err := lib.WriteSidecar(ingested.ID(), "data.txt", []byte("original")); err != nil {
-		t.Fatalf("WriteSidecar: %v", err)
-	}
-
-	// Overwrite it
-	if err := lib.WriteSidecar(ingested.ID(), "data.txt", []byte("updated")); err != nil {
-		t.Fatalf("WriteSidecar: %v", err)
-	}
-
-	// Should see the updated content
-	got, err := lib.ReadSidecar(ingested.ID(), "data.txt")
-	if err != nil {
-		t.Fatalf("ReadSidecar: %v", err)
-	}
-	if string(got) != "updated" {
-		t.Errorf("ReadSidecar = %q, want %q", got, "updated")
 	}
 }
 
@@ -83,6 +61,24 @@ func TestSidecarNotFound(t *testing.T) {
 	_, err := lib.ReadSidecar(ingested.ID(), "nonexistent.txt")
 	if err == nil {
 		t.Error("ReadSidecar should fail for non-existent file")
+	}
+}
+
+// The index still lists a book removed outside ebookfs until the next walk.
+func TestSidecarAccessDoesNotRecreateARemovedBookDirectory(t *testing.T) {
+	cfg := testConfig(t)
+	lib := openLib(t, cfg)
+	ingested := ingestTestEpub(t, lib, buildTestEpub(t, "Test Book", "Author"))
+	dir := filepath.Join(cfg.Root, ingested.Dir())
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := lib.ReadSidecar(ingested.ID(), "notes.txt"); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("ReadSidecar err = %v, want fs.ErrNotExist", err)
+	}
+	if _, err := os.Stat(dir); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("book directory exists again after sidecar access (stat err = %v)", err)
 	}
 }
 

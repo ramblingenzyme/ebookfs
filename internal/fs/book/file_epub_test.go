@@ -2,7 +2,6 @@ package book
 
 import (
 	"bytes"
-	"os"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
@@ -33,18 +32,31 @@ func TestEpubFileOpenRead(t *testing.T) {
 	fid.Close()
 }
 
-func TestEpubFileStatSize(t *testing.T) {
-	book := util.MakeMutableBook(1, "Test", "Author")
-	book.EpubPath = "/nonexistent/test.epub"
-	ef := newTestEpubFile(t, "test.epub", mock.ContentReader{}, util.Fixed(util.WrapBook(book)))
+// Stat reports the book's current filename and the size the index recorded,
+// without touching the disk. Building the file as stale.epub over a path that
+// does not exist shows both.
+func TestEpubFileStatReportsRecordedSize(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		size int64
+	}{
+		{"no size recorded", 0},
+		{"size recorded", 17},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			book := util.MakeMutableBook(1, "Test", "Author")
+			book.EpubPath = "/nonexistent/book.epub"
+			book.EpubSize = tc.size
+			ef := newTestEpubFile(t, "stale.epub", mock.ContentReader{}, util.Fixed(util.WrapBook(book)))
 
-	s := ef.Stat()
-	if s.Name != "test.epub" {
-		t.Errorf("Stat.Name = %q, want %q", s.Name, "test.epub")
-	}
-	// Length should be 0 since the book snapshot carries no EpubSize.
-	if s.Length != 0 {
-		t.Errorf("Stat.Length = %d, want 0 for nonexistent file", s.Length)
+			s := ef.Stat()
+			if s.Name != "book.epub" {
+				t.Errorf("Stat.Name = %q, want %q", s.Name, "book.epub")
+			}
+			if s.Length != uint64(tc.size) {
+				t.Errorf("Stat.Length = %d, want %d", s.Length, tc.size)
+			}
+		})
 	}
 }
 
@@ -57,27 +69,5 @@ func TestEpubFileStatNilBook(t *testing.T) {
 	}
 	if s.Length != 0 {
 		t.Errorf("Stat.Length = %d, want 0", s.Length)
-	}
-}
-
-func TestEpubFileStatWithRealFile(t *testing.T) {
-	content := []byte("fake epub content")
-	path := t.TempDir() + "/book.epub"
-	if err := os.WriteFile(path, content, 0644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-
-	book := util.MakeMutableBook(1, "Test", "Author")
-	book.EpubPath = path
-	book.EpubSize = int64(len(content))
-
-	ef := newTestEpubFile(t, "book.epub", mock.ContentReader{}, util.Fixed(util.WrapBook(book)))
-
-	s := ef.Stat()
-	if s.Name != "book.epub" {
-		t.Errorf("Stat.Name = %q, want %q", s.Name, "book.epub")
-	}
-	if s.Length != uint64(len(content)) {
-		t.Errorf("Stat.Length = %d, want %d", s.Length, len(content))
 	}
 }

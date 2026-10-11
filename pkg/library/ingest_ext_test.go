@@ -4,9 +4,13 @@ import (
 	"archive/zip"
 	"bytes"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/internal/testing/epubtest"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
@@ -35,6 +39,48 @@ func TestIngestSameTitleDifferentAuthors(t *testing.T) {
 
 	ingestTestEpub(t, lib, buildTestEpub(t, "Selected Poems", "Alice"))
 	ingestTestEpub(t, lib, buildTestEpub(t, "Selected Poems", "Bob"))
+}
+
+// A repeat fails the index's (book, entry) join-table keys. A repeated author
+// also names the directory twice, so the directory moved whenever an edit took
+// its authors from the index instead of the file.
+func TestIngestKeepsTheFirstOfRepeatedEntries(t *testing.T) {
+	lib := openTestLibrary(t)
+	path := epubtest.Build(t, epubtest.EPUB3(`    <dc:title>Echo</dc:title>
+    <dc:creator>Ann Author</dc:creator>
+    <dc:creator>Ann Author</dc:creator>
+    <dc:subject>Fiction</dc:subject>
+    <dc:subject>Fiction</dc:subject>
+    <dc:contributor id="c1">Ed Editor</dc:contributor>
+    <meta refines="#c1" property="role" scheme="marc:relators">edt</meta>
+    <dc:contributor id="c2">Ed Editor</dc:contributor>
+    <meta refines="#c2" property="role" scheme="marc:relators">edt</meta>`))
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := ingestTestEpub(t, lib, data)
+	if a := got.Authors(); len(a) != 1 || a[0].Name != "Ann Author" {
+		t.Errorf("authors = %v, want Ann Author once", a)
+	}
+	if want := []string{"Fiction"}; !slices.Equal(got.Subjects(), want) {
+		t.Errorf("subjects = %v, want %v", got.Subjects(), want)
+	}
+	if want := []library.Contributor{{Name: "Ed Editor", Role: "edt"}}; !slices.Equal(got.Contributors(), want) {
+		t.Errorf("contributors = %v, want %v", got.Contributors(), want)
+	}
+
+	// A bib edit leaves the creators repeated in the file and reads them back.
+	edited, err := lib.Edit(got.ID(), library.Edits{Title: new("Echo Two")})
+	if err != nil {
+		t.Fatalf("Edit: %v", err)
+	}
+	for _, p := range []string{got.EpubPath(), edited.EpubPath()} {
+		if dir, _, _ := strings.Cut(filepath.ToSlash(p), "/"); dir != "Ann Author" {
+			t.Errorf("epub path %q, want it under Ann Author/", p)
+		}
+	}
 }
 
 // Not an epub is the one ingest failure the uploader can fix, so it has a
@@ -74,6 +120,15 @@ func TestIngestPreservesAllMetadataFields(t *testing.T) {
 	if retrieved.Title() != "Complete Metadata Test" {
 		t.Errorf("Title = %q, want %q", retrieved.Title(), "Complete Metadata Test")
 	}
+	if retrieved.SortTitle() != "Metadata Test, Complete" {
+		t.Errorf("SortTitle = %q, want %q", retrieved.SortTitle(), "Metadata Test, Complete")
+	}
+	if retrieved.Pubdate() != "2024-03-01" {
+		t.Errorf("Pubdate = %q, want %q", retrieved.Pubdate(), "2024-03-01")
+	}
+	if s := retrieved.Series(); s == nil || s.Name != "Test Series" || s.Index != "2" {
+		t.Errorf("Series = %+v, want Test Series at 2", s)
+	}
 	if retrieved.Language() != "en" {
 		t.Errorf("Language = %q, want %q", retrieved.Language(), "en")
 	}
@@ -86,8 +141,8 @@ func TestIngestPreservesAllMetadataFields(t *testing.T) {
 	if len(authors) != 2 {
 		t.Fatalf("len(Authors) = %d, want 2", len(authors))
 	}
-	if authors[0].Name != "First Author" {
-		t.Errorf("Authors[0].Name = %q, want %q", authors[0].Name, "First Author")
+	if authors[0].Name != "First Author" || authors[0].SortName != "Author, First" {
+		t.Errorf("Authors[0] = %+v, want First Author sorting as Author, First", authors[0])
 	}
 	if authors[1].Name != "Second Author" {
 		t.Errorf("Authors[1].Name = %q, want %q", authors[1].Name, "Second Author")
@@ -158,9 +213,15 @@ func buildFullMetadataEpub(t *testing.T) []byte {
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
     <dc:identifier id="id">test-uuid-12345</dc:identifier>
     <dc:identifier id="isbn">978-3-16-148410-0</dc:identifier>
-    <dc:title>Complete Metadata Test</dc:title>
+    <dc:title id="title">Complete Metadata Test</dc:title>
+    <meta refines="#title" property="file-as">Metadata Test, Complete</meta>
     <dc:creator id="author1">First Author</dc:creator>
+    <meta refines="#author1" property="file-as">Author, First</meta>
     <dc:creator id="author2">Second Author</dc:creator>
+    <dc:date>2024-03-01</dc:date>
+    <meta property="belongs-to-collection" id="series">Test Series</meta>
+    <meta refines="#series" property="collection-type">series</meta>
+    <meta refines="#series" property="group-position">2</meta>
     <dc:contributor id="editor">Test Editor</dc:contributor>
     <meta refines="#editor" property="role" scheme="marc:relators">edt</meta>
     <dc:contributor id="translator">Test Translator</dc:contributor>

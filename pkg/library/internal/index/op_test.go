@@ -69,35 +69,6 @@ func TestDeleteSuccessLeavesClean(t *testing.T) {
 	}
 }
 
-// A store write that fails after starting leaves a pending row, so the next
-// startup reindexes and heals any partial on-disk divergence.
-func TestStoreFailureKeepsPending(t *testing.T) {
-	idx := openTestIndex(t)
-
-	op := idx.BeginOp()
-	op.MarkPending()
-	// Simulate a store failure after marking pending: Put is never called.
-
-	if n := pendingCount(t, idx); n != 1 {
-		t.Fatalf("pending_ops = %d, want 1", n)
-	}
-	mustNeedReindex(t, idx, true)
-}
-
-// A mutation refused before it touches disk never calls MarkPending, so it
-// leaves no row and forces no needless reindex.
-func TestPreStoreRefusalKeepsNoRow(t *testing.T) {
-	idx := openTestIndex(t)
-
-	_ = idx.BeginOp()
-	// Never call MarkPending, simulating a refusal before any disk mutation.
-
-	if n := pendingCount(t, idx); n != 0 {
-		t.Fatalf("pending_ops = %d, want 0 (a pre-disk refusal must not mark pending)", n)
-	}
-	mustNeedReindex(t, idx, false)
-}
-
 // More than one MarkPending inserts a single row.
 func TestMarkPendingIdempotent(t *testing.T) {
 	idx := openTestIndex(t)

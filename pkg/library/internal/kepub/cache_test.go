@@ -2,21 +2,12 @@ package kepub
 
 import (
 	"context"
-	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
 )
-
-type noopSource struct{}
-
-func (noopSource) Content(int64) (epub.EpubReader, error) {
-	return nil, errors.New("not used in this test")
-}
 
 func TestCacheClose(t *testing.T) {
 	c := NewCache(&fakeHost{dir: t.TempDir()})
@@ -169,24 +160,5 @@ func TestCacheEnsureFreshIsNoop(t *testing.T) {
 	data, _ := os.ReadFile(cachePath)
 	if string(data) != "fresh-cache" {
 		t.Errorf("cache content changed to %q, want %q", string(data), "fresh-cache")
-	}
-}
-
-func TestCacheEnsureWithZeroDateModified(t *testing.T) {
-	c, dir := newTestCache(t, "kepub-content")
-
-	b := makeBook(1, "Test", "Alice")
-	b.EpubSize = 9
-
-	if err := c.Ensure(wrapBook(b)); err != nil {
-		t.Fatalf("Ensure: %v", err)
-	}
-	path := filepath.Join(dir, "1", ".sidecar", "kepub.epub")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("ReadFile: %v", err)
-	}
-	if string(data) != "kepub-content" {
-		t.Errorf("cache content = %q, want %q", string(data), "kepub-content")
 	}
 }

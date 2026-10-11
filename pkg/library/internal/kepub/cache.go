@@ -119,6 +119,12 @@ func (c *Cache) Open(b *book.ImmutableBook) (epub.EpubReader, error) {
 
 // Ensure is serialized per book, so concurrent warms and reads coalesce into a
 // single conversion.
+//
+// ponytail: the whole conversion runs inside WithSidecars, which holds the
+// library's per-book lock. Size takes the same lock on every reader/ stat, so
+// an ls or rsync during the startup warm waits on kepubify, and so do edits,
+// deletes and kosync PUTs. The os.Root follows the directory by fd, so convert
+// unlocked and lock only for the rename once that wait shows up.
 func (c *Cache) Ensure(b *book.ImmutableBook) error {
 	l := c.locks.For(b.ID())
 	l.Lock()
@@ -142,6 +148,12 @@ func (c *Cache) Ensure(b *book.ImmutableBook) error {
 }
 
 // write renames into place, so a reader never observes a partial kepub.
+//
+// ponytail: the zip size comes from b, which may predate an edit, while src is
+// the current epub. An edit that resized the file puts the central directory
+// at the wrong offset, and a queued warm logs a spurious failure. The read
+// path recovers with a fresh book. Take the size from the opened file if those
+// failures become noise.
 func (c *Cache) write(b *book.ImmutableBook, root *os.Root, src epub.EpubReader) error {
 	// Deterministic name: the per-book lock in Ensure serializes writes, so
 	// there is no contention on the temp name within a single book.

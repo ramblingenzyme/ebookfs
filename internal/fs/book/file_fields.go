@@ -68,6 +68,13 @@ func (f *fieldFile) Write(fid uint64, offset uint64, data []byte) (uint32, error
 	return f.writes.Write(fid, offset, data, seed)
 }
 
+// ponytail: `: >` leaves the field alone, since only written bytes commit. A
+// client that opens with Otrunc could commit "" when that fid closes unwritten.
+// Linux v9fs sends the truncate as a Twstat of length 0 instead, which
+// BaseFile stores and nothing reads. It sends one before every > redirect's
+// write, so committing there would make `echo Dune > title` fail validation.
+// Record the truncate on the node and commit "" only if the next write-mode
+// close wrote nothing, once it can be checked against a kernel mount.
 func (f *fieldFile) Close(fid uint64) error {
 	data := f.writes.Take(fid)
 	f.Lock()

@@ -18,6 +18,8 @@ type Config struct {
 	KOSync  KOSyncConfig  `toml:"kosync"`
 	Search  SearchConfig  `toml:"search"`
 	Log     LogConfig     `toml:"log"`
+
+	UnknownKeys []string `toml:"-"` // set by Load: keys in the file that no field reads
 }
 
 type LibraryConfig struct {
@@ -79,11 +81,21 @@ type LogConfig struct {
 func Load(path string) (*Config, error) {
 	cfg := defaults()
 
-	if _, err := toml.DecodeFile(path, cfg); err != nil {
+	md, err := toml.DecodeFile(path, cfg)
+	if err != nil {
 		return nil, fmt.Errorf("parsing config %s: %w", path, err)
+	}
+	for _, k := range md.Undecoded() {
+		cfg.UnknownKeys = append(cfg.UnknownKeys, k.String())
 	}
 
 	// Apply defaults that depend on other config values
+	if cfg.Library.InboxTemp == "" {
+		cfg.Library.InboxTemp = cfg.Library.Root + "/.inbox-tmp"
+	}
+	if cfg.Library.IndexPath == "" {
+		cfg.Library.IndexPath = cfg.Library.Root + "/.index.db"
+	}
 	if cfg.KOSync.MappingPath == "" {
 		cfg.KOSync.MappingPath = cfg.Library.Root + "/.kosync"
 	}
@@ -98,9 +110,7 @@ func Load(path string) (*Config, error) {
 func defaults() *Config {
 	return &Config{
 		Library: LibraryConfig{
-			Root:      "/var/lib/ebookfs/library",
-			InboxTemp: "/var/lib/ebookfs/library/.inbox-tmp",
-			IndexPath: "/var/lib/ebookfs/library/.index.db",
+			Root: "/var/lib/ebookfs/library",
 		},
 		Search: SearchConfig{
 			HandleTTL:  30 * time.Minute,
@@ -204,12 +214,6 @@ func (c *Config) validateKOSync() error {
 func (c *Config) validate() error {
 	if c.Library.Root == "" {
 		return fmt.Errorf("library.root is required")
-	}
-	if c.Library.InboxTemp == "" {
-		return fmt.Errorf("library.inbox_temp is required")
-	}
-	if c.Library.IndexPath == "" {
-		return fmt.Errorf("library.index_path is required")
 	}
 
 	if err := c.validateReader(); err != nil {

@@ -8,12 +8,14 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
 )
 
-var opfSeriesNoIndexV3 = epubtest.Pkg{Meta: epubtest.Metas(
-	`<dc:title>Lonely Book</dc:title>`,
-	`<dc:creator id="creator1">Jane Doe</dc:creator>`,
-	`<meta refines="#creator1" property="role">aut</meta>`,
-	epubtest.Collection("c1", "Lonely Series", "series", ""),
-), Manifest: epubtest.ChapterOnlyManifest}.EPUB3()
+func opfSeriesV3(position string) epubtest.PackageDoc {
+	return epubtest.Pkg{Meta: epubtest.Metas(
+		`<dc:title>Lonely Book</dc:title>`,
+		`<dc:creator id="creator1">Jane Doe</dc:creator>`,
+		`<meta refines="#creator1" property="role">aut</meta>`,
+		epubtest.Collection("c1", "Lonely Series", "series", position),
+	), Manifest: epubtest.ChapterOnlyManifest}.EPUB3()
+}
 
 var opfSeriesNoIndexV2 = epubtest.Pkg{Meta: epubtest.Metas(
 	`<dc:title>Lonely Book</dc:title>`,
@@ -27,7 +29,9 @@ func TestParseDefaultsAMalformedSeriesIndex(t *testing.T) {
 		name string
 		opf  epubtest.PackageDoc
 	}{
-		{"epub3 collection without group-position", opfSeriesNoIndexV3},
+		{"epub3 collection without group-position", opfSeriesV3("")},
+		{"epub3 non-numeric group-position", opfSeriesV3("two")},
+		{"epub3 trailing separator", opfSeriesV3("1.")},
 		{"epub2 calibre:series without index", opfSeriesNoIndexV2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -36,11 +40,8 @@ func TestParseDefaultsAMalformedSeriesIndex(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if book.Series == nil || book.Series.Name != "Lonely Series" {
-				t.Fatalf("series = %v, want Lonely Series", book.Series)
-			}
-			if book.Series == nil || book.Series.Index != "1" {
-				t.Errorf("series index = %v, want 1 (calibre default)", book.Series.Index)
+			if book.Series == nil || book.Series.Name != "Lonely Series" || book.Series.Index != "1" {
+				t.Errorf("series = %+v, want Lonely Series at 1 (calibre default)", book.Series)
 			}
 		})
 	}

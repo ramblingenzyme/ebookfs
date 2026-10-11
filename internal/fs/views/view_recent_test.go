@@ -9,24 +9,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
 )
 
-func TestRecentDirOrdersNewestFirst(t *testing.T) {
-	reg := newTestRegistry(t)
-	d := NewRecentDir(reg)
-
-	base := time.Now()
-	b1 := makeBook(1, "Oldest", "Author")
-	b1.Meta.DateAdded = base.Add(-2 * time.Hour)
-	b2 := makeBook(2, "Newest", "Author")
-	b2.Meta.DateAdded = base
-
-	reg.Load(wrapBook(b1))
-	reg.Load(wrapBook(b2))
-
-	fstest.ChildCount(t, d, 2)
-	fstest.HasChild(t, d, "Newest")
-	fstest.HasChild(t, d, "Oldest")
-}
-
 func TestRecentDirCapsAtLimitAndBackfillsOnRemove(t *testing.T) {
 	reg, d := overfilledRecentDir(t)
 

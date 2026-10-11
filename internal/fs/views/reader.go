@@ -32,6 +32,11 @@ func (d *readerDir) authorDir(name string) fs.ModDir {
 	return d.childDir(name, func(s *proto.Stat) fs.FSNode { return fs.NewStaticDir(s) }).(fs.ModDir)
 }
 
+// ponytail: AddChild refuses a second child of one name, and the error is
+// dropped. Two books by the same authors whose titles differ only in
+// characters naming.ForFAT maps to "-" share an export name, so the second
+// never appears, and Remove's DeleteChild takes both. Disambiguate with the
+// book id, minting until the name is free, once two such books meet.
 func (d *readerDir) Add(dir *book.BookDir) {
 	b := dir.Book()
 	if !d.exp.Includes(b) {

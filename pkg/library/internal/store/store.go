@@ -168,9 +168,12 @@ func (s *Store) Update(oldLoc, newLoc book.Location, meta *book.Meta) (drift.Pat
 // OpenSidecars returns an os.Root scoped to the book's .sidecar/ subdirectory,
 // creating it on demand. Sidecar files are carried along by Move and removed
 // by Delete.
+//
+// Only .sidecar/ is created. A book directory removed outside ebookfs fails
+// with fs.ErrNotExist rather than coming back empty.
 func (s *Store) OpenSidecars(loc book.Location) (*os.Root, error) {
 	dir := filepath.Join(s.AbsPath(loc.Dir()), ".sidecar")
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.Mkdir(dir, 0755); err != nil && !errors.Is(err, os.ErrExist) {
 		return nil, err
 	}
 	return os.OpenRoot(dir)

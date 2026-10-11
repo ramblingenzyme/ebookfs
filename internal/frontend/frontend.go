@@ -86,6 +86,24 @@ func (r *Runner) RegisterHTTP(fe HTTPFrontend) error {
 	return nil
 }
 
+// httpHandler mounts each HTTP frontend under its prefix.
+func (r *Runner) httpHandler() http.Handler {
+	mux := http.NewServeMux()
+	for _, fe := range r.httpFrontends {
+		handler := fe.Handler()
+		if fe.StripPrefix() {
+			handler = http.StripPrefix(fe.Prefix(), handler)
+			// Stripping the bare prefix leaves an empty path, which the
+			// frontend's own ServeMux redirects to the site root.
+			mux.Handle(fe.Prefix(), http.RedirectHandler(fe.Prefix()+"/", http.StatusMovedPermanently))
+		} else {
+			mux.Handle(fe.Prefix(), handler)
+		}
+		mux.Handle(fe.Prefix()+"/", handler)
+	}
+	return mux
+}
+
 // Run starts all frontends and blocks until ctx is cancelled or any Serve returns.
 // It then shuts down everything with the given timeout.
 func (r *Runner) Run(ctx context.Context, timeout time.Duration) error {
@@ -94,18 +112,9 @@ func (r *Runner) Run(ctx context.Context, timeout time.Duration) error {
 
 	// Start HTTP server if there are HTTP frontends
 	if len(r.httpFrontends) > 0 {
-		mux := http.NewServeMux()
-		for _, fe := range r.httpFrontends {
-			handler := fe.Handler()
-			if fe.StripPrefix() {
-				handler = http.StripPrefix(fe.Prefix(), handler)
-			}
-			mux.Handle(fe.Prefix(), handler)
-			mux.Handle(fe.Prefix()+"/", handler)
-		}
 		httpServer = &http.Server{
 			Addr:              r.httpListen,
-			Handler:           mux,
+			Handler:           r.httpHandler(),
 			ReadHeaderTimeout: 10 * time.Second,
 			IdleTimeout:       60 * time.Second,
 		}

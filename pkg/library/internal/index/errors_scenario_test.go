@@ -2,7 +2,7 @@
 // failures are injected and every path that should surface them is driven in
 // one table each: a closed database (NextID, MarkPending, Put, Delete, Rebuild,
 // NeedsReindex, dropAllTables) and a rolled-back transaction (insertBook,
-// putBook, putRelations and its three writers, deleteBook, cleanupOrphans).
+// putBook, putRelations and its five writers, deleteBook, cleanupOrphans).
 //
 // The rule is that no write path swallows a database error.
 
@@ -88,6 +88,12 @@ func TestRolledBackTxSurfacesErrors(t *testing.T) {
 		}},
 		{"replaceTags", func(idx *Index, q *dbsqlc.Queries) error {
 			return idx.replaceTags(q, 1, []string{"sci-fi"})
+		}},
+		{"replaceSubjects", func(idx *Index, q *dbsqlc.Queries) error {
+			return idx.replaceSubjects(q, 1, []string{"Fiction"})
+		}},
+		{"replaceContributors", func(idx *Index, q *dbsqlc.Queries) error {
+			return idx.replaceContributors(q, 1, []book.Contributor{{Name: "Ed", Role: "edt"}})
 		}},
 		{"setSeries", func(idx *Index, q *dbsqlc.Queries) error {
 			b := newBook(1, "Test")

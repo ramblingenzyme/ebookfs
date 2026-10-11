@@ -10,6 +10,13 @@ import (
 // buffered and committed when the fid is closed (field, cover, and control
 // files). It is self-locking with its own mutex, independent of the embedding
 // file's, so callers never juggle lock ordering against the base-file methods.
+//
+// ponytail: a failed commit returns its error in Rclunk, and Linux v9fs clunks
+// from ->release, whose result the VFS discards. close(2) returns 0, so
+// `echo 7 > rating` or a PNG written over a JPEG cover exits 0 and changes
+// nothing, and only the server log says why. inbox/ commits on clunk the same
+// way. Surface failures in a per-book errors file or in log/ once a Linux
+// mount is the main client.
 type WriteBuffer struct {
 	mu   sync.Mutex
 	max  uint64

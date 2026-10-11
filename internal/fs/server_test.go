@@ -34,7 +34,10 @@ func TestNew(t *testing.T) {
 	}
 	srv.Shutdown(context.Background())
 
-	wantChildren := []string{"inbox", "books", "by-author", "by-id", "by-series", "reader", "recent", "stats", "search"}
+	wantChildren := []string{
+		"inbox", "books", "by-author", "by-id", "by-series", "by-tag", "by-status",
+		"recent", "reader", "stats", "ctl", "log", "help", "search",
+	}
 	for _, name := range wantChildren {
 		fstest.HasChild(t, srv.root, name)
 	}

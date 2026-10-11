@@ -3,6 +3,7 @@ package index
 import (
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
@@ -484,31 +485,34 @@ func TestQueryLimit(t *testing.T) {
 func TestQueryRecentOrder(t *testing.T) {
 	idx := openTestIndex(t)
 
-	old := book.NewBook(
-		book.Bib{Title: "Old", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
-		book.Meta{ID: 1},
-		book.Location{EpubPath: "A/Old (1)/book.epub"},
-	)
-	curr := book.NewBook(
-		book.Bib{Title: "New", Authors: []book.Author{{Name: "Alice", SortName: "Alice"}}},
-		book.Meta{ID: 2},
-		book.Location{EpubPath: "A/New (2)/book.epub"},
-	)
-
-	storeInIndex(t, idx, old)
-	storeInIndex(t, idx, curr)
+	// Books 1 and 2 share a second, which date_added (RFC3339) cannot split, so
+	// the id DESC tiebreak orders them. Book 3 is the oldest but has the highest
+	// id, so an order by id alone puts it first.
+	added := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	for _, b := range []struct {
+		id    int64
+		title string
+		added time.Time
+	}{
+		{1, "Tied A", added},
+		{2, "Tied B", added},
+		{3, "Oldest", added.Add(-time.Hour)},
+	} {
+		bk := makeAuthoredBook(b.id, b.title, book.Author{Name: "Alice", SortName: "Alice"})
+		bk.Meta.DateAdded = b.added
+		storeInIndex(t, idx, bk)
+	}
 
 	got, err := idx.Search(Query{Order: OrderDateAdded})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
-	if len(got) != 2 {
-		t.Fatalf("len = %d, want 2", len(got))
+	ids := make([]int64, len(got))
+	for i, b := range got {
+		ids[i] = b.Meta.ID
 	}
-	// OrderDateAdded means date_added DESC. Both books land in the same second
-	// here (date_added is RFC3339), so this also pins the id DESC tiebreak.
-	if got[0].Meta.ID != 2 {
-		t.Errorf("first book id = %d, want 2 (most recently added)", got[0].Meta.ID)
+	if want := []int64{2, 1, 3}; !slices.Equal(ids, want) {
+		t.Errorf("ids = %v, want %v (newest first, ties by id descending)", ids, want)
 	}
 }
 

@@ -6,6 +6,7 @@ package library_test
 
 import (
 	"bytes"
+	"errors"
 	"image"
 	"image/jpeg"
 	"os"
@@ -143,6 +144,11 @@ func TestConcurrentDuplicateIngestRejected(t *testing.T) {
 	}
 	if len(errs) < 2 {
 		t.Fatalf("expected at least 2 errors for duplicate ingests, got %d", len(errs))
+	}
+	for _, err := range errs {
+		if !errors.Is(err, library.ErrDuplicate) {
+			t.Errorf("losing ingest err = %v, want ErrDuplicate", err)
+		}
 	}
 
 	got, err := lib.Search(library.Query{Authors: []string{"Alice"}})

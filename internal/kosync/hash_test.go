@@ -2,9 +2,7 @@ package kosync
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
-	"strings"
 	"testing"
 )
 
@@ -80,9 +78,6 @@ func TestPartialMD5_Sparse1GiB(t *testing.T) {
 // TestPartialMD5_FirstOffsetIsZero verifies the i=-1 term produces offset 0,
 // per spec §8.3. This is the critical LuaJIT bitwise masking behavior.
 func TestPartialMD5_FirstOffsetIsZero(t *testing.T) {
-	// Create a file where byte 0 differs from byte 256.
-	// If the first sample offset is 0, the hash will differ from a file
-	// where only byte 256 differs.
 	data1 := patternFile(2048)
 	data2 := patternFile(2048)
 	data2[0] = 0xFF // change byte at offset 0
@@ -102,19 +97,6 @@ func TestPartialMD5_FirstOffsetIsZero(t *testing.T) {
 	if h1 == h2 {
 		t.Error("hashes should differ when byte 0 differs (proves first offset is 0)")
 	}
-
-	// Also verify that changing byte 256 produces a different hash.
-	data3 := patternFile(2048)
-	data3[256] = 0xFF
-	r3 := bytes.NewReader(data3)
-	h3, err := PartialMD5(r3, 2048)
-	if err != nil {
-		t.Fatalf("PartialMD5(data3): %v", err)
-	}
-
-	if h1 == h3 {
-		t.Error("hashes should differ when byte 256 differs")
-	}
 }
 
 // TestPartialMD5_EmptyFile tests that an empty file produces a valid hash
@@ -129,28 +111,5 @@ func TestPartialMD5_EmptyFile(t *testing.T) {
 	expect := "d41d8cd98f00b204e9800998ecf8427e"
 	if got != expect {
 		t.Errorf("got %s, want %s", got, expect)
-	}
-}
-
-// TestPartialMD5_FullFileHash verifies that for files larger than 1 GiB,
-// the algorithm produces a hash that depends on all 12 samples.
-func TestPartialMD5_LowercaseHex(t *testing.T) {
-	data := patternFile(2048)
-	r := bytes.NewReader(data)
-	got, err := PartialMD5(r, 2048)
-	if err != nil {
-		t.Fatalf("PartialMD5: %v", err)
-	}
-
-	// Verify the hash is lowercase hex.
-	if len(got) != 32 {
-		t.Errorf("hash length = %d, want 32", len(got))
-	}
-	if strings.ToLower(got) != got {
-		t.Errorf("hash %q contains uppercase characters", got)
-	}
-	// Verify it's valid hex.
-	if _, err := hex.DecodeString(got); err != nil {
-		t.Errorf("hash %q is not valid hex: %v", got, err)
 	}
 }

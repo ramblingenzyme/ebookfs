@@ -134,28 +134,40 @@ func TestFacetListings(t *testing.T) {
 	}
 }
 
-// A value nothing points at is absent rather than a zero-count row: the
-// listings join through the book tables, and Delete prunes the orphan anyway.
+// A value nothing points at is absent rather than a zero-count row, since the
+// listings join through the book tables. Every write path prunes orphans, so
+// these are inserted directly.
 func TestFacetListingsSkipOrphans(t *testing.T) {
 	idx := openTestIndex(t)
-	storeInIndex(t, idx, makeTestBook(1, "Only", []string{"Alice"}, "sci-fi", book.StatusUnread))
+	b := makeTestBook(1, "Only", []string{"Alice"}, "sci-fi", book.StatusUnread)
+	b.Series = &book.SeriesRef{Name: "Saga", Index: "1"}
+	storeInIndex(t, idx, b)
 
-	op := idx.BeginOp()
-	mustMarkPending(t, op)
-	if err := op.Delete(1); err != nil {
-		t.Fatalf("Delete: %v", err)
+	for _, stmt := range []string{
+		"INSERT INTO authors (name, sort_name) VALUES ('Nobody', 'Nobody')",
+		"INSERT INTO series (name) VALUES ('Lost')",
+		"INSERT INTO tags (name) VALUES ('orphan')",
+	} {
+		if _, err := idx.db.Exec(stmt); err != nil {
+			t.Fatalf("%s: %v", stmt, err)
+		}
 	}
 
-	for name, list := range map[string]func() ([]Facet, error){
-		"authors": idx.ListAuthors,
-		"tags":    idx.ListTags,
+	for _, tc := range []struct {
+		name string
+		list func() ([]Facet, error)
+		want []Facet
+	}{
+		{"authors", idx.ListAuthors, []Facet{{"Alice", 1}}},
+		{"series", idx.ListSeries, []Facet{{"Saga", 1}}},
+		{"tags", idx.ListTags, []Facet{{"sci-fi", 1}}},
 	} {
-		got, err := list()
+		got, err := tc.list()
 		if err != nil {
-			t.Fatalf("%s: %v", name, err)
+			t.Fatalf("%s: %v", tc.name, err)
 		}
-		if len(got) != 0 {
-			t.Errorf("%s = %v, want none", name, got)
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("%s = %v, want %v", tc.name, got, tc.want)
 		}
 	}
 }

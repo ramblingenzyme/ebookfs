@@ -28,13 +28,13 @@ func TestSeriesEntryName(t *testing.T) {
 			want: "2.5 - Longer",
 		},
 		{
-			name: "zero-padded when maxIdx >= 10",
+			name: "two-digit index already fills the pad",
 			book: makeBookWithSeries(1, "Padded", "Author", "", "10"),
 			pad:  2,
 			want: "10 - Padded",
 		},
 		{
-			name: "zero-padded with decimal",
+			name: "two-digit index with a decimal fills the pad",
 			book: makeBookWithSeries(1, "DPadded", "Author", "", "10.5"),
 			pad:  2,
 			want: "10.5 - DPadded",

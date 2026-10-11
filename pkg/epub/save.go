@@ -321,7 +321,6 @@ func (b *Book) rewrite(replace map[string][]byte) error {
 	if err != nil {
 		return fmt.Errorf("rewritten epub failed validation: %w", err)
 	}
-	defer next.Close()
 
 	if err := os.Rename(tmpPath, b.path); err != nil {
 		next.Close()
@@ -329,7 +328,8 @@ func (b *Book) rewrite(replace map[string][]byte) error {
 	}
 
 	// The open handle follows the file through the rename, so next reads the
-	// new file under the original path.
+	// new file under the original path. b takes the handle over, so it is not
+	// closed here.
 	next.path = b.path
 	b.File.Close()
 	*b = *next
