@@ -373,12 +373,8 @@ func (h *handler) putProgress(w http.ResponseWriter, r *http.Request) {
 
 // updateBookStatus updates the book's reading status based on progress percentage.
 // Transitions are configurable via ReadingThreshold and ReadThreshold.
-// Once a book is marked as "read", it stays read even if percentage drops.
-//
-// ponytail: only read is protected. A sync below ReadingThreshold turns
-// reading back into unread, and any sync overwrites abandoned. With
-// reader.statuses = ["reading"] the book leaves reader/, and the next
-// rsync --delete removes it from the device. Promoting only would close it.
+// Once a book has left "unread", it never returns to it. Once a book is "read",
+// it stays "read" even if percentage drops.
 func (h *handler) updateBookStatus(bookID int64, percentage float64) error {
 	// Get current book
 	b, err := h.lib.Get(bookID)
@@ -395,6 +391,11 @@ func (h *handler) updateBookStatus(bookID int64, percentage float64) error {
 		targetStatus = book.StatusReading
 	default:
 		targetStatus = book.StatusUnread
+	}
+
+	// Don't revert to "unread" once the book has left it
+	if targetStatus == book.StatusUnread && b.Status() != book.StatusUnread {
+		return nil
 	}
 
 	// Don't downgrade from "read" to anything else

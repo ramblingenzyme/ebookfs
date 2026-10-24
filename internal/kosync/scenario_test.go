@@ -64,6 +64,17 @@ func TestProgressTransitions(t *testing.T) {
 				{0.95, "read"},
 			},
 		},
+		{
+			name: "reading doesn't revert to unread",
+			cfg:  defaultCfg,
+			steps: []struct {
+				percentage float64
+				wantStatus string
+			}{
+				{0.5, "reading"},
+				{0.01, "reading"}, // no revert to unread
+			},
+		},
 	}
 
 	for _, tt := range tests {
