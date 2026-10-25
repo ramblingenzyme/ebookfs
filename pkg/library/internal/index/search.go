@@ -19,6 +19,9 @@ func (idx *Index) Search(q Query) ([]*book.Book, error) {
 	addIn(bq, "b.id IN (SELECT bt.book_id FROM book_tags bt JOIN tags t ON t.id = bt.tag_id WHERE t.name IN (%s))", q.Tags)
 	addIn(bq, "b.series_id IN (SELECT id FROM series WHERE name IN (%s))", q.Series)
 	addIn(bq, "b.status IN (%s)", q.Status)
+	addIn(bq, "b.id IN (SELECT bs.book_id FROM book_subjects bs JOIN subjects s ON s.id = bs.subject_id WHERE s.name IN (%s))", q.Subjects)
+	addIn(bq, "b.publisher IN (%s)", q.Publisher)
+	addIn(bq, "b.language IN (%s)", q.Language)
 	addIn(bq, "b.id IN (%s)", q.IDs)
 
 	if q.ExactTitles {
