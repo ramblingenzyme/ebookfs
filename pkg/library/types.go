@@ -41,4 +41,3 @@ const (
 	OrderRating       = index.OrderRating
 	OrderPubdate      = index.OrderPubdate
 )
-

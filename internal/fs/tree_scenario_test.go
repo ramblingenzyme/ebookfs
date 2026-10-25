@@ -134,7 +134,6 @@ func TestStatsReportsTheLibrary(t *testing.T) {
 	}
 }
 
-
 func TestSearchOverNinep(t *testing.T) {
 	h := newHarness(t, ingest("Dune", "Frank Herbert"), edited(1, library.Edits{Tags: &[]string{"sf"}}))
 

@@ -14,4 +14,3 @@ type Config struct {
 	// may be deleted; the next Open rebuilds it.
 	IndexPath string
 }
-
