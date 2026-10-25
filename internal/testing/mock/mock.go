@@ -17,9 +17,7 @@ package mock
 import (
 	"bytes"
 	"errors"
-	"slices"
 
-	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
@@ -75,41 +73,6 @@ func (s StatsReader) Stats() (*library.Stats, error) {
 	}
 	return &library.Stats{}, nil
 }
-
-type Renderer struct {
-	OpenFn func(*library.Book) (library.EpubReader, error)
-	SizeFn func(*library.Book) (int64, bool)
-}
-
-func (r Renderer) Open(b *library.Book) (library.EpubReader, error) {
-	if r.OpenFn != nil {
-		return r.OpenFn(b)
-	}
-	return nil, errors.New("mock: no OpenFn")
-}
-
-func (r Renderer) Size(b *library.Book) (int64, bool) {
-	if r.SizeFn != nil {
-		return r.SizeFn(b)
-	}
-	return 0, false
-}
-
-type Exporter struct {
-	Renderer
-	StatusList []string
-}
-
-func (e Exporter) Includes(b *library.Book) bool {
-	return slices.Contains(e.StatusList, b.Status())
-}
-
-func (e Exporter) Dirname(b *library.Book) string {
-	return book.JoinAuthors(b.Authors(), book.AuthorSep)
-}
-
-func (e Exporter) Filename(b *library.Book) string { return b.Filename() }
-func (e Exporter) Warm(*library.Book)              {}
 
 type IngestHandle struct {
 	IngestFn func(string) (*library.Book, error)

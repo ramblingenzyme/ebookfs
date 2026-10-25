@@ -4,7 +4,7 @@ How to run `ebookfs` as a long-lived service and mount it, locally and over the 
 
 ## Prerequisites
 
-`ebookfs` has no runtime dependencies. The binary is statically compiled with `CGO_ENABLED=0` and runs on any Linux system regardless of installed packages. KEPUB conversion is linked in at build time (`kepubify/v4`), so no external tools are needed at runtime.
+`ebookfs` has no runtime dependencies. The binary is statically compiled with `CGO_ENABLED=0` and runs on any Linux system regardless of installed packages.
 
 ```bash
 # Native build

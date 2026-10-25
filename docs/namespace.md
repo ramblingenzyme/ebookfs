@@ -43,9 +43,6 @@ to the library, never to a file on the server's disk of the same name.
 │       ├── ctl                  ← write query, read last query, write "close"
 │       └── results/             ← matching books (live, not snapshot)
 ├── inbox/                       ← write here to ingest
-├── reader/                      ← export view for rsync-to-Kobo
-│   └── Author/                  ← all authors joined with " & "
-│       └── Title.epub           ← or .kepub.epub when Convert
 ├── ctl                          ← write commands, read last result
 ├── log                          ← recent command history
 ├── help                         ← command reference

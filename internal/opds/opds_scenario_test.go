@@ -67,7 +67,6 @@ func (f atomFeed) titles() []string {
 type fake struct {
 	mock.Catalog
 	queries []library.Query
-	opened  int
 }
 
 // epubBody's length is the Content-Length the download assertions expect.
@@ -100,14 +99,7 @@ func newFake(t *testing.T, books ...*library.Book) (*fake, http.Handler) {
 	f.SeriesFn = func() ([]library.Facet, error) { return count(books, seriesOf), nil }
 	f.TagsFn = func() ([]library.Facet, error) { return count(books, (*library.Book).Tags), nil }
 
-	exp := mock.Exporter{Renderer: mock.Renderer{
-		OpenFn: func(*library.Book) (library.EpubReader, error) {
-			f.opened++
-			return &mock.EpubReader{Reader: bytes.NewReader([]byte(epubBody))}, nil
-		},
-		SizeFn: func(*library.Book) (int64, bool) { return int64(len(epubBody)), true },
-	}}
-	return f, NewHandler(f, exp, "https://books.example.com")
+	return f, NewHandler(f, "https://books.example.com")
 }
 
 func get(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
@@ -237,6 +229,7 @@ func TestEntryCarriesAcquisitionAndMetadata(t *testing.T) {
 func TestDownloadSupportsRanges(t *testing.T) {
 	b := util.MakeMutableBook(7, "Dune", "Frank Herbert")
 	b.EpubPath = "Frank Herbert/Dune (7)/Dune.epub"
+	b.EpubSize = int64(len(epubBody))
 	_, h := newFake(t, util.WrapBook(b))
 
 	w := get(t, h, Prefix+"/content/7/Dune.epub")
@@ -265,12 +258,12 @@ func TestDownloadSupportsRanges(t *testing.T) {
 	}
 }
 
-// Reading the cover through the exporter would convert the book, minutes of
-// CPU for a thumbnail.
-func TestCoverBypassesTheExporter(t *testing.T) {
+// Cover images are served directly from the book's cover file without opening
+// the epub content.
+func TestCoverServedDirectly(t *testing.T) {
 	b := util.MakeMutableBook(7, "Dune", "Frank Herbert")
 	b.CoverPath = "OEBPS/cover.png"
-	f, h := newFake(t, util.WrapBook(b))
+	_, h := newFake(t, util.WrapBook(b))
 
 	w := get(t, h, Prefix+"/cover/7")
 	if w.Code != http.StatusOK {
@@ -278,9 +271,6 @@ func TestCoverBypassesTheExporter(t *testing.T) {
 	}
 	if got := w.Header().Get("Content-Type"); got != "image/png" {
 		t.Errorf("content type = %q, want image/png", got)
-	}
-	if f.opened != 0 {
-		t.Errorf("exporter opened %d times, want 0", f.opened)
 	}
 }
 

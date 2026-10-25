@@ -15,9 +15,8 @@ const pageSize = 50
 
 // catalog implements opds.Source and opds.Searcher over the library.
 type catalog struct {
-	lib      Library
-	filename func(*library.Book) string
-	base     string // the configured absolute base URL, or ""
+	lib  Library
+	base string // the configured absolute base URL, or ""
 }
 
 func (c *catalog) Root(_ context.Context, _ opds.FeedRequest) (*opds.Feed, error) {
@@ -54,7 +53,7 @@ func (c *catalog) Publication(_ context.Context, id string) (*opds.Publication, 
 	if err != nil {
 		return nil, err
 	}
-	p := toPublication(b, c.filename(b))
+	p := toPublication(b, b.Filename())
 	return &p, nil
 }
 
@@ -145,7 +144,7 @@ func (c *catalog) page(f *opds.Feed, baseHref string, reqPage int, books []*libr
 	start := min((page-1)*pageSize, len(books))
 	end := min(start+pageSize, len(books))
 	for _, b := range books[start:end] {
-		f.Add(toPublication(b, c.filename(b)))
+		f.Add(toPublication(b, b.Filename()))
 	}
 	f.Page(len(books), pageSize, start+1)
 	return f.Paged(baseHref, page, end < len(books))

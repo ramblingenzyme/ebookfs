@@ -12,7 +12,7 @@ import (
 // The catalog trimmed one trailing slash where opdshttp trims all of them, so
 // a base ending in "//" put a doubled slash into the search template.
 func TestNewHandlerStripsTrailingSlashesFromBaseURL(t *testing.T) {
-	h := NewHandler(&mock.Catalog{}, mock.Exporter{}, "https://books.example.com//")
+	h := NewHandler(&mock.Catalog{}, "https://books.example.com//")
 
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, Prefix+"/opensearch.xml", nil))

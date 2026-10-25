@@ -47,11 +47,7 @@ func newHarness(t *testing.T, seeds ...func(*testing.T, *library.Library)) *harn
 	for _, s := range seeds {
 		s(t, lib)
 	}
-	exp, err := lib.Exporter(library.ReaderConfig{Statuses: []string{"reading"}})
-	if err != nil {
-		t.Fatalf("Exporter: %v", err)
-	}
-	srv, err := New(lib, exp, Config{})
+	srv, err := New(lib, Config{})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

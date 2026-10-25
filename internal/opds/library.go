@@ -17,12 +17,6 @@ type Library interface {
 	Tags() ([]library.Facet, error)
 }
 
-type Renderer interface {
-	Open(*library.Book) (library.EpubReader, error)
-	Size(*library.Book) (int64, bool)
-	Filename(*library.Book) string
-}
-
 // lookupBook returns the library's error untranslated, so Publication and
 // httpError each map it at their own edge.
 func lookupBook(lib Library, id string) (*library.Book, error) {

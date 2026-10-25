@@ -44,21 +44,6 @@ func fatal(msg string, err error) {
 	os.Exit(1)
 }
 
-// opdsExporter reuses the reader's exporter whenever the two want the same
-// rendition. Both convert into each book's .sidecar/ directory, so at most one
-// kepub file exists per book.
-//
-// Statuses is left empty. It decides reader/ membership through Includes,
-// which the catalog's Renderer does not declare and never calls.
-func opdsExporter(lib *library.Library, cfg *config.Config, readerExp library.Exporter) (library.Exporter, error) {
-	if cfg.OPDS.Convert == cfg.Reader.Convert {
-		return readerExp, nil
-	}
-	return lib.Exporter(library.ReaderConfig{
-		Convert: cfg.OPDS.Convert,
-	})
-}
-
 func main() {
 	configPath := flag.String("config", "/etc/ebookfs/config.toml", "path to config file")
 	forceReindex := flag.Bool("reindex", false, "force a full index rebuild from disk")
@@ -85,12 +70,7 @@ func main() {
 		fatal("opening library", err)
 	}
 
-	exp, err := lib.Exporter(library.ReaderConfig(cfg.Reader))
-	if err != nil {
-		fatal("creating exporter", err)
-	}
-
-	ninepSrv, err := fs.New(lib, exp, fs.Config{
+	ninepSrv, err := fs.New(lib, fs.Config{
 		Listen:           cfg.Server.Listen,
 		SearchTTL:        cfg.Search.HandleTTL,
 		SearchMaxHandles: cfg.Search.MaxHandles,
@@ -104,12 +84,7 @@ func main() {
 
 	// Register OPDS as HTTPFrontend if enabled
 	if cfg.OPDS.Enable {
-		opdsExp, err := opdsExporter(lib, cfg, exp)
-		if err != nil {
-			fatal("creating OPDS exporter", err)
-		}
-
-		opdsSrv := opds.New(lib, opdsExp, opds.Config{
+		opdsSrv := opds.New(lib, opds.Config{
 			BaseURL: cfg.HTTP.BaseURL,
 		})
 		if err := runner.RegisterHTTP(opdsSrv); err != nil {
