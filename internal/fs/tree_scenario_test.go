@@ -15,7 +15,7 @@ import (
 func TestRootListing(t *testing.T) {
 	h := newHarness(t)
 	got := h.ls("/")
-	want := []string{"books", "by-author", "by-id", "by-series", "by-status", "by-tag", "ctl", "help", "inbox", "log", "reader", "recent", "search", "stats"}
+	want := []string{"books", "by-author", "by-id", "by-series", "by-status", "by-tag", "ctl", "help", "inbox", "log", "recent", "search", "stats"}
 	if !slices.Equal(got, want) {
 		t.Errorf("ls / = %v, want %v", got, want)
 	}
@@ -43,19 +43,6 @@ func TestEditsReachTheTree(t *testing.T) {
 			appear: []string{"/books/Dune Messiah", "/by-id/1. Dune Messiah", "/by-author/Frank Herbert/Dune Messiah"},
 		},
 
-		{
-			name:   "status into reader",
-			edit:   func(h *harness) { h.mustWrite("/books/Dune/status", "reading\n") },
-			gone:   []string{"/by-status/unread"},
-			appear: []string{"/by-status/reading/Dune", "/reader/Frank Herbert/Dune - Frank Herbert.epub"},
-		},
-		{
-			name:      "status out of reader",
-			extraSeed: edited(1, library.Edits{Status: new("reading")}),
-			edit:      func(h *harness) { h.mustWrite("/books/Dune/status", "read\n") },
-			gone:      []string{"/reader/Frank Herbert", "/by-status/reading"},
-			appear:    []string{"/by-status/read/Dune"},
-		},
 		{
 			name:   "ctl set-status",
 			edit:   func(h *harness) { h.mustCtl("set-status reading 1") },
@@ -147,20 +134,6 @@ func TestStatsReportsTheLibrary(t *testing.T) {
 	}
 }
 
-func TestReaderFileServesTheEpub(t *testing.T) {
-	h := newHarness(t, ingest("Dune", "Frank Herbert"), edited(1, library.Edits{Status: new("reading")}))
-
-	readerPath := "/reader/Frank Herbert/Dune - Frank Herbert.epub"
-	bookPath := "/books/Dune/Dune - Frank Herbert.epub"
-
-	readerStat, bookStat := h.stat(readerPath), h.stat(bookPath)
-	if readerStat.Length == 0 || readerStat.Length != bookStat.Length {
-		t.Errorf("reader file length = %d, want the book's %d", readerStat.Length, bookStat.Length)
-	}
-	if !bytes.Equal(h.readBytes(readerPath), h.readBytes(bookPath)) {
-		t.Error("the reader file serves different bytes from the book's epub")
-	}
-}
 
 func TestSearchOverNinep(t *testing.T) {
 	h := newHarness(t, ingest("Dune", "Frank Herbert"), edited(1, library.Edits{Tags: &[]string{"sf"}}))

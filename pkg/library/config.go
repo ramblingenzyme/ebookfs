@@ -15,11 +15,3 @@ type Config struct {
 	IndexPath string
 }
 
-// ReaderConfig configures the rendition Library.Exporter serves to the reader/
-// view an e-reader syncs from.
-type ReaderConfig struct {
-	// Statuses selects the books that appear.
-	Statuses []string
-	// Convert serves kepubs; false serves the original epub.
-	Convert bool
-}

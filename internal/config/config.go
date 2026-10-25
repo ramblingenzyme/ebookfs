@@ -6,12 +6,10 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
 type Config struct {
 	Library LibraryConfig `toml:"library"`
-	Reader  ReaderConfig  `toml:"reader"`
 	Server  ServerConfig  `toml:"server"`
 	HTTP    HTTPConfig    `toml:"http"`
 	OPDS    OPDSConfig    `toml:"opds"`
@@ -33,14 +31,6 @@ type SearchConfig struct {
 	MaxHandles int           `toml:"max_handles"` // e.g. 100
 }
 
-// ReaderConfig is library.ReaderConfig with the toml tags, and must stay
-// field-identical to it since main converts between the two.
-// library.ReaderConfig documents what each field means.
-type ReaderConfig struct {
-	Statuses []string `toml:"statuses"`
-	Convert  bool     `toml:"convert"`
-}
-
 // HTTPConfig configures the shared HTTP listener.
 type HTTPConfig struct {
 	Listen  string `toml:"listen"`   // e.g. "0.0.0.0:8080"
@@ -50,11 +40,6 @@ type HTTPConfig struct {
 // OPDSConfig configures the OPDS catalog.
 type OPDSConfig struct {
 	Enable bool `toml:"enable"` // explicit toggle to enable/disable OPDS
-
-	// Convert is the catalog's rendition choice, separate from [reader]'s.
-	// Both convert into each book's .sidecar/ directory, since a book's kepub
-	// is the same file whoever asked for it.
-	Convert bool `toml:"convert"`
 }
 
 // KOSyncConfig configures the kosync progress sync server.
@@ -116,10 +101,6 @@ func defaults() *Config {
 			HandleTTL:  30 * time.Minute,
 			MaxHandles: 100,
 		},
-		Reader: ReaderConfig{
-			Statuses: []string{book.StatusUnread, book.StatusReading},
-			Convert:  false,
-		},
 		Server: ServerConfig{
 			Listen: "0.0.0.0:5640",
 			Auth:   "none",
@@ -144,15 +125,6 @@ func (c *Config) validateAuth() error {
 		return fmt.Errorf(`server.auth = "shared-secret" is not implemented yet; use "none"`)
 	default:
 		return fmt.Errorf(`server.auth must be "none" or "shared-secret", got %q`, c.Server.Auth)
-	}
-	return nil
-}
-
-func (c *Config) validateReader() error {
-	for _, s := range c.Reader.Statuses {
-		if !book.IsValidStatus(s) {
-			return fmt.Errorf("reader.statuses contains invalid status %q: must be %s", s, book.StatusList())
-		}
 	}
 	return nil
 }
@@ -214,10 +186,6 @@ func (c *Config) validateKOSync() error {
 func (c *Config) validate() error {
 	if c.Library.Root == "" {
 		return fmt.Errorf("library.root is required")
-	}
-
-	if err := c.validateReader(); err != nil {
-		return err
 	}
 
 	if err := c.validateAuth(); err != nil {

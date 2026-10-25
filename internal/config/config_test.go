@@ -13,12 +13,6 @@ func TestDefaults(t *testing.T) {
 	if cfg.Library.Root != "/var/lib/ebookfs/library" {
 		t.Errorf("Library.Root = %q, want %q", cfg.Library.Root, "/var/lib/ebookfs/library")
 	}
-	if cfg.Reader.Convert {
-		t.Errorf("Reader.Convert = true, want false")
-	}
-	if len(cfg.Reader.Statuses) != 2 || cfg.Reader.Statuses[0] != "unread" || cfg.Reader.Statuses[1] != "reading" {
-		t.Errorf("Reader.Statuses = %v, want [unread reading]", cfg.Reader.Statuses)
-	}
 	if cfg.Server.Listen != "0.0.0.0:5640" {
 		t.Errorf("Server.Listen = %q, want %q", cfg.Server.Listen, "0.0.0.0:5640")
 	}
@@ -42,9 +36,6 @@ func TestLoad(t *testing.T) {
 		}
 		if cfg.Library.Root != "/l" {
 			t.Errorf("Library.Root = %q, want %q", cfg.Library.Root, "/l")
-		}
-		if cfg.Reader.Convert {
-			t.Errorf("Reader.Convert should default to false")
 		}
 	})
 
@@ -74,39 +65,11 @@ format = "json"
 		if cfg.Library.Root != "/custom/root" {
 			t.Errorf("Library.Root = %q, want %q", cfg.Library.Root, "/custom/root")
 		}
-		if want := []string{"read", "abandoned"}; !slices.Equal(cfg.Reader.Statuses, want) {
-			t.Errorf("Reader.Statuses = %v, want %v", cfg.Reader.Statuses, want)
-		}
-		if !cfg.Reader.Convert {
-			t.Errorf("Reader.Convert should be true")
-		}
 		if cfg.Log.Level != "debug" {
 			t.Errorf("Log.Level = %q, want %q", cfg.Log.Level, "debug")
 		}
 		if cfg.Log.Format != "json" {
 			t.Errorf("Log.Format = %q, want %q", cfg.Log.Format, "json")
-		}
-	})
-
-	t.Run("invalid reader status", func(t *testing.T) {
-		path := writeConfig(t, reqLibSection+`
-[reader]
-statuses = ["invalid_status"]
-`)
-		_, err := Load(path)
-		if err == nil {
-			t.Fatal("expected error for invalid reader status")
-		}
-	})
-
-	t.Run("convert", func(t *testing.T) {
-		path := writeConfig(t, reqLibSection+`
-[reader]
-convert = true
-`)
-		_, err := Load(path)
-		if err != nil {
-			t.Fatalf("Load: %v", err)
 		}
 	})
 
@@ -220,7 +183,7 @@ func TestLoadListsUnknownKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if want := []string{"reader.cache_dir", "opds.enabeld"}; !slices.Equal(cfg.UnknownKeys, want) {
+	if want := []string{"reader", "reader.convert", "reader.cache_dir", "opds.enabeld"}; !slices.Equal(cfg.UnknownKeys, want) {
 		t.Errorf("UnknownKeys = %v, want %v", cfg.UnknownKeys, want)
 	}
 }

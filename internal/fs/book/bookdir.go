@@ -1,6 +1,5 @@
 // Package book holds the per-book 9P directory (BookDir) and the concrete files
-// it assembles from the vfile primitives (cover/opf/epub/field, and the exported
-// ReaderFile used by the reader view).
+// it assembles from the vfile primitives (cover/opf/epub/field).
 package book
 
 import (

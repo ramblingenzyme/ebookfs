@@ -28,8 +28,8 @@ type Config struct {
 	BaseURL string
 }
 
-func New(lib Library, rend Renderer, cfg Config) *Server {
-	handler := NewHandler(lib, rend, cfg.BaseURL)
+func New(lib Library, cfg Config) *Server {
+	handler := NewHandler(lib, cfg.BaseURL)
 	if cfg.BaseURL == "" {
 		slog.Warn("opds.base_url is unset; absolute URLs in served documents follow the client's Host and X-Forwarded-* headers")
 	}
@@ -42,12 +42,12 @@ func New(lib Library, rend Renderer, cfg Config) *Server {
 // NewHandler mounts the OPDS handler at Prefix with the two content routes
 // ahead of it. ServeMux prefers the more specific pattern, so the content
 // routes win over the catalog's subtree match.
-func NewHandler(lib Library, rend Renderer, baseURL string) http.Handler {
-	files := &content{lib: lib, rend: rend}
+func NewHandler(lib Library, baseURL string) http.Handler {
+	files := &content{lib: lib}
 	// opdshttp.WithBaseURL trims every trailing slash, so the search template
 	// must too.
 	baseURL = strings.TrimRight(baseURL, "/")
-	c := &catalog{lib: lib, filename: rend.Filename, base: baseURL}
+	c := &catalog{lib: lib, base: baseURL}
 	h := opdshttp.New(c,
 		opdshttp.WithPrefix(Prefix),
 		opdshttp.WithBaseURL(baseURL),

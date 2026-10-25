@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"slices"
@@ -32,14 +31,6 @@ type Library struct {
 	index     *index.Index
 	inboxTemp string
 
-	// Exporters that own resources, such as the kepub cache, for Close.
-	//
-	// ponytail: two readers with identical config each get their own exporter.
-	// Key a map on the ReaderConfig fields only if a deployment ever has enough
-	// readers for the duplication to cost anything.
-	closers  []io.Closer
-	closerMu sync.Mutex
-
 	// bookMu serializes Edit and Delete on one book, so a cover rewrite cannot
 	// interleave with an edit moving the book directory.
 	bookMu syncutil.KeyedMutex
@@ -58,13 +49,6 @@ type Library struct {
 }
 
 func (l *Library) Close() error {
-	l.closerMu.Lock()
-	for _, c := range l.closers {
-		if err := c.Close(); err != nil {
-			slog.Error("close: exporter failed", "error", err)
-		}
-	}
-	l.closerMu.Unlock()
 	return l.index.Close()
 }
 

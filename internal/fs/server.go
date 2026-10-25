@@ -69,7 +69,7 @@ type Config struct {
 // any book's tags, and the registry drifts from it until restart. Reject
 // WriteStat on the synthetic nodes, or accept only a length change, once a
 // client is seen doing it.
-func New(lib Library, exp library.Exporter, cfg Config) (*Server, error) {
+func New(lib Library, cfg Config) (*Server, error) {
 	ebookfs, root := fs.NewFS("glenda", "glenda", 0555, fs.IgnorePermissions())
 	reg := registry.NewBookRegistry(ebookfs, lib)
 	lib.AddHook(reg)
@@ -83,7 +83,6 @@ func New(lib Library, exp library.Exporter, cfg Config) (*Server, error) {
 	byTag := views.NewByTagDir(reg)
 	byStatus := views.NewByStatusDir(reg)
 	recent := views.NewRecentDir(reg)
-	reader := views.NewReaderDir(reg, exp)
 	stats := views.NewStatsFile(ebookfs, lib)
 
 	books, err := lib.Search(library.Query{})
@@ -100,7 +99,6 @@ func New(lib Library, exp library.Exporter, cfg Config) (*Server, error) {
 	root.AddChild(byTag)
 	root.AddChild(byStatus)
 	root.AddChild(recent)
-	root.AddChild(reader)
 	root.AddChild(stats)
 
 	cmdLog := ctl.NewCommandLog(100)

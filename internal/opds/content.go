@@ -12,8 +12,7 @@ import (
 )
 
 type content struct {
-	lib  Library
-	rend Renderer
+	lib Library
 }
 
 // byID turns serve's error into a status, so no route writes its own failure.
@@ -32,26 +31,23 @@ func (c *content) byID(serve func(*library.Book, http.ResponseWriter, *http.Requ
 // serveEpub delivers a book's export rendition, using http.ServeContent and
 // Range support when the rendition size is known.
 func (c *content) serveEpub(b *library.Book, w http.ResponseWriter, r *http.Request) error {
-	rd, err := c.rend.Open(b)
+	rd, err := c.lib.Content(b.ID())
 	if err != nil {
 		return err
 	}
 	defer rd.Close()
 
-	name := c.rend.Filename(b)
+	name := b.Filename()
+	size := b.EpubSize()
 	w.Header().Set("Content-Type", mediaTypeEpub)
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
 
-	// Size is cheap and, for a converted rendition, true once Open has built
-	// it. The fallback covers the rendition disappearing between the two.
-	if size, ok := c.rend.Size(b); ok {
+	if size > 0 {
 		http.ServeContent(w, r, name, b.DateModified(), io.NewSectionReader(rd, 0, size))
 		return nil
 	}
 
-	slog.Warn("opds: rendition size unknown, serving without ranges", "book_id", b.ID())
-	// Logged rather than returned, since the body is already going out and
-	// there is no status left to send.
+	slog.Warn("opds: book size unknown, serving without ranges", "book_id", b.ID())
 	if _, err := io.Copy(w, io.NewSectionReader(rd, 0, math.MaxInt64)); err != nil {
 		slog.Warn("opds: download failed", "book_id", b.ID(), "error", err)
 	}
