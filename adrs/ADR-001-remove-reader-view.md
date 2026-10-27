@@ -28,6 +28,11 @@ OPDS now serves the original epub files directly from the library, using the `Li
 
 Device sync is now handled exclusively through OPDS, which provides stable book references and eliminates the filename instability problem.
 
+## Supersedes
+
+- Decision #6: Sync to e-readers via USB/rsync, not cloud sync
+- Decision #19: Built-in conversion to Kobo's KEPUB format
+
 ## Consequences
 
 **Good:**

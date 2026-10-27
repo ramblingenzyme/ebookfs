@@ -4,10 +4,6 @@ Unordered. Nothing here blocks anything else unless it says so.
 
 ## Library surface
 
-- **Exporter registry.** Named exporter factories register themselves, replacing
-  the hardcoded epub/kepub switch. An exporter controls the format of the
-  rendered file, never its on-disk name, so the directory tree stays the same
-  whichever one is configured.
 - **Ingest pipeline hooks.** Convert or rewrite a file before it is parsed, and
   amend the bibliographic record before it is committed. A hook gets a
   per-ingest temp directory that is cleaned up either way.
@@ -16,9 +12,7 @@ Unordered. Nothing here blocks anything else unless it says so.
   subscriber must not block or call back in. The 9P registry becomes the first
   subscriber instead of holding a library reference.
 - **Book sidecar files.** Read and write auxiliary files inside a book's
-  directory, carried along by renames and removed on delete. The kepub cache
-  moves out of its own directory and becomes one of these, dropping the
-  cache-dir config and its invalidation logic.
+  directory, carried along by renames and removed on delete.
 - **Custom metadata namespaces.** Somewhere for per-book data the built-in
   sidecar fields don't cover: purchase date, read count, notes, shelf location.
   Each handler declares a namespace and serializes into its own sidecar file.
@@ -68,7 +62,7 @@ replace the 9P server.
 ## Not planned
 
 - A plugin loader. Registration is compile-time linking.
-- Config reload at runtime. Exporters and hooks are set when the library opens.
+- Config reload at runtime. Hooks are set when the library opens.
 - Multi-process or distributed operation. Subscribers are in-process.
 - A public store type. Capabilities go through the library.
 
@@ -79,7 +73,6 @@ replace the 9P server.
   rewrite the epub's package document atomically.
 - Inbox ingestion over 9P, with in-flight writes buffered and the clunk as the
   transaction boundary.
-- KEPUB renditions in `reader/`, with an on-disk cache and a warmer.
 - Clone-style `search/` handles and a root `ctl` file, including the bulk
   `rename-tag`, `rename-author` and `rename-series` commands.
 - Startup reindex, narrowed to run only when the store and index disagree.

@@ -3,14 +3,6 @@ root = "/var/lib/ebookfs/library"
 # inbox_temp = ""  # default: <library.root>/.inbox-tmp; must be on same filesystem as root
 # index_path = ""  # default: <library.root>/.index.db
 
-[reader]
-# The reader/ directory is an rsync source for an e-reader: books in the listed
-# reading statuses, grouped by author.
-statuses = ["unread", "reading"]  # subset of unread | reading | read | abandoned
-# Convert epubs to Kobo's kepub format on the way out. false serves the original
-# epub (works on any e-reader); true converts and caches per book in .sidecar/.
-convert = false
-
 [search]
 # handle_ttl controls how long a search handle lives without activity before the
 # cleanup worker reclaims it. Set to "0s" to disable TTL-based cleanup.
@@ -33,10 +25,6 @@ base_url = ""  # e.g. "https://books.example.com"
 
 [opds]
 enable = false
-# Separate from [reader]'s convert: reader/ is rsynced to one known device,
-# the catalog serves whichever app holds the URL. Conversions land in each
-# book's .sidecar/ directory either way.
-convert = false
 
 [kosync]
 enable = false

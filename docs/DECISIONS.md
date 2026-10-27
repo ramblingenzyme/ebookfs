@@ -41,7 +41,7 @@ frontend is planned (see TODO.md) that will end that exclusivity.)*
 Go has solid 9P libraries and cross-compiles cleanly to ARM with
 `CGO_ENABLED=0`, which matters for running on small home-server hardware.
 
-## 6. Sync to e-readers via USB/rsync, not cloud sync
+## 6. ~~Sync to e-readers via USB/rsync, not cloud sync~~ (superseded by ADR-001)
 
 Keeps every part of the pipeline self-hosted, with no dependency on a
 third-party sync service. The `reader/` view is just a folder to rsync or copy
@@ -127,7 +127,7 @@ avoids parsing a config file format on every write, and each field only needs a
 few lines of setup. An earlier design used one combined file for all fields; it
 added complexity without a real benefit.
 
-## 19. Built-in conversion to Kobo's KEPUB format
+## 19. ~~Built-in conversion to Kobo's KEPUB format~~ (superseded by ADR-001)
 
 Native KEPUB avoids doing the conversion on the device itself and fixes some
 formatting quirks Kobo devices have with plain epub. Conversions are cached on
