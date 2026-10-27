@@ -33,6 +33,12 @@ func ParseQuery(query string) (library.Query, error) {
 			q.Series = append(q.Series, val)
 		case "status":
 			q.Status = append(q.Status, val)
+		case "subject":
+			q.Subjects = append(q.Subjects, val)
+		case "publisher":
+			q.Publisher = append(q.Publisher, val)
+		case "language":
+			q.Language = append(q.Language, val)
 		case "id":
 			id, err := strconv.ParseInt(val, 10, 64)
 			if err != nil {

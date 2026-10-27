@@ -20,6 +20,9 @@ func TestParseQuery(t *testing.T) {
 		{"tag", "tag:sci-fi", library.Query{Tags: []string{"sci-fi"}}, false},
 		{"series", "series:Foundation", library.Query{Series: []string{"Foundation"}}, false},
 		{"status", "status:unread", library.Query{Status: []string{"unread"}}, false},
+		{"subject", "subject:Fiction", library.Query{Subjects: []string{"Fiction"}}, false},
+		{"publisher", "publisher:Tor", library.Query{Publisher: []string{"Tor"}}, false},
+		{"language", "language:en", library.Query{Language: []string{"en"}}, false},
 		{"id", "id:42", library.Query{IDs: []int64{42}}, false},
 		{"title", "title:Dune", library.Query{Titles: []string{"Dune"}}, false},
 		// A repeated prefix accumulates into one field, which the matcher ORs.
@@ -31,7 +34,7 @@ func TestParseQuery(t *testing.T) {
 		// An empty value is a term rather than a parse error, and matches nothing.
 		{"empty value", "tag:", library.Query{Tags: []string{""}}, false},
 		{"no colon", "sci-fi", library.Query{}, true},
-		{"unknown prefix", "publisher:Tor", library.Query{}, true},
+		{"unknown prefix", "foo:bar", library.Query{}, true},
 		{"non-numeric id", "id:abc", library.Query{}, true},
 		// Reached only if a caller skips its own empty check: searchCtlFile.Close
 		// drops empty writes and parseSelection rejects an empty id-spec.
