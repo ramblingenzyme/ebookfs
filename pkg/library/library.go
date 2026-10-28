@@ -31,6 +31,10 @@ type Library struct {
 	index     *index.Index
 	inboxTemp string
 
+	// lockFile is held open for the library's lifetime; closing it releases
+	// the flock that excludes a second instance from the same root.
+	lockFile *os.File
+
 	// bookMu serializes Edit and Delete on one book, so a cover rewrite cannot
 	// interleave with an edit moving the book directory.
 	bookMu syncutil.KeyedMutex
@@ -49,6 +53,9 @@ type Library struct {
 }
 
 func (l *Library) Close() error {
+	if l.lockFile != nil {
+		l.lockFile.Close()
+	}
 	return l.index.Close()
 }
 

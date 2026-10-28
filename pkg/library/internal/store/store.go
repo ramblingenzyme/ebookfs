@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/ramblingenzyme/ebookfs/internal/atomicfs"
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/drift"
 )
@@ -99,7 +100,7 @@ func (s *Store) Move(from, to book.Location) error {
 	fromName := filepath.Join(toDir, from.Filename())
 	toName := filepath.Join(toDir, to.Filename())
 	if toName != fromName {
-		if err := os.Rename(fromName, toName); err != nil {
+		if err := atomicfs.Rename(fromName, toName); err != nil {
 			rollbackFn(err)
 			return err
 		}
@@ -123,7 +124,7 @@ func (s *Store) renameDir(fromDir, toDir string) (func(error), error) {
 		return nil, err
 	}
 
-	if err := os.Rename(fromDir, toDir); err != nil {
+	if err := atomicfs.Rename(fromDir, toDir); err != nil {
 		return nil, err
 	}
 

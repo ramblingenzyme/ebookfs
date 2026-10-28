@@ -15,12 +15,19 @@ type Option func(*options)
 
 type options struct {
 	forceReindex bool
+	allowSMB     bool
 }
 
 // WithForceReindex rebuilds the index even when it looks clean. The drift check
 // compares only size and mtime, so it can miss a change.
 func WithForceReindex() Option {
 	return func(o *options) { o.forceReindex = true }
+}
+
+// WithAllowSMB permits opening on SMB/CIFS filesystems, which have unreliable
+// atomic rename and file locking. Use only if you understand the risks.
+func WithAllowSMB() Option {
+	return func(o *options) { o.allowSMB = true }
 }
 
 // Open opens the library rooted at cfg.Root, rebuilding the index from the
@@ -34,11 +41,36 @@ func Open(cfg Config, opts ...Option) (*Library, error) {
 	if err := os.MkdirAll(cfg.Root, 0755); err != nil {
 		return nil, fmt.Errorf("creating library root: %w", err)
 	}
+
+	if err := checkFilesystem(cfg.Root, o.allowSMB); err != nil {
+		return nil, err
+	}
+
+	lockFile, err := acquireLock(cfg.Root)
+	if err != nil {
+		return nil, err
+	}
+
+	lib, err := openLocked(cfg, o, lockFile)
+	if err != nil {
+		lockFile.Close()
+		return nil, err
+	}
+
+	return lib, nil
+}
+
+// openLocked does the work of opening the library while holding the lock.
+// If it fails, the caller is responsible for closing lockFile.
+func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
 	if err := os.MkdirAll(cfg.InboxTemp, 0700); err != nil {
 		return nil, fmt.Errorf("creating inbox temp dir: %w", err)
 	}
 	if err := cleanInboxTemp(cfg.InboxTemp); err != nil {
 		return nil, fmt.Errorf("cleaning inbox temp: %w", err)
+	}
+	if err := cleanStaleTmpFiles(cfg.Root); err != nil {
+		slog.Warn("cleaning stale epub temp files failed", "error", err)
 	}
 	if err := checkSameFilesystem(cfg.Root, cfg.InboxTemp); err != nil {
 		return nil, fmt.Errorf("inbox_temp must be on the same filesystem as library.root: %w", err)
@@ -52,6 +84,7 @@ func Open(cfg Config, opts ...Option) (*Library, error) {
 		store:     store.New(cfg.Root),
 		index:     idx,
 		inboxTemp: cfg.InboxTemp,
+		lockFile:  lockFile,
 	}
 	// Not one || chain, so storeDrifted's scan can be handed to reindex.
 	var onDisk *storeScan

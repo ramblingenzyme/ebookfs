@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Single-instance lock on the library root.** `Open` takes an exclusive `flock` on `<root>/.lock` before touching anything. A second process opening the same root now fails with `ErrLibraryLocked` naming the holder as `<hostname>:<pid>` (read from the lock file). The lock is in the root because that's the only persistent, shared location on NFS; a local lock wouldn't stop a second host. A self-test at startup takes the lock, then tries again on a second fd — if the second succeeds, or if `flock` returns `ENOLCK`/`ENOTSUP`/`EOPNOTSUPP`, the filesystem doesn't enforce locks and a warning is logged. This prevents the corruption that rolling restarts and misconfigured Compose deploys caused.
+
+- **Filesystem detection at startup.** `Open` calls `statfs` on the library root and refuses to start on SMB/CIFS (magic numbers `0xFF534D42` and `0xFE534D42`), which have unreliable atomic rename and file locking. NFS and FUSE are logged but allowed. The override `WithAllowSMB()` permits SMB mounts where the operator understands the risks or detection is wrong. This replaces Grimmory's manual `DISK_TYPE` flag with auto-detection.
+
 - **Additional EPUB metadata fields.** Publisher, rights, subjects, and contributors are now readable and writable through the filesystem interface. Subjects and contributors support multiple values (newline-separated); publisher and rights are single-valued. All four fields are exposed in the OPDS catalog. The database schema version is bumped, so the first startup after upgrading reindexes.
 
 - **OPDS catalog, the second frontend.** An OPDS 1.2 / 2.0 feed at `/opds`, off unless `opds.listen` is set, built on [`github.com/ophymx/opds`](https://github.com/ophymx/opds). Reader apps browse all books, recently added, authors, series, tags and reading status, search over OpenSearch, and download through the configured exporter. Covers are served from the original epub, so browsing never triggers a kepub conversion. Read-only: 9P is still the only write path (DECISIONS.md #4). See [docs/security.md](./docs/security.md) before opening the port.
@@ -28,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Write-path durability for renames and crash recovery.** Atomic renames now fsync the parent directory before returning, preventing a crash from losing a rename the caller was told succeeded. This covers epub saves, metadata writes, ingest moves, and kosync mapping updates. Stale `.ebookfs-*.epub.tmp` files in book directories are now cleaned up on startup, instead of only sweeping the inbox temp directory. A crash mid-save previously left these behind forever.
+
+- **Ingest path fsyncs uploaded epubs before rename.** The ingest handle now fsyncs the uploaded epub file before closing it, and the ingest path fsyncs the processed file (original or hook-transformed) before `store.Ingest` renames it to the final location. Without this, a crash after rename but before the file data is flushed could leave the ingested book with incomplete or corrupted data.
+
 - **`ReaderConfig` is validated by the library that owns it.** The rules (a cache dir is required when converting, and it must sit outside the library root or the store walk indexes converted kepubs as books) were enforced only in `internal/config`, so a caller building the struct in Go got neither. `Library.Exporter` now checks both, and the TOML layer no longer repeats them.
 
 - **`Library.Close` no longer converts the whole kepub backlog before returning.** Up to 4096 queued warm hints were converted on the way out, uncancellably. Close now cancels the converter's context and drops the queue. A warm is a hint; the read path still converts on demand.
@@ -43,6 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sidecar access no longer recreates a deleted book directory.** A kepub stat or sidecar read for a book removed outside ebookfs left an empty `Author/Title (id)/.sidecar/` behind.
 
 ### Changed
+
+- **Atomic file operations extracted to `internal/atomicfs`.** The atomic-rename-and-fsync pattern was duplicated across store, epub, and kosync. `internal/atomicfs` now provides `Write` (temp file, write, fsync file, rename, fsync parent) and `Rename` (rename, fsync parent) for any code that needs durable writes. All call sites refactored to use the shared implementation. The `Write` function fsyncs the temp file before renaming to ensure data is on disk, preventing corruption if the system crashes after rename but before the file's data is flushed.
 
 - **One startup lifecycle for every frontend.** `internal/frontend` holds a three-method interface the 9P and OPDS servers implement, and a `Run` that starts them, waits on a context, and shuts them all down against a shared deadline. A frontend that fails to bind now takes the process down instead of being logged while the rest keep serving: a binary answering 9P with its catalog port dead looks healthy to init. `SetupServer` on both frontends is now `New`, taking a package-level `Config` in place of positional parameters, and `Server.Start` is now `Server.Serve`, carrying no listen address, since it blocks and Go reads `Start` as returning immediately. See DECISIONS.md #26.
 
