@@ -15,12 +15,19 @@ type Option func(*options)
 
 type options struct {
 	forceReindex bool
+	allowSMB     bool
 }
 
 // WithForceReindex rebuilds the index even when it looks clean. The drift check
 // compares only size and mtime, so it can miss a change.
 func WithForceReindex() Option {
 	return func(o *options) { o.forceReindex = true }
+}
+
+// WithAllowSMB permits opening on SMB/CIFS filesystems, which have unreliable
+// atomic rename and file locking. Use only if you understand the risks.
+func WithAllowSMB() Option {
+	return func(o *options) { o.allowSMB = true }
 }
 
 // Open opens the library rooted at cfg.Root, rebuilding the index from the
@@ -33,6 +40,10 @@ func Open(cfg Config, opts ...Option) (*Library, error) {
 
 	if err := os.MkdirAll(cfg.Root, 0755); err != nil {
 		return nil, fmt.Errorf("creating library root: %w", err)
+	}
+
+	if err := checkFilesystem(cfg.Root, o.allowSMB); err != nil {
+		return nil, err
 	}
 
 	lockFile, err := acquireLock(cfg.Root)
