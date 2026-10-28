@@ -34,6 +34,24 @@ func Open(cfg Config, opts ...Option) (*Library, error) {
 	if err := os.MkdirAll(cfg.Root, 0755); err != nil {
 		return nil, fmt.Errorf("creating library root: %w", err)
 	}
+
+	lockFile, err := acquireLock(cfg.Root)
+	if err != nil {
+		return nil, err
+	}
+
+	lib, err := openLocked(cfg, o, lockFile)
+	if err != nil {
+		lockFile.Close()
+		return nil, err
+	}
+
+	return lib, nil
+}
+
+// openLocked does the work of opening the library while holding the lock.
+// If it fails, the caller is responsible for closing lockFile.
+func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
 	if err := os.MkdirAll(cfg.InboxTemp, 0700); err != nil {
 		return nil, fmt.Errorf("creating inbox temp dir: %w", err)
 	}
@@ -52,6 +70,7 @@ func Open(cfg Config, opts ...Option) (*Library, error) {
 		store:     store.New(cfg.Root),
 		index:     idx,
 		inboxTemp: cfg.InboxTemp,
+		lockFile:  lockFile,
 	}
 	// Not one || chain, so storeDrifted's scan can be handed to reindex.
 	var onDisk *storeScan
