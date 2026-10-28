@@ -24,6 +24,7 @@ type LibraryConfig struct {
 	Root      string `toml:"root"`
 	InboxTemp string `toml:"inbox_temp"`
 	IndexPath string `toml:"index_path"`
+	StateDir  string `toml:"state_dir"` // Small persistent state (kosync mapping, queues). Defaults to Root if empty.
 }
 
 type SearchConfig struct {
@@ -45,7 +46,6 @@ type OPDSConfig struct {
 // KOSyncConfig configures the kosync progress sync server.
 type KOSyncConfig struct {
 	Enable           bool    `toml:"enable"`            // explicit toggle to enable/disable kosync
-	MappingPath      string  `toml:"mapping_path"`      // path to mapping directory (default: <library_root>/.kosync)
 	Username         string  `toml:"username"`          // pre-provisioned username
 	Password         string  `toml:"password"`          // pre-provisioned password (plaintext, hashed to MD5 at startup)
 	ReadingThreshold float64 `toml:"reading_threshold"` // percentage to mark as "reading" (default: 0.05)
@@ -78,11 +78,11 @@ func Load(path string) (*Config, error) {
 	if cfg.Library.InboxTemp == "" {
 		cfg.Library.InboxTemp = cfg.Library.Root + "/.inbox-tmp"
 	}
-	if cfg.Library.IndexPath == "" {
-		cfg.Library.IndexPath = cfg.Library.Root + "/.index.db"
+	if cfg.Library.StateDir == "" {
+		cfg.Library.StateDir = cfg.Library.Root
 	}
-	if cfg.KOSync.MappingPath == "" {
-		cfg.KOSync.MappingPath = cfg.Library.Root + "/.kosync"
+	if cfg.Library.IndexPath == "" {
+		cfg.Library.IndexPath = cfg.Library.StateDir + "/.index.db"
 	}
 
 	if err := cfg.validate(); err != nil {

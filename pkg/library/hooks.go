@@ -12,6 +12,9 @@ import (
 // Hook is a unified interface for observing and amending library operations.
 // Hooks embed HookBase and override the phases they care about.
 //
+// Setup runs once during library initialization, before any other phases.
+// It receives paths the hook needs for persistent state.
+//
 // Pipeline phases (PreParse, PreCommit) run during ingest under ingestMu.
 // They can modify data before the library commits. If they return an error,
 // the operation fails.
@@ -27,6 +30,10 @@ import (
 // Panics are recovered and logged so one hook cannot prevent later hooks
 // from receiving the event.
 type Hook interface {
+	// Setup initializes the hook with library paths. Called by AddHook when the
+	// hook is registered, before any other hook phases.
+	Setup(root string, stateDir string) error
+
 	// PreParse rewrites the epub file before parsing. epubPath is the absolute
 	// path to the staged file. tempDir is per-ingest scratch space, retained
 	// until ingest completes. Return a replacement path, or "" to keep epubPath.
@@ -57,6 +64,8 @@ type Hook interface {
 // HookBase provides no-op defaults for all hook phases. Hooks embed HookBase
 // and override only the methods they need.
 type HookBase struct{}
+
+func (HookBase) Setup(root string, stateDir string) error { return nil }
 
 func (HookBase) PreParse(epubPath string, tempDir string) (string, error) {
 	return "", nil
@@ -90,9 +99,14 @@ func (s *hookSet) snapshot() []Hook {
 	return slices.Clone(s.hooks)
 }
 
-// AddHook registers a hook. The hook is called synchronously at each phase,
-// in registration order. Hooks stay registered for the library's lifetime.
-func (l *Library) AddHook(h Hook) { l.hooks.add(h) }
+// AddHook registers a hook and calls Setup with the library's root and stateDir.
+// Setup errors are logged but don't prevent hook registration.
+func (l *Library) AddHook(h Hook) {
+	if err := h.Setup(l.root, l.stateDir); err != nil {
+		slog.Error("hook setup failed", "error", err)
+	}
+	l.hooks.add(h)
+}
 
 // preParse calls PreParse in registration order. An error stops the ingest;
 // an empty returned path keeps the path passed to that hook.

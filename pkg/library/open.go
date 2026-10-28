@@ -76,16 +76,26 @@ func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
 		return nil, fmt.Errorf("inbox_temp must be on the same filesystem as library.root: %w", err)
 	}
 
-	idx, err := index.Open(cfg.IndexPath)
+	fsType, err := index.DetectFilesystemType(filepath.Dir(cfg.IndexPath))
+	if err != nil {
+		return nil, fmt.Errorf("detecting filesystem for index: %w", err)
+	}
+	if err := requireNotSMB(fsType, o.allowSMB, cfg.IndexPath); err != nil {
+		return nil, err
+	}
+	idx, err := index.Open(cfg.IndexPath, fsType)
 	if err != nil {
 		return nil, err
 	}
 	lib := &Library{
 		store:     store.New(cfg.Root),
 		index:     idx,
+		root:      cfg.Root,
+		stateDir:  cfg.StateDir,
 		inboxTemp: cfg.InboxTemp,
 		lockFile:  lockFile,
 	}
+
 	// Not one || chain, so storeDrifted's scan can be handed to reindex.
 	var onDisk *storeScan
 	needs := o.forceReindex || lib.needsReindex()

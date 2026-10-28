@@ -38,7 +38,6 @@ const (
 
 // Config holds kosync configuration.
 type Config struct {
-	MappingPath      string  // path to mapping directory (default: <library_root>/.kosync)
 	Username         string  // pre-provisioned username
 	PasswordHash     string  // MD5 hash of password (lowercase hex)
 	PathPrefix       string  // URL path prefix (e.g., "/sync")
@@ -46,13 +45,15 @@ type Config struct {
 	ReadThreshold    float64 // percentage to mark as "read" (default: 0.95)
 }
 
-// Server implements HTTPFrontend for kosync.
+// Server implements both HTTPFrontend and Hook for kosync.
 type Server struct {
+	library.HookBase
 	handler http.Handler
 	prefix  string
+	mapping *MappingFile
 }
 
-// New creates a kosync server, handling mapping initialization and hook registration.
+// New creates a kosync server, handling mapping initialization.
 //
 // ponytail: Rebuild runs only on an empty mapping. A book that arrives through
 // a startup reindex, or while kosync is off, never gets a document ID, so its
@@ -60,28 +61,24 @@ type Server struct {
 // answers 502. Rebuilding on every startup fixes both for one sidecar read per
 // book.
 func New(lib *library.Library, cfg Config) (*Server, error) {
-	// Load or create mapping
-	mapping, err := LoadMapping(cfg.MappingPath)
-	if err != nil {
-		slog.Warn("kosync mapping corrupt or missing, rebuilding", "error", err)
-		mapping = NewEmptyMapping(cfg.MappingPath)
-	}
+	// Create server
+	srv := &Server{}
+
+	// Register as hook with the library (this will call Setup automatically)
+	lib.AddHook(srv)
 
 	// Rebuild if mapping is empty (first run, after corruption, or all books deleted)
-	if mapping.IsEmpty() {
-		if err := mapping.Rebuild(lib); err != nil {
+	if srv.mapping.IsEmpty() {
+		if err := srv.mapping.Rebuild(lib); err != nil {
 			return nil, fmt.Errorf("rebuilding kosync mapping: %w", err)
 		}
 	}
 
-	// Create and register hook
-	hook := NewHook(mapping)
-	lib.AddHook(hook)
+	// Create HTTP handler
+	srv.handler = NewHandler(lib, srv.mapping, cfg)
+	srv.prefix = cfg.PathPrefix
 
-	return &Server{
-		handler: NewHandler(lib, mapping, cfg),
-		prefix:  cfg.PathPrefix,
-	}, nil
+	return srv, nil
 }
 
 // NewHandler creates a kosync HTTP handler.

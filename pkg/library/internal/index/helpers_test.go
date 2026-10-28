@@ -23,7 +23,7 @@ func bookPaths(books ...*book.Book) []BookPath {
 // version-stamped baseline so tests start from a known clean state.
 func openTestIndex(t *testing.T) *Index {
 	t.Helper()
-	idx, err := Open(filepath.Join(t.TempDir(), "index.db"))
+	idx, err := Open(filepath.Join(t.TempDir(), "index.db"), FSTypeLocal)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
