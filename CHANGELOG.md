@@ -32,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Write-path durability for renames and crash recovery.** Atomic renames now fsync the parent directory before returning, preventing a crash from losing a rename the caller was told succeeded. This covers epub saves, metadata writes, ingest moves, and kosync mapping updates. Stale `.ebookfs-*.epub.tmp` files in book directories are now cleaned up on startup, instead of only sweeping the inbox temp directory. A crash mid-save previously left these behind forever.
+
+- **Ingest path fsyncs uploaded epubs before rename.** The ingest handle now fsyncs the uploaded epub file before closing it, and the ingest path fsyncs the processed file (original or hook-transformed) before `store.Ingest` renames it to the final location. Without this, a crash after rename but before the file data is flushed could leave the ingested book with incomplete or corrupted data.
+
 - **`ReaderConfig` is validated by the library that owns it.** The rules (a cache dir is required when converting, and it must sit outside the library root or the store walk indexes converted kepubs as books) were enforced only in `internal/config`, so a caller building the struct in Go got neither. `Library.Exporter` now checks both, and the TOML layer no longer repeats them.
 
 - **`Library.Close` no longer converts the whole kepub backlog before returning.** Up to 4096 queued warm hints were converted on the way out, uncancellably. Close now cancels the converter's context and drops the queue. A warm is a hint; the read path still converts on demand.
@@ -47,6 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sidecar access no longer recreates a deleted book directory.** A kepub stat or sidecar read for a book removed outside ebookfs left an empty `Author/Title (id)/.sidecar/` behind.
 
 ### Changed
+
+- **Atomic file operations extracted to `internal/atomicfs`.** The atomic-rename-and-fsync pattern was duplicated across store, epub, and kosync. `internal/atomicfs` now provides `Write` (temp file, write, fsync file, rename, fsync parent) and `Rename` (rename, fsync parent) for any code that needs durable writes. All call sites refactored to use the shared implementation. The `Write` function fsyncs the temp file before renaming to ensure data is on disk, preventing corruption if the system crashes after rename but before the file's data is flushed.
 
 - **One startup lifecycle for every frontend.** `internal/frontend` holds a three-method interface the 9P and OPDS servers implement, and a `Run` that starts them, waits on a context, and shuts them all down against a shared deadline. A frontend that fails to bind now takes the process down instead of being logged while the rest keep serving: a binary answering 9P with its catalog port dead looks healthy to init. `SetupServer` on both frontends is now `New`, taking a package-level `Config` in place of positional parameters, and `Server.Start` is now `Server.Serve`, carrying no listen address, since it blocks and Go reads `Start` as returning immediately. See DECISIONS.md #26.
 

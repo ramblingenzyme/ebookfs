@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/ramblingenzyme/ebookfs/internal/atomicfs"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
@@ -201,32 +202,11 @@ func (m *MappingFile) Delete(documentID string) {
 // save writes the mapping to disk atomically.
 // Caller must hold the write lock.
 func (m *MappingFile) save() error {
-
-	// Write to temp file first
-	tmpPath := m.path + ".tmp"
-	f, err := os.Create(tmpPath)
-	if err != nil {
-		return fmt.Errorf("creating temp mapping: %w", err)
-	}
-
-	if err := json.NewEncoder(f).Encode(m.data); err != nil {
-		f.Close()
-		os.Remove(tmpPath)
-		return fmt.Errorf("encoding mapping: %w", err)
-	}
-
-	if err := f.Close(); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("closing temp mapping: %w", err)
-	}
-
-	// Atomic rename
-	if err := os.Rename(tmpPath, m.path); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("renaming mapping: %w", err)
-	}
-
-	return nil
+	dir := filepath.Dir(m.path)
+	pattern := filepath.Base(m.path) + ".tmp"
+	return atomicfs.Write(dir, pattern, func(f *os.File) error {
+		return json.NewEncoder(f).Encode(m.data)
+	}, m.path)
 }
 
 // Snapshot returns a copy of the current mapping for testing.

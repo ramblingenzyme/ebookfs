@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
+	"github.com/ramblingenzyme/ebookfs/internal/atomicfs"
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
@@ -46,18 +47,10 @@ func writeMeta(path string, meta *book.Meta) error {
 		return err
 	}
 
-	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path))
-	if err != nil {
+	dir := filepath.Dir(path)
+	pattern := filepath.Base(path)
+	return atomicfs.Write(dir, pattern, func(f *os.File) error {
+		_, err := f.Write(buf)
 		return err
-	}
-	defer tmp.Close()
-	defer os.Remove(tmp.Name())
-
-	if _, err = tmp.Write(buf); err != nil {
-		return err
-	}
-	if err = tmp.Sync(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), path)
+	}, path)
 }

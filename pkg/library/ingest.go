@@ -28,6 +28,9 @@ func (h *ingestHandle) WriteAt(p []byte, off int64) (int, error) { return h.file
 
 func (h *ingestHandle) Ingest() (*Book, error) {
 	path := h.file.Name()
+	if err := h.file.Sync(); err != nil {
+		slog.Warn("ingest: fsync temp file failed", "path", path, "error", err)
+	}
 	if err := h.file.Close(); err != nil {
 		slog.Warn("ingest: close temp file failed", "path", path, "error", err)
 	}
@@ -103,6 +106,18 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 		DateModified: now,
 	}
 	loc := l.store.Layout(bib.Authors, bib.Title, id)
+
+	// fsync processedPath before rename, so the data is on disk before
+	// store.Ingest moves it. This covers both the original temp file and any
+	// hook-transformed file.
+	if pf, err := os.Open(processedPath); err != nil {
+		return nil, fmt.Errorf("opening processed file for fsync: %w", err)
+	} else {
+		if err := pf.Sync(); err != nil {
+			slog.Warn("ingest: fsync processed file failed", "path", processedPath, "error", err)
+		}
+		pf.Close()
+	}
 
 	op := l.index.BeginOp()
 	if err := op.MarkPending(); err != nil {

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ramblingenzyme/ebookfs/internal/atomicfs"
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/drift"
 )
@@ -15,7 +16,7 @@ func (s *Store) Ingest(epubPath string, loc book.Location, meta *book.Meta) (dri
 		return drift.PathInfo{}, err
 	}
 
-	if err := os.Rename(epubPath, filepath.Join(dir, loc.Filename())); err != nil {
+	if err := atomicfs.Rename(epubPath, filepath.Join(dir, loc.Filename())); err != nil {
 		return drift.PathInfo{}, err
 	}
 
