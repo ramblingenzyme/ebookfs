@@ -76,14 +76,7 @@ func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
 		return nil, fmt.Errorf("inbox_temp must be on the same filesystem as library.root: %w", err)
 	}
 
-	fsType, err := index.DetectFilesystemType(filepath.Dir(cfg.IndexPath))
-	if err != nil {
-		return nil, fmt.Errorf("detecting filesystem for index: %w", err)
-	}
-	if err := requireNotSMB(fsType, o.allowSMB, cfg.IndexPath); err != nil {
-		return nil, err
-	}
-	idx, err := index.Open(cfg.IndexPath, fsType)
+	idx, err := index.Open(cfg.IndexPath, o.allowSMB)
 	if err != nil {
 		return nil, err
 	}

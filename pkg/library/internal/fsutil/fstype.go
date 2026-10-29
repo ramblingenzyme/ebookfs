@@ -1,4 +1,4 @@
-package index
+package fsutil
 
 import (
 	"fmt"
@@ -66,4 +66,12 @@ func DetectFilesystemType(path string) (FSType, error) {
 		// Treat anything else as local
 		return FSTypeLocal, nil
 	}
+}
+
+// RequireNotSMB returns an error if fsType is SMB and allowSMB is false
+func RequireNotSMB(fsType FSType, allowSMB bool, path string) error {
+	if fsType.IsSMB() && !allowSMB {
+		return fmt.Errorf("SMB filesystem detected at %s: atomic rename and file locking are unreliable; use WithAllowSMB() to override if you understand the risks", path)
+	}
+	return nil
 }

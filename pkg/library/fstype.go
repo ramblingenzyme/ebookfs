@@ -1,27 +1,19 @@
 package library
 
 import (
-	"fmt"
 	"log/slog"
 
-	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/fsutil"
 )
-
-func requireNotSMB(fsType index.FSType, allowSMB bool, path string) error {
-	if fsType.IsSMB() && !allowSMB {
-		return fmt.Errorf("SMB filesystem detected at %s: atomic rename and file locking are unreliable; use WithAllowSMB() to override if you understand the risks", path)
-	}
-	return nil
-}
 
 // checkFilesystem detects the filesystem type and enforces policy
 func checkFilesystem(root string, allowSMB bool) error {
-	fsType, err := index.DetectFilesystemType(root)
+	fsType, err := fsutil.DetectFilesystemType(root)
 	if err != nil {
 		return err
 	}
 
-	if err := requireNotSMB(fsType, allowSMB, root); err != nil {
+	if err := fsutil.RequireNotSMB(fsType, allowSMB, root); err != nil {
 		return err
 	}
 

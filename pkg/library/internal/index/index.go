@@ -7,8 +7,11 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"net/url"
+	"path/filepath"
 
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/fsutil"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index/dbsqlc"
 	_ "modernc.org/sqlite"
 )
@@ -38,7 +41,7 @@ func dsn(path string, pragmas ...string) string {
 	return path + "?" + q.Encode()
 }
 
-func writerPragmas(fsType FSType) []string {
+func writerPragmas(fsType fsutil.FSType) []string {
 	pragmas := []string{
 		"busy_timeout(5000)",
 		"journal_size_limit(27103364)",
@@ -48,9 +51,9 @@ func writerPragmas(fsType FSType) []string {
 		"foreign_keys(ON)",
 	}
 	switch fsType {
-	case FSTypeNFS:
+	case fsutil.FSTypeNFS:
 		pragmas = append([]string{"journal_mode(DELETE)", "synchronous(FULL)"}, pragmas...)
-	case FSTypeCIFS, FSTypeSMB2:
+	case fsutil.FSTypeCIFS, fsutil.FSTypeSMB2:
 		pragmas = append([]string{"journal_mode(WAL)", "synchronous(NORMAL)", "locking_mode(EXCLUSIVE)"}, pragmas...)
 	default: // local, FUSE, unknown
 		pragmas = append([]string{"journal_mode(WAL)", "synchronous(NORMAL)"}, pragmas...)
@@ -58,7 +61,7 @@ func writerPragmas(fsType FSType) []string {
 	return pragmas
 }
 
-func readerPragmas(fsType FSType) []string {
+func readerPragmas(fsType fsutil.FSType) []string {
 	pragmas := []string{
 		"busy_timeout(5000)",
 		"query_only",
@@ -67,7 +70,7 @@ func readerPragmas(fsType FSType) []string {
 		"temp_store(memory)",
 	}
 	switch fsType {
-	case FSTypeNFS:
+	case fsutil.FSTypeNFS:
 		pragmas = append([]string{"journal_mode(DELETE)"}, pragmas...)
 	default: // local, FUSE, CIFS, SMB2, unknown
 		pragmas = append([]string{"journal_mode(WAL)"}, pragmas...)
@@ -75,7 +78,20 @@ func readerPragmas(fsType FSType) []string {
 	return pragmas
 }
 
-func Open(path string, fsType FSType) (*Index, error) {
+func Open(path string, allowSMB bool) (*Index, error) {
+	fsType, err := fsutil.DetectFilesystemType(filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
+	if err := fsutil.RequireNotSMB(fsType, allowSMB, path); err != nil {
+		return nil, err
+	}
+	if fsType.IsSMB() {
+		slog.Warn("detected SMB filesystem for index, proceeding with override enabled", "path", path)
+	} else {
+		slog.Info("detected "+fsType.String()+" filesystem for index", "path", path)
+	}
+
 	db, err := sql.Open("sqlite", dsn(path, writerPragmas(fsType)...))
 	if err != nil {
 		return nil, err
