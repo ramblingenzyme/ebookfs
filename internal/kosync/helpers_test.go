@@ -30,6 +30,7 @@ func openTestLibrary(t *testing.T) *testLibrary {
 		Root:      tmpDir,
 		IndexPath: tmpDir + "/.index.db",
 		InboxTemp: tmpDir + "/.inbox-tmp",
+		StateDir:  tmpDir,
 	})
 	if err != nil {
 		os.RemoveAll(tmpDir)
@@ -90,19 +91,22 @@ var defaultCfg = Config{
 	ReadThreshold:    0.95,
 }
 
-// setupEnv creates a library, mapping, hook, one ingested book, and a handler.
+// setupEnv creates a library, server with mapping, one ingested book, and a handler.
 func setupEnv(t *testing.T, cfg Config) *testEnv {
 	t.Helper()
 	lib := openTestLibrary(t)
-	mapping := NewEmptyMapping(t.TempDir())
-	hook := NewHook(mapping)
-	lib.AddHook(hook)
+	stateDir := t.TempDir()
+	srv := &Server{}
+	if err := srv.Setup("", stateDir); err != nil {
+		t.Fatalf("server setup: %v", err)
+	}
+	lib.AddHook(srv)
 
 	data := buildTestEpub(t, "Test Book", "Author")
 	book := ingestTestEpub(t, lib.Library, data)
 
 	var docID string
-	for id := range mapping.Snapshot() {
+	for id := range srv.mapping.Snapshot() {
 		docID = id
 		break
 	}
@@ -110,8 +114,8 @@ func setupEnv(t *testing.T, cfg Config) *testEnv {
 		t.Fatal("document ID not in mapping after ingest")
 	}
 
-	handler := NewHandler(lib.Library, mapping, cfg)
-	return &testEnv{lib: lib, mapping: mapping, handler: handler, docID: docID, book: book}
+	handler := NewHandler(lib.Library, srv.mapping, cfg)
+	return &testEnv{lib: lib, mapping: srv.mapping, handler: handler, docID: docID, book: book}
 }
 
 // putProgress sends a PUT /syncs/progress with the given body.
@@ -154,14 +158,17 @@ func (e *testEnv) bookStatus(t *testing.T) string {
 	return b.Status()
 }
 
-// setupMapping creates a library, mapping, and hook (no books).
+// setupMapping creates a library and server with mapping (no books).
 func setupMapping(t *testing.T) (*testLibrary, *MappingFile) {
 	t.Helper()
 	lib := openTestLibrary(t)
-	mapping := NewEmptyMapping(t.TempDir())
-	hook := NewHook(mapping)
-	lib.AddHook(hook)
-	return lib, mapping
+	stateDir := t.TempDir()
+	srv := &Server{}
+	if err := srv.Setup("", stateDir); err != nil {
+		t.Fatalf("server setup: %v", err)
+	}
+	lib.AddHook(srv)
+	return lib, srv.mapping
 }
 
 func (e *testEnv) documentIDs(t *testing.T) []string {

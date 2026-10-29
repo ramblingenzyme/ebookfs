@@ -18,6 +18,16 @@ Config lives at `/etc/ebookfs/config.toml` (or wherever `--config` points). See 
 
 Before deciding what `server.listen` should bind to and whether to publish the port, read [security.md](./security.md). The server has no authentication or transport encryption today.
 
+## SQLite and filesystem behavior
+
+The SQLite index detects the filesystem type at startup and selects the appropriate journal mode:
+
+- **Local filesystems**: WAL (Write-Ahead Logging) journal mode. Concurrent reads, good performance.
+- **NFS**: DELETE journal mode. WAL requires shared memory support, which NFS doesn't provide. DELETE mode is slower but reliable on network filesystems.
+- **SMB/CIFS**: Refused by default. SMB/CIFS has unreliable atomic rename and locking behavior. If you understand the risks, pass the `WithAllowSMB()` option to permit SMB mounts. When permitted, the index uses WAL with EXCLUSIVE locking and a single connection to work around filesystem limitations.
+
+The index path defaults to `<state_dir>/.index.db`, where `state_dir` defaults to `library.root`. You can place the index on different storage (e.g., local SSD when the library is on NFS) by setting `library.index_path` explicitly. This allows you to keep the derived index on fast local storage while the library files remain on network storage.
+
 ## Mounting from a client
 
 `9pfuse` is the tested client:

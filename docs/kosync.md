@@ -50,7 +50,7 @@ Kosync data is stored in two locations:
    - Contains the document ID(s) and current progress
    - Document IDs are computed using a partial MD5 algorithm matching KOReader's specification
 
-2. **Mapping file**: `{mapping_path}/mapping.json`, where `mapping_path` defaults to `{library_root}/.kosync`
+2. **Mapping file**: `<state_dir>/.kosync/mapping.json`, where `state_dir` defaults to `library_root`
    - Maps document IDs to book IDs for efficient lookup
    - Can be rebuilt from sidecars if lost or corrupted
 

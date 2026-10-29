@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/drift"
 )
 
@@ -23,7 +22,7 @@ func bookPaths(books ...*book.Book) []BookPath {
 // version-stamped baseline so tests start from a known clean state.
 func openTestIndex(t *testing.T) *Index {
 	t.Helper()
-	idx, err := Open(filepath.Join(t.TempDir(), "index.db"))
+	idx, err := Open(filepath.Join(t.TempDir(), "index.db"), false)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
