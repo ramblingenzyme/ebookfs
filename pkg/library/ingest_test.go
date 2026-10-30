@@ -65,7 +65,11 @@ func TestFailedIngestCleansUp(t *testing.T) {
 	if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("book directory left behind (stat err = %v)", err)
 	}
-	if lib.needsReindex() {
+	needs, err := lib.index.NeedsReindex()
+	if err != nil {
+		t.Fatalf("NeedsReindex: %v", err)
+	}
+	if needs {
 		t.Error("the failed ingest left its pending row, so the next start rebuilds")
 	}
 	if got, err := lib.Search(Query{}); err != nil || len(got) != 0 {

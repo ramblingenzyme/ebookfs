@@ -1,5 +1,16 @@
 # Agent notes
 
+## Where things live
+
+- `main.go` — entry point
+- `internal/` — app code: `atomicfs`, `book` (+ `edits`), `config`, `frontend`, `fs`, `kosync`, `opds`, `testing` (shared test helpers), `util`
+- `pkg/epub/` — public EPUB parsing library (`README.md`); `internal/` holds `content`, `ncx`, `ocf`, `opf`
+- `pkg/library/` — library management (cleanup, config, concurrency); `internal/` holds `drift`, `epub`, `fsutil`, `index`
+- `docs/` — `DECISIONS.md`, `deployment.md`, `kosync.md`, `namespace.md`, `security.md`
+- `adrs/` — architecture decision records
+- `config.toml` — runtime config; `configs/config.example.toml` is the template
+- `scripts/`, `testdata/`, `build/` (Dockerfile) — support material
+
 ## Comments
 
 ### Keep each comment on its declaration
