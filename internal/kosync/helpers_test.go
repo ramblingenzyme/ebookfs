@@ -75,11 +75,11 @@ func ingestTestEpub(t *testing.T, lib *library.Library, data []byte) *library.Bo
 
 // testEnv bundles the recurring setup for kosync scenario tests.
 type testEnv struct {
-	lib     *testLibrary
-	mapping *MappingFile
-	handler http.Handler
-	docID   string
-	book    *library.Book
+	lib      *testLibrary
+	registry *docRegistry
+	handler  http.Handler
+	docID    string
+	book     *library.Book
 }
 
 // defaultCfg is the config most scenario tests use.
@@ -91,31 +91,30 @@ var defaultCfg = Config{
 	ReadThreshold:    0.95,
 }
 
-// setupEnv creates a library, server with mapping, one ingested book, and a handler.
+// setupEnv creates a kosync server on a fresh library, ingests one book
+// through the server's hook, and returns the handler.
 func setupEnv(t *testing.T, cfg Config) *testEnv {
 	t.Helper()
 	lib := openTestLibrary(t)
-	stateDir := t.TempDir()
-	srv := &Server{}
-	if err := srv.Setup("", stateDir); err != nil {
-		t.Fatalf("server setup: %v", err)
+
+	srv, err := New(lib.Library, cfg)
+	if err != nil {
+		t.Fatalf("New: %v", err)
 	}
-	lib.AddHook(srv)
 
 	data := buildTestEpub(t, "Test Book", "Author")
 	book := ingestTestEpub(t, lib.Library, data)
 
-	var docID string
-	for id := range srv.mapping.Snapshot() {
-		docID = id
-		break
+	snap := srv.registry.snapshot()
+	if len(snap) != 1 {
+		t.Fatalf("index after ingest has %d entries, want 1", len(snap))
 	}
-	if docID == "" {
-		t.Fatal("document ID not in mapping after ingest")
+	var docID string
+	for id := range snap {
+		docID = id
 	}
 
-	handler := NewHandler(lib.Library, srv.mapping, cfg)
-	return &testEnv{lib: lib, mapping: srv.mapping, handler: handler, docID: docID, book: book}
+	return &testEnv{lib: lib, registry: srv.registry, handler: srv.handler, docID: docID, book: book}
 }
 
 // putProgress sends a PUT /syncs/progress with the given body.
@@ -158,18 +157,6 @@ func (e *testEnv) bookStatus(t *testing.T) string {
 	return b.Status()
 }
 
-// setupMapping creates a library and server with mapping (no books).
-func setupMapping(t *testing.T) (*testLibrary, *MappingFile) {
-	t.Helper()
-	lib := openTestLibrary(t)
-	stateDir := t.TempDir()
-	srv := &Server{}
-	if err := srv.Setup("", stateDir); err != nil {
-		t.Fatalf("server setup: %v", err)
-	}
-	lib.AddHook(srv)
-	return lib, srv.mapping
-}
 
 func (e *testEnv) documentIDs(t *testing.T) []string {
 	t.Helper()

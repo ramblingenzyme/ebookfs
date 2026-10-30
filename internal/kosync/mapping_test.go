@@ -3,140 +3,75 @@ package kosync
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"testing"
+
+	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// TestRebuildFromMissingMapping verifies that Rebuild() restores the mapping
-// when the mapping file is deleted.
-func TestRebuildFromMissingMapping(t *testing.T) {
-	lib, mapping := setupMapping(t)
+// TestRestoreEmptyLibrary verifies that Restore works on an empty library.
+func TestRestoreEmptyLibrary(t *testing.T) {
+	lib := openTestLibrary(t)
+
+	r := newDocRegistry()
+	if err := r.Restore(lib.Library); err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+
+	if snap := r.snapshot(); len(snap) != 0 {
+		t.Errorf("restored index has %d entries, want 0", len(snap))
+	}
+}
+
+// TestRestoreCreatesMissingSidecars verifies Restore computes document IDs and
+// writes sidecars for books that arrived without one.
+func TestRestoreCreatesMissingSidecars(t *testing.T) {
+	lib := openTestLibrary(t)
 
 	book1 := ingestTestEpub(t, lib.Library, buildTestEpub(t, "Book One", "Alice"))
 	book2 := ingestTestEpub(t, lib.Library, buildTestEpub(t, "Book Two", "Bob"))
+	books := []*library.Book{book1, book2}
 
-	if len(mapping.Snapshot()) != 2 {
-		t.Fatalf("mapping has %d entries, want 2", len(mapping.Snapshot()))
+	for _, book := range books {
+		if _, err := lib.Library.ReadSidecar(book.ID(), "kosync.json"); err == nil {
+			t.Fatalf("book %d has a sidecar before Restore", book.ID())
+		}
 	}
 
-	if err := os.Remove(mapping.path); err != nil {
-		t.Fatalf("removing mapping: %v", err)
+	r := newDocRegistry()
+	if err := r.Restore(lib.Library); err != nil {
+		t.Fatalf("Restore: %v", err)
 	}
 
-	newMapping := NewEmptyMapping(filepath.Dir(mapping.path))
-	if err := newMapping.Rebuild(lib.Library); err != nil {
-		t.Fatalf("Rebuild: %v", err)
+	snap := r.snapshot()
+	if len(snap) != 2 {
+		t.Fatalf("restored index has %d entries, want 2", len(snap))
 	}
 
-	newSnapshot := newMapping.Snapshot()
-	if len(newSnapshot) != 2 {
-		t.Errorf("rebuilt mapping has %d entries, want 2", len(newSnapshot))
-	}
-
-	for docID, bookID := range newSnapshot {
-		if bookID != book1.ID() && bookID != book2.ID() {
-			t.Errorf("unexpected book_id %d for document %s", bookID, docID)
+	for _, book := range books {
+		raw, err := lib.Library.ReadSidecar(book.ID(), "kosync.json")
+		if err != nil {
+			t.Fatalf("reading sidecar after Restore: %v", err)
+		}
+		var sidecar SidecarData
+		if err := json.Unmarshal(raw, &sidecar); err != nil {
+			t.Fatalf("unmarshaling sidecar: %v", err)
+		}
+		if len(sidecar.DocumentIDs) != 1 || sidecar.DocumentIDs[0] == "" {
+			t.Fatalf("book %d sidecar has invalid document IDs: %v", book.ID(), sidecar.DocumentIDs)
+		}
+		if bookID := snap[sidecar.DocumentIDs[0]]; bookID != book.ID() {
+			t.Errorf("index[%s] = %d, want %d", sidecar.DocumentIDs[0], bookID, book.ID())
 		}
 	}
 }
 
-// TestRebuildFromCorruptMapping verifies that Rebuild() overwrites a corrupt
-// mapping file with correct data from sidecars.
-func TestRebuildFromCorruptMapping(t *testing.T) {
-	lib, mapping := setupMapping(t)
-
-	book := ingestTestEpub(t, lib.Library, buildTestEpub(t, "Corrupt Test", "Alice"))
-
-	if len(mapping.Snapshot()) != 1 {
-		t.Fatalf("mapping has %d entries, want 1", len(mapping.Snapshot()))
-	}
-
-	if err := os.WriteFile(mapping.path, []byte("{invalid json"), 0644); err != nil {
-		t.Fatalf("corrupting mapping: %v", err)
-	}
-
-	if _, err := LoadMapping(filepath.Dir(mapping.path)); err == nil {
-		t.Fatal("LoadMapping succeeded on corrupt file, want error")
-	}
-
-	newMapping := NewEmptyMapping(filepath.Dir(mapping.path))
-	if err := newMapping.Rebuild(lib.Library); err != nil {
-		t.Fatalf("Rebuild: %v", err)
-	}
-
-	newSnapshot := newMapping.Snapshot()
-	if len(newSnapshot) != 1 {
-		t.Errorf("rebuilt mapping has %d entries, want 1", len(newSnapshot))
-	}
-
-	for _, bookID := range newSnapshot {
-		if bookID != book.ID() {
-			t.Errorf("book_id = %d, want %d", bookID, book.ID())
-		}
-	}
-}
-
-// TestRebuildCreatesMissingSidecars verifies that Rebuild() creates sidecars
-// for books that don't have kosync sidecars yet.
-func TestRebuildCreatesMissingSidecars(t *testing.T) {
-	lib, mapping := setupMapping(t)
-
-	ingestTestEpub(t, lib.Library, buildTestEpub(t, "With Sidecar", "Alice"))
-	book2 := ingestTestEpub(t, lib.Library, buildTestEpub(t, "Without Sidecar", "Bob"))
-
-	if len(mapping.Snapshot()) != 2 {
-		t.Fatalf("mapping has %d entries, want 2", len(mapping.Snapshot()))
-	}
-
-	// Remove book2's sidecar to simulate a book that existed before kosync
-	if err := lib.Library.WithSidecars(book2.ID(), func(root *os.Root) error {
-		return root.Remove("kosync.json")
-	}); err != nil {
-		t.Fatalf("removing sidecar: %v", err)
-	}
-
-	if err := os.Remove(mapping.path); err != nil {
-		t.Fatalf("removing mapping: %v", err)
-	}
-
-	newMapping := NewEmptyMapping(filepath.Dir(mapping.path))
-	if err := newMapping.Rebuild(lib.Library); err != nil {
-		t.Fatalf("Rebuild: %v", err)
-	}
-
-	newSnapshot := newMapping.Snapshot()
-	if len(newSnapshot) != 2 {
-		t.Errorf("rebuilt mapping has %d entries, want 2", len(newSnapshot))
-	}
-
-	// Verify book2's sidecar was created with a valid document ID
-	data, err := lib.Library.ReadSidecar(book2.ID(), "kosync.json")
-	if err != nil {
-		t.Fatalf("reading book2 sidecar after rebuild: %v", err)
-	}
-	var sd SidecarData
-	if err := json.Unmarshal(data, &sd); err != nil {
-		t.Fatalf("unmarshaling book2 sidecar: %v", err)
-	}
-	if len(sd.DocumentIDs) != 1 || sd.DocumentIDs[0] == "" {
-		t.Fatalf("book2 sidecar has invalid document IDs: %v", sd.DocumentIDs)
-	}
-	if _, ok := newSnapshot[sd.DocumentIDs[0]]; !ok {
-		t.Error("book2 not in rebuilt mapping")
-	}
-}
-
-// TestRebuildSkipsCorruptSidecars verifies that Rebuild() skips books with
-// corrupt sidecars and continues rebuilding the rest.
-func TestRebuildSkipsCorruptSidecars(t *testing.T) {
-	lib, mapping := setupMapping(t)
+// TestRestoreSkipsCorruptSidecars verifies Restore skips books with corrupt
+// sidecars and indexes the rest.
+func TestRestoreSkipsCorruptSidecars(t *testing.T) {
+	lib := openTestLibrary(t)
 
 	book1 := ingestTestEpub(t, lib.Library, buildTestEpub(t, "Good Book", "Alice"))
 	book2 := ingestTestEpub(t, lib.Library, buildTestEpub(t, "Corrupt Book", "Bob"))
-
-	if len(mapping.Snapshot()) != 2 {
-		t.Fatalf("mapping has %d entries, want 2", len(mapping.Snapshot()))
-	}
 
 	if err := lib.Library.WithSidecars(book2.ID(), func(root *os.Root) error {
 		return root.WriteFile("kosync.json", []byte("{corrupt json"), 0644)
@@ -144,38 +79,19 @@ func TestRebuildSkipsCorruptSidecars(t *testing.T) {
 		t.Fatalf("corrupting sidecar: %v", err)
 	}
 
-	if err := os.Remove(mapping.path); err != nil {
-		t.Fatalf("removing mapping: %v", err)
+	r := newDocRegistry()
+	if err := r.Restore(lib.Library); err != nil {
+		t.Fatalf("Restore: %v", err)
 	}
 
-	newMapping := NewEmptyMapping(filepath.Dir(mapping.path))
-	if err := newMapping.Rebuild(lib.Library); err != nil {
-		t.Fatalf("Rebuild: %v", err)
+	snap := r.snapshot()
+	if len(snap) != 1 {
+		t.Fatalf("restored index has %d entries, want 1 (corrupt sidecar should be skipped)", len(snap))
 	}
 
-	newSnapshot := newMapping.Snapshot()
-	if len(newSnapshot) != 1 {
-		t.Errorf("rebuilt mapping has %d entries, want 1 (corrupt sidecar should be skipped)", len(newSnapshot))
-	}
-
-	for _, bookID := range newSnapshot {
+	for _, bookID := range snap {
 		if bookID != book1.ID() {
-			t.Errorf("book_id = %d, want %d", bookID, book1.ID())
+			t.Errorf("index book_id = %d, want %d", bookID, book1.ID())
 		}
-	}
-}
-
-// TestRebuildEmptyLibrary verifies that Rebuild() works correctly on an
-// empty library.
-func TestRebuildEmptyLibrary(t *testing.T) {
-	lib := openTestLibrary(t)
-	mapping := NewEmptyMapping(t.TempDir())
-
-	if err := mapping.Rebuild(lib.Library); err != nil {
-		t.Fatalf("Rebuild: %v", err)
-	}
-
-	if len(mapping.Snapshot()) != 0 {
-		t.Errorf("rebuilt mapping has %d entries, want 0", len(mapping.Snapshot()))
 	}
 }
