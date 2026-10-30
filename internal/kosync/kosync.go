@@ -4,12 +4,9 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"net/http"
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -48,43 +45,31 @@ type Config struct {
 // Server implements both HTTPFrontend and Hook for kosync.
 type Server struct {
 	library.HookBase
-	handler http.Handler
-	prefix  string
-	mapping *MappingFile
+	handler  http.Handler
+	prefix   string
+	registry *docRegistry
 }
 
-// New creates a kosync server, handling mapping initialization.
-//
-// ponytail: Rebuild runs only on an empty mapping. A book that arrives through
-// a startup reindex, or while kosync is off, never gets a document ID, so its
-// PUTs are dropped. An entry for a book removed outside ebookfs stays and
-// answers 502. Rebuilding on every startup fixes both for one sidecar read per
-// book.
+// New creates a kosync server and restores the document-ID index from the
+// library's sidecars, before any request can be served.
 func New(lib *library.Library, cfg Config) (*Server, error) {
-	// Create server
-	srv := &Server{}
-
-	// Register as hook with the library (this will call Setup automatically)
+	srv := &Server{registry: newDocRegistry()}
 	lib.AddHook(srv)
 
-	// Rebuild if mapping is empty (first run, after corruption, or all books deleted)
-	if srv.mapping.IsEmpty() {
-		if err := srv.mapping.Rebuild(lib); err != nil {
-			return nil, fmt.Errorf("rebuilding kosync mapping: %w", err)
-		}
+	if err := srv.registry.Restore(lib); err != nil {
+		return nil, fmt.Errorf("restoring kosync index: %w", err)
 	}
 
-	// Create HTTP handler
-	srv.handler = NewHandler(lib, srv.mapping, cfg)
+	srv.handler = NewHandler(lib, srv.registry, cfg)
 	srv.prefix = cfg.PathPrefix
 
 	return srv, nil
 }
 
 // NewHandler creates a kosync HTTP handler.
-func NewHandler(lib *library.Library, mapping *MappingFile, cfg Config) http.Handler {
+func NewHandler(lib *library.Library, registry *docRegistry, cfg Config) http.Handler {
 	mux := http.NewServeMux()
-	h := newHandler(lib, mapping, cfg)
+	h := newHandler(lib, registry, cfg)
 	h.registerRoutes(mux)
 	return logRequest(checkAcceptHeader(mux))
 }
@@ -172,16 +157,16 @@ func logRequest(next http.Handler) http.Handler {
 }
 
 type handler struct {
-	lib     *library.Library
-	mapping *MappingFile
-	cfg     Config
+	lib      *library.Library
+	registry *docRegistry
+	cfg      Config
 }
 
-func newHandler(lib *library.Library, mapping *MappingFile, cfg Config) *handler {
+func newHandler(lib *library.Library, registry *docRegistry, cfg Config) *handler {
 	return &handler{
-		lib:     lib,
-		mapping: mapping,
-		cfg:     cfg,
+		lib:      lib,
+		registry: registry,
+		cfg:      cfg,
 	}
 }
 
@@ -260,25 +245,13 @@ func (h *handler) getProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bookID, ok := h.mapping.Get(docID)
-	if !ok {
-		h.writeJSON(w, http.StatusOK, map[string]any{})
-		return
-	}
-
-	sidecarData, err := h.lib.ReadSidecar(bookID, "kosync.json")
+	progress, found, err := h.registry.ReadProgress(h.lib, docID)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			h.writeJSON(w, http.StatusOK, map[string]any{})
-			return
-		}
-		h.writeServerError(w, "kosync: failed to read sidecar", bookID, err)
+		h.writeServerError(w, "kosync: failed to read sidecar progress", 0, err)
 		return
 	}
-
-	var sidecar SidecarData
-	if err := json.Unmarshal(sidecarData, &sidecar); err != nil {
-		h.writeServerError(w, "kosync: failed to parse sidecar", bookID, err)
+	if !found {
+		h.writeJSON(w, http.StatusOK, map[string]any{})
 		return
 	}
 
@@ -287,7 +260,7 @@ func (h *handler) getProgress(w http.ResponseWriter, r *http.Request) {
 		Progress
 	}{
 		Document: docID,
-		Progress: sidecar.Progress,
+		Progress: progress,
 	}
 	h.writeJSON(w, http.StatusOK, resp)
 }
@@ -322,9 +295,17 @@ func (h *handler) putProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Look up book_id from mapping
-	bookID, ok := h.mapping.Get(docID)
-	if !ok {
+	bookID, timestamp, found, err := h.registry.StoreProgress(h.lib, docID, Progress{
+		Percentage: *req.Percentage,
+		Progress:   *req.Progress,
+		Device:     *req.Device,
+		DeviceID:   req.DeviceID,
+	})
+	if err != nil {
+		h.writeServerError(w, "kosync: failed to update sidecar progress", bookID, err)
+		return
+	}
+	if !found {
 		// Unknown document: accept but don't store
 		h.writeJSON(w, http.StatusOK, map[string]any{
 			"document":  docID,
@@ -333,35 +314,12 @@ func (h *handler) putProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Read-modify-write sidecar atomically under per-book lock
-	var timestamp int64
-	err := h.lib.WithSidecars(bookID, func(root *os.Root) error {
-		sidecar, err := readSidecar(root)
-		if err != nil {
-			return err
-		}
-		sidecar.Progress = Progress{
-			Percentage: *req.Percentage,
-			Progress:   *req.Progress,
-			Device:     *req.Device,
-			DeviceID:   req.DeviceID,
-			Timestamp:  time.Now().Unix(),
-		}
-		timestamp = sidecar.Progress.Timestamp
-		return writeSidecar(root, *sidecar)
-	})
-	if err != nil {
-		h.writeServerError(w, "kosync: failed to update sidecar", bookID, err)
-		return
-	}
-
-	// Update book status based on progress percentage (outside sidecar lock)
+	// Update book status based on progress percentage (outside the sidecar
+	// lock). A failed status update doesn't fail the request.
 	if err := h.updateBookStatus(bookID, *req.Percentage); err != nil {
 		slog.Error("kosync: failed to update book status", "book_id", bookID, "error", err)
-		// Don't fail the request, just log the error
 	}
 
-	// Return response
 	h.writeJSON(w, http.StatusOK, map[string]any{
 		"document":  docID,
 		"timestamp": timestamp,
