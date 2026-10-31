@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/reconcile"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/store"
 )
 
@@ -89,21 +90,11 @@ func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
 		lockFile:  lockFile,
 	}
 
-	// Not one || chain, so storeDrifted's scan can be handed to reindex.
-	var onDisk *storeScan
-	needs := o.forceReindex || lib.needsReindex()
-	if !needs {
-		onDisk, needs = lib.storeDrifted()
-	}
-	if needs {
-		if err := lib.reindex(onDisk); err != nil {
-			// lib is never returned, so nothing else would close the index. A
-			// duplicate book id makes this a routine path (docs/DECISIONS.md #14).
-			idx.Close()
-			return nil, fmt.Errorf("reindexing library: %w", err)
-		}
-	} else {
-		slog.Info("reindex: index is clean, skipping")
+	if err := reconcile.Run(lib.store, idx, o.forceReindex); err != nil {
+		// lib is never returned, so nothing else would close the index. A
+		// duplicate book id makes this a routine path (docs/DECISIONS.md #14).
+		idx.Close()
+		return nil, fmt.Errorf("reindexing library: %w", err)
 	}
 	return lib, nil
 }

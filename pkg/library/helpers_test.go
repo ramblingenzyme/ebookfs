@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/drift"
 )
 
 var buildTestEpub = util.BuildTestEpub
@@ -28,12 +29,6 @@ func openLib(t *testing.T, cfg Config, opts ...Option) *Library {
 	}
 	t.Cleanup(func() { lib.Close() })
 	return lib
-}
-
-func drifted(t *testing.T, lib *Library) bool {
-	t.Helper()
-	_, d := lib.storeDrifted()
-	return d
 }
 
 // The store keeps the sidecar's filename private, so tests restate it here
@@ -69,9 +64,7 @@ func dropIndex(t *testing.T, cfg Config) {
 	}
 }
 
-// A rebuild that forgets an unreadable book sees it as drift on every startup.
-// Two restarts prove it: one records, one confirms. Both close explicitly,
-// since the point is what a later process sees.
+// Reopening twice verifies that skipped books can be reconciled repeatedly.
 func assertSettlesClean(t *testing.T, cfg Config) {
 	t.Helper()
 	for i := 1; i <= 2; i++ {
@@ -79,13 +72,32 @@ func assertSettlesClean(t *testing.T, cfg Config) {
 		if err != nil {
 			t.Fatalf("reopen %d: %v", i, err)
 		}
-		d := drifted(t, lib)
+		entries, err := lib.store.Walk()
+		if err != nil {
+			lib.Close()
+			t.Fatalf("walk after reopen %d: %v", i, err)
+		}
+		indexed, err := lib.index.AllPathInfo()
+		if err != nil {
+			lib.Close()
+			t.Fatalf("indexed paths after reopen %d: %v", i, err)
+		}
+		if len(indexed) != len(entries) {
+			lib.Close()
+			t.Fatalf("indexed %d paths after reopen %d, store has %d", len(indexed), i, len(entries))
+		}
+		for _, entry := range entries {
+			observed, err := lib.store.Stat(entry)
+			if err != nil {
+				observed = drift.PathInfo{}
+			}
+			if got, ok := indexed[entry.EpubPath]; !ok || !got.Equal(observed) {
+				lib.Close()
+				t.Fatalf("indexed observation for %q after reopen %d = %+v, want %+v", entry.EpubPath, i, got, observed)
+			}
+		}
 		if err := lib.Close(); err != nil {
 			t.Fatalf("Close %d: %v", i, err)
-		}
-		if d {
-			t.Fatalf("storeDrifted() = true on restart %d — the rebuild did not record what it found, "+
-				"so one unreadable book forces a full reindex on every startup", i)
 		}
 	}
 }
