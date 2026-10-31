@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
@@ -349,7 +348,7 @@ func TestMetadataAcceptance(t *testing.T) {
 }
 
 // TestKosyncStartupCreatesMissingSidecars verifies that kosync.New() creates
-// sidecars and populates the mapping for books that existed before kosync
+// sidecars and populates the index for books that existed before kosync
 // was enabled.
 func TestKosyncStartupCreatesMissingSidecars(t *testing.T) {
 	// Create a library and ingest books WITHOUT kosync hook registered
@@ -366,44 +365,30 @@ func TestKosyncStartupCreatesMissingSidecars(t *testing.T) {
 		}
 	}
 
-	// Enable kosync — should create sidecars and mapping for existing books
-	_, err := New(lib.Library, defaultCfg)
+	// Enable kosync — should create sidecars and populate the index for
+	// existing books
+	srv, err := New(lib.Library, defaultCfg)
 	if err != nil {
 		t.Fatalf("kosync.New: %v", err)
 	}
 
-	// Verify mapping file was created and populated
-	mappingPath := lib.tmpDir + "/.kosync/mapping.json"
-	if _, err := os.Stat(mappingPath); err != nil {
-		t.Fatalf("mapping file not created: %v", err)
+	snap := srv.registry.snapshot()
+	if len(snap) != 2 {
+		t.Errorf("index has %d entries, want 2", len(snap))
 	}
 
-	mappingData, err := os.ReadFile(mappingPath)
-	if err != nil {
-		t.Fatalf("reading mapping file: %v", err)
-	}
-
-	var mapping map[string]int64
-	if err := json.Unmarshal(mappingData, &mapping); err != nil {
-		t.Fatalf("unmarshaling mapping: %v", err)
-	}
-
-	if len(mapping) != 2 {
-		t.Errorf("mapping has %d entries, want 2", len(mapping))
-	}
-
-	// Verify each book's document ID is in the mapping
+	// Verify each book's document ID is in the index
 	for _, book := range []*library.Book{book1, book2} {
 		data, _ := lib.Library.ReadSidecar(book.ID(), "kosync.json")
 		var sidecar SidecarData
 		json.Unmarshal(data, &sidecar)
 
-		bookID, ok := mapping[sidecar.DocumentIDs[0]]
+		bookID, ok := snap[sidecar.DocumentIDs[0]]
 		if !ok {
-			t.Errorf("book %d document ID not in mapping", book.ID())
+			t.Errorf("book %d document ID not in index", book.ID())
 		}
 		if bookID != book.ID() {
-			t.Errorf("mapping[docID] = %d, want %d", bookID, book.ID())
+			t.Errorf("index[docID] = %d, want %d", bookID, book.ID())
 		}
 	}
 }
@@ -428,8 +413,8 @@ func TestEditKeepsProgressUnderBothDocumentIDs(t *testing.T) {
 		t.Fatalf("sidecar document IDs = %v, want [<new> %s]", ids, oldID)
 	}
 	for _, id := range ids {
-		if got, ok := env.mapping.Get(id); !ok || got != env.book.ID() {
-			t.Errorf("mapping[%s] = %d, %v, want %d", id, got, ok, env.book.ID())
+		if got, ok := env.registry.Lookup(id); !ok || got != env.book.ID() {
+			t.Errorf("index[%s] = %d, %v, want %d", id, got, ok, env.book.ID())
 		}
 		if resp, _ := env.getProgress(t, id); resp["progress"] != "/body/chapter1" {
 			t.Errorf("GET %s = %v, want the saved progress", id, resp)
@@ -437,7 +422,7 @@ func TestEditKeepsProgressUnderBothDocumentIDs(t *testing.T) {
 	}
 }
 
-// Every document ID the book ever had leaves the mapping, or a later hash
+// Every document ID the book ever had leaves the index, or a later hash
 // collision would resolve to a book id that no longer exists.
 func TestDeleteDropsEveryDocumentID(t *testing.T) {
 	env := setupEnv(t, defaultCfg)
@@ -452,7 +437,7 @@ func TestDeleteDropsEveryDocumentID(t *testing.T) {
 	if err := env.lib.Delete(env.book.ID()); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
-	if snap := env.mapping.Snapshot(); len(snap) != 0 {
-		t.Errorf("mapping after delete = %v, want empty", snap)
+	if snap := env.registry.snapshot(); len(snap) != 0 {
+		t.Errorf("index after delete = %v, want empty", snap)
 	}
 }
