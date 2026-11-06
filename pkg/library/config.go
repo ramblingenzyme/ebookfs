@@ -13,4 +13,7 @@ type Config struct {
 	// IndexPath is the SQLite index, a cache of Root (docs/DECISIONS.md #2). It
 	// may be deleted; the next Open rebuilds it.
 	IndexPath string
+	// StateDir holds small persistent state (kosync mapping, future queues).
+	// Defaults to Root if empty.
+	StateDir string
 }

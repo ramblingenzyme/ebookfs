@@ -149,7 +149,7 @@ func TestRebuildRecordsSkippedPaths(t *testing.T) {
 func TestNeedsReindex(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "index.db")
 
-	idx, err := Open(path)
+	idx, err := Open(path, false)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestNeedsReindex(t *testing.T) {
 	mustNeedReindex(t, idx, false)
 	idx.Close()
 
-	idx2, err := Open(path)
+	idx2, err := Open(path, false)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}

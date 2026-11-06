@@ -8,26 +8,27 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// Hook implements library.Hook for kosync document ID computation.
-type Hook struct {
-	library.HookBase
-	mapping *MappingFile
-}
-
-// NewHook creates a kosync hook that manages document IDs and mapping.
-func NewHook(mapping *MappingFile) *Hook {
-	return &Hook{mapping: mapping}
-}
-
 // SidecarData is the structure stored in .sidecar/kosync.json
 type SidecarData struct {
 	DocumentIDs []string `json:"document_ids"`
 	Progress    Progress `json:"progress"`
 }
 
+// Setup initializes the kosync mapping file from the library's state directory.
+func (s *Server) Setup(root, stateDir string) error {
+	mappingPath := stateDir + "/.kosync"
+	var err error
+	s.mapping, err = LoadMapping(mappingPath)
+	if err != nil {
+		slog.Warn("kosync mapping corrupt or missing, rebuilding", "error", err)
+		s.mapping = NewEmptyMapping(mappingPath)
+	}
+	return nil
+}
+
 // OnIngested computes the document ID and initializes the sidecar.
-func (h *Hook) OnIngested(book *library.Book, sidecars *os.Root, openEpub func() (library.EpubReader, error)) {
-	docID, err := h.computeDocumentID(book, openEpub)
+func (s *Server) OnIngested(book *library.Book, sidecars *os.Root, openEpub func() (library.EpubReader, error)) {
+	docID, err := s.computeDocumentID(book, openEpub)
 	if err != nil {
 		slog.Error("kosync: failed to compute document ID", "book_id", book.ID(), "error", err)
 		return
@@ -44,15 +45,15 @@ func (h *Hook) OnIngested(book *library.Book, sidecars *os.Root, openEpub func()
 		return
 	}
 
-	h.setMapping(docID, book.ID())
+	s.setMapping(docID, book.ID())
 
 	slog.Info("kosync: computed document ID", "book_id", book.ID(), "document_id", docID)
 }
 
 // OnEdited recomputes the document ID and updates the sidecar.
 // Historical document IDs are preserved to maintain progress continuity.
-func (h *Hook) OnEdited(book *library.Book, sidecars *os.Root, openEpub func() (library.EpubReader, error)) {
-	newDocID, err := h.computeDocumentID(book, openEpub)
+func (s *Server) OnEdited(book *library.Book, sidecars *os.Root, openEpub func() (library.EpubReader, error)) {
+	newDocID, err := s.computeDocumentID(book, openEpub)
 	if err != nil {
 		slog.Error("kosync: failed to compute document ID", "book_id", book.ID(), "error", err)
 		return
@@ -81,13 +82,13 @@ func (h *Hook) OnEdited(book *library.Book, sidecars *os.Root, openEpub func() (
 	}
 
 	// Add new document ID to mapping, keeping historical IDs for backward compatibility
-	h.setMapping(newDocID, book.ID())
+	s.setMapping(newDocID, book.ID())
 
 	slog.Info("kosync: updated document ID", "book_id", book.ID(), "document_id", newDocID)
 }
 
 // OnDeleting removes document IDs from the mapping before deletion.
-func (h *Hook) OnDeleting(book *library.Book, sidecars *os.Root, openEpub func() (library.EpubReader, error)) {
+func (s *Server) OnDeleting(book *library.Book, sidecars *os.Root, openEpub func() (library.EpubReader, error)) {
 	// Read sidecar to get all document IDs
 	data, err := readSidecar(sidecars)
 	if err != nil {
@@ -97,7 +98,7 @@ func (h *Hook) OnDeleting(book *library.Book, sidecars *os.Root, openEpub func()
 
 	// Remove all document IDs from mapping
 	for _, docID := range data.DocumentIDs {
-		h.mapping.Delete(docID)
+		s.mapping.Delete(docID)
 	}
 
 	slog.Info("kosync: removed document IDs from mapping", "book_id", book.ID(), "count", len(data.DocumentIDs))
@@ -107,7 +108,7 @@ func (h *Hook) OnDeleting(book *library.Book, sidecars *os.Root, openEpub func()
 // kepub, whose hash maps to nothing, so its progress is dropped. Map the
 // kepub's hash too, refreshed on each reconversion, if convert and kosync are
 // used together.
-func (h *Hook) computeDocumentID(book *library.Book, openEpub func() (library.EpubReader, error)) (string, error) {
+func (s *Server) computeDocumentID(book *library.Book, openEpub func() (library.EpubReader, error)) (string, error) {
 	epub, err := openEpub()
 	if err != nil {
 		return "", err
@@ -149,6 +150,6 @@ func writeSidecar(sidecars *os.Root, data SidecarData) error {
 }
 
 // setMapping sets a document ID mapping.
-func (h *Hook) setMapping(docID string, bookID int64) {
-	h.mapping.Set(docID, bookID)
+func (s *Server) setMapping(docID string, bookID int64) {
+	s.mapping.Set(docID, bookID)
 }

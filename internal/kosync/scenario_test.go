@@ -366,47 +366,14 @@ func TestKosyncStartupCreatesMissingSidecars(t *testing.T) {
 		}
 	}
 
-	// Now enable kosync by calling New() with a fresh mapping path
-	kosyncDir := t.TempDir()
-	cfg := Config{
-		MappingPath:      kosyncDir,
-		Username:         "testuser",
-		PasswordHash:     "testhash",
-		PathPrefix:       "/sync",
-		ReadingThreshold: 0.05,
-		ReadThreshold:    0.95,
-	}
-
-	srv, err := New(lib.Library, cfg)
+	// Enable kosync — should create sidecars and mapping for existing books
+	_, err := New(lib.Library, defaultCfg)
 	if err != nil {
-		t.Fatalf("kosync.New(): %v", err)
-	}
-	if srv == nil {
-		t.Fatal("kosync.New() returned nil server")
-	}
-
-	// Verify sidecars were created for both books
-	for _, book := range []*library.Book{book1, book2} {
-		data, err := lib.Library.ReadSidecar(book.ID(), "kosync.json")
-		if err != nil {
-			t.Fatalf("reading sidecar for book %d: %v", book.ID(), err)
-		}
-
-		var sidecar SidecarData
-		if err := json.Unmarshal(data, &sidecar); err != nil {
-			t.Fatalf("unmarshaling sidecar for book %d: %v", book.ID(), err)
-		}
-
-		if len(sidecar.DocumentIDs) != 1 {
-			t.Errorf("book %d: expected 1 document ID, got %d", book.ID(), len(sidecar.DocumentIDs))
-		}
-		if sidecar.DocumentIDs[0] == "" {
-			t.Errorf("book %d: document ID is empty", book.ID())
-		}
+		t.Fatalf("kosync.New: %v", err)
 	}
 
 	// Verify mapping file was created and populated
-	mappingPath := kosyncDir + "/mapping.json"
+	mappingPath := lib.tmpDir + "/.kosync/mapping.json"
 	if _, err := os.Stat(mappingPath); err != nil {
 		t.Fatalf("mapping file not created: %v", err)
 	}

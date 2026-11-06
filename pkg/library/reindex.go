@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/drift"
@@ -28,6 +29,7 @@ func (l *Library) Reindex() error {
 // reindex takes storeDrifted's scan when there is one, which saves a walk and
 // a stat per book at startup. With nil it walks the store itself.
 func (l *Library) reindex(scan *storeScan) error {
+	walkStart := time.Now()
 	if scan == nil {
 		entries, err := l.store.Walk()
 		if err != nil {
@@ -35,20 +37,35 @@ func (l *Library) reindex(scan *storeScan) error {
 		}
 		scan = &storeScan{entries: entries}
 	}
+	walkDur := time.Since(walkStart)
 
 	// Stat before the moves: observations are keyed by the pre-move path, and
 	// rename preserves size and mtime, so they stay accurate after.
+	scanStart := time.Now()
 	s := l.scanEntries(scan)
+	scanDur := time.Since(scanStart)
+
 	// Before the moves, so the reported paths are the ones on disk.
+	dedupStart := time.Now()
 	if err := s.checkDuplicateIDs(); err != nil {
 		return err
 	}
-	l.moveToCanonical(s.indexed)
+	dedupDur := time.Since(dedupStart)
 
+	moveStart := time.Now()
+	l.moveToCanonical(s.indexed)
+	moveDur := time.Since(moveStart)
+
+	rebuildStart := time.Now()
 	if err := l.index.Rebuild(s.indexed, s.unindexed, s.maxID); err != nil {
 		return err
 	}
-	slog.Info("reindex: indexed books", "indexed", len(s.indexed), "total", len(scan.entries))
+	rebuildDur := time.Since(rebuildStart)
+
+	slog.Info("reindex: indexed books",
+		"indexed", len(s.indexed), "total", len(scan.entries),
+		"walk", walkDur, "scan", scanDur, "dedup", dedupDur, "move", moveDur, "rebuild", rebuildDur,
+	)
 	return nil
 }
 
@@ -107,6 +124,7 @@ func (l *Library) scanEntries(scan *storeScan) *scanState {
 		wg  sync.WaitGroup
 		sem = make(chan struct{}, runtime.GOMAXPROCS(0))
 	)
+	start := time.Now()
 	for _, e := range scan.entries {
 		wg.Add(1)
 		sem <- struct{}{}
@@ -117,19 +135,31 @@ func (l *Library) scanEntries(scan *storeScan) *scanState {
 		}()
 	}
 	wg.Wait()
+	wallDur := time.Since(start)
+	slog.Info("reindex: scan",
+		"wall", wallDur,
+		"stat", s.statDur,
+		"meta", s.metaDur,
+		"parse", s.parseDur,
+		"books", len(s.indexed),
+	)
 	return s
 }
 
 // scanEntry records one book directory in s: indexed when its sidecar and epub
 // both read, skipped otherwise. Either way it reserves the directory's id.
 func (l *Library) scanEntry(s *scanState, known map[string]drift.PathInfo, e book.Location) {
-	// The stat error is held, so an unstattable book still reserves its id.
+	start := time.Now()
 	pi, statErr := l.pathInfo(known, e)
+	statDur := time.Since(start)
+	// The stat error is held, so an unstattable book still reserves its id.
 	if statErr != nil {
 		pi = drift.PathInfo{}
 	}
 
+	start = time.Now()
 	meta, err := l.store.ReadMeta(e)
+	metaDur := time.Since(start)
 	if err != nil {
 		slog.Warn("reindex: skip, read meta failed", "path", e.Dir(), "error", err)
 		// The id is also in the directory name. Reissuing it would make the
@@ -138,6 +168,7 @@ func (l *Library) scanEntry(s *scanState, known map[string]drift.PathInfo, e boo
 			s.reserveID(id)
 		}
 		s.skip(e.EpubPath, pi)
+		s.recordDurations(statDur, metaDur, 0)
 		return
 	}
 	// Reserved even if the stat failed or the epub will not parse.
@@ -146,18 +177,23 @@ func (l *Library) scanEntry(s *scanState, known map[string]drift.PathInfo, e boo
 	if statErr != nil {
 		slog.Warn("reindex: skip, stat failed", "path", e.Dir(), "error", statErr)
 		s.skip(e.EpubPath, pi)
+		s.recordDurations(statDur, metaDur, 0)
 		return
 	}
 
+	start = time.Now()
 	bib, err := epub.Parse(l.store.AbsPath(e.EpubPath))
+	parseDur := time.Since(start)
 	if err != nil {
 		slog.Warn("reindex: skip, parse epub failed", "path", e.Dir(), "error", err)
 		s.skip(e.EpubPath, pi)
+		s.recordDurations(statDur, metaDur, parseDur)
 		return
 	}
 
 	b := bookFromBib(*bib, *meta, e, pi)
 	s.add(index.BookPath{Book: b, Info: pi})
+	s.recordDurations(statDur, metaDur, parseDur)
 }
 
 // moveToCanonical moves books to their canonical paths. A book that cannot
@@ -201,6 +237,9 @@ type scanState struct {
 	indexed   []index.BookPath
 	unindexed map[string]drift.PathInfo
 	maxID     int64
+	statDur   time.Duration
+	metaDur   time.Duration
+	parseDur  time.Duration
 }
 
 func (s *scanState) add(bp index.BookPath) {
@@ -222,6 +261,14 @@ func (s *scanState) reserveID(id int64) {
 	if id > s.maxID {
 		s.maxID = id
 	}
+	s.mu.Unlock()
+}
+
+func (s *scanState) recordDurations(stat, meta, parse time.Duration) {
+	s.mu.Lock()
+	s.statDur += stat
+	s.metaDur += meta
+	s.parseDur += parse
 	s.mu.Unlock()
 }
 

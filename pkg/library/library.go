@@ -29,6 +29,8 @@ import (
 type Library struct {
 	store     *store.Store
 	index     *index.Index
+	root      string
+	stateDir  string
 	inboxTemp string
 
 	// lockFile is held open for the library's lifetime; closing it releases

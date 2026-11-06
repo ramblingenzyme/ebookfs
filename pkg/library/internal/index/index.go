@@ -7,8 +7,11 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"net/url"
+	"path/filepath"
 
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/fsutil"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index/dbsqlc"
 	_ "modernc.org/sqlite"
 )
@@ -38,11 +41,8 @@ func dsn(path string, pragmas ...string) string {
 	return path + "?" + q.Encode()
 }
 
-func writerPragmas() []string {
-	return []string{
-		"journal_mode(WAL)",
-		// In WAL mode, NORMAL is crash-safe and avoids an extra fsync per write.
-		"synchronous(NORMAL)",
+func writerPragmas(fsType fsutil.FSType) []string {
+	pragmas := []string{
 		"busy_timeout(5000)",
 		"journal_size_limit(27103364)",
 		"mmap_size(134217728)",
@@ -50,38 +50,57 @@ func writerPragmas() []string {
 		"temp_store(memory)",
 		"foreign_keys(ON)",
 	}
+	switch fsType {
+	case fsutil.FSTypeNFS:
+		pragmas = append([]string{"journal_mode(DELETE)", "synchronous(FULL)"}, pragmas...)
+	case fsutil.FSTypeCIFS, fsutil.FSTypeSMB2:
+		pragmas = append([]string{"journal_mode(WAL)", "synchronous(NORMAL)", "locking_mode(EXCLUSIVE)"}, pragmas...)
+	default: // local, FUSE, unknown
+		pragmas = append([]string{"journal_mode(WAL)", "synchronous(NORMAL)"}, pragmas...)
+	}
+	return pragmas
 }
 
-func readerPragmas() []string {
-	return []string{
-		"journal_mode(WAL)",
+func readerPragmas(fsType fsutil.FSType) []string {
+	pragmas := []string{
 		"busy_timeout(5000)",
 		"query_only",
 		"mmap_size(134217728)",
 		"cache_size(-8000)",
 		"temp_store(memory)",
 	}
+	switch fsType {
+	case fsutil.FSTypeNFS:
+		pragmas = append([]string{"journal_mode(DELETE)"}, pragmas...)
+	default: // local, FUSE, CIFS, SMB2, unknown
+		pragmas = append([]string{"journal_mode(WAL)"}, pragmas...)
+	}
+	return pragmas
 }
 
-func Open(path string) (*Index, error) {
-	db, err := sql.Open("sqlite", dsn(path, writerPragmas()...))
+func Open(path string, allowSMB bool) (*Index, error) {
+	fsType, err := fsutil.DetectFilesystemType(filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
+	if err := fsutil.RequireNotSMB(fsType, allowSMB, path); err != nil {
+		return nil, err
+	}
+	if fsType.IsSMB() {
+		slog.Warn("detected SMB filesystem for index, proceeding with override enabled", "path", path)
+	} else {
+		slog.Info("detected "+fsType.String()+" filesystem for index", "path", path)
+	}
+
+	db, err := sql.Open("sqlite", dsn(path, writerPragmas(fsType)...))
 	if err != nil {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 
-	readDB, err := sql.Open("sqlite", dsn(path, readerPragmas()...))
-	if err != nil {
-		db.Close()
-		return nil, err
-	}
-	readDB.SetMaxOpenConns(4)
-	readDB.SetMaxIdleConns(4)
-
 	var v int64
 	if err := db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
-		readDB.Close()
 		db.Close()
 		return nil, err
 	}
@@ -92,11 +111,30 @@ func Open(path string) (*Index, error) {
 		// the normal clean state and cannot distinguish a fresh index from a
 		// completed one, so Rebuild is left as the sole version-stamper.
 		if _, err := db.Exec(schema); err != nil {
-			readDB.Close()
 			db.Close()
 			return nil, fmt.Errorf("applying schema: %w", err)
 		}
 	}
+
+	// In EXCLUSIVE mode, the writer connection holds the exclusive lock,
+	// so we can't have separate reader connections. Use the writer for reads.
+	if fsType.IsSMB() {
+		return &Index{
+			db:      db,
+			wq:      dbsqlc.New(db),
+			readDB:  db,
+			queries: dbsqlc.New(db),
+			ctx:     context.Background(),
+		}, nil
+	}
+
+	readDB, err := sql.Open("sqlite", dsn(path, readerPragmas(fsType)...))
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	readDB.SetMaxOpenConns(4)
+	readDB.SetMaxIdleConns(4)
 
 	return &Index{
 		db:      db,

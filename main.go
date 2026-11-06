@@ -103,7 +103,6 @@ func main() {
 
 		// Create kosync server (handles mapping and hook setup internally)
 		kosyncSrv, err := kosync.New(lib, kosync.Config{
-			MappingPath:      cfg.KOSync.MappingPath,
 			Username:         cfg.KOSync.Username,
 			PasswordHash:     passwordHash,
 			PathPrefix:       "/sync",
