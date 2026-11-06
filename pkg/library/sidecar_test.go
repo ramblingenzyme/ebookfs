@@ -2,7 +2,6 @@ package library_test
 
 import (
 	"errors"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -52,10 +51,10 @@ func TestSidecarAccessDoesNotRecreateARemovedBookDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := lib.ReadSidecar(ingested.ID(), "notes.txt"); !errors.Is(err, fs.ErrNotExist) {
-		t.Errorf("ReadSidecar err = %v, want fs.ErrNotExist", err)
+	if _, err := lib.ReadSidecar(ingested.ID(), "notes.txt"); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("ReadSidecar err = %v, want os.ErrNotExist", err)
 	}
-	if _, err := os.Stat(dir); !errors.Is(err, fs.ErrNotExist) {
+	if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("book directory exists again after sidecar access (stat err = %v)", err)
 	}
 }

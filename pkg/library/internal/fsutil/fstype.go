@@ -1,9 +1,12 @@
 package fsutil
 
 import (
+	"errors"
 	"fmt"
 	"syscall"
 )
+
+var ErrSMBFilesystem = errors.New("SMB filesystem detected")
 
 // Linux filesystem magic numbers from magic.h
 const (
@@ -53,7 +56,8 @@ func DetectFilesystemType(path string) (FSType, error) {
 		return FSTypeUnknown, fmt.Errorf("statfs %s: %w", path, err)
 	}
 
-	switch stat.Type {
+	// stat.Type is int32 on 32-bit Linux, where the SMB magic numbers overflow.
+	switch uint32(stat.Type) {
 	case nfsSuperMagic:
 		return FSTypeNFS, nil
 	case cifsMagicNumber:
@@ -71,7 +75,7 @@ func DetectFilesystemType(path string) (FSType, error) {
 // RequireNotSMB returns an error if fsType is SMB and allowSMB is false
 func RequireNotSMB(fsType FSType, allowSMB bool, path string) error {
 	if fsType.IsSMB() && !allowSMB {
-		return fmt.Errorf("SMB filesystem detected at %s: atomic rename and file locking are unreliable; use WithAllowSMB() to override if you understand the risks", path)
+		return fmt.Errorf("%w at %s: atomic rename and file locking are unreliable; use WithAllowSMB() to override if you understand the risks", ErrSMBFilesystem, path)
 	}
 	return nil
 }

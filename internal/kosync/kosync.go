@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -268,7 +267,7 @@ func (h *handler) getProgress(w http.ResponseWriter, r *http.Request) {
 
 	sidecarData, err := h.lib.ReadSidecar(bookID, "kosync.json")
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
+		if errors.Is(err, os.ErrNotExist) {
 			h.writeJSON(w, http.StatusOK, map[string]any{})
 			return
 		}

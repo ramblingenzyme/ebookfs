@@ -16,6 +16,8 @@ CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o ebookfs .
 
 Config lives at `/etc/ebookfs/config.toml` (or wherever `--config` points). See `configs/config.example.toml` for all options. `library.inbox_temp` must be on the same filesystem as `library.root` so ingestion can finalize with `rename(2)`.
 
+`ebookfs` refuses to start on an SMB/CIFS `library.root`, where atomic rename and file locking are unreliable. `--allow-smb` overrides this, for when you accept the risk or the mount is misdetected. On NFS, avoid the `nolock` and `local_lock` mount options if more than one host can reach the library: the startup lock then only works within one host, and `ebookfs` can't detect that.
+
 Before deciding what `server.listen` should bind to and whether to publish the port, read [security.md](./security.md). The server has no authentication or transport encryption today.
 
 ## SQLite and filesystem behavior

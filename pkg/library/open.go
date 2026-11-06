@@ -70,7 +70,7 @@ func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
 		return nil, fmt.Errorf("cleaning inbox temp: %w", err)
 	}
 	if err := cleanStaleTmpFiles(cfg.Root); err != nil {
-		slog.Warn("cleaning stale epub temp files failed", "error", err)
+		slog.Warn("cleaning stale temp files failed", "error", err)
 	}
 	if err := checkSameFilesystem(cfg.Root, cfg.InboxTemp); err != nil {
 		return nil, fmt.Errorf("inbox_temp must be on the same filesystem as library.root: %w", err)
