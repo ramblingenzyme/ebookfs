@@ -9,7 +9,7 @@ When enabled, ebookfs provides a kosync server at `/sync/` that allows KOReader 
 - Automatically update book statuses based on reading progress
 - Resume reading from the last position across devices
 
-The implementation stores progress data in per-book sidecars and maintains a mapping document IDs to book IDs for efficient lookup.
+The implementation stores progress data in per-book sidecars and keeps an in-memory index of document IDs to book IDs, rebuilt from the sidecars at every startup.
 
 ## Configuration
 
@@ -44,25 +44,21 @@ Status transitions are one-way: once a book is marked "read", it will not be dow
 
 ## Storage Layout
 
-Kosync data is stored in two locations:
+Kosync data is stored in one location:
 
 1. **Per-book sidecars**: `{library_root}/{author}/{title} ({id})/.sidecar/kosync.json`
    - Contains the document ID(s) and current progress
    - Document IDs are computed using a partial MD5 algorithm matching KOReader's specification
 
-2. **Mapping file**: `<state_dir>/.kosync/mapping.json`, where `state_dir` defaults to `library_root`
-   - Maps document IDs to book IDs for efficient lookup
-   - Can be rebuilt from sidecars if lost or corrupted
+The document-ID to book-ID index used for lookup is a separate in-memory map, not persisted anywhere.
 
-## Mapping Recovery
+## Index Recovery
 
-The mapping file is a derived index that can be rebuilt from book sidecars. ebookfs automatically rebuilds the mapping on startup if it's missing or corrupted.
-
-Manual rebuild is not typically necessary, but if needed, restarting ebookfs will trigger the rebuild process. During rebuild:
+The index is rebuilt from the sidecars at every startup. That scan costs one small read per book, which is why the index is not persisted — a second copy of the document IDs would drift from the sidecars it derives from. If startup restore ever becomes slow at a large library, a persisted snapshot of the index is the upgrade path. During the rebuild:
 - All books in the library are scanned
 - Each book's kosync sidecar is read to extract document IDs
-- The mapping is reconstructed atomically
-- Books without sidecars or with corrupt sidecars are skipped (logged as warnings)
+- Books without a sidecar get one created (the document ID is computed from the epub)
+- Books with corrupt sidecars are skipped (logged as warnings)
 
 ## Protocol Compatibility
 
@@ -80,7 +76,7 @@ KOReader clients should work without modification when configured with the ebook
 
 1. **Check logs**: Look for "kosync: computed document ID" messages during book ingest
 2. **Verify credentials**: Ensure `enable = true`, and that username and password match in both ebookfs config and KOReader
-3. **Check mapping**: Look for "kosync: rebuild complete" in logs if the mapping was missing or corrupted
+3. **Check index**: Look for "kosync: index restored" in logs
 4. **Verify sidecars**: Check that `{library_root}/{author}/{title} ({id})/.sidecar/kosync.json` exists for books you're reading
 
 ### Progress not syncing between devices
@@ -95,12 +91,12 @@ KOReader clients should work without modification when configured with the ebook
 If KOReader computes a different document ID than ebookfs:
 - The book file may have been modified after ingest
 - Re-ingest the book to recompute the document ID
-- The mapping will be updated automatically
+- The index will be updated automatically
 
 ### Corrupt sidecar
 
 If a sidecar becomes corrupted:
-1. The book will be skipped during mapping rebuild (warning logged)
+1. The book will be skipped during index restore (warning logged)
 2. Progress for that book will not sync until the sidecar is fixed
 3. Re-ingesting the book will recreate the sidecar (but lose existing progress)
 
