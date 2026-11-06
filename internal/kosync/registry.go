@@ -291,4 +291,3 @@ func writeSidecar(sidecars *os.Root, data SidecarData) error {
 	}
 	return sidecars.Rename(tmpName, "kosync.json")
 }
-
