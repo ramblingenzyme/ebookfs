@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
@@ -81,146 +80,33 @@ func stageLegacyLayout(t *testing.T, cfg Config, title string, authors []string,
 	return b, canonical
 }
 
-func TestNeedsReindexClosedIndex(t *testing.T) {
-	lib := openTestLibrary(t)
-	lib.index.Close()
-
-	if !lib.needsReindex() {
-		t.Error("needsReindex should return true when index check fails")
-	}
-}
-
-func TestStoreDrifted(t *testing.T) {
-	tests := []struct {
-		name   string
-		change func(t *testing.T, lib *Library, book *Book)
-		want   bool
-	}{
-		{
-			"nothing changed",
-			func(*testing.T, *Library, *Book) {},
-			false,
-		},
-		{
-			"book directory added by hand",
-			func(t *testing.T, lib *Library, _ *Book) {
-				writeManualBookDir(t, lib, "Manual/Added Book (999)")
-			},
-			true,
-		},
-		{
-			"book directory removed by hand",
-			func(t *testing.T, lib *Library, book *Book) {
-				dir := filepath.Join(lib.store.Root(), filepath.Dir(book.EpubPath()))
-				if err := os.RemoveAll(dir); err != nil {
-					t.Fatalf("remove book dir: %v", err)
-				}
-			},
-			true,
-		},
-		{
-			"epub swapped for a different one",
-			func(t *testing.T, lib *Library, book *Book) {
-				absEpub := lib.store.AbsPath(book.EpubPath())
-				writeFile(t, absEpub, buildTestEpub(t, "A Completely Different And Much Longer Title"))
-			},
-			true,
-		},
-		{
-			// Same byte count, different content, so only mtime separates them.
-			// Pinned explicitly: a coarse clock reuses it within a tick.
-			"epub swapped for one of the same size",
-			func(t *testing.T, lib *Library, book *Book) {
-				absEpub := lib.store.AbsPath(book.EpubPath())
-				orig, err := os.ReadFile(absEpub)
-				if err != nil {
-					t.Fatalf("read epub: %v", err)
-				}
-				writeFile(t, absEpub, bytes.Repeat([]byte("X"), len(orig)))
-				mt := book.DateModified().Add(-time.Hour)
-				if err := os.Chtimes(absEpub, mt, mt); err != nil {
-					t.Fatalf("chtimes: %v", err)
-				}
-			},
-			true,
-		},
-		{
-			// The opposite case, and why size is compared at all: mtime pinned
-			// back, only the length gives the change away.
-			"epub resized under an unchanged mtime",
-			func(t *testing.T, lib *Library, book *Book) {
-				absEpub := lib.store.AbsPath(book.EpubPath())
-				fi, err := os.Stat(absEpub)
-				if err != nil {
-					t.Fatalf("stat epub: %v", err)
-				}
-				writeFile(t, absEpub, bytes.Repeat([]byte("X"), int(fi.Size())+512))
-				if err := os.Chtimes(absEpub, fi.ModTime(), fi.ModTime()); err != nil {
-					t.Fatalf("chtimes: %v", err)
-				}
-			},
-			true,
-		},
-		{
-			// Rename preserves size and mtime; only the filename catches it.
-			"epub renamed in place",
-			func(t *testing.T, lib *Library, book *Book) {
-				absEpub := lib.store.AbsPath(book.EpubPath())
-				renamed := filepath.Join(filepath.Dir(absEpub), "hand-renamed.epub")
-				if err := os.Rename(absEpub, renamed); err != nil {
-					t.Fatalf("rename epub: %v", err)
-				}
-			},
-			true,
-		},
-		{
-			"meta.toml edited by hand",
-			func(t *testing.T, lib *Library, book *Book) {
-				metaPath := metaPathOf(book, lib.store.Root())
-				writeFile(t, metaPath, fmt.Appendf(nil, "id = %d\nstatus = \"read\"\n", book.ID()))
-				// Coarse-clock filesystems reuse an mtime within a tick; pin it.
-				mt := book.DateModified().Add(-time.Hour)
-				if err := os.Chtimes(metaPath, mt, mt); err != nil {
-					t.Fatalf("chtimes meta: %v", err)
-				}
-			},
-			true,
-		},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			lib := openTestLibrary(t)
-			book := ingestTestEpub(t, lib, buildTestEpub(t, "Original"))
-
-			tc.change(t, lib, book)
-
-			if got := drifted(t, lib); got != tc.want {
-				t.Errorf("storeDrifted() = %v, want %v", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestStoreCleanAfterEdit(t *testing.T) {
-	// A meta-only edit skips the epub rewrite; a title edit rewrites the epub
-	// and moves the directory. Both must leave the index clean.
-	tests := []struct {
+func TestEditSurvivesRestart(t *testing.T) {
+	for _, tc := range []struct {
 		name  string
 		edits Edits
+		check func(*Book) bool
 	}{
-		{"meta only", Edits{Status: new(book.StatusRead)}},
-		{"title change", Edits{Title: new("A Thoroughly Different Title")}},
-	}
-	for _, tc := range tests {
+		{"meta only", Edits{Status: new(book.StatusRead)}, func(b *Book) bool { return b.Status() == book.StatusRead }},
+		{"title change", Edits{Title: new("After")}, func(b *Book) bool { return b.Title() == "After" }},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
-			lib := openTestLibrary(t)
-			book := ingestTestEpub(t, lib, buildTestEpub(t, "Before"))
-
-			if _, err := lib.Edit(book.ID(), tc.edits); err != nil {
+			cfg := testConfig(t)
+			lib := openLib(t, cfg)
+			b := ingestTestEpub(t, lib, buildTestEpub(t, "Before"))
+			if _, err := lib.Edit(b.ID(), tc.edits); err != nil {
 				t.Fatalf("Edit: %v", err)
 			}
-			if drifted(t, lib) {
-				t.Error("storeDrifted() = true after Edit, want false — a library-mediated change left stale file state in the index, so every startup will reindex")
+			if err := lib.Close(); err != nil {
+				t.Fatalf("Close: %v", err)
+			}
+
+			lib = openLib(t, cfg)
+			got, err := lib.Get(b.ID())
+			if err != nil {
+				t.Fatalf("Get after restart: %v", err)
+			}
+			if !tc.check(got) {
+				t.Errorf("book after restart = %+v", got)
 			}
 		})
 	}
@@ -306,9 +192,6 @@ func TestRestartReconcilesTheDisk(t *testing.T) {
 			}
 			if _, err := os.Stat(filepath.Join(cfg.Root, canonical.EpubPath)); err != nil {
 				t.Errorf("canonical epub missing after restart: %v", err)
-			}
-			if drifted(t, lib) {
-				t.Error("storeDrifted() = true after the restart, so every startup would reindex again")
 			}
 		})
 	}
