@@ -50,7 +50,8 @@ func detectFilesystemType(path string) (FSType, error) {
 		return FSTypeUnknown, fmt.Errorf("statfs %s: %w", path, err)
 	}
 
-	switch stat.Type {
+	// stat.Type is int32 on 32-bit Linux, where the SMB magic numbers overflow.
+	switch uint32(stat.Type) {
 	case nfsSuperMagic:
 		return FSTypeNFS, nil
 	case cifsMagicNumber:
@@ -74,7 +75,7 @@ func checkFilesystem(root string, allowSMB bool) error {
 
 	// SMB variants are unreliable for atomic rename and locking
 	if (fsType == FSTypeCIFS || fsType == FSTypeSMB2) && !allowSMB {
-		return fmt.Errorf("SMB filesystem detected at %s: atomic rename and file locking are unreliable; use WithAllowSMB() to override if you understand the risks", root)
+		return fmt.Errorf("%w at %s: atomic rename and file locking are unreliable; use WithAllowSMB() to override if you understand the risks", ErrSMBFilesystem, root)
 	}
 
 	// Log the detection result
@@ -84,6 +85,14 @@ func checkFilesystem(root string, allowSMB bool) error {
 	} else {
 		msg := "detected " + fsType.String() + " filesystem, using flock-based locking"
 		slog.Info(msg, "path", root)
+	}
+
+	// ponytail: selfTestFlock runs on one host, so a lock local to this host
+	// passes it. Parse /proc/self/mountinfo for nolock and local_lock to warn
+	// only on the mounts affected, if the warning on every NFS start gets noisy.
+	if fsType == FSTypeNFS {
+		slog.Warn("the flock self-test can't see other hosts; if this mount uses nolock or local_lock, a second host could open the library and corrupt it",
+			"path", root)
 	}
 
 	return nil

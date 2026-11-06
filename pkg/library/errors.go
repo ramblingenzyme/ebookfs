@@ -14,6 +14,10 @@ var ErrBookNotFound = errors.New("no such book")
 // the library root. The wrapped error names the holder as "<hostname>:<pid>".
 var ErrLibraryLocked = errors.New("library is locked by another process")
 
+// ErrSMBFilesystem is wrapped into Open's error when the library root is on
+// SMB/CIFS and WithAllowSMB was not passed.
+var ErrSMBFilesystem = errors.New("SMB filesystem detected")
+
 // ErrDuplicate is wrapped into an ingest's error when the library already
 // holds a book with the same title and set of authors.
 var ErrDuplicate = errors.New("book already in library")

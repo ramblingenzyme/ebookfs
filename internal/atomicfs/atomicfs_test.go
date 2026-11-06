@@ -1,9 +1,12 @@
 package atomicfs
 
 import (
+	"bytes"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -108,4 +111,134 @@ func TestRenameSourceNotExist(t *testing.T) {
 	if err == nil {
 		t.Fatal("Rename should have failed for nonexistent source")
 	}
+}
+
+// A failed directory fsync comes after the rename, so returning it would tell
+// callers the file hadn't moved. Each parent gets a turn as the failing one,
+// which also shows that both are synced.
+func TestRenameLogsDirSyncFailure(t *testing.T) {
+	for _, unopenable := range []string{"from", "to"} {
+		t.Run(unopenable, func(t *testing.T) {
+			logs := captureLogs(t)
+			base := t.TempDir()
+			src := filepath.Join(base, "from", "f")
+			dst := filepath.Join(base, "to", "f")
+			for _, dir := range []string{"from", "to"} {
+				if err := os.Mkdir(filepath.Join(base, dir), 0755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(src, []byte("x"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			failing := filepath.Join(base, unopenable)
+			makeUnopenable(t, failing)
+
+			if err := Rename(src, dst); err != nil {
+				t.Fatalf("Rename: %v", err)
+			}
+			if _, err := os.Stat(dst); err != nil {
+				t.Errorf("dst after Rename: %v", err)
+			}
+			if !strings.Contains(logs.String(), failing) {
+				t.Errorf("no warning naming %s, logs: %q", failing, logs)
+			}
+		})
+	}
+}
+
+// The parent of each new directory is synced, and an existing tree isn't.
+func TestMkdirAllSyncsParentsOfNewDirs(t *testing.T) {
+	logs := captureLogs(t)
+	base := filepath.Join(t.TempDir(), "base")
+	if err := os.Mkdir(base, 0755); err != nil {
+		t.Fatal(err)
+	}
+	makeUnopenable(t, base)
+	path := filepath.Join(base, "a", "b")
+
+	if err := MkdirAll(path, 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if fi, err := os.Stat(path); err != nil || !fi.IsDir() {
+		t.Fatalf("Stat(%s) = %v, %v", path, fi, err)
+	}
+	if !strings.Contains(logs.String(), base) {
+		t.Errorf("no warning naming %s, logs: %q", base, logs)
+	}
+
+	logs.Reset()
+	if err := MkdirAll(path, 0755); err != nil {
+		t.Fatalf("MkdirAll on existing path: %v", err)
+	}
+	if logs.Len() != 0 {
+		t.Errorf("existing path logged %q", logs)
+	}
+}
+
+func TestMkdirAllUnderFile(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(file, nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := MkdirAll(filepath.Join(file, "a", "b"), 0755); err == nil {
+		t.Fatal("MkdirAll under a file should fail")
+	}
+}
+
+func TestWriteRootReplaces(t *testing.T) {
+	logs := captureLogs(t)
+	dir := t.TempDir()
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+
+	for _, want := range []string{"first", "second"} {
+		if err := WriteRoot(root, "f.json", []byte(want)); err != nil {
+			t.Fatalf("WriteRoot(%q): %v", want, err)
+		}
+		got, err := root.ReadFile("f.json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("entries = %v, want only f.json", entries)
+	}
+	if logs.Len() != 0 {
+		t.Errorf("logged %q", logs)
+	}
+}
+
+// slog is process-global, so tests using this can't run in parallel.
+func captureLogs(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	return &buf
+}
+
+// makeUnopenable leaves dir writable and traversable, so a rename into it works
+// but opening it for fsync fails. Root ignores the mode.
+func makeUnopenable(t *testing.T, dir string) {
+	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	if err := os.Chmod(dir, 0300); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0755) })
 }

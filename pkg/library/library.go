@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ramblingenzyme/ebookfs/internal/atomicfs"
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/internal/util/syncutil"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/drift"
@@ -52,11 +53,14 @@ type Library struct {
 	hooks hookSet
 }
 
+// Close keeps the lock until the index closes, since closing it still writes
+// to the database (PRAGMA optimize, the final WAL checkpoint).
 func (l *Library) Close() error {
+	err := l.index.Close()
 	if l.lockFile != nil {
 		l.lockFile.Close()
 	}
-	return l.index.Close()
+	return err
 }
 
 func (l *Library) Search(q Query) ([]*Book, error) {
@@ -268,14 +272,16 @@ func (l *Library) ReadSidecar(id int64, name string) ([]byte, error) {
 	return data, err
 }
 
-// WriteSidecar writes a sidecar file atomically (temp file + rename). The
+// WriteSidecar writes a sidecar file atomically (temp file, fsync, rename). The
 // per-book lock is held for the write.
 func (l *Library) WriteSidecar(id int64, name string, data []byte) error {
 	return l.WithSidecars(id, func(root *os.Root) error {
-		tmpName := "." + name + ".tmp"
-		if err := root.WriteFile(tmpName, data, 0644); err != nil {
-			return err
-		}
-		return root.Rename(tmpName, name)
+		return WriteSidecarFile(root, name, data)
 	})
+}
+
+// WriteSidecarFile is WriteSidecar for a caller that already holds the per-book
+// lock, inside WithSidecars or a Hook event. WriteSidecar deadlocks there.
+func WriteSidecarFile(sidecars *os.Root, name string, data []byte) error {
+	return atomicfs.WriteRoot(sidecars, name, data)
 }
