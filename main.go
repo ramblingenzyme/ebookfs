@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/md5"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -47,6 +48,7 @@ func fatal(msg string, err error) {
 func main() {
 	configPath := flag.String("config", "/etc/ebookfs/config.toml", "path to config file")
 	forceReindex := flag.Bool("reindex", false, "force a full index rebuild from disk")
+	allowSMB := flag.Bool("allow-smb", false, "start on an SMB/CIFS library root, where atomic rename and file locking are unreliable")
 	flag.Parse()
 
 	cfg, err := config.Load(*configPath)
@@ -65,7 +67,13 @@ func main() {
 	if *forceReindex {
 		opts = append(opts, library.WithForceReindex())
 	}
+	if *allowSMB {
+		opts = append(opts, library.WithAllowSMB())
+	}
 	lib, err := library.Open(library.Config(cfg.Library), opts...)
+	if errors.Is(err, library.ErrSMBFilesystem) {
+		fatal("opening library: pass --allow-smb to override", err)
+	}
 	if err != nil {
 		fatal("opening library", err)
 	}

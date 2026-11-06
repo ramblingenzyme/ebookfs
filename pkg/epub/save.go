@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/ramblingenzyme/ebookfs/internal/atomicfs"
 	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/content"
 	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/ncx"
 	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/ocf"
@@ -322,7 +323,7 @@ func (b *Book) rewrite(replace map[string][]byte) error {
 		return fmt.Errorf("rewritten epub failed validation: %w", err)
 	}
 
-	if err := os.Rename(tmpPath, b.path); err != nil {
+	if err := atomicfs.Rename(tmpPath, b.path); err != nil {
 		next.Close()
 		return err
 	}
