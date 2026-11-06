@@ -99,6 +99,23 @@ func Open(path string, allowSMB bool) (*Index, error) {
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 
+	var v int64
+	if err := db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	if v == 0 {
+		// Fresh database: apply the schema but leave user_version at 0 so
+		// NeedsReindex forces the first reindex. An empty pending_ops table is
+		// the normal clean state and cannot distinguish a fresh index from a
+		// completed one, so Rebuild is left as the sole version-stamper.
+		if _, err := db.Exec(schema); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("applying schema: %w", err)
+		}
+	}
+
 	// In EXCLUSIVE mode, the writer connection holds the exclusive lock,
 	// so we can't have separate reader connections. Use the writer for reads.
 	if fsType.IsSMB() {
@@ -118,25 +135,6 @@ func Open(path string, allowSMB bool) (*Index, error) {
 	}
 	readDB.SetMaxOpenConns(4)
 	readDB.SetMaxIdleConns(4)
-
-	var v int64
-	if err := db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
-		readDB.Close()
-		db.Close()
-		return nil, err
-	}
-
-	if v == 0 {
-		// Fresh database: apply the schema but leave user_version at 0 so
-		// NeedsReindex forces the first reindex. An empty pending_ops table is
-		// the normal clean state and cannot distinguish a fresh index from a
-		// completed one, so Rebuild is left as the sole version-stamper.
-		if _, err := db.Exec(schema); err != nil {
-			readDB.Close()
-			db.Close()
-			return nil, fmt.Errorf("applying schema: %w", err)
-		}
-	}
 
 	return &Index{
 		db:      db,
