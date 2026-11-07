@@ -7,8 +7,11 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"net/url"
+	"path/filepath"
 
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/fsutil"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index/dbsqlc"
 	_ "modernc.org/sqlite"
 )
@@ -16,8 +19,8 @@ import (
 //go:embed schema.sql
 var schema string
 
-// Index holds two connections in WAL mode, so a read neither blocks another
-// read nor contends for the single writer slot.
+// Index holds separate writer and reader connections, so a read doesn't contend
+// for the single writer slot. On SMB, Open makes both the one writer connection.
 type Index struct {
 	db      *sql.DB         // writer, SetMaxOpenConns(1)
 	wq      *dbsqlc.Queries // writer queries; NextID and pending_ops
@@ -38,52 +41,98 @@ func dsn(path string, pragmas ...string) string {
 	return path + "?" + q.Encode()
 }
 
-func writerPragmas() []string {
-	return []string{
-		"journal_mode(WAL)",
-		// In WAL mode, NORMAL is crash-safe and avoids an extra fsync per write.
-		"synchronous(NORMAL)",
-		"busy_timeout(5000)",
+// mmapPragma turns memory mapping off on network filesystems. SQLite reports an
+// I/O error on a mapped file as a signal, and SIGBUS kills the Go process where
+// a read would have returned a query error.
+func mmapPragma(fsType fsutil.FSType) string {
+	if isNetwork(fsType) {
+		return "mmap_size(0)"
+	}
+	return "mmap_size(134217728)"
+}
+
+// busyPragma waits longer on SMB, where a client that died can leave its
+// EXCLUSIVE lock on the server until the server drops the client's handles.
+func busyPragma(fsType fsutil.FSType) string {
+	if fsType.IsSMB() {
+		return "busy_timeout(60000)"
+	}
+	return "busy_timeout(5000)"
+}
+
+func isNetwork(fsType fsutil.FSType) bool {
+	return fsType == fsutil.FSTypeNFS || fsType.IsSMB()
+}
+
+func writerPragmas(fsType fsutil.FSType) []string {
+	pragmas := []string{
+		busyPragma(fsType),
 		"journal_size_limit(27103364)",
-		"mmap_size(134217728)",
+		mmapPragma(fsType),
 		"cache_size(-8000)",
 		"temp_store(memory)",
 		"foreign_keys(ON)",
 	}
+	switch fsType {
+	case fsutil.FSTypeNFS:
+		pragmas = append([]string{"journal_mode(DELETE)", "synchronous(FULL)"}, pragmas...)
+	case fsutil.FSTypeCIFS, fsutil.FSTypeSMB2:
+		// WAL would map a -shm file on every open but the first, since modernc
+		// runs journal_mode before locking_mode. DELETE never creates one.
+		pragmas = append([]string{"journal_mode(DELETE)", "synchronous(FULL)", "locking_mode(EXCLUSIVE)"}, pragmas...)
+	default: // local, FUSE, unknown
+		pragmas = append([]string{"journal_mode(WAL)", "synchronous(NORMAL)"}, pragmas...)
+	}
+	return pragmas
 }
 
-func readerPragmas() []string {
-	return []string{
-		"journal_mode(WAL)",
+func readerPragmas(fsType fsutil.FSType) []string {
+	pragmas := []string{
 		"busy_timeout(5000)",
 		"query_only",
-		"mmap_size(134217728)",
+		mmapPragma(fsType),
 		"cache_size(-8000)",
 		"temp_store(memory)",
 	}
+	switch fsType {
+	case fsutil.FSTypeNFS:
+		pragmas = append([]string{"journal_mode(DELETE)"}, pragmas...)
+	default: // local, FUSE, CIFS, SMB2, unknown
+		pragmas = append([]string{"journal_mode(WAL)"}, pragmas...)
+	}
+	return pragmas
 }
 
-func Open(path string) (*Index, error) {
-	db, err := sql.Open("sqlite", dsn(path, writerPragmas()...))
+func Open(path string, allowSMB bool) (*Index, error) {
+	fsType, err := fsutil.Check(filepath.Dir(path), allowSMB, "index")
+	if err != nil {
+		return nil, err
+	}
+	if fsType.IsSMB() {
+		slog.Warn("a lock left by a dead SMB client can delay opening the index", "path", path)
+	}
+
+	db, err := sql.Open("sqlite", dsn(path, writerPragmas(fsType)...))
 	if err != nil {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 
-	readDB, err := sql.Open("sqlite", dsn(path, readerPragmas()...))
-	if err != nil {
+	var v int64
+	if err := db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
 		db.Close()
 		return nil, err
 	}
-	readDB.SetMaxOpenConns(4)
-	readDB.SetMaxIdleConns(4)
 
-	var v int64
-	if err := db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
-		readDB.Close()
+	// journal_mode keeps the old mode rather than failing when it can't switch.
+	var journalMode string
+	if err := db.QueryRow("PRAGMA journal_mode").Scan(&journalMode); err != nil {
 		db.Close()
 		return nil, err
+	}
+	if isNetwork(fsType) && journalMode != "delete" {
+		slog.Warn("index stayed out of DELETE journal mode on a network filesystem", "path", path, "journal_mode", journalMode)
 	}
 
 	if v == 0 {
@@ -92,11 +141,30 @@ func Open(path string) (*Index, error) {
 		// the normal clean state and cannot distinguish a fresh index from a
 		// completed one, so Rebuild is left as the sole version-stamper.
 		if _, err := db.Exec(schema); err != nil {
-			readDB.Close()
 			db.Close()
 			return nil, fmt.Errorf("applying schema: %w", err)
 		}
 	}
+
+	// In EXCLUSIVE mode, the writer connection holds the exclusive lock,
+	// so we can't have separate reader connections. Use the writer for reads.
+	if fsType.IsSMB() {
+		return &Index{
+			db:      db,
+			wq:      dbsqlc.New(db),
+			readDB:  db,
+			queries: dbsqlc.New(db),
+			ctx:     context.Background(),
+		}, nil
+	}
+
+	readDB, err := sql.Open("sqlite", dsn(path, readerPragmas(fsType)...))
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	readDB.SetMaxOpenConns(4)
+	readDB.SetMaxIdleConns(4)
 
 	return &Index{
 		db:      db,

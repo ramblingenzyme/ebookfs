@@ -1,6 +1,7 @@
 package library
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"slices"
@@ -11,6 +12,9 @@ import (
 
 // Hook is a unified interface for observing and amending library operations.
 // Hooks embed HookBase and override the phases they care about.
+//
+// Setup runs once during library initialization, before any other phases.
+// It receives paths the hook needs for persistent state.
 //
 // Pipeline phases (PreParse, PreCommit) run during ingest under ingestMu.
 // They can modify data before the library commits. If they return an error,
@@ -27,6 +31,10 @@ import (
 // Panics are recovered and logged so one hook cannot prevent later hooks
 // from receiving the event.
 type Hook interface {
+	// Setup initializes the hook with library paths. Called by AddHook when the
+	// hook is registered, before any other hook phases.
+	Setup(root string, stateDir string) error
+
 	// PreParse rewrites the epub file before parsing. epubPath is the absolute
 	// path to the staged file. tempDir is per-ingest scratch space, retained
 	// until ingest completes. Return a replacement path, or "" to keep epubPath.
@@ -57,6 +65,8 @@ type Hook interface {
 // HookBase provides no-op defaults for all hook phases. Hooks embed HookBase
 // and override only the methods they need.
 type HookBase struct{}
+
+func (HookBase) Setup(root string, stateDir string) error { return nil }
 
 func (HookBase) PreParse(epubPath string, tempDir string) (string, error) {
 	return "", nil
@@ -90,9 +100,21 @@ func (s *hookSet) snapshot() []Hook {
 	return slices.Clone(s.hooks)
 }
 
-// AddHook registers a hook. The hook is called synchronously at each phase,
-// in registration order. Hooks stay registered for the library's lifetime.
-func (l *Library) AddHook(h Hook) { l.hooks.add(h) }
+// AddHook calls Setup with the library's root and stateDir, then registers the
+// hook. A Setup error or panic returns an error and leaves the hook unregistered,
+// so it never hears an event with its state uninitialised.
+func (l *Library) AddHook(h Hook) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("hook %T setup panicked: %v", h, r)
+		}
+	}()
+	if err := h.Setup(l.store.Root(), l.stateDir); err != nil {
+		return fmt.Errorf("hook %T setup: %w", h, err)
+	}
+	l.hooks.add(h)
+	return nil
+}
 
 // preParse calls PreParse in registration order. An error stops the ingest;
 // an empty returned path keeps the path passed to that hook.

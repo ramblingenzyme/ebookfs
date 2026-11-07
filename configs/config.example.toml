@@ -1,7 +1,8 @@
 [library]
 root = "/var/lib/ebookfs/library"
 # inbox_temp = ""  # default: <library.root>/.inbox-tmp; must be on same filesystem as root
-# index_path = ""  # default: <library.root>/.index.db
+# state_dir = ""  # default: <library.root>; small persistent state (kosync mapping, queues)
+# index_path = ""  # default: <state_dir>/.index.db
 
 [search]
 # handle_ttl controls how long a search handle lives without activity before the
@@ -29,7 +30,7 @@ enable = false
 [kosync]
 enable = false
 # KOReader reading progress sync. Runs on the shared HTTP listener at /sync/.
-# mapping_path = ""  # default: <library.root>/.kosync
+# Mapping lives in <state_dir>/.kosync
 username = ""  # pre-provisioned username
 password = ""  # plaintext password (hashed to MD5 at startup)
 # Thresholds for automatic status updates based on progress percentage.
