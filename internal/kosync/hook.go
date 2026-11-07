@@ -2,6 +2,7 @@ package kosync
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"os"
 
@@ -121,7 +122,7 @@ func (s *Server) computeDocumentID(book *library.Book, openEpub func() (library.
 func readSidecar(sidecars *os.Root) (*SidecarData, error) {
 	f, err := sidecars.Open("kosync.json")
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return &SidecarData{DocumentIDs: []string{}}, nil
 		}
 		return nil, err
@@ -135,18 +136,14 @@ func readSidecar(sidecars *os.Root) (*SidecarData, error) {
 	return &data, nil
 }
 
-// writeSidecar renames into place. A truncated kosync.json fails to parse,
-// which loses the progress and fails every later PUT for the book.
+// writeSidecar fsyncs and renames into place. A truncated kosync.json fails to
+// parse, which loses the progress and fails every later PUT for the book.
 func writeSidecar(sidecars *os.Root, data SidecarData) error {
 	raw, err := json.Marshal(data)
 	if err != nil {
 		return err
 	}
-	const tmpName = ".kosync.json.tmp"
-	if err := sidecars.WriteFile(tmpName, raw, 0644); err != nil {
-		return err
-	}
-	return sidecars.Rename(tmpName, "kosync.json")
+	return library.WriteSidecarFile(sidecars, "kosync.json", raw)
 }
 
 // setMapping sets a document ID mapping.

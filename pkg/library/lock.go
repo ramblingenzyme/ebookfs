@@ -11,9 +11,13 @@ import (
 
 const lockFileName = ".lock"
 
+// flock is a variable so tests can simulate a filesystem without lock support.
+var flock = syscall.Flock
+
 // acquireLock opens <root>/.lock and takes an exclusive flock.
 // Returns the file handle, which must be kept open to hold the lock.
 // If another process holds the lock, returns ErrLibraryLocked.
+// If the filesystem has no flock, logs an error and returns the file unlocked.
 func acquireLock(root string) (*os.File, error) {
 	path := filepath.Join(root, lockFileName)
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
@@ -21,7 +25,10 @@ func acquireLock(root string) (*os.File, error) {
 		return nil, fmt.Errorf("open lock file: %w", err)
 	}
 
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		if warnLockUnsupported(path, err) {
+			return f, nil
+		}
 		f.Close()
 		if errors.Is(err, syscall.EWOULDBLOCK) {
 			holder := readLockHolder(path)
@@ -50,22 +57,31 @@ func selfTestFlock(path string) error {
 	}
 	defer fd2.Close()
 
-	err = syscall.Flock(int(fd2.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+	err = flock(int(fd2.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 	switch {
 	case err == nil:
-		syscall.Flock(int(fd2.Fd()), syscall.LOCK_UN)
+		flock(int(fd2.Fd()), syscall.LOCK_UN)
 		slog.Error("flock is not enforced on this filesystem; a second instance could corrupt the library",
 			"path", path)
 		return nil
 	case errors.Is(err, syscall.EWOULDBLOCK):
 		return nil
-	case errors.Is(err, syscall.ENOLCK), errors.Is(err, syscall.ENOTSUP), errors.Is(err, syscall.EOPNOTSUPP):
-		slog.Error("flock is not supported on this filesystem; a second instance could corrupt the library",
-			"path", path, "error", err)
+	case warnLockUnsupported(path, err):
 		return nil
 	default:
 		return fmt.Errorf("self-test: flock: %w", err)
 	}
+}
+
+// warnLockUnsupported logs and reports true if err means the filesystem has no
+// flock, as on NFSv3 without lockd.
+func warnLockUnsupported(path string, err error) bool {
+	unsupported := errors.Is(err, syscall.ENOLCK) || errors.Is(err, syscall.ENOTSUP) || errors.Is(err, syscall.EOPNOTSUPP)
+	if unsupported {
+		slog.Error("flock is not supported on this filesystem; a second instance could corrupt the library",
+			"path", path, "error", err)
+	}
+	return unsupported
 }
 
 // readLockHolder reads the lock file content, which is "<hostname>:<pid>".

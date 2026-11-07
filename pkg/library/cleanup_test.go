@@ -1,6 +1,7 @@
 package library
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -59,6 +60,58 @@ func TestCleanStaleTmpFiles(t *testing.T) {
 	}
 	if _, err := os.Stat(other); err != nil {
 		t.Errorf("other.tmp was removed: %v", err)
+	}
+}
+
+func TestCleanStaleTmpFilesMeta(t *testing.T) {
+	root := t.TempDir()
+	stale := filepath.Join(root, ".ebookfs-123456789.meta.toml.tmp")
+	real := filepath.Join(root, "meta.toml")
+	for _, path := range []string{stale, real} {
+		if err := os.WriteFile(path, nil, 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := cleanStaleTmpFiles(root); err != nil {
+		t.Fatalf("cleanStaleTmpFiles: %v", err)
+	}
+
+	if _, err := os.Stat(stale); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("stale meta temp still exists after cleanup")
+	}
+	if _, err := os.Stat(real); err != nil {
+		t.Errorf("meta.toml was removed: %v", err)
+	}
+}
+
+// One unreadable book must not stop the sweep of the books after it.
+func TestCleanStaleTmpFilesPastUnreadableDir(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	root := t.TempDir()
+	unreadable := filepath.Join(root, "A")
+	later := filepath.Join(root, "Z")
+	for _, dir := range []string{unreadable, later} {
+		if err := os.Mkdir(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stale := filepath.Join(later, ".ebookfs-1.epub.tmp")
+	if err := os.WriteFile(stale, nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(unreadable, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(unreadable, 0755) })
+
+	if err := cleanStaleTmpFiles(root); err != nil {
+		t.Fatalf("cleanStaleTmpFiles: %v", err)
+	}
+	if _, err := os.Stat(stale); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("stale temp past the unreadable dir still exists")
 	}
 }
 

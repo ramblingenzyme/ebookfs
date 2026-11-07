@@ -56,3 +56,19 @@ func TestCheckSameFilesystemMissingTarget(t *testing.T) {
 		t.Fatal("expected error when target directory doesn't exist")
 	}
 }
+
+func TestOpenCreatesStateAndIndexDirs(t *testing.T) {
+	cfg := testConfig(t)
+	base := t.TempDir()
+	cfg.StateDir = filepath.Join(base, "state")
+	cfg.IndexPath = filepath.Join(base, "cache", "index.db")
+
+	openLib(t, cfg)
+
+	if fi, err := os.Stat(cfg.StateDir); err != nil || !fi.IsDir() {
+		t.Errorf("state dir: %v, %v", fi, err)
+	}
+	if _, err := os.Stat(cfg.IndexPath); err != nil {
+		t.Errorf("index: %v", err)
+	}
+}

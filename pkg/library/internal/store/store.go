@@ -120,7 +120,7 @@ func (s *Store) renameDir(fromDir, toDir string) (func(error), error) {
 		return nil, err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(toDir), 0755); err != nil {
+	if err := atomicfs.MkdirAll(filepath.Dir(toDir), 0755); err != nil {
 		return nil, err
 	}
 
@@ -171,10 +171,10 @@ func (s *Store) Update(oldLoc, newLoc book.Location, meta *book.Meta) (drift.Pat
 // by Delete.
 //
 // Only .sidecar/ is created. A book directory removed outside ebookfs fails
-// with fs.ErrNotExist rather than coming back empty.
+// with os.ErrNotExist rather than coming back empty.
 func (s *Store) OpenSidecars(loc book.Location) (*os.Root, error) {
 	dir := filepath.Join(s.AbsPath(loc.Dir()), ".sidecar")
-	if err := os.Mkdir(dir, 0755); err != nil && !errors.Is(err, os.ErrExist) {
+	if err := atomicfs.Mkdir(dir, 0755); err != nil && !errors.Is(err, os.ErrExist) {
 		return nil, err
 	}
 	return os.OpenRoot(dir)

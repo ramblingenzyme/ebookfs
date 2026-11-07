@@ -46,6 +46,30 @@ func TestCreateIngestReadOnlyDir(t *testing.T) {
 	}
 }
 
+// A failed fsync can mean the upload never reached the server, so nothing gets
+// filed and the temp file goes. Closing the file first forces the failure.
+func TestIngestRefusesFailedSync(t *testing.T) {
+	lib := openTestLibrary(t)
+	h, err := lib.CreateIngest()
+	if err != nil {
+		t.Fatalf("CreateIngest: %v", err)
+	}
+	handle := h.(*ingestHandle)
+	handle.ingestFn = func(string) (*Book, error) {
+		t.Error("ingestFn ran after a failed fsync")
+		return nil, nil
+	}
+	path := handle.file.Name()
+	handle.file.Close()
+
+	if _, err := h.Ingest(); !errors.Is(err, os.ErrClosed) {
+		t.Errorf("Ingest err = %v, want os.ErrClosed", err)
+	}
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("temp file still present: %v", err)
+	}
+}
+
 // An ingest that fails after the store has started writing removes the
 // directory it built and clears its pending row, so the next start neither
 // rebuilds nor finds a half-built book. A directory occupying meta.toml's name

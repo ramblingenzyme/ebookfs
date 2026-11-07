@@ -71,10 +71,20 @@ func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
 		return nil, fmt.Errorf("cleaning inbox temp: %w", err)
 	}
 	if err := cleanStaleTmpFiles(cfg.Root); err != nil {
-		slog.Warn("cleaning stale epub temp files failed", "error", err)
+		slog.Warn("cleaning stale temp files failed", "error", err)
 	}
 	if err := checkSameFilesystem(cfg.Root, cfg.InboxTemp); err != nil {
 		return nil, fmt.Errorf("inbox_temp must be on the same filesystem as library.root: %w", err)
+	}
+
+	if cfg.StateDir == "" {
+		cfg.StateDir = cfg.Root
+	}
+	if err := os.MkdirAll(cfg.StateDir, 0755); err != nil {
+		return nil, fmt.Errorf("creating state dir: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(cfg.IndexPath), 0755); err != nil {
+		return nil, fmt.Errorf("creating index dir: %w", err)
 	}
 
 	idx, err := index.Open(cfg.IndexPath, o.allowSMB)
@@ -84,7 +94,6 @@ func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
 	lib := &Library{
 		store:     store.New(cfg.Root),
 		index:     idx,
-		root:      cfg.Root,
 		stateDir:  cfg.StateDir,
 		inboxTemp: cfg.InboxTemp,
 		lockFile:  lockFile,

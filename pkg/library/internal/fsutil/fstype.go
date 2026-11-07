@@ -1,9 +1,13 @@
 package fsutil
 
 import (
+	"errors"
 	"fmt"
+	"log/slog"
 	"syscall"
 )
+
+var ErrSMBFilesystem = errors.New("SMB filesystem detected")
 
 // Linux filesystem magic numbers from magic.h
 const (
@@ -53,7 +57,8 @@ func DetectFilesystemType(path string) (FSType, error) {
 		return FSTypeUnknown, fmt.Errorf("statfs %s: %w", path, err)
 	}
 
-	switch stat.Type {
+	// stat.Type is int32 on 32-bit Linux, where the SMB magic numbers overflow.
+	switch uint32(stat.Type) {
 	case nfsSuperMagic:
 		return FSTypeNFS, nil
 	case cifsMagicNumber:
@@ -68,10 +73,27 @@ func DetectFilesystemType(path string) (FSType, error) {
 	}
 }
 
-// RequireNotSMB returns an error if fsType is SMB and allowSMB is false
-func RequireNotSMB(fsType FSType, allowSMB bool, path string) error {
+// Check detects the filesystem at dir, enforces the SMB policy and logs the
+// result. role names dir in the log.
+func Check(dir string, allowSMB bool, role string) (FSType, error) {
+	fsType, err := DetectFilesystemType(dir)
+	if err != nil {
+		return fsType, err
+	}
+	if err := requireNotSMB(fsType, allowSMB, dir); err != nil {
+		return fsType, err
+	}
+	if fsType.IsSMB() {
+		slog.Warn("detected SMB filesystem for "+role+", proceeding with override enabled", "path", dir)
+	} else {
+		slog.Info("detected "+fsType.String()+" filesystem for "+role, "path", dir)
+	}
+	return fsType, nil
+}
+
+func requireNotSMB(fsType FSType, allowSMB bool, path string) error {
 	if fsType.IsSMB() && !allowSMB {
-		return fmt.Errorf("SMB filesystem detected at %s: atomic rename and file locking are unreliable; use WithAllowSMB() to override if you understand the risks", path)
+		return fmt.Errorf("%w at %s: atomic rename and file locking are unreliable; use WithAllowSMB() to override if you understand the risks", ErrSMBFilesystem, path)
 	}
 	return nil
 }

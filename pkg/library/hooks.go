@@ -1,6 +1,7 @@
 package library
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"slices"
@@ -99,13 +100,20 @@ func (s *hookSet) snapshot() []Hook {
 	return slices.Clone(s.hooks)
 }
 
-// AddHook registers a hook and calls Setup with the library's root and stateDir.
-// Setup errors are logged but don't prevent hook registration.
-func (l *Library) AddHook(h Hook) {
-	if err := h.Setup(l.root, l.stateDir); err != nil {
-		slog.Error("hook setup failed", "error", err)
+// AddHook calls Setup with the library's root and stateDir, then registers the
+// hook. A Setup error or panic returns an error and leaves the hook unregistered,
+// so it never hears an event with its state uninitialised.
+func (l *Library) AddHook(h Hook) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("hook %T setup panicked: %v", h, r)
+		}
+	}()
+	if err := h.Setup(l.store.Root(), l.stateDir); err != nil {
+		return fmt.Errorf("hook %T setup: %w", h, err)
 	}
 	l.hooks.add(h)
+	return nil
 }
 
 // preParse calls PreParse in registration order. An error stops the ingest;

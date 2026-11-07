@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -65,7 +64,9 @@ func New(lib *library.Library, cfg Config) (*Server, error) {
 	srv := &Server{}
 
 	// Register as hook with the library (this will call Setup automatically)
-	lib.AddHook(srv)
+	if err := lib.AddHook(srv); err != nil {
+		return nil, fmt.Errorf("registering kosync hook: %w", err)
+	}
 
 	// Rebuild if mapping is empty (first run, after corruption, or all books deleted)
 	if srv.mapping.IsEmpty() {
@@ -268,7 +269,7 @@ func (h *handler) getProgress(w http.ResponseWriter, r *http.Request) {
 
 	sidecarData, err := h.lib.ReadSidecar(bookID, "kosync.json")
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
+		if errors.Is(err, os.ErrNotExist) {
 			h.writeJSON(w, http.StatusOK, map[string]any{})
 			return
 		}

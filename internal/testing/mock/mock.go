@@ -130,13 +130,14 @@ type Library struct {
 	SearchDeleter
 	Ingester
 	StatsReader
-	AddHookFn func(library.Hook)
+	AddHookFn func(library.Hook) error
 }
 
-func (l Library) AddHook(h library.Hook) {
+func (l Library) AddHook(h library.Hook) error {
 	if l.AddHookFn != nil {
-		l.AddHookFn(h)
+		return l.AddHookFn(h)
 	}
+	return nil
 }
 
 func (l Library) Edit(id int64, edits library.Edits) (*library.Book, error) {

@@ -48,7 +48,7 @@ type Library interface {
 	ctl.Library
 	inbox.Ingester
 	views.StatsReader
-	AddHook(library.Hook)
+	AddHook(library.Hook) error
 }
 
 type Config struct {
@@ -72,7 +72,9 @@ type Config struct {
 func New(lib Library, cfg Config) (*Server, error) {
 	ebookfs, root := fs.NewFS("glenda", "glenda", 0555, fs.IgnorePermissions())
 	reg := registry.NewBookRegistry(ebookfs, lib)
-	lib.AddHook(reg)
+	if err := lib.AddHook(reg); err != nil {
+		return nil, fmt.Errorf("registering book registry: %w", err)
+	}
 	ebookfs.CreateFile = vfile.DispatchCreate
 
 	// Each view self-registers with the registry on construction.

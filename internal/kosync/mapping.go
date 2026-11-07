@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -52,7 +51,7 @@ func LoadMapping(kosyncDir string) (*MappingFile, error) {
 	// Try to load existing mapping
 	f, err := os.Open(path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return m, nil
 		}
 		return nil, fmt.Errorf("opening mapping: %w", err)
@@ -114,7 +113,7 @@ func (m *MappingFile) Rebuild(lib *library.Library) error {
 		// Read the kosync.json sidecar
 		sidecarData, err := lib.ReadSidecar(book.ID(), "kosync.json")
 		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
+			if errors.Is(err, os.ErrNotExist) {
 				// Sidecar doesn't exist — compute document ID and create it
 				if err := m.createSidecarForBook(lib, book, newData); err != nil {
 					slog.Error("kosync: failed to create sidecar during rebuild", "book_id", book.ID(), "error", err)
