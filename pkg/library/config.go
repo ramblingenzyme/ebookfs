@@ -1,8 +1,9 @@
 package library
 
-// Config is the library's storage layout. All three paths are required. Open
-// creates Root and InboxTemp if missing, and refuses to open unless both are
-// on one filesystem, since ingest moves a book from one to the other by rename.
+// Config is the library's storage layout. All paths but StateDir are required.
+// Open creates every directory it names if missing, and refuses to open unless
+// Root and InboxTemp are on one filesystem, since ingest moves a book from one
+// to the other by rename.
 //
 // It has no serialization tags; loading it is the caller's job.
 type Config struct {

@@ -26,9 +26,11 @@ The SQLite index detects the filesystem type at startup and selects the appropri
 
 - **Local filesystems**: WAL (Write-Ahead Logging) journal mode. Concurrent reads, good performance.
 - **NFS**: DELETE journal mode. WAL requires shared memory support, which NFS doesn't provide. DELETE mode is slower but reliable on network filesystems.
-- **SMB/CIFS**: Refused by default. SMB/CIFS has unreliable atomic rename and locking behavior. If you understand the risks, pass the `WithAllowSMB()` option to permit SMB mounts. When permitted, the index uses WAL with EXCLUSIVE locking and a single connection to work around filesystem limitations.
+- **SMB/CIFS**: Refused by default. SMB/CIFS has unreliable atomic rename and locking behavior. If you understand the risks, pass `--allow-smb` to permit SMB mounts. When permitted, the index uses DELETE journal mode with EXCLUSIVE locking and a single connection, for one host at a time. If a client dies uncleanly, the server can hold its locks until it drops the client's handles, so the next start may report the library as locked, or wait up to a minute on the index. The `nobrl` mount option makes locks local to the client, so they no longer stop a second host, and `ebookfs` can't detect it.
 
-The index path defaults to `<state_dir>/.index.db`, where `state_dir` defaults to `library.root`. You can place the index on different storage (e.g., local SSD when the library is on NFS) by setting `library.index_path` explicitly. This allows you to keep the derived index on fast local storage while the library files remain on network storage.
+Memory mapping is off on NFS and SMB/CIFS, since an I/O error on a mapped file would kill the process.
+
+The index path defaults to `<state_dir>/.index.db`, where `state_dir` defaults to `library.root`. You can place the index on different storage (e.g., local SSD when the library is on NFS) by setting `library.index_path` explicitly. This allows you to keep the derived index on fast local storage while the library files remain on network storage, which is the recommended setup on any network mount: the filesystem check then sees a local path, and the index uses WAL.
 
 ## Mounting from a client
 

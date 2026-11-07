@@ -64,7 +64,9 @@ func New(lib *library.Library, cfg Config) (*Server, error) {
 	srv := &Server{}
 
 	// Register as hook with the library (this will call Setup automatically)
-	lib.AddHook(srv)
+	if err := lib.AddHook(srv); err != nil {
+		return nil, fmt.Errorf("registering kosync hook: %w", err)
+	}
 
 	// Rebuild if mapping is empty (first run, after corruption, or all books deleted)
 	if srv.mapping.IsEmpty() {
