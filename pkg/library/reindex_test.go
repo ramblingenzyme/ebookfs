@@ -96,6 +96,8 @@ func TestEditSurvivesRestart(t *testing.T) {
 			if _, err := lib.Edit(b.ID(), tc.edits); err != nil {
 				t.Fatalf("Edit: %v", err)
 			}
+			// Open reindexes on drift and hides it, so this runs before the restart.
+			assertIndexMatchesStore(t, lib)
 			if err := lib.Close(); err != nil {
 				t.Fatalf("Close: %v", err)
 			}
@@ -193,6 +195,7 @@ func TestRestartReconcilesTheDisk(t *testing.T) {
 			if _, err := os.Stat(filepath.Join(cfg.Root, canonical.EpubPath)); err != nil {
 				t.Errorf("canonical epub missing after restart: %v", err)
 			}
+			assertIndexMatchesStore(t, lib)
 		})
 	}
 }

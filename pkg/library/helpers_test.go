@@ -68,36 +68,34 @@ func dropIndex(t *testing.T, cfg Config) {
 func assertSettlesClean(t *testing.T, cfg Config) {
 	t.Helper()
 	for i := 1; i <= 2; i++ {
-		lib, err := Open(cfg)
-		if err != nil {
-			t.Fatalf("reopen %d: %v", i, err)
-		}
-		entries, err := lib.store.Walk()
-		if err != nil {
-			lib.Close()
-			t.Fatalf("walk after reopen %d: %v", i, err)
-		}
-		indexed, err := lib.index.AllPathInfo()
-		if err != nil {
-			lib.Close()
-			t.Fatalf("indexed paths after reopen %d: %v", i, err)
-		}
-		if len(indexed) != len(entries) {
-			lib.Close()
-			t.Fatalf("indexed %d paths after reopen %d, store has %d", len(indexed), i, len(entries))
-		}
-		for _, entry := range entries {
-			observed, err := lib.store.Stat(entry)
-			if err != nil {
-				observed = drift.PathInfo{}
-			}
-			if got, ok := indexed[entry.EpubPath]; !ok || !got.Equal(observed) {
-				lib.Close()
-				t.Fatalf("indexed observation for %q after reopen %d = %+v, want %+v", entry.EpubPath, i, got, observed)
-			}
-		}
+		lib := openLib(t, cfg)
+		assertIndexMatchesStore(t, lib)
 		if err := lib.Close(); err != nil {
 			t.Fatalf("Close %d: %v", i, err)
+		}
+	}
+}
+
+func assertIndexMatchesStore(t *testing.T, lib *Library) {
+	t.Helper()
+	entries, err := lib.store.Walk()
+	if err != nil {
+		t.Fatalf("Walk: %v", err)
+	}
+	indexed, err := lib.index.AllPathInfo()
+	if err != nil {
+		t.Fatalf("AllPathInfo: %v", err)
+	}
+	if len(indexed) != len(entries) {
+		t.Fatalf("index has %d paths, store has %d", len(indexed), len(entries))
+	}
+	for _, entry := range entries {
+		observed, err := lib.store.Stat(entry)
+		if err != nil {
+			observed = drift.PathInfo{}
+		}
+		if got, ok := indexed[entry.EpubPath]; !ok || !got.Equal(observed) {
+			t.Fatalf("index observation for %q = %+v, want %+v", entry.EpubPath, got, observed)
 		}
 	}
 }
