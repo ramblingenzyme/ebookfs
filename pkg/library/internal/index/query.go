@@ -6,12 +6,15 @@ import "time"
 // tag:sci-fi+tag:fantasy matches either tag while tag:sci-fi+status:unread
 // matches both. A zero-valued field is ignored, so Query{} matches every book.
 type Query struct {
-	Authors []string // display name or sort name
-	Tags    []string // exact name
-	Series  []string // exact name
-	Status  []string // exact
-	IDs     []int64
-	Titles  []string // substring, ASCII case-insensitive, unless ExactTitles
+	Authors   []string // display name or sort name
+	Tags      []string // exact name
+	Series    []string // exact name
+	Status    []string // exact
+	Subjects  []string // exact name
+	Publisher []string // exact name
+	Language  []string // exact name
+	IDs       []int64
+	Titles    []string // substring, ASCII case-insensitive, unless ExactTitles
 
 	// Exact is binary equality, so it is case-sensitive.
 	ExactTitles bool

@@ -122,7 +122,7 @@ func TestSearchCtlRejectsUnparseableQuery(t *testing.T) {
 	reg.Load(makeBookWithTags(1, "Foundation", "Isaac Asimov", "sci-fi"))
 	handle.executeSearch(library.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
 
-	fstest.Fid(t, ctl, 3).Write(0, "publisher:Tor")
+	fstest.Fid(t, ctl, 3).Write(0, "foo:bar")
 	if err := ctl.Close(3); err == nil {
 		t.Error("Close on an unparseable query returned nil, want the parse error surfaced to the client")
 	}

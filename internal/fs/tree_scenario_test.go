@@ -15,7 +15,7 @@ import (
 func TestRootListing(t *testing.T) {
 	h := newHarness(t)
 	got := h.ls("/")
-	want := []string{"books", "by-author", "by-id", "by-series", "by-status", "by-tag", "ctl", "help", "inbox", "log", "recent", "search", "stats"}
+	want := []string{"books", "by-author", "by-id", "by-series", "by-status", "by-subjects", "by-tag", "ctl", "help", "inbox", "log", "recent", "search", "stats"}
 	if !slices.Equal(got, want) {
 		t.Errorf("ls / = %v, want %v", got, want)
 	}
