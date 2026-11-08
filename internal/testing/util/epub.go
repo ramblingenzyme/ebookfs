@@ -72,6 +72,7 @@ type LibraryConfig struct {
 	Root      string
 	InboxTemp string
 	IndexPath string
+	StateDir  string
 }
 
 // TestConfig exists for a test that reopens a library across a restart.
@@ -82,5 +83,6 @@ func TestConfig(t testing.TB) LibraryConfig {
 		Root:      filepath.Join(dir, "root"),
 		InboxTemp: filepath.Join(dir, "inbox-tmp"),
 		IndexPath: filepath.Join(dir, "index.db"),
+		StateDir:  filepath.Join(dir, "root"),
 	}
 }

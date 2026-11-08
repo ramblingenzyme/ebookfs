@@ -1,8 +1,9 @@
 package library
 
-// Config is the library's storage layout. All three paths are required. Open
-// creates Root and InboxTemp if missing, and refuses to open unless both are
-// on one filesystem, since ingest moves a book from one to the other by rename.
+// Config is the library's storage layout. All paths but StateDir are required.
+// Open creates every directory it names if missing, and refuses to open unless
+// Root and InboxTemp are on one filesystem, since ingest moves a book from one
+// to the other by rename.
 //
 // It has no serialization tags; loading it is the caller's job.
 type Config struct {
@@ -13,4 +14,7 @@ type Config struct {
 	// IndexPath is the SQLite index, a cache of Root (docs/DECISIONS.md #2). It
 	// may be deleted; the next Open rebuilds it.
 	IndexPath string
+	// StateDir holds small persistent state (kosync mapping, future queues).
+	// Defaults to Root if empty.
+	StateDir string
 }

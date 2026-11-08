@@ -277,6 +277,66 @@ func (h *editCountingHook) OnEdited(*library.Book, *os.Root, func() (library.Epu
 	h.edits++
 }
 
+type setupHook struct {
+	editCountingHook
+	setup func() error
+}
+
+func (h *setupHook) Setup(string, string) error { return h.setup() }
+
+type setupPathsHook struct {
+	library.HookBase
+	root, stateDir string
+}
+
+func (h *setupPathsHook) Setup(root, stateDir string) error {
+	h.root, h.stateDir = root, stateDir
+	return nil
+}
+
+func TestSetupStateDirDefaultsToRoot(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.StateDir = ""
+	lib := openLib(t, cfg)
+	hook := &setupPathsHook{}
+	if err := lib.AddHook(hook); err != nil {
+		t.Fatalf("AddHook: %v", err)
+	}
+	if hook.root != cfg.Root || hook.stateDir != cfg.Root {
+		t.Errorf("Setup(%q, %q), want both %q", hook.root, hook.stateDir, cfg.Root)
+	}
+}
+
+func TestFailedSetupLeavesHookUnregistered(t *testing.T) {
+	boom := errors.New("boom")
+	cases := map[string]func() error{
+		"error": func() error { return boom },
+		"panic": func() error { panic(boom) },
+	}
+	for name, setup := range cases {
+		t.Run(name, func(t *testing.T) {
+			lib := openTestLibrary(t)
+			hook := &setupHook{setup: setup}
+
+			err := lib.AddHook(hook)
+			if err == nil {
+				t.Fatal("AddHook succeeded after a failed Setup")
+			}
+			if name == "error" && !errors.Is(err, boom) {
+				t.Errorf("AddHook err = %v, want it to wrap the Setup error", err)
+			}
+
+			b := ingestTestEpub(t, lib, buildTestEpub(t, "Dune", "Frank Herbert"))
+			if _, err := lib.Edit(b.ID(), library.Edits{Status: new("read")}); err != nil {
+				t.Fatalf("Edit: %v", err)
+			}
+			if hook.edits != 0 {
+				t.Errorf("unregistered hook heard %d edits", hook.edits)
+			}
+		})
+	}
+}
+
 // One hook's panic stays inside it: the edit commits, the hooks after it still
 // hear the event, and the library takes the next edit.
 func TestPanickingHookIsContained(t *testing.T) {
