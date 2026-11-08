@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
 
+	"github.com/ramblingenzyme/ebookfs/internal/atomicfs"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
@@ -51,7 +51,7 @@ func LoadMapping(kosyncDir string) (*MappingFile, error) {
 	// Try to load existing mapping
 	f, err := os.Open(path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return m, nil
 		}
 		return nil, fmt.Errorf("opening mapping: %w", err)
@@ -113,7 +113,7 @@ func (m *MappingFile) Rebuild(lib *library.Library) error {
 		// Read the kosync.json sidecar
 		sidecarData, err := lib.ReadSidecar(book.ID(), "kosync.json")
 		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
+			if errors.Is(err, os.ErrNotExist) {
 				// Sidecar doesn't exist — compute document ID and create it
 				if err := m.createSidecarForBook(lib, book, newData); err != nil {
 					slog.Error("kosync: failed to create sidecar during rebuild", "book_id", book.ID(), "error", err)
@@ -201,32 +201,11 @@ func (m *MappingFile) Delete(documentID string) {
 // save writes the mapping to disk atomically.
 // Caller must hold the write lock.
 func (m *MappingFile) save() error {
-
-	// Write to temp file first
-	tmpPath := m.path + ".tmp"
-	f, err := os.Create(tmpPath)
-	if err != nil {
-		return fmt.Errorf("creating temp mapping: %w", err)
-	}
-
-	if err := json.NewEncoder(f).Encode(m.data); err != nil {
-		f.Close()
-		os.Remove(tmpPath)
-		return fmt.Errorf("encoding mapping: %w", err)
-	}
-
-	if err := f.Close(); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("closing temp mapping: %w", err)
-	}
-
-	// Atomic rename
-	if err := os.Rename(tmpPath, m.path); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("renaming mapping: %w", err)
-	}
-
-	return nil
+	dir := filepath.Dir(m.path)
+	pattern := filepath.Base(m.path) + ".tmp"
+	return atomicfs.Write(dir, pattern, func(f *os.File) error {
+		return json.NewEncoder(f).Encode(m.data)
+	}, m.path)
 }
 
 // Snapshot returns a copy of the current mapping for testing.

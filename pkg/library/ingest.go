@@ -1,6 +1,7 @@
 package library
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -28,14 +29,22 @@ func (h *ingestHandle) WriteAt(p []byte, off int64) (int, error) { return h.file
 
 func (h *ingestHandle) Ingest() (*Book, error) {
 	path := h.file.Name()
+	defer func() {
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			slog.Warn("ingest: remove temp file failed", "path", path, "error", err)
+		}
+	}()
+	// Synced here as well as in ingestPath, since the fd that wrote is the one
+	// certain to see a writeback error.
+	if err := h.file.Sync(); err != nil {
+		h.file.Close()
+		return nil, fmt.Errorf("syncing uploaded epub: %w", err)
+	}
+	// NFS can report a failed write as late as close.
 	if err := h.file.Close(); err != nil {
-		slog.Warn("ingest: close temp file failed", "path", path, "error", err)
+		return nil, fmt.Errorf("closing uploaded epub: %w", err)
 	}
-	b, err := h.ingestFn(path)
-	if rmErr := os.Remove(path); rmErr != nil && !os.IsNotExist(rmErr) {
-		slog.Warn("ingest: remove temp file failed", "path", path, "error", rmErr)
-	}
-	return b, err
+	return h.ingestFn(path)
 }
 
 func (l *Library) CreateIngest() (IngestHandle, error) {
@@ -65,6 +74,13 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 	bib, err := epub.Parse(processedPath)
 	if err != nil {
 		return nil, err
+	}
+
+	// A PreParse hook can return a different file, which Ingest's fsync never saw.
+	//
+	// Outside ingestMu, since a slow fsync would stall other uploads.
+	if err := syncFile(processedPath); err != nil {
+		return nil, fmt.Errorf("syncing uploaded epub: %w", err)
 	}
 
 	l.mutateMu.RLock()
@@ -143,6 +159,15 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 	mu.Unlock()
 
 	return b, nil
+}
+
+func syncFile(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return f.Sync()
 }
 
 // authorNames must not filter: the set Index.Exists compares has to be the set
