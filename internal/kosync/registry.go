@@ -53,28 +53,19 @@ func (r *docRegistry) Restore(lib *library.Library) error {
 	// Built without the lock; swapped in atomically at the end.
 	newData := make(map[string]int64)
 	for _, book := range books {
-		raw, err := lib.ReadSidecar(book.ID(), "kosync.json")
-		if errors.Is(err, fs.ErrNotExist) {
-			if err := r.createSidecar(lib, book, newData); err != nil {
-				slog.Error("kosync: failed to create sidecar during restore", "book_id", book.ID(), "error", err)
-			}
-			continue
-		}
+		var docIDs []string
+		err := lib.WithSidecars(book.ID(), func(root *os.Root) error {
+			var err error
+			docIDs, err = restoreDocumentIDs(lib, book.ID(), root)
+			return err
+		})
 		if err != nil {
-			slog.Warn("kosync: failed to read sidecar during restore", "book_id", book.ID(), "error", err)
+			slog.Error("kosync: failed to restore sidecar", "book_id", book.ID(), "error", err)
 			continue
 		}
-
-		var sidecar SidecarData
-		if err := json.Unmarshal(raw, &sidecar); err != nil {
-			slog.Warn("kosync: corrupt sidecar during restore", "book_id", book.ID(), "error", err)
-			continue
-		}
-
-		for _, docID := range sidecar.DocumentIDs {
+		for _, docID := range docIDs {
 			if docID != "" {
 				newData[docID] = book.ID()
-				continue
 			}
 		}
 	}
@@ -87,31 +78,34 @@ func (r *docRegistry) Restore(lib *library.Library) error {
 	return nil
 }
 
-// createSidecar computes the document ID for a book and writes its sidecar.
-// It adds the index entry to the provided map.
-func (r *docRegistry) createSidecar(lib *library.Library, book *library.Book, index map[string]int64) error {
-	epub, err := lib.Content(book.ID())
+// restoreDocumentIDs runs under the per-book lock, creating a missing sidecar.
+// The book is re-read there, since the Restore snapshot's size may predate an
+// edit and would hash the wrong prefix of the file.
+func restoreDocumentIDs(lib *library.Library, id int64, root *os.Root) ([]string, error) {
+	raw, err := root.ReadFile("kosync.json")
+	if errors.Is(err, fs.ErrNotExist) {
+		book, err := lib.Get(id)
+		if err != nil {
+			return nil, err
+		}
+		docID, err := computeDocumentID(book, func() (library.EpubReader, error) { return lib.Content(id) })
+		if err != nil {
+			return nil, fmt.Errorf("computing document ID: %w", err)
+		}
+		if err := writeSidecar(root, SidecarData{DocumentIDs: []string{docID}}); err != nil {
+			return nil, fmt.Errorf("writing sidecar: %w", err)
+		}
+		return []string{docID}, nil
+	}
 	if err != nil {
-		return fmt.Errorf("opening epub: %w", err)
-	}
-	defer epub.Close()
-
-	docID, err := PartialMD5(epub, book.EpubSize())
-	if err != nil {
-		return fmt.Errorf("computing document ID: %w", err)
+		return nil, fmt.Errorf("reading sidecar: %w", err)
 	}
 
-	if err := lib.WithSidecars(book.ID(), func(root *os.Root) error {
-		return writeSidecar(root, SidecarData{
-			DocumentIDs: []string{docID},
-			Progress:    Progress{},
-		})
-	}); err != nil {
-		return fmt.Errorf("writing sidecar: %w", err)
+	var sidecar SidecarData
+	if err := json.Unmarshal(raw, &sidecar); err != nil {
+		return nil, fmt.Errorf("corrupt sidecar: %w", err)
 	}
-
-	index[docID] = book.ID()
-	return nil
+	return sidecar.DocumentIDs, nil
 }
 
 // Assign computes the document ID and initializes the sidecar (OnIngested).
@@ -278,16 +272,12 @@ func readSidecar(sidecars *os.Root) (*SidecarData, error) {
 	return &data, nil
 }
 
-// writeSidecar renames into place. A truncated kosync.json fails to parse,
-// which loses the progress and fails every later PUT for the book.
+// writeSidecar must stay atomic and durable. A torn kosync.json fails to
+// parse, which loses the progress and fails every later PUT for the book.
 func writeSidecar(sidecars *os.Root, data SidecarData) error {
 	raw, err := json.Marshal(data)
 	if err != nil {
 		return err
 	}
-	const tmpName = ".kosync.json.tmp"
-	if err := sidecars.WriteFile(tmpName, raw, 0644); err != nil {
-		return err
-	}
-	return sidecars.Rename(tmpName, "kosync.json")
+	return library.WriteSidecarFile(sidecars, "kosync.json", raw)
 }

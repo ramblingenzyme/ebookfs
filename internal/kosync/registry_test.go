@@ -3,6 +3,7 @@ package kosync
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
@@ -62,19 +63,41 @@ func TestRestoreCreatesMissingSidecars(t *testing.T) {
 		if bookID := snap[sidecar.DocumentIDs[0]]; bookID != book.ID() {
 			t.Errorf("index[%s] = %d, want %d", sidecar.DocumentIDs[0], bookID, book.ID())
 		}
+
+		// A wrong size still hashes to a non-empty ID, just not the one
+		// KOReader sends, so compare against the file as KOReader sees it.
+		f, err := os.Open(filepath.Join(lib.tmpDir, book.EpubPath()))
+		if err != nil {
+			t.Fatalf("opening epub: %v", err)
+		}
+		fi, err := f.Stat()
+		if err != nil {
+			f.Close()
+			t.Fatalf("stat epub: %v", err)
+		}
+		want, err := PartialMD5(f, fi.Size())
+		f.Close()
+		if err != nil {
+			t.Fatalf("hashing epub: %v", err)
+		}
+		if got := sidecar.DocumentIDs[0]; got != want {
+			t.Errorf("book %d document ID = %s, want %s", book.ID(), got, want)
+		}
 	}
 }
 
 // TestRestoreSkipsCorruptSidecars verifies Restore skips books with corrupt
-// sidecars and indexes the rest.
+// sidecars and indexes the rest. The corrupt file stays as it was, since the
+// progress in it may still be recoverable by hand.
 func TestRestoreSkipsCorruptSidecars(t *testing.T) {
 	lib := openTestLibrary(t)
 
 	book1 := ingestTestEpub(t, lib.Library, buildTestEpub(t, "Good Book", "Alice"))
 	book2 := ingestTestEpub(t, lib.Library, buildTestEpub(t, "Corrupt Book", "Bob"))
 
+	const corrupt = "{corrupt json"
 	if err := lib.Library.WithSidecars(book2.ID(), func(root *os.Root) error {
-		return root.WriteFile("kosync.json", []byte("{corrupt json"), 0644)
+		return root.WriteFile("kosync.json", []byte(corrupt), 0644)
 	}); err != nil {
 		t.Fatalf("corrupting sidecar: %v", err)
 	}
@@ -93,5 +116,13 @@ func TestRestoreSkipsCorruptSidecars(t *testing.T) {
 		if bookID != book1.ID() {
 			t.Errorf("index book_id = %d, want %d", bookID, book1.ID())
 		}
+	}
+
+	raw, err := lib.Library.ReadSidecar(book2.ID(), "kosync.json")
+	if err != nil {
+		t.Fatalf("reading corrupt sidecar after Restore: %v", err)
+	}
+	if string(raw) != corrupt {
+		t.Errorf("corrupt sidecar = %q after Restore, want it left as %q", raw, corrupt)
 	}
 }
