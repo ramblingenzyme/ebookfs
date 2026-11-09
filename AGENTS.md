@@ -6,7 +6,7 @@
 - `internal/` — app code: `atomicfs`, `book` (+ `edits`), `config`, `frontend`, `fs`, `kosync`, `opds`, `testing` (shared test helpers), `util`
 - `pkg/epub/` — public EPUB parsing library (`README.md`); `internal/` holds `content`, `ncx`, `ocf`, `opf`, `xml`
 - `pkg/library/` — library management (cleanup, config, concurrency); `internal/` holds `drift`, `epub`, `fsutil`, `index`, `reconcile`, `store`
-- `docs/` — `DECISIONS.md`, `deployment.md`, `kosync.md`, `namespace.md`, `security.md`
+- `docs/` — `DECISIONS.md`, `adding-a-field.md`, `deployment.md`, `kosync.md`, `namespace.md`, `security.md`
 - `adrs/` — architecture decision records
 - `config.toml` — runtime config; `configs/config.example.toml` is the template
 - `scripts/`, `testdata/`, `build/` (Dockerfile) — support material
@@ -136,6 +136,9 @@ Turn history into a standing property:
     and internal/ for the library. Importing a domain-free utility such as
     internal/atomicfs is fine, since it carries no ebookfs concept into either
     package.
+  - **Before adding a book field or query filter:** follow
+    docs/adding-a-field.md. Several of the places a field must be added fail
+    silently when missed.
   - **Planning docs:** keep TODO.md and docs/DECISIONS.md at the design level.
     No file:line references and no internal Go symbols. Public names (9P paths,
     config fields, a proposed interface) are fine.

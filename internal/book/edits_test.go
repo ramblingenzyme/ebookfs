@@ -3,6 +3,7 @@ package book
 import (
 	"errors"
 	"math"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -378,18 +379,21 @@ func TestValidateCoverEmptyBytes(t *testing.T) {
 	}
 }
 
+// Every field is set alone. Only the cover and the meta.toml fields leave the
+// OPF untouched.
 func TestHasBibEdits(t *testing.T) {
-	var empty Edits
-	if empty.HasBibEdits() {
-		t.Error("HasBibEdits should be false for empty Edits")
+	if (Edits{}).HasBibEdits() {
+		t.Error("HasBibEdits is true for an empty Edits")
 	}
-	title := "x"
-	if !(&Edits{Title: &title}).HasBibEdits() {
-		t.Error("HasBibEdits should be true when Title is set")
-	}
-	series := "S"
-	if !(&Edits{Series: &series}).HasBibEdits() {
-		t.Error("HasBibEdits should be true when Series is set")
+	notBib := map[string]bool{"Cover": true, "Status": true, "Rating": true, "Tags": true}
+	typ := reflect.TypeFor[Edits]()
+	for i := range typ.NumField() {
+		f := typ.Field(i)
+		var e Edits
+		reflect.ValueOf(&e).Elem().Field(i).Set(reflect.New(f.Type.Elem()))
+		if got, want := e.HasBibEdits(), !notBib[f.Name]; got != want {
+			t.Errorf("HasBibEdits with only %s set = %v, want %v", f.Name, got, want)
+		}
 	}
 }
 

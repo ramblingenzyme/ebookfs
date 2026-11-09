@@ -59,11 +59,14 @@ func (e Edits) Normalized() Edits {
 	return e
 }
 
+// HasBibEdits reports whether e sets a field the OPF carries. It clears the
+// fields that live elsewhere, so a new bib field counts with no change here,
+// but a new meta.toml field must be cleared too. Missed, it opens the epub for
+// an edit that changes nothing in it, and a signed epub refuses that edit.
 func (e Edits) HasBibEdits() bool {
-	return e.Title != nil || e.SortTitle != nil || e.Description != nil ||
-		e.Language != nil || e.Publisher != nil || e.Rights != nil ||
-		e.Authors != nil || e.Series != nil || e.SeriesIndex != nil ||
-		e.Subjects != nil || e.Contributors != nil
+	// This method has a value receiver, not a pointer receiver, so e is already a copy
+	e.Cover, e.Status, e.Rating, e.Tags = nil, nil, nil, nil
+	return e != Edits{}
 }
 
 func (e Edits) HasCoverEdit() bool { return e.Cover != nil }

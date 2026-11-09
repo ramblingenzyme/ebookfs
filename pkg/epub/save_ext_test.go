@@ -7,6 +7,7 @@ import (
 	"image/gif"
 	"image/jpeg"
 	"image/png"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -1758,5 +1759,96 @@ func TestAuthorRenameDropsRefinements(t *testing.T) {
 	}
 	if !bytes.Contains(opfBytes, []byte("Smith, Jane")) {
 		t.Error("the supplied sort name was not written")
+	}
+}
+
+// Every Metadata field is filled by reflection, so a field added to Metadata
+// but missed in one of Book's per-field lists fails here: newBook and it is
+// never read back, moved or write and it is never saved, take and clearing it
+// compares equal to the zero value and is never saved.
+func TestSaveRoundTripsEveryMetadataField(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		opf  epubtest.PackageDoc
+	}{
+		{"EPUB 3", epubtest.OPF3},
+		{"EPUB 2", epubtest.OPF2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := epubtest.Build(t, tc.opf)
+			var want epub.Metadata
+			fillMetadata(t, &want)
+
+			if _, err := save(t, path, func(b *epub.Book) { b.Metadata = want }); err != nil {
+				t.Fatal(err)
+			}
+			if got := open(t, path).Metadata; !reflect.DeepEqual(got, want) {
+				t.Fatalf("after setting every field:\n got %+v\nwant %+v", got, want)
+			}
+
+			// take must clone a slice, or the in-place change also lands in orig
+			// and Save sees nothing to write.
+			mutated := want
+			fillMetadata(t, &mutated)
+			mutateSlices(t, &mutated)
+			if _, err := save(t, path, func(b *epub.Book) { mutateSlices(t, &b.Metadata) }); err != nil {
+				t.Fatal(err)
+			}
+			if got := open(t, path).Metadata; !reflect.DeepEqual(got, mutated) {
+				t.Fatalf("after changing slices in place:\n got %+v\nwant %+v", got, mutated)
+			}
+
+			if _, err := save(t, path, func(b *epub.Book) { b.Metadata = epub.Metadata{} }); err != nil {
+				t.Fatal(err)
+			}
+			got := reflect.ValueOf(open(t, path).Metadata)
+			for i := range got.NumField() {
+				f := got.Field(i)
+				if cleared := f.IsZero() || (f.Kind() == reflect.Slice && f.Len() == 0); !cleared {
+					t.Errorf("after clearing every field, %s = %v", got.Type().Field(i).Name, f.Interface())
+				}
+			}
+		})
+	}
+}
+
+// fillMetadata gives every field a distinct value, and fails on a field type it
+// has no case for, so a new type gets one.
+func fillMetadata(t *testing.T, m *epub.Metadata) {
+	t.Helper()
+	v := reflect.ValueOf(m).Elem()
+	for i := range v.NumField() {
+		f, name := v.Field(i), v.Type().Field(i).Name
+		switch f.Interface().(type) {
+		case string:
+			f.SetString(name + " value")
+		case []string:
+			f.Set(reflect.ValueOf([]string{name + " one", name + " two"}))
+		case []epub.Author:
+			f.Set(reflect.ValueOf([]epub.Author{{Name: "Ann One", SortName: "One, Ann"}, {Name: "Bo Two", SortName: "Two, Bo"}}))
+		case []epub.Contributor:
+			f.Set(reflect.ValueOf([]epub.Contributor{{Name: "Cy One", Role: "edt"}, {Name: "Di Two", Role: "trl"}}))
+		case *epub.Series:
+			f.Set(reflect.ValueOf(&epub.Series{Name: "Saga", Index: "2"}))
+		default:
+			t.Fatalf("Metadata.%s is a %s, which fillMetadata has no case for", name, f.Type())
+		}
+	}
+}
+
+// mutateSlices changes the first element of every slice field in place.
+func mutateSlices(t *testing.T, m *epub.Metadata) {
+	t.Helper()
+	v := reflect.ValueOf(m).Elem()
+	for i := range v.NumField() {
+		f := v.Field(i)
+		if f.Kind() != reflect.Slice || f.Len() == 0 {
+			continue
+		}
+		first := f.Index(0)
+		if first.Kind() == reflect.Struct {
+			first = first.Field(0)
+		}
+		first.SetString(first.String() + " changed")
 	}
 }

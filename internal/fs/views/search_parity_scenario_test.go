@@ -10,6 +10,7 @@
 package views
 
 import (
+	"reflect"
 	"slices"
 	"testing"
 
@@ -25,9 +26,11 @@ type parityBook struct {
 
 func TestSearchMatcherAgreesWithSQL(t *testing.T) {
 	books := []parityBook{
-		{"Findable", []string{"Alice"}, library.Edits{Tags: &[]string{"sf"}, Status: new("reading"), Series: new("Saga"), SeriesIndex: new("1")}},
+		{"Findable", []string{"Alice"}, library.Edits{Tags: &[]string{"sf"}, Status: new("reading"), Series: new("Saga"), SeriesIndex: new("1"),
+			Subjects: &[]string{"space"}, Publisher: new("Tor"), Language: new("fr")}},
 		{"Plain Book", []string{"Alice"}, library.Edits{}},
-		{"Ünderland", []string{"Bob"}, library.Edits{Tags: &[]string{"fantasy"}, Status: new("read"), Series: new("Saga"), SeriesIndex: new("2"), Authors: &[]library.Author{{Name: "Bob", SortName: "Bobson, Bob"}}}},
+		{"Ünderland", []string{"Bob"}, library.Edits{Tags: &[]string{"fantasy"}, Status: new("read"), Series: new("Saga"), SeriesIndex: new("2"), Authors: &[]library.Author{{Name: "Bob", SortName: "Bobson, Bob"}},
+			Subjects: &[]string{"space", "myth"}, Publisher: new("Gollancz")}},
 		{"STRAÜSS", []string{"Carol"}, library.Edits{}},
 		{"Good Omens", []string{"Neil Gaiman", "Terry Pratchett"}, library.Edits{}},
 		{"100% Wool", []string{"Dave"}, library.Edits{}},
@@ -37,6 +40,24 @@ func TestSearchMatcherAgreesWithSQL(t *testing.T) {
 	}
 
 	lib, all := parityBooks(t, books)
+
+	everyField := library.Query{
+		Authors: []string{"Alice"}, Tags: []string{"sf"}, Series: []string{"Saga"},
+		Status: []string{"reading"}, Subjects: []string{"space"}, Publisher: []string{"Tor"},
+		Language: []string{"fr"}, IDs: []int64{1}, Titles: []string{"find"},
+	}
+	// A filter field added to Query fails here until a case exercises it. Order,
+	// Limit and ExactTitles shape or qualify a match, so they are left out.
+	v := reflect.ValueOf(everyField)
+	for i := range v.NumField() {
+		switch name := v.Type().Field(i).Name; name {
+		case "Order", "Limit", "ExactTitles":
+		default:
+			if v.Field(i).IsZero() {
+				t.Errorf("the every-field case leaves Query.%s unset", name)
+			}
+		}
+	}
 
 	for _, tc := range []struct {
 		name string
@@ -59,8 +80,13 @@ func TestSearchMatcherAgreesWithSQL(t *testing.T) {
 		{"series", library.Query{Series: []string{"Saga"}}, []string{"Findable", "Ünderland"}, ""},
 		{"status", library.Query{Status: []string{"reading"}}, []string{"Findable"}, ""},
 		{"ids", library.Query{IDs: []int64{1, 3}}, []string{"Findable", "Ünderland"}, ""},
-		{"every field", library.Query{Authors: []string{"Alice"}, Tags: []string{"sf"}, Series: []string{"Saga"}, Status: []string{"reading"}, IDs: []int64{1}, Titles: []string{"find"}}, []string{"Findable"}, ""},
+		{"subject", library.Query{Subjects: []string{"space"}}, []string{"Findable", "Ünderland"}, ""},
+		{"subjects OR", library.Query{Subjects: []string{"myth", "absent"}}, []string{"Ünderland"}, ""},
+		{"publisher", library.Query{Publisher: []string{"Tor"}}, []string{"Findable"}, ""},
+		{"language", library.Query{Language: []string{"fr"}}, []string{"Findable"}, ""},
+		{"every field", everyField, []string{"Findable"}, ""},
 		{"one field fails", library.Query{Tags: []string{"sf"}, Status: []string{"read"}}, nil, ""},
+		{"subject fails", library.Query{Tags: []string{"sf"}, Subjects: []string{"myth"}}, nil, ""},
 		{"literal percent", library.Query{Titles: []string{"100%"}}, []string{"100% Wool"}, ""},
 		{"literal underscore", library.Query{Titles: []string{"x_y"}}, []string{"x_y Files"}, ""},
 		{"no match", library.Query{Titles: []string{"nothing here"}}, nil, ""},

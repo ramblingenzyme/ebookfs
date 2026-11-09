@@ -34,6 +34,20 @@ func matchesStatus(q library.Query, b *library.Book) bool {
 	return len(q.Status) == 0 || slices.Contains(q.Status, b.Status())
 }
 
+func matchesSubjects(q library.Query, b *library.Book) bool {
+	return len(q.Subjects) == 0 || slices.ContainsFunc(q.Subjects, func(s string) bool {
+		return slices.Contains(b.Subjects(), s)
+	})
+}
+
+func matchesPublisher(q library.Query, b *library.Book) bool {
+	return len(q.Publisher) == 0 || slices.Contains(q.Publisher, b.Publisher())
+}
+
+func matchesLanguage(q library.Query, b *library.Book) bool {
+	return len(q.Language) == 0 || slices.Contains(q.Language, b.Language())
+}
+
 func matchesIDs(q library.Query, b *library.Book) bool {
 	return len(q.IDs) == 0 || slices.Contains(q.IDs, b.ID())
 }
@@ -65,6 +79,7 @@ func matchesTitles(q library.Query, b *library.Book) bool {
 func makeMatchesFn(q library.Query) func(*library.Book) bool {
 	return func(b *library.Book) bool {
 		return matchesAuthors(q, b) && matchesTags(q, b) && matchesSeries(q, b) &&
-			matchesStatus(q, b) && matchesIDs(q, b) && matchesTitles(q, b)
+			matchesStatus(q, b) && matchesSubjects(q, b) && matchesPublisher(q, b) &&
+			matchesLanguage(q, b) && matchesIDs(q, b) && matchesTitles(q, b)
 	}
 }

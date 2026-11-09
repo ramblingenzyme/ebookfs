@@ -3,6 +3,7 @@ package ctl
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -226,10 +227,13 @@ func renameSeries(f *CtlFile, args []string) string {
 // --- helpers ---
 
 // idsOnly reports whether q came from a bare id-spec rather than a query that
-// happens to name ids.
+// happens to name ids. It compares against the zero Query, so a filter field
+// added to Query counts without a change here. Order, Limit and ExactTitles
+// select nothing on their own, so they are cleared first.
 func idsOnly(q library.Query) bool {
-	return len(q.IDs) > 0 && len(q.Authors) == 0 && len(q.Tags) == 0 &&
-		len(q.Series) == 0 && len(q.Status) == 0 && len(q.Titles) == 0
+	filters := q
+	filters.IDs, filters.Order, filters.Limit, filters.ExactTitles = nil, 0, 0, false
+	return len(q.IDs) > 0 && reflect.DeepEqual(filters, library.Query{})
 }
 
 // dedupeAuthors keeps the first occurrence of each display name, so
