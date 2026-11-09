@@ -11,7 +11,7 @@ import (
 // does, reports missing. Both failures are worded here because every file in
 // this package meets them, the second when a book is removed after its fid was
 // opened.
-// ponytail: remove present arg, likely after deletinng benchmark tests
+// ponytail: remove present arg, likely after deleting benchmark tests
 func snapshot(present bool, missing string, book func() *library.Book) (*library.Book, error) {
 	if !present {
 		return nil, errors.New(missing)

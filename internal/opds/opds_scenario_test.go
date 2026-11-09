@@ -1,5 +1,5 @@
 // The catalog driven the way an OPDS reader drives it: an HTTP request in, a
-// parsed Atom document out. Only the library and the exporter are faked.
+// parsed Atom document out. Only the library is faked.
 //
 // These pin what no single source file holds. A href written into one feed
 // routes back to the query it names, and a facet value with a slash or a space

@@ -1,8 +1,8 @@
 // Package book defines the internal book record types used by store, index,
 // and library, and Edits, the partial update to one.
 //
-// Edits spans the whole record as Book does: seven fields the epub carries,
-// plus Status, Rating and Tags, which live in the meta.toml sidecar.
+// Edits spans the whole record as Book does: the fields the epub carries and
+// the fields the meta.toml sidecar holds.
 package book
 
 import (
@@ -57,10 +57,9 @@ func StatusList() string {
 	return strings.Join(Statuses[:len(Statuses)-1], ", ") + ", or " + Statuses[len(Statuses)-1]
 }
 
-// AuthorSep joins co-authors in every name derived for filing: the library
-// directory, the epub filename, and the reader export's folder. All three must
+// AuthorSep joins co-authors in every name derived for filing. Those names must
 // agree or a book is written under one name and looked up under another, so
-// they read the separator from here rather than spelling it.
+// each reads the separator from here rather than spelling it.
 const AuthorSep = " & "
 
 // JoinAuthors renders authors as a display string joined by sep, skipping empty

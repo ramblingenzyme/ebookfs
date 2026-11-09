@@ -8,9 +8,9 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// ParseQuery parses "term1+term2+..." where each term is prefix:value. It
-// backs both the search view's clone file and ctl's id-spec, so the two
-// surfaces share one syntax.
+// ParseQuery parses "term1+term2+..." where each term is prefix:value. Every
+// 9P surface that takes a query parses it here, so a change to the syntax
+// reaches them all.
 //
 // Values sharing a prefix are OR'd within the field, different prefixes AND'd
 // across fields. author matches a display name or a sort name, as

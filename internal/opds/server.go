@@ -39,8 +39,8 @@ func New(lib Library, cfg Config) *Server {
 	}
 }
 
-// NewHandler mounts the OPDS handler at Prefix with the two content routes
-// ahead of it. ServeMux prefers the more specific pattern, so the content
+// NewHandler mounts the OPDS handler at Prefix with its content routes ahead
+// of it. ServeMux prefers the more specific pattern, so the content
 // routes win over the catalog's subtree match.
 func NewHandler(lib Library, baseURL string) http.Handler {
 	files := &content{lib: lib}

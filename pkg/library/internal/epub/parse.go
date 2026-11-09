@@ -1,5 +1,5 @@
 // Package epub translates between pkg/epub and the library's book model. It
-// also applies four rules of ebookfs's own:
+// also applies rules of ebookfs's own:
 //
 //   - A book needs a title and at least one author, because the store builds
 //     every path from them.

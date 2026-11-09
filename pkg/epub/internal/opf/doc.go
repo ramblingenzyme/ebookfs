@@ -6,11 +6,9 @@
 // is defaulted or rejected; Package.Metadata says what that leaves to the
 // caller.
 //
-//   - A field with an encoding of its own is a type with get and set (title,
-//     authors, series, modified, subjects, contributors). Description, language,
-//     publisher and rights are one plain element each, read by a Package
-//     method and written by a Set method. A read-only field is a single
-//     Package method (pubdate, identifiers, cover).
+//   - A field with an encoding of its own is a type with get and set. A field
+//     that is one plain element is read by a Package method and written by a
+//     Set method. A read-only field is a single Package method.
 //
 //   - A field says what a value should be, not where it is kept. pkgdoc's
 //     slots know where, and this package does not import etree.
@@ -142,7 +140,7 @@ func (o *Package) Metadata(base string) Metadata {
 }
 
 // writeV3 reports whether the EPUB 3 slot takes the value, for a field recorded
-// both the EPUB 3 way and as a calibre meta (sort title and series).
+// both the EPUB 3 way and as a calibre meta.
 //
 // A slot already in the file is rewritten whatever the version says, since a
 // stale one would outrank the calibre meta on read. A v3 package without one

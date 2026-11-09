@@ -45,8 +45,8 @@ type Edits struct {
 }
 
 // Normalized returns a copy of e with the persisted-precision rules applied:
-// ratings are stored to 2 decimal places. Rounding is a storage policy enforced
-// by Library.Edit for every caller, not a parsing concern re-implemented by each
+// ratings are stored to 2 decimal places. Rounding is a storage policy the
+// library enforces on every edit, not a parsing concern re-implemented by each
 // frontend. NaN/Inf survive rounding and are rejected by Validate.
 //
 // The series index is not rounded: it is the string the epub carries, and

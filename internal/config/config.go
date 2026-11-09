@@ -24,7 +24,7 @@ type LibraryConfig struct {
 	Root      string `toml:"root"`
 	InboxTemp string `toml:"inbox_temp"`
 	IndexPath string `toml:"index_path"`
-	StateDir  string `toml:"state_dir"` // Small persistent state (kosync mapping, queues). Defaults to Root if empty.
+	StateDir  string `toml:"state_dir"` // Hook state, and the index unless index_path is set. Defaults to Root if empty.
 }
 
 type SearchConfig struct {

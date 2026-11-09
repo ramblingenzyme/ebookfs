@@ -40,8 +40,7 @@ func (n *namedBookDir) Stat() proto.Stat {
 // groupingDir is the shared base for by-x view directories. StaticDir is a
 // pointer, never a value, because fs.StaticDir embeds sync.RWMutex (via its
 // BaseFile). Copying a mutex after first use is undefined behaviour, and
-// groupingDir is returned by value and embedded by value in every view type
-// (keyedDir, byIDDir, readerDir). A pointer avoids copying the mutex.
+// groupingDir is returned and embedded by value.
 type groupingDir struct {
 	*fs.StaticDir
 	f *fs.FS
@@ -87,11 +86,9 @@ func (g *groupingDir) removeFromChild(name string, dir *book.BookDir) {
 // listing, as by-series does.
 func bookListFactory(s *proto.Stat) fs.FSNode { return newBookListDir(s) }
 
-// keyedDir is a by-x view: one child per key the book yields. by-author,
-// by-tag, by-status and by-series are all this type.
-//
-// by-id and reader embed groupingDir directly, since neither files a book
-// under a key the book carries.
+// keyedDir is a by-x view: one child per key the book yields. A view that
+// files a book under something other than a key it carries embeds groupingDir
+// directly instead.
 type keyedDir struct {
 	groupingDir
 	// keys returns values verbatim. entryNames makes them safe, so a keys

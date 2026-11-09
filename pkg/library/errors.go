@@ -32,7 +32,7 @@ var ErrDuplicateOnDisk = errors.New("book already on disk but not indexed")
 // callers. They are the same values, so errors.Is matches either name.
 //
 // ErrNotEpub means the file is not a zip, or lacks the mimetype that
-// OCF 3.3 §4.3.3 fixes. The other three name where the path from the container
+// OCF 3.3 §4.3.3 fixes. The others name where the path from the container
 // to the package document breaks.
 var (
 	ErrNotEpub         = epub.ErrNotEpub

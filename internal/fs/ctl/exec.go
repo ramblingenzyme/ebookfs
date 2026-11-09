@@ -60,8 +60,8 @@ duplicate <old>.`
 authors field file).`
 )
 
-// commands is ordered, since the help file lists them in this order. A scan of
-// eight entries is enough against one admin typing.
+// commands is ordered, since the help file lists them in this order. A linear
+// scan is enough against one admin typing.
 var commands = []command{
 	{"add-tag", "<tag> <id-spec>", "Add a tag to matching books.", addTag},
 	{"remove-tag", "<tag> <id-spec>", "Remove a tag from matching books.", removeTag},

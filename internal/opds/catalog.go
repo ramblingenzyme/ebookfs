@@ -53,7 +53,7 @@ func (c *catalog) Publication(_ context.Context, id string) (*opds.Publication, 
 	if err != nil {
 		return nil, err
 	}
-	p := toPublication(b, b.Filename())
+	p := toPublication(b)
 	return &p, nil
 }
 
@@ -144,7 +144,7 @@ func (c *catalog) page(f *opds.Feed, baseHref string, reqPage int, books []*libr
 	start := min((page-1)*pageSize, len(books))
 	end := min(start+pageSize, len(books))
 	for _, b := range books[start:end] {
-		f.Add(toPublication(b, b.Filename()))
+		f.Add(toPublication(b))
 	}
 	f.Page(len(books), pageSize, start+1)
 	return f.Paged(baseHref, page, end < len(books))

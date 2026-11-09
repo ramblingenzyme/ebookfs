@@ -254,7 +254,8 @@ func (idx *Index) setSeries(q *dbsqlc.Queries, b *book.Book) error {
 }
 
 func (idx *Index) deleteBook(q *dbsqlc.Queries, id int64) error {
-	// ON DELETE CASCADE handles book_authors, book_tags, identifiers.
+	// The schema cascades the book's relation rows, so only the entities no
+	// book references are left for cleanupOrphans.
 	if err := q.DeleteBook(idx.ctx, id); err != nil {
 		return err
 	}

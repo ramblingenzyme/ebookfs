@@ -28,8 +28,8 @@ func (c *content) byID(serve func(*library.Book, http.ResponseWriter, *http.Requ
 	}
 }
 
-// serveEpub delivers a book's export rendition, using http.ServeContent and
-// Range support when the rendition size is known.
+// serveEpub delivers a book's epub, with http.ServeContent's Range support when
+// the book's size is known.
 func (c *content) serveEpub(b *library.Book, w http.ResponseWriter, r *http.Request) error {
 	rd, err := c.lib.Content(b.ID())
 	if err != nil {
@@ -54,9 +54,6 @@ func (c *content) serveEpub(b *library.Book, w http.ResponseWriter, r *http.Requ
 	return nil
 }
 
-// serveCover delivers a book's cover image from the original epub rather than
-// the export rendition, so browsing a catalog of covers never triggers a
-// conversion.
 func (c *content) serveCover(b *library.Book, w http.ResponseWriter, r *http.Request) error {
 	rd, err := c.lib.Content(b.ID())
 	if err != nil {

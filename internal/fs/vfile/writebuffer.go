@@ -7,9 +7,9 @@ import (
 )
 
 // WriteBuffer accumulates per-fid 9P write data for files whose writes are
-// buffered and committed when the fid is closed (field, cover, and control
-// files). It is self-locking with its own mutex, independent of the embedding
-// file's, so callers never juggle lock ordering against the base-file methods.
+// buffered and committed when the fid is closed. It is self-locking with its
+// own mutex, independent of the embedding file's, so callers never juggle lock
+// ordering against the base-file methods.
 //
 // ponytail: a failed commit returns its error in Rclunk, and Linux v9fs clunks
 // from ->release, whose result the VFS discards. close(2) returns 0, so

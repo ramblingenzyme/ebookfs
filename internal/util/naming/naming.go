@@ -9,9 +9,10 @@ import "strings"
 // its caller.
 //
 // FAT forbids \ : * ? " < > | and every control character, so fatComponent
-// drops all of them. POSIX and 9P bar only '/' and NUL, so pathComponent drops
-// no more than that: a name is metadata stored as the file wrote it (EPUB 3.3
-// §5.5.2), and removing a character the destination accepts loses part of it.
+// replaces the first set with '-' and drops control characters. POSIX and 9P
+// bar only '/' and NUL, so pathComponent drops no more than that: a name is
+// metadata stored as the file wrote it (EPUB 3.3 §5.5.2), and removing a
+// character the destination accepts loses part of it.
 //
 // Both trim leading and trailing dots, spaces and tabs. FAT allows no trailing
 // space or period, and a leading ".." lets filepath.Join walk out of the

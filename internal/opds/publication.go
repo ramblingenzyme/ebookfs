@@ -15,10 +15,7 @@ import (
 
 // toPublication leaves out rating and reading status, since neither has an
 // OPDS slot.
-//
-// filename is the exporter's name for the book, which a converting exporter
-// spells differently from b.Filename().
-func toPublication(b *library.Book, filename string) opds.Publication {
+func toPublication(b *library.Book) opds.Publication {
 	id := strconv.FormatInt(b.ID(), 10)
 	p := opds.NewPublication(urn("book:"+id), b.Title()).
 		UpdatedAt(b.DateModified()).
@@ -82,7 +79,7 @@ func toPublication(b *library.Book, filename string) opds.Publication {
 
 	p.Acquire(opds.Acquisition{
 		Rel:  opds.AcquireOpenAccess,
-		Href: contentPath(id, filename),
+		Href: contentPath(id, b.Filename()),
 		Type: mediaTypeEpub,
 	})
 
