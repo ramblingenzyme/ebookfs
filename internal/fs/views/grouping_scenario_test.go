@@ -1,7 +1,7 @@
-// One table over every by-x view: by-author, by-series, by-tag, by-status. They
-// differ only in which book property keys a group and whether a book can key
-// into more than one, so the nine rules they share are asserted once here rather
-// than copied into four files.
+// One table over every by-x view. They differ only in which book property keys
+// a group and whether a book can key into more than one, so the rules they
+// share are asserted once here rather than copied into each view's file. A new
+// view joins groupingViews.
 //
 // The rules: a book creates its group, distinct keys make distinct groups, one
 // key gathers several books, the last book out prunes the group, removing one
@@ -76,6 +76,15 @@ var groupingViews = []groupingView{
 		multiKey: true,
 	},
 	{
+		name:   "by-subjects",
+		newDir: func(reg *registry.BookRegistry) fs.Dir { return NewBySubjectsDir(reg) },
+		withKeys: func(id int64, title string, keys ...string) *library.Book {
+			return makeBookWithSubjects(id, title, "Author", keys...)
+		},
+		keyless:  func(id int64, title string) *library.Book { return makeBookWithSubjects(id, title, "Author") },
+		multiKey: true,
+	},
+	{
 		name:   "by-status",
 		newDir: func(reg *registry.BookRegistry) fs.Dir { return NewByStatusDir(reg) },
 		withKeys: func(id int64, title string, keys ...string) *library.Book {
@@ -113,6 +122,27 @@ func TestGroupNamesAreOneComponent(t *testing.T) {
 			// Remove has to mint the same name or the group is orphaned.
 			removeBookFromView(t, reg, d, 1)
 			fstest.ChildCount(t, d, 0)
+		})
+	}
+}
+
+// A value that names nothing would share naming.PathSafe's placeholder with
+// every other such value, and one with a control character is an entry a
+// shell cannot name. Validate refuses both, so a book carries one only from a
+// hand-edited meta.toml or an epub, and the view skips it.
+func TestGroupsSkipKeysThatCannotNameADirectory(t *testing.T) {
+	for _, v := range groupingViews {
+		if v.name != "by-tag" && v.name != "by-subjects" {
+			continue
+		}
+		t.Run(v.name, func(t *testing.T) {
+			reg := newTestRegistry(t)
+			d := v.newDir(reg)
+			reg.Load(v.withKeys(1, "Title", "...", "sci\nfi", "kept"))
+
+			if names := fstest.ChildNames(d); !slices.Equal(names, []string{"kept"}) {
+				t.Errorf("groups = %q, want only kept", names)
+			}
 		})
 	}
 }

@@ -118,6 +118,20 @@ func (d *keyedDir) entryNames(b *library.Book) []string {
 	return names
 }
 
+// nameableKeys drops the values a group directory cannot be named after: one
+// that names nothing, which naming.PathSafe would file with every other such
+// value under its placeholder, and one carrying a control character. Validate
+// refuses both on edit, so these arrive only from a file.
+func nameableKeys(values []string) []string {
+	keys := make([]string, 0, len(values))
+	for _, v := range values {
+		if !naming.NamesNothing(v) && !naming.HasControl(v) {
+			keys = append(keys, v)
+		}
+	}
+	return keys
+}
+
 func (d *keyedDir) Add(dir *book.BookDir) {
 	for _, name := range d.entryNames(dir.Book()) {
 		d.childDir(name, d.factory).(registry.BookView).Add(dir)

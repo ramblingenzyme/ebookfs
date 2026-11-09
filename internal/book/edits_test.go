@@ -178,6 +178,7 @@ func TestValidateTags(t *testing.T) {
 		{"leading dot", &[]string{".hidden", "v1.2"}, false},
 		// A '/' becomes '-' rather than trimming away, so it still names a group.
 		{"slash", &[]string{"sci/fi"}, false},
+		{"control character", &[]string{"sci\nfi"}, true},
 		{"duplicate", &[]string{"fiction", "sci-fi", "fiction"}, true},
 		{"duplicate after trimming", &[]string{"fiction", " fiction "}, true},
 	} {
@@ -204,6 +205,10 @@ func TestValidateSubjects(t *testing.T) {
 		{"distinct", &[]string{"Fiction", "History"}, ""},
 		{"duplicate", &[]string{"Fiction", "History", "Fiction"}, `subject 3 duplicates "Fiction"`},
 		{"duplicate after trimming", &[]string{"Fiction", " Fiction "}, `subject 2 duplicates "Fiction"`},
+		// by-subjects groups like by-tag, so the tag directory rule applies.
+		{"names nothing", &[]string{"Fiction", "..."}, `subject 2 is "...", which cannot name a directory`},
+		{"empty", &[]string{""}, `subject 1 is "", which cannot name a directory`},
+		{"control character", &[]string{"sci\x01fi"}, `subject 1 is "sci\x01fi", which cannot name a directory`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := Validate(Edits{Subjects: tc.subjects}, testBook("", nil))

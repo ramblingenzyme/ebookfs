@@ -194,7 +194,7 @@ func (e Edits) validateTags() string {
 		if strings.TrimSpace(t) == "" {
 			return fmt.Sprintf("tag %d is empty", i+1)
 		}
-		if naming.NamesNothing(t) {
+		if naming.NamesNothing(t) || naming.HasControl(t) {
 			return fmt.Sprintf("tag %d is %q, which cannot name a directory", i+1, t)
 		}
 	}
@@ -204,9 +204,16 @@ func (e Edits) validateTags() string {
 	return ""
 }
 
+// validateSubjects applies validateTags's directory rule, since a frontend
+// groups books by subject the same way.
 func (e Edits) validateSubjects() string {
 	if e.Subjects == nil {
 		return ""
+	}
+	for i, s := range *e.Subjects {
+		if naming.NamesNothing(s) || naming.HasControl(s) {
+			return fmt.Sprintf("subject %d is %q, which cannot name a directory", i+1, s)
+		}
 	}
 	if i := firstRepeat(*e.Subjects, strings.TrimSpace); i >= 0 {
 		return fmt.Sprintf("subject %d duplicates %q", i+1, strings.TrimSpace((*e.Subjects)[i]))

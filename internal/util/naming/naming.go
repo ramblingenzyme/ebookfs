@@ -2,7 +2,10 @@
 // path components.
 package naming
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 // fatComponent and pathComponent are the two character rules, one per
 // destination. Each returns "" when nothing survives, leaving the fallback to
@@ -69,3 +72,8 @@ func PathSafe(s string) string {
 // caller that owns its input, as ebookfs owns a tag, refuses them rather than
 // filing them all under the same name.
 func NamesNothing(s string) bool { return pathComponent(s) == "" }
+
+// HasControl reports whether s holds a control character. PathSafe keeps
+// one, since POSIX and 9P allow it, but a listing entry carrying a newline or
+// an escape is one a shell cannot name cleanly.
+func HasControl(s string) bool { return strings.ContainsFunc(s, unicode.IsControl) }
