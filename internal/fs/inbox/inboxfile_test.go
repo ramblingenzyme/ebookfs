@@ -141,3 +141,33 @@ func TestInboxFileOpen(t *testing.T) {
 		}
 	})
 }
+
+// A second upload under the same name replaces the first in the listing, and
+// the first's close leaves it there. That rests on go9p's DeleteChild clearing
+// the replaced file's parent, so the first's close finds no directory to delete
+// the name from.
+func TestInboxCloseLeavesASameNamedUploadListed(t *testing.T) {
+	f := util.NewTestFS(t)
+	dir := NewInboxDir(f, mock.Ingester{
+		IngestFn: func(string) (*library.Book, error) { return util.MakeBook(1, "Test", "Author"), nil },
+	})
+
+	first, err := dir.Create(f, "same.epub", 0644, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstFid := fstest.Fid(t, first, 1)
+	firstFid.Open(proto.Mode(0))
+	firstFid.Write(0, "first")
+
+	second, err := dir.Create(f, "same.epub", 0644, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fstest.Fid(t, second, 2).Open(proto.Mode(0))
+
+	firstFid.Close()
+	if got := dir.Children()["same.epub"]; got != second {
+		t.Errorf("after the first upload closed, same.epub is %v, want the second upload", got)
+	}
+}

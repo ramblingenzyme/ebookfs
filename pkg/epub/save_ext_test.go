@@ -1852,3 +1852,38 @@ func mutateSlices(t *testing.T, m *epub.Metadata) {
 		first.SetString(first.String() + " changed")
 	}
 }
+
+// A value repeated in the input is one element, at its first position,
+// whether or not the file already had it. The lookup once missed elements
+// created in the same write, so a new value was written twice, and each repeat
+// moved the element to the end.
+func TestSaveWritesARepeatedValueOnce(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		opf  epubtest.PackageDoc
+	}{
+		{"EPUB 3", epubtest.OPF3},
+		{"EPUB 2", epubtest.OPF2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := epubtest.Build(t, tc.opf)
+			if _, err := save(t, path, func(b *epub.Book) {
+				b.Subjects = []string{"First", "Second", "First"}
+				b.Authors = []epub.Author{{Name: "Ann First"}, {Name: "Bo Second"}, {Name: "Ann First"}}
+			}); err != nil {
+				t.Fatal(err)
+			}
+			b := open(t, path)
+			if want := []string{"First", "Second"}; !slices.Equal(b.Subjects, want) {
+				t.Errorf("subjects = %v, want %v", b.Subjects, want)
+			}
+			var names []string
+			for _, a := range b.Authors {
+				names = append(names, a.Name)
+			}
+			if want := []string{"Ann First", "Bo Second"}; !slices.Equal(names, want) {
+				t.Errorf("authors = %v, want %v", names, want)
+			}
+		})
+	}
+}

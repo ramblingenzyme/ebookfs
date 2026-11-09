@@ -35,6 +35,9 @@ func (f subjectsField) set(subjects []string) {
 		unclaimed[el] = true
 	}
 
+	// A repeat is placed once, since placing it again would move the element
+	// from its first position to the end.
+	placed := map[*pkgdoc.Element]bool{}
 	for _, text := range subjects {
 		el, reused := byText[text]
 		if reused {
@@ -42,8 +45,12 @@ func (f subjectsField) set(subjects []string) {
 		} else {
 			el = f.d.NewDC("subject")
 			el.Set(text)
+			byText[text] = el
 		}
-		el.Place()
+		if !placed[el] {
+			el.Place()
+			placed[el] = true
+		}
 	}
 
 	for el := range unclaimed {

@@ -142,41 +142,39 @@ func (d *searchDir) cleanupLoop() {
 	}
 }
 
-// cloneFile is the entry point for allocation. Opening it creates a new search
-// handle; reading returns the allocated id. Close is a no-op, since the handle
-// persists until "close" is written to its ctl file or the cleanup worker
-// reclaims it.
+// cloneFile is the entry point for allocation. The first read of a fid
+// allocates its handle and returns the id. Closing the fid forgets it, but the
+// handle persists until "close" is written to its ctl file or the cleanup
+// worker reclaims it.
 type cloneFile struct {
 	fs.BaseFile
-	search  *searchDir
+	search *searchDir
+	// mu guards handles, and Read holds it across allocation. The embedded
+	// file's lock cannot serve, since allocation adds a child to the search
+	// directory, which takes Stat, and so that lock, on every existing child.
+	mu      sync.Mutex
 	handles map[uint64]int64
 }
 
 func (f *cloneFile) Open(fid uint64, _ proto.Mode) error {
-	f.Lock()
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if _, exists := f.handles[fid]; !exists {
 		f.handles[fid] = 0
 	}
-	f.Unlock()
 	return nil
 }
 
 func (f *cloneFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error) {
-	f.Lock()
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	id, ok := f.handles[fid]
 	if !ok {
-		f.Unlock()
 		return nil, fmt.Errorf("not open")
 	}
-	needAlloc := id == 0
-	f.Unlock()
-
-	if needAlloc {
-		handle := f.search.allocateHandle()
-		f.Lock()
-		id = handle.id
+	if id == 0 {
+		id = f.search.allocateHandle().id
 		f.handles[fid] = id
-		f.Unlock()
 	}
 
 	data := []byte(strconv.FormatInt(id, 10) + "\n")
@@ -184,8 +182,8 @@ func (f *cloneFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error
 }
 
 func (f *cloneFile) Close(fid uint64) error {
-	f.Lock()
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	delete(f.handles, fid)
-	f.Unlock()
 	return nil
 }

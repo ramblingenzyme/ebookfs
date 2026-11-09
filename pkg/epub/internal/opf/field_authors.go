@@ -97,13 +97,20 @@ func (f authorsField) reconcileCreators(authors []Author) []*pkgdoc.Element {
 		}
 	}
 
+	// A repeat is placed once, since placing it again would move the creator
+	// from its first position to the end.
 	out := make([]*pkgdoc.Element, len(authors))
+	placed := map[*pkgdoc.Element]bool{}
 	for i, a := range authors {
 		c, reused := byName[a.Name]
 		if !reused {
 			c = f.d.NewDC("creator")
+			byName[a.Name] = c
 		}
-		c.Place()
+		if !placed[c] {
+			c.Place()
+			placed[c] = true
+		}
 		delete(unclaimed, c)
 		out[i] = c
 	}

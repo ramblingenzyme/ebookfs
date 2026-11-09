@@ -44,14 +44,17 @@ func Parse(b []byte, entry string) (*Page, error) {
 
 func (d *Page) Bytes() ([]byte, error) { return d.doc.WriteToBytes() }
 
-// FitCover resizes the cover image's frame to width by height, and reports
-// whether anything changed. A document that does not reference the cover image
-// is left alone.
+// FitCover resizes the cover image's frame to width by height, and returns the
+// document's new bytes, or nil if nothing changed. A document that does not
+// reference the cover image is left alone.
 //
 // The usual cover page is an SVG whose viewBox is the old image's pixel size,
 // so a replacement of different proportions is drawn cropped.
-func (d *Page) FitCover(coverPath string, width, height int) bool {
-	before, _ := d.Bytes()
+func (d *Page) FitCover(coverPath string, width, height int) ([]byte, error) {
+	before, err := d.Bytes()
+	if err != nil {
+		return nil, err
+	}
 
 	for _, img := range d.coverImages(coverPath) {
 		// A percentage already fits any image, and pixels would overflow a
@@ -70,8 +73,11 @@ func (d *Page) FitCover(coverPath string, width, height int) bool {
 		}
 	}
 
-	after, _ := d.Bytes()
-	return !bytes.Equal(before, after)
+	after, err := d.Bytes()
+	if err != nil || bytes.Equal(before, after) {
+		return nil, err
+	}
+	return after, nil
 }
 
 // coverImages returns the SVG <image> and HTML <img> elements that reference

@@ -223,11 +223,11 @@ func (b *Book) refitCoverPage(enc *ocf.EncryptionInfo, width, height int, replac
 		if err != nil {
 			continue
 		}
-		if page.FitCover(b.coverPath, width, height) {
-			out, err := page.Bytes()
-			if err != nil {
-				return err
-			}
+		out, err := page.FitCover(b.coverPath, width, height)
+		if err != nil {
+			return err
+		}
+		if out != nil {
 			replace[entry] = out
 			return nil
 		}

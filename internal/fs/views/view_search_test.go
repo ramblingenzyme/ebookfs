@@ -1,6 +1,7 @@
 package views
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
@@ -61,5 +62,46 @@ func TestSearchDirEnforcesMaxHandles(t *testing.T) {
 		if hasHandleDir(sd, id) {
 			t.Errorf("handle %d survived, want the least recently queried evicted first", id)
 		}
+	}
+}
+
+// Concurrent reads of one clone fid share one handle. Allocating outside the
+// clone file's lock once let each read see no handle yet and allocate its own,
+// and the extras lived until the TTL sweep.
+func TestCloneReadsOfOneFidShareAHandle(t *testing.T) {
+	_, sd := newTestSearchDir(t, 0, 0)
+	clone := sd.Children()["clone"].(*cloneFile)
+	if err := clone.Open(1, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	const readers = 64
+	start := make(chan struct{})
+	ids := make(chan string, readers)
+	var wg sync.WaitGroup
+	for range readers {
+		wg.Go(func() {
+			<-start
+			data, err := clone.Read(1, 0, 64)
+			if err != nil {
+				t.Error(err)
+			}
+			ids <- string(data)
+		})
+	}
+	close(start)
+	wg.Wait()
+	close(ids)
+
+	first := <-ids
+	for id := range ids {
+		if id != first {
+			t.Fatalf("one fid read back handles %q and %q", first, id)
+		}
+	}
+	sd.mu.Lock()
+	defer sd.mu.Unlock()
+	if len(sd.handles) != 1 {
+		t.Errorf("%d handles allocated for one fid, want 1", len(sd.handles))
 	}
 }
