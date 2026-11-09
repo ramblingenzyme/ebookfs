@@ -23,3 +23,27 @@ func TestResolveHref(t *testing.T) {
 		})
 	}
 }
+
+// XML 1.0 §2.2: Char ::= #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] |
+// [#x10000-#x10FFFF].
+func TestRepresentable(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		s    string
+		want bool
+	}{
+		{"plain", "Dune", true},
+		{"tab newline return", "a\tb\nc\rd", true},
+		{"astral", "📚", true},
+		{"NUL", "a\x00b", false},
+		{"other C0 control", "a\x01b", false},
+		{"noncharacter FFFE", "a￾b", false},
+		{"invalid UTF-8", "a\xffb", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Representable(tc.s); got != tc.want {
+				t.Errorf("Representable(%q) = %v, want %v", tc.s, got, tc.want)
+			}
+		})
+	}
+}

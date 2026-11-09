@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"unicode/utf8"
 )
 
 // Collapse is the whitespace normalization XML 1.0 §3.3.3 requires of a reader.
@@ -38,4 +39,23 @@ func ResolveHref(baseDir, href string) string {
 	}
 	resolved := (&url.URL{Path: root}).ResolveReference(ref)
 	return strings.TrimPrefix(resolved.Path, "/")
+}
+
+// Representable reports whether every character of s is one XML 1.0 §2.2's
+// Char production allows. Tab, newline and carriage return are the only
+// control characters it admits, and invalid UTF-8 has no representation.
+func Representable(s string) bool {
+	if !utf8.ValidString(s) {
+		return false
+	}
+	for _, r := range s {
+		ok := r == 0x9 || r == 0xA || r == 0xD ||
+			(r >= 0x20 && r <= 0xD7FF) ||
+			(r >= 0xE000 && r <= 0xFFFD) ||
+			(r >= 0x10000 && r <= 0x10FFFF)
+		if !ok {
+			return false
+		}
+	}
+	return true
 }

@@ -21,10 +21,12 @@ as the file states it, with no ebookfs rule attached.
    against its zero value, so clearing it is never saved. A slice copied
    without cloning shares the caller's array, so `Save` misses an in-place
    change.
-4. **Add it to `moved` and `write`** (`save.go`). `moved.changed` needs no edit.
+4. **Add it to `moved`, `write` and `representable`** (`save.go`).
+   `moved.changed` needs no edit.
 
-`TestSaveRoundTripsEveryMetadataField` fills every `Metadata` field by
-reflection, so it fails when any of steps 2–4 is missed.
+`TestSaveRoundTripsEveryMetadataField` and
+`TestSaveRefusesAnUnrepresentableCharacter` fill every `Metadata` field by
+reflection, so they fail when any of steps 2–4 is missed.
 
 ### The library: `pkg/library` and `internal/book`
 

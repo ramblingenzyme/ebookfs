@@ -7,6 +7,7 @@ import (
 	"image/gif"
 	"image/jpeg"
 	"image/png"
+	"os"
 	"reflect"
 	"slices"
 	"strings"
@@ -1885,5 +1886,72 @@ func TestSaveWritesARepeatedValueOnce(t *testing.T) {
 				t.Errorf("authors = %v, want %v", names, want)
 			}
 		})
+	}
+}
+
+// Each string a Metadata field holds is set alone to a character XML 1.0
+// cannot represent, found by reflection, so a field missing from Save's check
+// fails here. The file must be left as it was.
+func TestSaveRefusesAnUnrepresentableCharacter(t *testing.T) {
+	const bad = "bad\x01value"
+	typ := reflect.TypeFor[epub.Metadata]()
+	for i := range typ.NumField() {
+		field := typ.Field(i)
+		for name, value := range unrepresentableValues(t, field, bad) {
+			t.Run(name, func(t *testing.T) {
+				path := epubtest.Build(t, epubtest.OPF3)
+				before, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, err = save(t, path, func(b *epub.Book) {
+					reflect.ValueOf(&b.Metadata).Elem().Field(i).Set(value)
+				})
+				if err == nil || !strings.Contains(err.Error(), "XML 1.0") {
+					t.Errorf("Save err = %v, want the XML 1.0 refusal", err)
+				}
+				if after, _ := os.ReadFile(path); !bytes.Equal(before, after) {
+					t.Error("a refused save changed the file")
+				}
+			})
+		}
+	}
+
+	// Tab and newline are the control characters XML allows.
+	path := epubtest.Build(t, epubtest.OPF3)
+	if _, err := save(t, path, func(b *epub.Book) { b.Description = "one\ntwo\tthree" }); err != nil {
+		t.Errorf("Save with a tab and newline: %v", err)
+	}
+}
+
+// unrepresentableValues returns one value for field per string it can hold,
+// with that string set to bad and any other strings left representable.
+func unrepresentableValues(t *testing.T, field reflect.StructField, bad string) map[string]reflect.Value {
+	t.Helper()
+	switch typ := field.Type; {
+	case typ.Kind() == reflect.String:
+		return map[string]reflect.Value{field.Name: reflect.ValueOf(bad)}
+	case typ == reflect.TypeFor[[]string]():
+		return map[string]reflect.Value{field.Name: reflect.ValueOf([]string{bad})}
+	case typ.Kind() == reflect.Slice || typ.Kind() == reflect.Pointer:
+		elemType := typ.Elem()
+		out := map[string]reflect.Value{}
+		for j := range elemType.NumField() {
+			elem := reflect.New(elemType).Elem()
+			for k := range elemType.NumField() {
+				elem.Field(k).SetString("ok")
+			}
+			elem.Field(j).SetString(bad)
+			name := field.Name + "." + elemType.Field(j).Name
+			if typ.Kind() == reflect.Pointer {
+				out[name] = elem.Addr()
+			} else {
+				out[name] = reflect.Append(reflect.MakeSlice(typ, 0, 1), elem)
+			}
+		}
+		return out
+	default:
+		t.Fatalf("Metadata.%s is a %s, which unrepresentableValues has no case for", field.Name, field.Type)
+		return nil
 	}
 }

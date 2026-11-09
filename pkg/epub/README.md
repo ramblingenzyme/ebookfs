@@ -51,6 +51,9 @@ When writing metadata changes, the package preserves:
 The package refuses to edit:
 - Signed EPUBs (would invalidate the signature)
 - Encrypted entries (would corrupt them)
+- A changed field holding a character XML 1.0 cannot represent, such as a
+  control character other than tab, newline or carriage return (would leave a
+  package document strict readers reject)
 
 ## Size limits
 

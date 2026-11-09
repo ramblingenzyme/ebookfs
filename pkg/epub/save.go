@@ -20,6 +20,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/ncx"
 	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/ocf"
 	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/opf"
+	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/xml"
 )
 
 // ErrNoCover is returned by Cover and SetCover when the book has no cover
@@ -106,6 +107,9 @@ func (b *Book) stage() (map[string][]byte, error) {
 	}
 
 	if m := b.moved(); m.changed() {
+		if err := b.representable(m); err != nil {
+			return nil, err
+		}
 		if enc.IsEncrypted(b.PackagePath()) {
 			return nil, fmt.Errorf("refusing to edit: package document %q is encrypted", b.PackagePath())
 		}
@@ -122,6 +126,58 @@ func (b *Book) stage() (map[string][]byte, error) {
 	}
 
 	return replace, nil
+}
+
+// representable refuses a changed field holding a character XML 1.0 cannot
+// represent. Only the changed fields are checked, so a value a file already
+// carries does not block an unrelated edit.
+func (b *Book) representable(m moved) error {
+	var bad string
+	check := func(field string, values ...string) {
+		for _, v := range values {
+			if bad == "" && !xml.Representable(v) {
+				bad = fmt.Sprintf("%s %q", field, v)
+			}
+		}
+	}
+	if m.title {
+		check("title", b.Title)
+	}
+	if m.sortTitle {
+		check("sort title", b.SortTitle)
+	}
+	if m.description {
+		check("description", b.Description)
+	}
+	if m.language {
+		check("language", b.Language)
+	}
+	if m.publisher {
+		check("publisher", b.Publisher)
+	}
+	if m.rights {
+		check("rights", b.Rights)
+	}
+	if m.authors {
+		for _, a := range b.Authors {
+			check("author", a.Name, a.SortName)
+		}
+	}
+	if m.series && b.Series != nil {
+		check("series", b.Series.Name, b.Series.Index)
+	}
+	if m.subjects {
+		check("subject", b.Subjects...)
+	}
+	if m.contributors {
+		for _, c := range b.Contributors {
+			check("contributor", c.Name, c.Role)
+		}
+	}
+	if bad != "" {
+		return fmt.Errorf("refusing to edit: %s holds a character XML 1.0 cannot represent", bad)
+	}
+	return nil
 }
 
 // moved records which fields changed since Open. write and changed both read
