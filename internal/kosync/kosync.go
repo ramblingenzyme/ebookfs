@@ -45,24 +45,18 @@ type Config struct {
 // Server implements both HTTPFrontend and Hook for kosync.
 type Server struct {
 	library.HookBase
+	lib      *library.Library
 	handler  http.Handler
 	prefix   string
 	registry *docRegistry
 }
 
-// New creates a kosync server and restores the document-ID index from the
-// library's sidecars, before any request can be served.
+// New creates a kosync server. Registering it restores the document-ID index
+// from the library's sidecars, before any request can be served.
 func New(lib *library.Library, cfg Config) (*Server, error) {
-	// Create server
-	srv := &Server{registry: newDocRegistry()}
-
-	// Register as hook with the library (this will call Setup automatically)
+	srv := &Server{lib: lib, registry: newDocRegistry()}
 	if err := lib.AddHook(srv); err != nil {
 		return nil, fmt.Errorf("registering kosync hook: %w", err)
-	}
-
-	if err := srv.registry.Restore(lib); err != nil {
-		return nil, fmt.Errorf("restoring kosync index: %w", err)
 	}
 
 	srv.handler = NewHandler(lib, srv.registry, cfg)

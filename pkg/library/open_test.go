@@ -15,8 +15,8 @@ func entryNames(entries []os.DirEntry) []string {
 	return names
 }
 
-// Only regular files ending .epub go. A directory with that suffix stays, so
-// the type check is what keeps it.
+// Regular files ending .epub and hooks-* scratch directories go. A directory
+// with the .epub suffix stays, so the type check is what keeps it.
 func TestCleanInboxTemp(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"123.epub", "456.epub", "readme.txt"} {
@@ -25,6 +25,13 @@ func TestCleanInboxTemp(t *testing.T) {
 		}
 	}
 	if err := os.Mkdir(filepath.Join(dir, "nested.epub"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	scratch := filepath.Join(dir, "hooks-123")
+	if err := os.Mkdir(scratch, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(scratch, "converted.epub"), []byte("data"), 0644); err != nil {
 		t.Fatal(err)
 	}
 

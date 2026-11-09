@@ -117,11 +117,13 @@ func cleanInboxTemp(dir string) error {
 		return err
 	}
 	for _, e := range entries {
-		if !e.Type().IsRegular() || !strings.HasSuffix(e.Name(), ".epub") {
+		upload := e.Type().IsRegular() && strings.HasSuffix(e.Name(), ".epub")
+		scratch := e.IsDir() && strings.HasPrefix(e.Name(), "hooks-")
+		if !upload && !scratch {
 			continue
 		}
 		path := filepath.Join(dir, e.Name())
-		if err := os.Remove(path); err != nil {
+		if err := os.RemoveAll(path); err != nil {
 			slog.Warn("removing stale inbox temp failed", "path", path, "error", err)
 		} else {
 			slog.Info("removed stale inbox temp", "path", path)

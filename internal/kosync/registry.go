@@ -43,8 +43,8 @@ func (r *docRegistry) Lookup(docID string) (int64, bool) {
 }
 
 // Restore rebuilds the index from all book sidecars and creates missing
-// sidecars. Runs unconditionally at startup; harmless when every sidecar is
-// already present.
+// sidecars. Server.Setup runs it, and it replaces the index wholesale, so it
+// must not run once Hook events can arrive.
 func (r *docRegistry) Restore(lib *library.Library) error {
 	books, err := lib.Search(library.Query{})
 	if err != nil {
@@ -215,6 +215,11 @@ func (r *docRegistry) StoreProgress(lib *library.Library, docID string, progress
 		if err != nil {
 			return err
 		}
+		// Written without an ID, the sidecar would leave Restore nothing to
+		// map the book by after the next restart.
+		if len(sidecar.DocumentIDs) == 0 {
+			sidecar.DocumentIDs = []string{docID}
+		}
 		progress.Timestamp = time.Now().Unix()
 		sidecar.Progress = progress
 		timestamp = progress.Timestamp
@@ -237,10 +242,6 @@ func (r *docRegistry) snapshot() map[string]int64 {
 	return cp
 }
 
-// ponytail: only the epub is hashed. With reader.convert the device holds the
-// kepub, whose hash maps to nothing, so its progress is dropped. Map the
-// kepub's hash too, refreshed on each reconversion, if convert and kosync are
-// used together.
 func computeDocumentID(book *library.Book, openEpub func() (library.EpubReader, error)) (string, error) {
 	epub, err := openEpub()
 	if err != nil {

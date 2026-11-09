@@ -474,3 +474,33 @@ func TestFailedDeleteKeepsDocumentIDs(t *testing.T) {
 		t.Errorf("GET after a failed delete = %v, want the saved progress", resp)
 	}
 }
+
+// A PUT once rewrote a missing sidecar with no document IDs, and Restore then
+// had nothing to map the book by after a restart.
+func TestPutRecreatesAMissingSidecarWithItsDocumentID(t *testing.T) {
+	env := setupEnv(t, defaultCfg)
+	if err := env.lib.WithSidecars(env.book.ID(), func(root *os.Root) error {
+		return root.Remove("kosync.json")
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Below reading_threshold, so no status edit fires OnEdited, whose
+	// Refresh would restore the ID on its own.
+	if _, code := env.putProgress(t, map[string]any{
+		"document": env.docID, "percentage": 0.01, "progress": "/body/chapter1", "device": "test-device",
+	}); code != http.StatusOK {
+		t.Fatalf("PUT: status = %d, want %d", code, http.StatusOK)
+	}
+	if ids := env.documentIDs(t); len(ids) != 1 || ids[0] != env.docID {
+		t.Fatalf("sidecar document IDs = %v, want [%s]", ids, env.docID)
+	}
+
+	restarted := newDocRegistry()
+	if err := restarted.Restore(env.lib.Library); err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if got, ok := restarted.Lookup(env.docID); !ok || got != env.book.ID() {
+		t.Errorf("Lookup after restart = %d, %v, want %d", got, ok, env.book.ID())
+	}
+}
