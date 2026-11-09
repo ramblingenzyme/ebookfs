@@ -819,6 +819,17 @@ func (q *Queries) InsertTag(ctx context.Context, name string) error {
 	return err
 }
 
+const lastIssuedBookID = `-- name: LastIssuedBookID :one
+SELECT CAST(COALESCE(MAX(id), 0) AS INTEGER) FROM book_id_seq
+`
+
+func (q *Queries) LastIssuedBookID(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, lastIssuedBookID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const listAuthors = `-- name: ListAuthors :many
 
 SELECT a.name, COUNT(ba.book_id) AS book_count

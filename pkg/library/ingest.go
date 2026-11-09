@@ -111,6 +111,9 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := l.store.RecordID(id); err != nil {
+		return nil, fmt.Errorf("recording book id %d: %w", id, err)
+	}
 
 	now := time.Now()
 	meta := book.Meta{

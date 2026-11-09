@@ -60,6 +60,14 @@ func reindex(files *store.Store, idx *index.Index, scan *storeScan) error {
 	moveToCanonical(files, s.indexed)
 	moveDur := time.Since(moveStart)
 
+	// An id no directory carries any more was still issued, so the sequence
+	// resumes past the store's record as well as past every id on disk.
+	if last, err := files.LastID(); err != nil {
+		slog.Warn("reindex: could not read the last issued book id; a deleted book's id may be reissued", "error", err)
+	} else {
+		s.reserveID(last)
+	}
+
 	rebuildStart := time.Now()
 	if err := idx.Rebuild(s.indexed, s.unindexed, s.maxID); err != nil {
 		return err

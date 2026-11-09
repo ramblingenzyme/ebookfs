@@ -225,6 +225,9 @@ SELECT COUNT(*) FROM pending_ops;
 -- name: NextBookID :one
 INSERT INTO book_id_seq DEFAULT VALUES RETURNING id;
 
+-- name: LastIssuedBookID :one
+SELECT CAST(COALESCE(MAX(id), 0) AS INTEGER) FROM book_id_seq;
+
 -- name: InsertSkippedBook :exec
 INSERT INTO skipped_books (epub_path, epub_size, epub_mtime, meta_mtime, meta_size)
 VALUES (?, ?, ?, ?, ?);

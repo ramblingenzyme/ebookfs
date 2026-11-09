@@ -108,7 +108,33 @@ func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
 		idx.Close()
 		return nil, fmt.Errorf("reindexing library: %w", err)
 	}
+	recordLastID(lib.store, idx)
 	return lib, nil
+}
+
+// recordLastID brings the store's record of the highest issued id up to the
+// index's. A rebuild seeds the sequence past every id on disk, so after any
+// Open the index's figure is the higher one wherever the record missed an id:
+// a library from before the record, or a book copied in by hand.
+//
+// A failure only risks reissuing a deleted id later, so it is logged. An
+// unreadable record is overwritten, since the index's figure already covers
+// every id in use.
+func recordLastID(s *store.Store, idx *index.Index) {
+	issued, err := idx.LastIssuedID()
+	if err != nil {
+		slog.Warn("could not read the last issued book id from the index", "error", err)
+		return
+	}
+	last, err := s.LastID()
+	if err != nil {
+		slog.Warn("replacing an unreadable record of the last issued book id", "error", err)
+	}
+	if issued > last {
+		if err := s.RecordID(issued); err != nil {
+			slog.Warn("could not record the last issued book id; a deleted book's id may be reissued", "error", err)
+		}
+	}
 }
 
 func cleanInboxTemp(dir string) error {

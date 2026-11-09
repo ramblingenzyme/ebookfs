@@ -10,6 +10,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/ramblingenzyme/ebookfs/internal/atomicfs"
@@ -161,6 +163,34 @@ func (s *Store) Delete(loc book.Location) error {
 		return err
 	}
 	return removeIfEmpty(filepath.Dir(path))
+}
+
+// lastIDName holds the highest book id ever issued. The index's sequence is
+// lost with the index, and a rebuild seeds it from the ids still on disk, so a
+// deleted newest book's id would be issued again without this floor. It is
+// data, not cache: a backup must keep it.
+const lastIDName = ".last-id"
+
+// LastID returns the highest id RecordID has written, or 0 when none has.
+func (s *Store) LastID() (int64, error) {
+	data, err := os.ReadFile(filepath.Join(s.root, lastIDName))
+	if errors.Is(err, os.ErrNotExist) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseInt(strings.TrimSpace(string(data)), 10, 64)
+}
+
+// RecordID makes id the floor LastID reports. The caller records an id before
+// anything on disk carries it, so a crash between the two cannot leave an id
+// the floor misses.
+func (s *Store) RecordID(id int64) error {
+	return atomicfs.Write(s.root, ".ebookfs-*"+lastIDName+".tmp", func(f *os.File) error {
+		_, err := fmt.Fprintf(f, "%d\n", id)
+		return err
+	}, filepath.Join(s.root, lastIDName))
 }
 
 // EmptyTrash removes what a Delete moved to the trash but could not remove.

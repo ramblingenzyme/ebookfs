@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -345,5 +346,99 @@ func TestUpdateNilWritesNothing(t *testing.T) {
 	}
 	if hook.edits != 0 {
 		t.Errorf("OnEdited fired %d times on a nil Update, want 0", hook.edits)
+	}
+}
+
+// The id sequence lives in the index, which a deleted file or a schema bump
+// discards, and a rebuild re-seeds it from the ids still on disk. A deleted
+// newest book's id was then handed out again, to a different book that OPDS
+// readers already cached under it.
+func TestDeletedIDIsNotReusedAfterTheIndexIsLost(t *testing.T) {
+	cfg := testConfig(t)
+	lib, err := library.Open(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ingestTestEpub(t, lib, buildTestEpub(t, "First", "Alice"))
+	newest := ingestTestEpub(t, lib, buildTestEpub(t, "Second", "Alice"))
+	if err := lib.Delete(newest.ID()); err != nil {
+		t.Fatal(err)
+	}
+	if err := lib.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		if err := os.Remove(cfg.IndexPath + suffix); err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+	}
+
+	got := ingestTestEpub(t, openLib(t, cfg), buildTestEpub(t, "Third", "Alice"))
+	if got.ID() <= newest.ID() {
+		t.Errorf("new book got id %d, want above the deleted %d", got.ID(), newest.ID())
+	}
+}
+
+// A library from before .last-id, or one restored without it, starts with no
+// rebuild to correct it. Open records the highest issued id anyway, so a
+// later index loss cannot reuse a deleted book's id.
+func TestOpenRecordsTheLastIssuedID(t *testing.T) {
+	cfg := testConfig(t)
+	lib, err := library.Open(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ingestTestEpub(t, lib, buildTestEpub(t, "First", "Alice"))
+	newest := ingestTestEpub(t, lib, buildTestEpub(t, "Second", "Alice"))
+	if err := lib.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(cfg.Root, ".last-id")); err != nil {
+		t.Fatal(err)
+	}
+
+	lib = openLib(t, cfg)
+	if err := lib.Delete(newest.ID()); err != nil {
+		t.Fatal(err)
+	}
+	if err := lib.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		if err := os.Remove(cfg.IndexPath + suffix); err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+	}
+
+	got := ingestTestEpub(t, openLib(t, cfg), buildTestEpub(t, "Third", "Alice"))
+	if got.ID() <= newest.ID() {
+		t.Errorf("new book got id %d, want above the deleted %d", got.ID(), newest.ID())
+	}
+}
+
+// An unreadable record is replaced from the index rather than left to fail
+// every later read.
+func TestOpenReplacesAnUnreadableLastID(t *testing.T) {
+	cfg := testConfig(t)
+	lib, err := library.Open(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := ingestTestEpub(t, lib, buildTestEpub(t, "First", "Alice"))
+	if err := lib.Close(); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(cfg.Root, ".last-id")
+	if err := os.WriteFile(path, []byte("garbage"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	openLib(t, cfg)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.TrimSpace(string(data)), strconv.FormatInt(b.ID(), 10); got != want {
+		t.Errorf(".last-id = %q after Open, want %q", got, want)
 	}
 }

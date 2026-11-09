@@ -219,6 +219,12 @@ func (idx *Index) NextID() (int64, error) {
 	return idx.wq.NextBookID(idx.ctx)
 }
 
+// LastIssuedID is the highest id NextID has returned or a rebuild reserved, or
+// 0 for an empty sequence.
+func (idx *Index) LastIssuedID() (int64, error) {
+	return idx.queries.LastIssuedBookID(idx.ctx)
+}
+
 func newOpID() string {
 	var b [16]byte
 	_, _ = rand.Read(b[:])

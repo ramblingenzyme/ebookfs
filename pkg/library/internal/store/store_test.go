@@ -173,3 +173,22 @@ func TestDeleteWithReadOnlyDirError(t *testing.T) {
 		t.Errorf("trash after a failed delete holds %d entries, want none", len(entries))
 	}
 }
+
+func TestLastID(t *testing.T) {
+	s, root := newStore(t)
+	if id, err := s.LastID(); err != nil || id != 0 {
+		t.Errorf("LastID with no record = %d, %v; want 0, nil", id, err)
+	}
+	if err := s.RecordID(7); err != nil {
+		t.Fatal(err)
+	}
+	if id, err := s.LastID(); err != nil || id != 7 {
+		t.Errorf("LastID after RecordID(7) = %d, %v; want 7, nil", id, err)
+	}
+	if err := os.WriteFile(filepath.Join(root, lastIDName), []byte("garbage"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.LastID(); err == nil {
+		t.Error("LastID read a corrupt record without an error")
+	}
+}
