@@ -89,6 +89,11 @@ func TestCommandEdits(t *testing.T) {
 		{"rename-tag onto a tag the book has", nil, library.Edits{Tags: &[]string{"old", "other", "new"}},
 			`rename-tag "old" "new"`, "ok: 1 books renamed",
 			wantTags("new", "other")},
+		// The merge branch once took a tag renamed onto itself for a tag the
+		// book already had, and dropped it.
+		{"rename-tag onto itself", nil, library.Edits{Tags: &[]string{"same", "other"}},
+			`rename-tag "same" "same"`, "ok: no books renamed\n1 skipped",
+			wantTags("same", "other")},
 		{"rename-author with a sort name", []string{"Asimov"}, library.Edits{},
 			`rename-author "Asimov" "Isaac Asimov|Asimov, Isaac"`, "ok: 1 books renamed",
 			wantAuthors(library.Author{Name: "Isaac Asimov", SortName: "Asimov, Isaac"})},

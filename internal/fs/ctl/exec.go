@@ -164,6 +164,9 @@ func renameTag(f *CtlFile, args []string) string {
 	old, newName := args[0], args[1]
 
 	return f.editSelection("renamed", library.Query{Tags: []string{old}}, func(b *library.Book) *library.Edits {
+		if old == newName {
+			return nil
+		}
 		updated := slices.Clone(b.Tags())
 		if slices.Contains(updated, newName) {
 			updated = slices.DeleteFunc(updated, func(t string) bool { return t == old })
