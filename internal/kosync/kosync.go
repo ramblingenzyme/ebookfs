@@ -334,16 +334,10 @@ func (h *handler) putProgress(w http.ResponseWriter, r *http.Request) {
 
 // updateBookStatus updates the book's reading status based on progress percentage.
 // Transitions are configurable via ReadingThreshold and ReadThreshold.
-// Once a book has left "unread", it never returns to it. Once a book is "read",
-// it stays "read" even if percentage drops.
+//
+// The guards read the status under Library.Update, so a status set over 9P
+// or ctl between this PUT's lookup and its write cannot be downgraded.
 func (h *handler) updateBookStatus(bookID int64, percentage float64) error {
-	// Get current book
-	b, err := h.lib.Get(bookID)
-	if err != nil {
-		return fmt.Errorf("getting book: %w", err)
-	}
-
-	// Determine target status based on configurable thresholds
 	var targetStatus string
 	switch {
 	case percentage >= h.cfg.ReadThreshold:
@@ -354,29 +348,30 @@ func (h *handler) updateBookStatus(bookID int64, percentage float64) error {
 		targetStatus = book.StatusUnread
 	}
 
-	// Don't revert to "unread" once the book has left it
-	if targetStatus == book.StatusUnread && b.Status() != book.StatusUnread {
-		return nil
-	}
-
-	// Don't downgrade from "read" to anything else
-	if b.Status() == book.StatusRead && targetStatus != book.StatusRead {
-		return nil
-	}
-
-	// Only update if status changed
-	if b.Status() == targetStatus {
-		return nil
-	}
-
-	// Update book status
-	edits := library.Edits{
-		Status: &targetStatus,
-	}
-	if _, err := h.lib.Edit(bookID, edits); err != nil {
+	_, changed, err := h.lib.Update(bookID, func(b *library.Book) *library.Edits {
+		current := b.Status()
+		// An edit that sets the same status still bumps the modified time and
+		// fires OnEdited, which rehashes the epub on every PUT.
+		if current == targetStatus {
+			return nil
+		}
+		// A PUT below reading_threshold also comes from a book reopened at its
+		// start, so obeying it would reset a book mid-read to unread.
+		if targetStatus == book.StatusUnread {
+			return nil
+		}
+		// Rereading a finished book sends low percentages again, and would
+		// otherwise demote it to reading.
+		if current == book.StatusRead {
+			return nil
+		}
+		return &library.Edits{Status: &targetStatus}
+	})
+	if err != nil {
 		return fmt.Errorf("editing book: %w", err)
 	}
-
-	slog.Info("kosync: updated book status", "book_id", bookID, "status", targetStatus, "percentage", percentage)
+	if changed {
+		slog.Info("kosync: updated book status", "book_id", bookID, "status", targetStatus, "percentage", percentage)
+	}
 	return nil
 }

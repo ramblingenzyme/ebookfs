@@ -8,30 +8,38 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// rename-author re-checks the match against the snapshot the search returned,
-// so a book the index credits to old but whose snapshot does not is reported
-// rather than passed over.
-func TestRenameAuthorReportsABookTheSnapshotDoesNotMatch(t *testing.T) {
-	book := util.MakeMutableBook(1, "Foundation", "Someone Else")
+// A rename re-checks the match against the book's state at the edit, so a book
+// that lost the old value after the search is skipped rather than renamed.
+func TestRenameSkipsABookThatChangedSinceTheSearch(t *testing.T) {
+	// The search claims a match, but the book carries no tag or series and a
+	// different author.
+	book := util.WrapBook(util.MakeMutableBook(1, "Foundation", "Someone Else"))
 
-	search := mock.SearchDeleter{
-		SearchFn: func(library.Query) ([]*library.Book, error) {
-			return []*library.Book{util.WrapBook(book)}, nil
-		},
-	}
-	edit := mock.Editor{
-		EditFn: func(int64, library.Edits) (*library.Book, error) {
-			t.Fatal("no book matched, so none should be edited")
-			return nil, nil
-		},
-	}
+	for _, cmd := range []string{
+		`rename-author "Isaac Asimov" "I. Asimov"`,
+		`rename-tag "scifi" "sci-fi"`,
+		`rename-series "Old" "New"`,
+	} {
+		t.Run(cmd, func(t *testing.T) {
+			cf := newTestCtl(t, mock.Library{
+				SearchDeleter: mock.SearchDeleter{
+					SearchFn: func(library.Query) ([]*library.Book, error) {
+						return []*library.Book{book}, nil
+					},
+				},
+				UpdateFn: func(_ int64, fn func(*library.Book) *library.Edits) (*library.Book, bool, error) {
+					if e := fn(book); e != nil {
+						t.Fatalf("the book no longer matches, so it should not be edited: %+v", e)
+					}
+					return book, false, nil
+				},
+			})
 
-	cf := newTestCtl(t, search, edit)
-
-	result := cf.execute(`rename-author "Isaac Asimov" "I. Asimov"`)
-	const want = "ok: no books renamed\n1 skipped"
-	if result != want {
-		t.Errorf("result = %q, want %q", result, want)
+			const want = "ok: no books renamed\n1 skipped"
+			if got := cf.execute(cmd); got != want {
+				t.Errorf("result = %q, want %q", got, want)
+			}
+		})
 	}
 }
 
@@ -74,19 +82,18 @@ func TestCommandRejections(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Both hooks fail the test rather than returning: a rejected
 			// command must not reach the library at all.
-			search := mock.SearchDeleter{
-				DeleteFn: func(id int64) error {
-					t.Fatalf("rejected command still deleted book %d", id)
-					return nil
+			cf := newTestCtl(t, mock.Library{
+				SearchDeleter: mock.SearchDeleter{
+					DeleteFn: func(id int64) error {
+						t.Fatalf("rejected command still deleted book %d", id)
+						return nil
+					},
 				},
-			}
-			edit := mock.Editor{
-				EditFn: func(id int64, _ library.Edits) (*library.Book, error) {
+				UpdateFn: func(id int64, _ func(*library.Book) *library.Edits) (*library.Book, bool, error) {
 					t.Fatalf("rejected command still edited book %d", id)
-					return nil, nil
+					return nil, false, nil
 				},
-			}
-			cf := newTestCtl(t, search, edit)
+			})
 
 			if got := cf.execute(tc.cmd); got != tc.want {
 				t.Errorf("execute(%q) = %q, want %q", tc.cmd, got, tc.want)

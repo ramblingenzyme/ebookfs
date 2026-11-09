@@ -7,9 +7,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 )
 
-func newTestCtl(t *testing.T, search mock.SearchDeleter, edit mock.Editor) *CtlFile {
+func newTestCtl(t *testing.T, lib mock.Library) *CtlFile {
 	t.Helper()
-	fsys := util.NewTestFS(t)
-	lib := mock.Library{Editor: edit, SearchDeleter: search}
-	return NewCtlFile(fsys, lib, NewCommandLog(10))
+	return NewCtlFile(util.NewTestFS(t), lib, NewCommandLog(10))
 }

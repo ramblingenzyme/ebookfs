@@ -131,6 +131,14 @@ type Library struct {
 	Ingester
 	StatsReader
 	AddHookFn func(library.Hook) error
+	UpdateFn  func(int64, func(*library.Book) *library.Edits) (*library.Book, bool, error)
+}
+
+func (l Library) Update(id int64, fn func(*library.Book) *library.Edits) (*library.Book, bool, error) {
+	if l.UpdateFn != nil {
+		return l.UpdateFn(id, fn)
+	}
+	return nil, false, errors.New("mock: no UpdateFn")
 }
 
 func (l Library) AddHook(h library.Hook) error {

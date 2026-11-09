@@ -15,7 +15,7 @@ import (
 // events update the 9P registry through its hook subscription.
 type Library interface {
 	Search(q library.Query) ([]*library.Book, error)
-	Edit(id int64, edits library.Edits) (*library.Book, error)
+	Update(id int64, fn func(*library.Book) *library.Edits) (*library.Book, bool, error)
 	Delete(id int64) error
 }
 
@@ -164,7 +164,7 @@ func renameTag(f *CtlFile, args []string) string {
 	old, newName := args[0], args[1]
 
 	return f.editSelection("renamed", library.Query{Tags: []string{old}}, func(b *library.Book) *library.Edits {
-		if old == newName {
+		if old == newName || !slices.Contains(b.Tags(), old) {
 			return nil
 		}
 		updated := slices.Clone(b.Tags())
@@ -199,7 +199,7 @@ func renameAuthor(f *CtlFile, args []string) string {
 			}
 		}
 		// Query{Authors} selects on name or sort name and the loop re-tests
-		// both, so no match means the index and the snapshot disagree.
+		// both, so no match means the book lost the author since the search.
 		if !matched {
 			return nil
 		}
@@ -215,7 +215,10 @@ func renameAuthor(f *CtlFile, args []string) string {
 func renameSeries(f *CtlFile, args []string) string {
 	old, newName := args[0], args[1]
 
-	return f.editSelection("renamed", library.Query{Series: []string{old}}, func(*library.Book) *library.Edits {
+	return f.editSelection("renamed", library.Query{Series: []string{old}}, func(b *library.Book) *library.Edits {
+		if b.SeriesName() != old {
+			return nil
+		}
 		return &library.Edits{Series: &newName}
 	})
 }
@@ -257,22 +260,20 @@ func (f *CtlFile) editSpec(op, spec string, editFn func(*library.Book) *library.
 // editSelection applies editFn to each book the selection addresses, reporting
 // the result as op. A nil from editFn counts the book as skipped, which is how
 // a command says it is already in the state asked for.
+//
+// editFn runs under Library.Update, on the book's state at the edit rather
+// than at the search. A book can change in between, so editFn re-checks
+// whatever the query selected on.
 func (f *CtlFile) editSelection(op string, query library.Query, editFn func(*library.Book) *library.Edits) string {
-	books, err := f.lib.Search(query)
-	if err != nil {
-		return fmt.Sprintf("error: query failed: %v", err)
-	}
-
-	byID := make(map[int64]*library.Book, len(books))
-	for _, b := range books {
-		byID[b.ID()] = b
-	}
-
 	// A bare id list is walked as given, so a typo surfaces as "not found".
 	// Once the query also filters, an absent id was filtered out rather than
 	// missing, so the results are walked instead.
 	visit := query.IDs
 	if !idsOnly(query) {
+		books, err := f.lib.Search(query)
+		if err != nil {
+			return fmt.Sprintf("error: query failed: %v", err)
+		}
 		visit = make([]int64, 0, len(books))
 		for _, b := range books {
 			visit = append(visit, b.ID())
@@ -289,19 +290,13 @@ func (f *CtlFile) editSelection(op string, query library.Query, editFn func(*lib
 		}
 		seen[id] = true
 
-		b, ok := byID[id]
-		if !ok {
-			errs = append(errs, fmt.Sprintf("book %d: not found", id))
-			continue
-		}
-		edits := editFn(b)
-		if edits == nil {
-			skipped++ // already in the requested state
-			continue
-		}
-		if _, err := f.lib.Edit(id, *edits); err != nil {
+		_, changed, err := f.lib.Update(id, editFn)
+		switch {
+		case err != nil:
 			errs = append(errs, bookError(id, err))
-		} else {
+		case !changed:
+			skipped++ // already in the requested state
+		default:
 			affected++
 		}
 	}

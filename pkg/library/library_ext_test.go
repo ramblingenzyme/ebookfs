@@ -284,3 +284,66 @@ func TestContentServesTheBook(t *testing.T) {
 		t.Errorf("OPF does not contain the title: %s", opf)
 	}
 }
+
+// fn sees a change committed after the caller's snapshot, so a list rebuilt
+// from the book keeps it.
+func TestUpdateBuildsOnTheCurrentState(t *testing.T) {
+	lib := openTestLibrary(t)
+	stale := ingestTestEpub(t, lib, buildTestEpub(t, "Title", "Alice"))
+	if _, err := lib.Edit(stale.ID(), library.Edits{Tags: &[]string{"concurrent"}}); err != nil {
+		t.Fatalf("Edit: %v", err)
+	}
+
+	got, changed, err := lib.Update(stale.ID(), func(b *library.Book) *library.Edits {
+		tags := append(b.Tags(), "added")
+		return &library.Edits{Tags: &tags}
+	})
+	if err != nil || !changed {
+		t.Fatalf("Update = changed %v, err %v, want a change", changed, err)
+	}
+	tags := got.Tags()
+	slices.Sort(tags)
+	if want := []string{"added", "concurrent"}; !slices.Equal(tags, want) {
+		t.Errorf("tags = %v, want %v", tags, want)
+	}
+}
+
+type editCounter struct {
+	library.HookBase
+	edits int
+}
+
+func (c *editCounter) OnEdited(*library.Book, *os.Root, func() (library.EpubReader, error)) {
+	c.edits++
+}
+
+func TestUpdateNilWritesNothing(t *testing.T) {
+	lib := openTestLibrary(t)
+	// Read back, since the index keeps DateModified only to the second.
+	before, err := lib.Get(ingestTestEpub(t, lib, buildTestEpub(t, "Title", "Alice")).ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	hook := &editCounter{}
+	if err := lib.AddHook(hook); err != nil {
+		t.Fatal(err)
+	}
+
+	got, changed, err := lib.Update(before.ID(), func(*library.Book) *library.Edits { return nil })
+	if err != nil || changed {
+		t.Fatalf("Update = changed %v, err %v, want no change", changed, err)
+	}
+	if got.ID() != before.ID() {
+		t.Errorf("Update returned book %d, want the current book %d", got.ID(), before.ID())
+	}
+	after, err := lib.Get(before.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.DateModified().Equal(before.DateModified()) {
+		t.Errorf("DateModified moved from %v to %v on a nil Update", before.DateModified(), after.DateModified())
+	}
+	if hook.edits != 0 {
+		t.Errorf("OnEdited fired %d times on a nil Update, want 0", hook.edits)
+	}
+}

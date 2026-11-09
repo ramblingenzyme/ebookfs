@@ -24,9 +24,9 @@ import (
 //
 // Its methods are safe for concurrent use. A returned *Book is a snapshot the
 // library never mutates. Every other call names a book by id and reads its
-// current state, so a caller never passes a stale snapshot back. Edit and
+// current state, so a caller never passes a stale snapshot back. Update and
 // Delete are an atomic read-modify-write under a per-book lock, so callers
-// cannot revert each other.
+// cannot revert each other. Edit is Update with the Edits fixed in advance.
 type Library struct {
 	store     *store.Store
 	index     *index.Index
@@ -121,7 +121,22 @@ func (l *Library) Content(id int64) (EpubReader, error) {
 
 // Edit applies e and returns the updated book. A title or author change moves
 // the book directory.
+//
+// Edits computed from a Book read earlier can revert a change made since, such
+// as a tag list rebuilt from a stale snapshot. Update computes them under the
+// lock instead.
 func (l *Library) Edit(id int64, e Edits) (*Book, error) {
+	b, _, err := l.Update(id, func(*Book) *Edits { return &e })
+	return b, err
+}
+
+// Update calls fn with the book's current state under the per-book lock and
+// applies the Edits it returns, as Edit does. A nil from fn writes nothing,
+// fires no hook, and returns the current book with changed false.
+//
+// fn must not call back into the library. Edit, Delete and WithSidecars on the
+// same book deadlock.
+func (l *Library) Update(id int64, fn func(*Book) *Edits) (b *Book, changed bool, err error) {
 	l.mutateMu.RLock()
 	defer l.mutateMu.RUnlock()
 
@@ -129,48 +144,53 @@ func (l *Library) Edit(id int64, e Edits) (*Book, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	b, err := l.get(id)
+	current, err := l.get(id)
 	if err != nil {
-		return nil, err
+		return nil, false, err
+	}
+	snapshot := book.NewImmutableBook(current)
+	ep := fn(snapshot)
+	if ep == nil {
+		return snapshot, false, nil
 	}
 
 	// Validated here, the one enforcement point, since a meta-only edit never
 	// reaches the epub rewrite.
-	e = e.Normalized()
-	if v := book.Validate(e, b); v != nil {
-		return nil, v
+	e := ep.Normalized()
+	if v := book.Validate(e, current); v != nil {
+		return nil, false, v
 	}
 
 	op := l.index.BeginOp()
 	if err := op.MarkPending(); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	meta := applyMeta(b.Meta, e)
-	bib, err := epub.Rewrite(l.store.AbsPath(b.EpubPath), b, e)
+	meta := applyMeta(current.Meta, e)
+	bib, err := epub.Rewrite(l.store.AbsPath(current.EpubPath), current, e)
 	if err != nil {
 		op.Cancel()
-		slog.Error("edit: rewrite failed", "book_id", b.Meta.ID, "title", b.Title, "error", err)
-		return nil, err
+		slog.Error("edit: rewrite failed", "book_id", current.Meta.ID, "title", current.Title, "error", err)
+		return nil, false, err
 	}
 
 	location := l.store.Layout(bib.Authors, bib.Title, meta.ID)
-	mt, err := l.store.Update(b.Location, location, &meta)
+	mt, err := l.store.Update(current.Location, location, &meta)
 	if err != nil {
-		slog.Error("edit: update failed", "book_id", b.Meta.ID, "title", b.Title, "error", err)
-		return nil, err
+		slog.Error("edit: update failed", "book_id", current.Meta.ID, "title", current.Title, "error", err)
+		return nil, false, err
 	}
 
 	updated := bookFromBib(bib, meta, location, mt)
 	if err := op.Put(updated, mt); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	// Fire OnEdited hook while still holding the per-book lock
 	immutable := book.NewImmutableBook(updated)
 	l.hooks.onEdited(l, immutable, location)
 
-	return immutable, nil
+	return immutable, true, nil
 }
 
 func (l *Library) Delete(id int64) error {
