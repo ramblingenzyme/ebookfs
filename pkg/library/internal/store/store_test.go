@@ -95,6 +95,24 @@ func TestMoveRollsBackWhenEpubRenameFails(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, to.Dir())); !os.IsNotExist(err) {
 		t.Errorf("destination %q still exists after rollback", to.Dir())
 	}
+	if _, err := os.Stat(filepath.Join(root, "Bob")); !os.IsNotExist(err) {
+		t.Errorf("author directory Bob left behind by the rollback: %v", err)
+	}
+}
+
+// The author directory is created before the directory rename, so a failed
+// rename must not leave it behind empty.
+func TestMoveLeavesNoAuthorDirWhenDirRenameFails(t *testing.T) {
+	s, root := newStore(t)
+	from := book.Location{EpubPath: filepath.Join("Alice/Gone (1)", "gone.epub")}
+	to := book.Location{EpubPath: filepath.Join("Bob/Gone (1)", "gone.epub")}
+
+	if err := s.Move(from, to); err == nil {
+		t.Fatal("Move succeeded with a missing source directory")
+	}
+	if _, err := os.Stat(filepath.Join(root, "Bob")); !os.IsNotExist(err) {
+		t.Errorf("author directory Bob left behind by the failed rename: %v", err)
+	}
 }
 
 func TestDeleteRemovesBookDir(t *testing.T) {
