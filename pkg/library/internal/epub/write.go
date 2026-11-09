@@ -55,7 +55,7 @@ func Rewrite(epubPath string, b *book.Book, e book.Edits) (book.Bib, error) {
 }
 
 func apply(f *epubfile.Book, e book.Edits) {
-	if e.Title != nil {
+	if e.Title != nil && *e.Title != f.Title {
 		f.Title = *e.Title
 		f.SortTitle = ""
 	}

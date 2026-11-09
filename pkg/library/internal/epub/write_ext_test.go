@@ -190,13 +190,13 @@ func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Title is paired with its current SortTitle, because a Title on its own
-	// clears the sort title and so is a real change.
+	// A same-title write once cleared the sort title, so saving an unchanged
+	// title file stripped file-as and rewrote the epub.
 	for _, tc := range []struct {
 		name string
 		e    bookmodel.Edits
 	}{
-		{"title with its existing sort title", bookmodel.Edits{Title: &current.Title, SortTitle: &current.SortTitle}},
+		{"title already equal", bookmodel.Edits{Title: &current.Title}},
 		{"description already equal", bookmodel.Edits{Description: &current.Description}},
 		{"language already equal", bookmodel.Edits{Language: &current.Language}},
 	} {
@@ -209,6 +209,9 @@ func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 		}
 		if bib.Title != current.Title {
 			t.Errorf("%s: bib.Title = %q, want %q read back from the file", tc.name, bib.Title, current.Title)
+		}
+		if bib.SortTitle != current.SortTitle {
+			t.Errorf("%s: bib.SortTitle = %q, want %q kept", tc.name, bib.SortTitle, current.SortTitle)
 		}
 	}
 
