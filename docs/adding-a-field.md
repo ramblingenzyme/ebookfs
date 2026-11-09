@@ -36,7 +36,9 @@ reflection, so they fail when any of steps 2–4 is missed.
    `meta.toml` instead must be cleared there, or every edit of it opens the
    epub, and a signed epub refuses it.
 7. **`Validate`**: reject what the index or a path cannot hold. A multi-valued
-   field rejects repeats, since the index keys each entry on (book, value).
+   field rejects repeats, since the index keys each entry on (book, value). A
+   field a view groups by also takes the tag rule: a value that names nothing
+   or carries a control character cannot name a directory.
 8. **The translation layer** (`pkg/library/internal/epub`): read it in `bib`
    (`parse.go`), and apply it in `apply` (`write.go`). A multi-valued field is
    passed through `book.FirstOf` on read, so a file that repeats a value cannot
@@ -63,7 +65,10 @@ reflection, so they fail when any of steps 2–4 is missed.
 
 15. **9P**: add the field file to `fields` (`internal/fs/book/fields.go`), and
     to the tree in `docs/namespace.md`. A grouping view, like `by-subjects/`,
-    is a `keyedDir` registered in `fs.New`.
+    is a `keyedDir` registered in `fs.New`. Its keys go through
+    `nameableKeys`, which drops the values step 7 refuses when they arrive from
+    a file instead. Add the view to `groupingViews`
+    (`grouping_scenario_test.go`), which runs the rules every view shares.
 16. **OPDS**: map it onto the publication in `toPublication`, if OPDS has a
     slot for it.
 

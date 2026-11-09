@@ -64,7 +64,8 @@ func (e Edits) Normalized() Edits {
 // but a new meta.toml field must be cleared too. Missed, it opens the epub for
 // an edit that changes nothing in it, and a signed epub refuses that edit.
 func (e Edits) HasBibEdits() bool {
-	// This method has a value receiver, not a pointer receiver, so e is already a copy
+	// This method has a value receiver, not a pointer receiver, so e is
+	// already a copy.
 	e.Cover, e.Status, e.Rating, e.Tags = nil, nil, nil, nil
 	return e != Edits{}
 }

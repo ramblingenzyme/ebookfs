@@ -58,7 +58,7 @@ The index is rebuilt from the sidecars at every startup. That scan costs one sma
 - All books in the library are scanned
 - Each book's kosync sidecar is read to extract document IDs
 - Books without a sidecar get one created (the document ID is computed from the epub)
-- Books with corrupt sidecars are skipped (logged as warnings)
+- Books with corrupt sidecars are skipped and logged as errors. The file is left untouched, so its progress can still be recovered by hand
 
 ## Protocol Compatibility
 
@@ -88,17 +88,18 @@ KOReader clients should work without modification when configured with the ebook
 
 ### Document ID mismatch
 
-If KOReader computes a different document ID than ebookfs:
-- The book file may have been modified after ingest
-- Re-ingest the book to recompute the document ID
-- The index will be updated automatically
+If KOReader computes a different document ID than ebookfs, the book file was probably changed outside ebookfs after ingest. An edit made through ebookfs records the new ID itself and keeps the old ones. To recompute it:
+1. Delete the book's `.sidecar/kosync.json`
+2. Restart ebookfs. Startup computes the document ID from the current file and writes a new sidecar
+
+The book's stored progress is lost, and the device's next sync stores it again. Re-ingesting does not work, since ingest refuses a book the library already holds.
 
 ### Corrupt sidecar
 
 If a sidecar becomes corrupted:
-1. The book will be skipped during index restore (warning logged)
-2. Progress for that book will not sync until the sidecar is fixed
-3. Re-ingesting the book will recreate the sidecar (but lose existing progress)
+1. The book is skipped during index restore, with an error logged
+2. Progress for that book does not sync until the sidecar is fixed
+3. To start over, delete the sidecar and restart, as for a document ID mismatch. The progress it held is lost
 
 ## Limitations
 
