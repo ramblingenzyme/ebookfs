@@ -124,7 +124,15 @@ func TestDeleteWithReadOnlyDirError(t *testing.T) {
 	dir := filepath.Join(root, "Author, A", "Test (1)")
 	writeBook(t, root, "Author, A/Test (1)", "test.epub", "data", nil)
 
-	if err := os.Chmod(dir, 0444); err != nil {
+	sidecar := filepath.Join(dir, ".sidecar", "kosync.json")
+	if err := os.MkdirAll(filepath.Dir(sidecar), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sidecar, []byte("{}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Chmod(dir, 0555); err != nil {
 		t.Skip("cannot chmod book dir:", err)
 	}
 	// Restore permissions so TempDir cleanup succeeds.
@@ -134,5 +142,16 @@ func TestDeleteWithReadOnlyDirError(t *testing.T) {
 	err := s.Delete(loc)
 	if err == nil {
 		t.Error("expected error deleting a read-only book directory")
+	}
+
+	// RemoveAll goes deepest first, so it once emptied .sidecar/ before
+	// failing on the files beside it.
+	for _, path := range []string{filepath.Join(dir, "test.epub"), sidecar} {
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("%s after a failed delete: %v", path, err)
+		}
+	}
+	if entries, _ := os.ReadDir(filepath.Join(root, trashDirName)); len(entries) != 0 {
+		t.Errorf("trash after a failed delete holds %d entries, want none", len(entries))
 	}
 }

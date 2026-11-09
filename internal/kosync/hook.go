@@ -17,6 +17,6 @@ func (s *Server) OnEdited(book *library.Book, sidecars *os.Root, openEpub func()
 	s.registry.Refresh(book, sidecars, openEpub)
 }
 
-func (s *Server) OnDeleting(book *library.Book, sidecars *os.Root, openEpub func() (library.EpubReader, error)) {
-	s.registry.Forget(book, sidecars)
+func (s *Server) OnDeleted(bookID int64) {
+	s.registry.Forget(bookID)
 }

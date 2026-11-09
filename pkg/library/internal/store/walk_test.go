@@ -14,6 +14,8 @@ func TestWalk(t *testing.T) {
 	writeBook(t, root, "Author, B/Book Three (3)", "Book Three - B.epub", "book3", &book.Meta{ID: 3})
 	// meta.toml present but no epub: skipped gracefully.
 	writeBook(t, root, "Author, C/Stale (4)", "", "", &book.Meta{ID: 4})
+	// A deleted book whose removal failed: listing it would reindex it back.
+	writeBook(t, root, trashDirName+"/x/Deleted (5)", "Deleted - D.epub", "book5", &book.Meta{ID: 5})
 
 	results, err := s.Walk()
 	if err != nil {

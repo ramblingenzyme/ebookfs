@@ -147,13 +147,22 @@ func removeIfEmpty(dir string) error {
 	return nil
 }
 
+// trashDirName cannot collide with an author directory, since naming.PathSafe
+// trims leading dots.
+const trashDirName = ".trash"
+
+// Delete leaves the book whole when it fails, as atomicfs.RemoveAll says.
 func (s *Store) Delete(loc book.Location) error {
 	path := s.AbsPath(loc.Dir())
-	if err := os.RemoveAll(path); err != nil {
+	if err := atomicfs.RemoveAll(path, filepath.Join(s.root, trashDirName)); err != nil {
 		return err
 	}
-
 	return removeIfEmpty(filepath.Dir(path))
+}
+
+// EmptyTrash removes what a Delete moved to the trash but could not remove.
+func (s *Store) EmptyTrash() error {
+	return os.RemoveAll(filepath.Join(s.root, trashDirName))
 }
 
 func (s *Store) Update(oldLoc, newLoc book.Location, meta *book.Meta) (drift.PathInfo, error) {

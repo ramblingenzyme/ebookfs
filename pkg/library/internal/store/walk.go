@@ -19,6 +19,9 @@ func (s *Store) Walk() ([]book.Location, error) {
 		if !d.IsDir() {
 			return nil
 		}
+		if path == filepath.Join(s.root, trashDirName) {
+			return filepath.SkipDir // deleted books; reindexing them would undo the delete
+		}
 		if _, err := os.Stat(filepath.Join(path, metaFilename)); err != nil {
 			return nil // not a book directory; keep descending
 		}

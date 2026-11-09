@@ -98,6 +98,9 @@ func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
 		inboxTemp: cfg.InboxTemp,
 		lockFile:  lockFile,
 	}
+	if err := lib.store.EmptyTrash(); err != nil {
+		slog.Warn("emptying trash failed", "error", err)
+	}
 
 	if err := reconcile.Run(lib.store, idx, o.forceReindex); err != nil {
 		// lib is never returned, so nothing else would close the index. A

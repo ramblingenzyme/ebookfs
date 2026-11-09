@@ -86,6 +86,39 @@ func Rename(src, dst string) error {
 	return nil
 }
 
+// RemoveAll removes path by renaming it into a fresh directory under trash, so
+// a failure leaves path whole. os.RemoveAll fails partway, deepest files
+// first. trash must be on path's filesystem. Like os.RemoveAll, a missing path
+// returns nil.
+//
+// The removal has happened once the rename lands, so a failure to delete the
+// trashed copy is logged and returns nil. The caller empties trash later.
+func RemoveAll(path, trash string) error {
+	if err := MkdirAll(trash, 0755); err != nil {
+		return err
+	}
+	// A directory per call, since an earlier copy under the same name may
+	// still be in the trash.
+	container, err := os.MkdirTemp(trash, "")
+	if err != nil {
+		return err
+	}
+
+	if err := Rename(path, filepath.Join(container, filepath.Base(path))); err != nil {
+		os.Remove(container)
+		// Asked of path itself, since a trash removed under the rename also
+		// fails it with ENOENT.
+		if _, statErr := os.Lstat(path); errors.Is(statErr, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	if err := os.RemoveAll(container); err != nil {
+		slog.Warn("atomicfs: removed path left in trash", "path", container, "error", err)
+	}
+	return nil
+}
+
 // Mkdir is os.Mkdir plus an fsync of the parent.
 func Mkdir(path string, perm os.FileMode) error {
 	if err := os.Mkdir(path, perm); err != nil {

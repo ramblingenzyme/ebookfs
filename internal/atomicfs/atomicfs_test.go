@@ -242,3 +242,68 @@ func makeUnopenable(t *testing.T, dir string) {
 	}
 	t.Cleanup(func() { os.Chmod(dir, 0755) })
 }
+
+func TestRemoveAll(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "book")
+	if err := os.MkdirAll(filepath.Join(path, ".sidecar"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	trash := filepath.Join(dir, ".trash")
+
+	if err := RemoveAll(path, trash); err != nil {
+		t.Fatalf("RemoveAll: %v", err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("path after RemoveAll: err = %v, want it gone", err)
+	}
+	if entries, _ := os.ReadDir(trash); len(entries) != 0 {
+		t.Errorf("trash holds %d entries, want none", len(entries))
+	}
+}
+
+func TestRemoveAllMissingPath(t *testing.T) {
+	dir := t.TempDir()
+	if err := RemoveAll(filepath.Join(dir, "gone"), filepath.Join(dir, ".trash")); err != nil {
+		t.Errorf("RemoveAll of a missing path: %v", err)
+	}
+}
+
+// Once path is in the trash the removal has happened, so a failure to delete
+// the trashed copy is reported as success.
+func TestRemoveAllSucceedsWhenTrashRemovalFails(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "book")
+	stuck := filepath.Join(path, "stuck")
+	if err := os.MkdirAll(stuck, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stuck, "f"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(stuck, 0555); err != nil {
+		t.Skip("cannot chmod:", err)
+	}
+	trash := filepath.Join(dir, ".trash")
+	t.Cleanup(func() {
+		filepath.WalkDir(trash, func(p string, d os.DirEntry, err error) error {
+			if err == nil && d.IsDir() {
+				os.Chmod(p, 0755)
+			}
+			return nil
+		})
+	})
+
+	if err := RemoveAll(path, trash); err != nil {
+		t.Fatalf("RemoveAll: %v", err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("path after RemoveAll: err = %v, want it gone", err)
+	}
+	if entries, _ := os.ReadDir(trash); len(entries) != 1 {
+		t.Errorf("trash holds %d entries, want the one copy it could not remove", len(entries))
+	}
+}

@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
@@ -439,5 +441,36 @@ func TestDeleteDropsEveryDocumentID(t *testing.T) {
 	}
 	if snap := env.registry.snapshot(); len(snap) != 0 {
 		t.Errorf("index after delete = %v, want empty", snap)
+	}
+}
+
+// A delete that fails leaves the book in the library, so the device must
+// still reach it. Forgetting on OnDeleting once dropped its IDs anyway.
+func TestFailedDeleteKeepsDocumentIDs(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	env := setupEnv(t, defaultCfg)
+
+	dir := filepath.Join(env.lib.tmpDir, env.book.Dir())
+	if err := os.Chmod(dir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0755) })
+
+	if err := env.lib.Delete(env.book.ID()); err == nil {
+		t.Fatal("Delete succeeded on a read-only book directory")
+	}
+	if got, ok := env.registry.Lookup(env.docID); !ok || got != env.book.ID() {
+		t.Fatalf("index[%s] = %d, %v after a failed delete, want %d", env.docID, got, ok, env.book.ID())
+	}
+
+	if _, code := env.putProgress(t, map[string]any{
+		"document": env.docID, "percentage": 0.5, "progress": "/body/chapter1", "device": "test-device",
+	}); code != http.StatusOK {
+		t.Fatalf("PUT: status = %d, want %d", code, http.StatusOK)
+	}
+	if resp, _ := env.getProgress(t, env.docID); resp["progress"] != "/body/chapter1" {
+		t.Errorf("GET after a failed delete = %v, want the saved progress", resp)
 	}
 }

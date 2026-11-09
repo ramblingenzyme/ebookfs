@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"os"
 	"sync"
 	"time"
@@ -164,22 +165,17 @@ func (r *docRegistry) Refresh(book *library.Book, sidecars *os.Root, openEpub fu
 	slog.Info("kosync: updated document ID", "book_id", book.ID(), "document_id", newDocID)
 }
 
-// Forget drops every document ID the sidecar lists, before the book is
-// deleted from disk (OnDeleting).
-func (r *docRegistry) Forget(book *library.Book, sidecars *os.Root) {
-	data, err := readSidecar(sidecars)
-	if err != nil {
-		slog.Error("kosync: failed to read sidecar for deletion", "book_id", book.ID(), "error", err)
-		return
-	}
-
+// Forget drops every document ID mapped to bookID (OnDeleted). It waits for
+// the delete to succeed, since a failed one leaves the book live and still
+// syncing.
+func (r *docRegistry) Forget(bookID int64) {
 	r.mu.Lock()
-	for _, docID := range data.DocumentIDs {
-		delete(r.data, docID)
-	}
+	n := len(r.data)
+	maps.DeleteFunc(r.data, func(_ string, id int64) bool { return id == bookID })
+	n -= len(r.data)
 	r.mu.Unlock()
 
-	slog.Info("kosync: removed document IDs from index", "book_id", book.ID(), "count", len(data.DocumentIDs))
+	slog.Info("kosync: removed document IDs from index", "book_id", bookID, "count", n)
 }
 
 // ReadProgress returns the stored progress for a document ID. found is false

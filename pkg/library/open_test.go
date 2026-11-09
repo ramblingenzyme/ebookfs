@@ -72,3 +72,20 @@ func TestOpenCreatesStateAndIndexDirs(t *testing.T) {
 		t.Errorf("index: %v", err)
 	}
 }
+
+func TestOpenEmptiesTrash(t *testing.T) {
+	cfg := testConfig(t)
+	left := filepath.Join(cfg.Root, ".trash", "x", "Deleted (5)")
+	if err := os.MkdirAll(left, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(left, "meta.toml"), []byte("id = 5\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	openLib(t, cfg)
+
+	if _, err := os.Stat(filepath.Join(cfg.Root, ".trash")); !os.IsNotExist(err) {
+		t.Errorf("trash after Open: err = %v, want it removed", err)
+	}
+}

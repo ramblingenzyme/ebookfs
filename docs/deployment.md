@@ -66,4 +66,4 @@ See the README for the Docker build and run commands. The container listens on 5
 
 ## Backups
 
-The library is plain files and the SQLite index is a derived cache, rebuilt from the filesystem whenever startup finds the two disagree (DECISIONS.md #22). Any file-based backup tool pointed at `library.root` captures everything; `.index.db` and `.inbox-tmp/` can be excluded.
+The library is plain files and the SQLite index is a derived cache, rebuilt from the filesystem whenever startup finds the two disagree (DECISIONS.md #22). Any file-based backup tool pointed at `library.root` captures everything; `.index.db`, `.inbox-tmp/` and `.trash/` can be excluded.
