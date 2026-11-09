@@ -128,6 +128,14 @@ Turn history into a standing property:
     abstraction, so its exported API is disconnected from usage. An exported
     method with no caller outside tests is intended, not dead. Its
     `_ext_test.go` is its only consumer, so give it a contract test there.
+  - **Before adding to pkg/:** pkg/epub and pkg/library are standalone public
+    libraries, with users who have never heard of ebookfs. Neither grows API or
+    behaviour to serve an ebookfs need. Ask whether a user of the package alone
+    would want the change as written. If not, the rule belongs in the layer
+    that consumes the package: pkg/library/internal/epub for the epub format,
+    and internal/ for the library. Importing a domain-free utility such as
+    internal/atomicfs is fine, since it carries no ebookfs concept into either
+    package.
   - **Planning docs:** keep TODO.md and docs/DECISIONS.md at the design level.
     No file:line references and no internal Go symbols. Public names (9P paths,
     config fields, a proposed interface) are fine.

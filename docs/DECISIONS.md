@@ -203,8 +203,10 @@ reading status is, though it had come to anyway: `opf` and `ncx` built a
 `book.Bib` and took an `edits.Edits`, a struct carrying `Status`, `Rating` and
 `Tags`, three fields no EPUB file holds.
 
-`pkg/epub` now imports nothing of ebookfs and reports what the file says, with
-nothing rejected and nothing defaulted. `pkg/library/internal/epub` translates,
+`pkg/epub` now imports nothing of ebookfs's model and reports what the file
+says, with nothing rejected and nothing defaulted. A domain-free utility, such
+as atomic file writes, is fine to import, since it carries no library concept
+into the format. `pkg/library/internal/epub` translates,
 and holds the rules that are ebookfs's rather than the format's: a book needs a
 title and authors to be filed, a malformed series position still displays as
 `1`, a retitled book drops its stale sort title.

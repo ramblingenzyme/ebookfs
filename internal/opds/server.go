@@ -31,7 +31,7 @@ type Config struct {
 func New(lib Library, cfg Config) *Server {
 	handler := NewHandler(lib, cfg.BaseURL)
 	if cfg.BaseURL == "" {
-		slog.Warn("opds.base_url is unset; absolute URLs in served documents follow the client's Host and X-Forwarded-* headers")
+		slog.Warn("http.base_url is unset; absolute URLs in served documents follow the client's Host and X-Forwarded-* headers")
 	}
 	return &Server{
 		handler: handler,
