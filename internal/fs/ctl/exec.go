@@ -262,8 +262,10 @@ func (f *CtlFile) editSpec(op, spec string, editFn func(*library.Book) *library.
 // a command says it is already in the state asked for.
 //
 // editFn runs under Library.Update, on the book's state at the edit rather
-// than at the search. A book can change in between, so editFn re-checks
-// whatever the query selected on.
+// than at the search. The selection is still the search's: a book that stops
+// matching in between is edited anyway, and one that starts matching is
+// missed. editFn re-checks only what its own edit depends on, such as a
+// rename's old value.
 func (f *CtlFile) editSelection(op string, query library.Query, editFn func(*library.Book) *library.Edits) string {
 	// A bare id list is walked as given, so a typo surfaces as "not found".
 	// Once the query also filters, an absent id was filtered out rather than

@@ -179,7 +179,8 @@ func (r *docRegistry) Forget(bookID int64) {
 }
 
 // ReadProgress returns the stored progress for a document ID. found is false
-// for an unknown document ID or a book with no sidecar yet.
+// for an unknown document ID, a book with no sidecar yet, or a book deleted
+// since the lookup.
 func (r *docRegistry) ReadProgress(lib *library.Library, docID string) (progress Progress, found bool, err error) {
 	bookID, ok := r.Lookup(docID)
 	if !ok {
@@ -187,7 +188,7 @@ func (r *docRegistry) ReadProgress(lib *library.Library, docID string) (progress
 	}
 
 	raw, err := lib.ReadSidecar(bookID, "kosync.json")
-	if errors.Is(err, fs.ErrNotExist) {
+	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, library.ErrBookNotFound) {
 		return Progress{}, false, nil
 	}
 	if err != nil {
@@ -203,7 +204,8 @@ func (r *docRegistry) ReadProgress(lib *library.Library, docID string) (progress
 
 // StoreProgress writes progress into the book's sidecar under the per-book
 // lock, returning the stored timestamp. found is false for an unknown
-// document ID; the caller then stores nothing.
+// document ID or a book deleted since the lookup; the caller then stores
+// nothing.
 func (r *docRegistry) StoreProgress(lib *library.Library, docID string, progress Progress) (bookID, timestamp int64, found bool, err error) {
 	bookID, ok := r.Lookup(docID)
 	if !ok {
@@ -225,6 +227,9 @@ func (r *docRegistry) StoreProgress(lib *library.Library, docID string, progress
 		timestamp = progress.Timestamp
 		return writeSidecar(root, *sidecar)
 	})
+	if errors.Is(err, library.ErrBookNotFound) {
+		return 0, 0, false, nil
+	}
 	if err != nil {
 		return bookID, 0, true, err
 	}

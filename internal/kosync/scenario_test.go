@@ -504,3 +504,26 @@ func TestPutRecreatesAMissingSidecarWithItsDocumentID(t *testing.T) {
 		t.Errorf("Lookup after restart = %d, %v, want %d", got, ok, env.book.ID())
 	}
 }
+
+// A request that looks up a book just before its delete commits reaches the
+// library after it. The stale entry stands in for that race, and the request
+// must read as an unknown document rather than a server error.
+func TestRequestRacingADeleteIsAnUnknownDocument(t *testing.T) {
+	env := setupEnv(t, defaultCfg)
+	if err := env.lib.Delete(env.book.ID()); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	env.registry.mu.Lock()
+	env.registry.data[env.docID] = env.book.ID()
+	env.registry.mu.Unlock()
+
+	resp, code := env.putProgress(t, map[string]any{
+		"document": env.docID, "percentage": 0.5, "progress": "/body/chapter1", "device": "test-device",
+	})
+	if code != http.StatusOK || resp["document"] != env.docID {
+		t.Errorf("PUT = %d %v, want 200 accepting the unknown document", code, resp)
+	}
+	if resp, code := env.getProgress(t, env.docID); code != http.StatusOK || len(resp) != 0 {
+		t.Errorf("GET = %d %v, want 200 {}", code, resp)
+	}
+}
