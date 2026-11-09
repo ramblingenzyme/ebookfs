@@ -109,11 +109,11 @@ func (b *Book) stage() (map[string][]byte, error) {
 		if enc.IsEncrypted(b.PackagePath()) {
 			return nil, fmt.Errorf("refusing to edit: package document %q is encrypted", b.PackagePath())
 		}
-		if b.doc.Apply(func(d *opf.Doc) { b.write(d, m) }) {
-			out, err := b.doc.Bytes()
-			if err != nil {
-				return nil, err
-			}
+		out, err := b.doc.Apply(func(d *opf.Doc) { b.write(d, m) })
+		if err != nil {
+			return nil, err
+		}
+		if out != nil {
 			replace[b.PackagePath()] = out
 		}
 		if err := b.syncNCX(enc, m, replace); err != nil {
@@ -273,11 +273,11 @@ func (b *Book) syncNCX(enc *ocf.EncryptionInfo, m moved, replace map[string][]by
 			names[i] = a.Name
 		}
 	}
-	if doc.Apply(title, names) {
-		out, err := doc.Bytes()
-		if err != nil {
-			return err
-		}
+	out, err := doc.Apply(title, names)
+	if err != nil {
+		return err
+	}
+	if out != nil {
 		replace[entry] = out
 	}
 	return nil

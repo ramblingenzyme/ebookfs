@@ -43,11 +43,15 @@ func Parse(b []byte) (*Doc, error) {
 
 func (d *Doc) Bytes() ([]byte, error) { return d.doc.WriteToBytes() }
 
-// Apply writes the title and author names, and reports whether that changed
-// anything. A nil title or names slice leaves that field alone. It takes names
-// because the NCX has nowhere to record a sort name.
-func (d *Doc) Apply(title *string, names []string) bool {
-	before, _ := d.Bytes()
+// Apply writes the title and author names, and returns the document's new
+// bytes, or nil if that changed nothing. A nil title or names slice leaves that
+// field alone. It takes names because the NCX has nowhere to record a sort
+// name.
+func (d *Doc) Apply(title *string, names []string) ([]byte, error) {
+	before, err := d.Bytes()
+	if err != nil {
+		return nil, err
+	}
 
 	if title != nil {
 		d.title().set(*title)
@@ -57,8 +61,11 @@ func (d *Doc) Apply(title *string, names []string) bool {
 	}
 
 	// Compared as bytes, since a set may find the value already there.
-	after, _ := d.Bytes()
-	return !bytes.Equal(before, after)
+	after, err := d.Bytes()
+	if err != nil || bytes.Equal(before, after) {
+		return nil, err
+	}
+	return after, nil
 }
 
 func (d *Doc) title() textSlot { return slot(d.ncx.SelectElement("docTitle")) }

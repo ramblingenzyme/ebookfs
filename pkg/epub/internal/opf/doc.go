@@ -60,24 +60,28 @@ func Parse(b []byte) (*Doc, error) {
 
 func (o *Doc) Bytes() ([]byte, error) { return o.d.Bytes() }
 
-// Apply runs edit and reports whether the document changed. A false means the
-// file already said what the edit asked for.
+// Apply runs edit and returns the document's new bytes. Nil means the file
+// already said what the edit asked for.
 //
 // It takes a function rather than a struct of fields, so the dcterms:modified
 // update below brackets every write however the caller drives the setters.
-func (o *Doc) Apply(edit func(*Doc)) bool {
-	before, _ := o.Bytes()
+func (o *Doc) Apply(edit func(*Doc)) ([]byte, error) {
+	before, err := o.Bytes()
+	if err != nil {
+		return nil, err
+	}
 
 	edit(o)
 
 	// §5.5.5 asks for the timestamp when the creator makes changes, and an
 	// edit asking for what the file already says is not one. Only the bytes
 	// can tell, since a set may find the value already there.
-	if after, _ := o.Bytes(); bytes.Equal(before, after) {
-		return false
+	after, err := o.Bytes()
+	if err != nil || bytes.Equal(before, after) {
+		return nil, err
 	}
 	o.modified().set(time.Now())
-	return true
+	return o.Bytes()
 }
 
 // SetTitle writes the title and its sort title; a nil half is left alone.
