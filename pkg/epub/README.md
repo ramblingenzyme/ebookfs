@@ -42,13 +42,27 @@ When writing metadata changes, the package preserves:
 - Unknown metadata elements and attributes
 - Namespace declarations
 - CDATA sections
-- Entry order in the ZIP archive
-- Modification times and compression methods
+- Entry order in the ZIP archive, except that `mimetype` is moved first
+- Modification times and compression methods, except that `mimetype` is
+  rewritten stored, with no extra field and exactly `application/epub+zip`, as
+  OCF requires
 - Refinements on elements that aren't being edited
 
 The package refuses to edit:
 - Signed EPUBs (would invalidate the signature)
 - Encrypted entries (would corrupt them)
+
+## Size limits
+
+An entry's declared size is whatever the file claims, so a small file can
+inflate to gigabytes. Two limits bound what the package holds in memory:
+
+- No entry over 32 MiB is decompressed. `ReadEntry` and `Cover` return an
+  error for one, and the rest of the book stays usable. `Open` fails when the
+  entry is one it reads itself: `mimetype`, `META-INF/container.xml` or the
+  package document. `Save` fails on an oversized `META-INF/encryption.xml`.
+- `Open` refuses a package document over 16 MiB, since parsing it costs several
+  times its size.
 
 ## Simplifications
 

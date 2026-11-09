@@ -74,12 +74,27 @@ func (a *archive) size(name string) int64 {
 	return int64(f.UncompressedSize64)
 }
 
+// maxEntrySize caps every entry this package decompresses. archive/zip stops
+// at an entry's declared size, so checking that size bounds the read. The
+// declared size is whatever the file claims, though, and a 4 MB upload can
+// declare and inflate to gigabytes.
+const maxEntrySize = 32 << 20
+
+// openEntry is the only caller of zip.File.Open, so every read stays under
+// maxEntrySize. A direct Open would bypass the cap.
+func openEntry(f *zip.File) (io.ReadCloser, error) {
+	if f.UncompressedSize64 > maxEntrySize {
+		return nil, fmt.Errorf("entry %s declares %d bytes, over the %d-byte limit", f.Name, f.UncompressedSize64, maxEntrySize)
+	}
+	return f.Open()
+}
+
 func (a *archive) read(name string) ([]byte, error) {
 	f := a.file(name)
 	if f == nil {
 		return nil, fmt.Errorf("entry not found in epub: %s", name)
 	}
-	rc, err := f.Open()
+	rc, err := openEntry(f)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +129,7 @@ func (a *archive) metadataPath() (string, error) {
 	if f == nil {
 		return "", ErrContainer
 	}
-	r, err := f.Open()
+	r, err := openEntry(f)
 	if err != nil {
 		return "", err
 	}
@@ -223,7 +238,7 @@ func (a *archive) readEncryption() (*ocf.EncryptionInfo, error) {
 	if f == nil {
 		return nil, nil
 	}
-	rc, err := f.Open()
+	rc, err := openEntry(f)
 	if err != nil {
 		return nil, err
 	}

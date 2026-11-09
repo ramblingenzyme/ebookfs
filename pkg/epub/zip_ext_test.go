@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testing/epubtest"
@@ -505,4 +506,41 @@ func TestSetCoverWithDirectoryEntries(t *testing.T) {
 	swapCover(t, path)
 
 	wantDirEntries(t, path, "OEBPS/", "fonts/")
+}
+
+// One byte past the 32 MiB cap on a decompressed entry. Deflated zeros keep
+// the fixture a few kilobytes on disk, the shape a zip bomb takes.
+var overCap = bytes.Repeat([]byte{0}, 32<<20+1)
+
+func TestReadRefusesAnEntryOverTheCap(t *testing.T) {
+	entries := epubtest.BaseEntries(epubtest.OPF3)
+	for i := range entries {
+		if entries[i].Name == "OEBPS/cover.jpg" {
+			entries[i].Data = overCap
+		}
+	}
+	b := open(t, epubtest.WriteEpub(t, entries))
+
+	if _, err := b.Cover(); err == nil || !strings.Contains(err.Error(), "over the") {
+		t.Errorf("Cover() err = %v, want the size limit", err)
+	}
+	if _, err := b.ReadEntry("OEBPS/cover.jpg"); err == nil {
+		t.Error("ReadEntry read an entry over the cap")
+	}
+}
+
+// mimetype is read on every open, so an oversized one fails Open itself. The
+// padding is whitespace, which validate trims, so without the cap this file
+// opens after inflating every byte.
+func TestOpenRefusesAMimetypeOverTheCap(t *testing.T) {
+	padded := append([]byte(epubtest.MimetypeValue), bytes.Repeat([]byte(" "), len(overCap))...)
+	entries := epubtest.BaseEntries(epubtest.OPF3)
+	for i := range entries {
+		if entries[i].Name == epubtest.MimetypePath {
+			entries[i] = epubtest.Entry{Name: epubtest.MimetypePath, Data: padded}
+		}
+	}
+	if _, err := parse(t, epubtest.WriteEpub(t, entries)); err == nil || !strings.Contains(err.Error(), "over the") {
+		t.Errorf("Open err = %v, want the size limit", err)
+	}
 }
