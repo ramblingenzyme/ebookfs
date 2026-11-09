@@ -157,7 +157,6 @@ func (e *testEnv) bookStatus(t *testing.T) string {
 	return b.Status()
 }
 
-
 func (e *testEnv) documentIDs(t *testing.T) []string {
 	t.Helper()
 	data, err := e.lib.ReadSidecar(e.book.ID(), "kosync.json")
