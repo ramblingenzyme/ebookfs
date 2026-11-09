@@ -40,19 +40,6 @@ var offLayouts = []struct {
 	},
 }
 
-// Walk only checks that meta.toml and an *.epub exist, so neither needs valid
-// contents.
-func writeManualBookDir(t *testing.T, lib *Library, libraryPath string) {
-	t.Helper()
-	l := lib
-	dir := filepath.Dir(l.store.AbsPath(filepath.Join(libraryPath, "meta.toml")))
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	writeFile(t, filepath.Join(dir, "meta.toml"), []byte("id = 999\n"))
-	writeFile(t, filepath.Join(dir, "book.epub"), []byte("manual"))
-}
-
 // stageLegacyLayout ingests a book, then moves its directory to
 // legacyAuthorDir with the library closed, which may be where it already is. A
 // non-empty legacyEpub also renames the epub inside it. It returns the book and the canonical location a reindex

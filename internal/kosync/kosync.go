@@ -244,10 +244,9 @@ func (h *handler) getProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	progress, found, err := h.registry.ReadProgress(h.lib, docID)
+	bookID, progress, found, err := h.registry.ReadProgress(h.lib, docID)
 	if err != nil {
-		// TODO: figure out if we can log the bookID here like we're meant to
-		h.writeServerError(w, "kosync: failed to read sidecar progress", 0, err)
+		h.writeServerError(w, "kosync: failed to read sidecar progress", bookID, err)
 		return
 	}
 	if !found {

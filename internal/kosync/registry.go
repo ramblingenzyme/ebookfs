@@ -181,25 +181,25 @@ func (r *docRegistry) Forget(bookID int64) {
 // ReadProgress returns the stored progress for a document ID. found is false
 // for an unknown document ID, a book with no sidecar yet, or a book deleted
 // since the lookup.
-func (r *docRegistry) ReadProgress(lib *library.Library, docID string) (progress Progress, found bool, err error) {
+func (r *docRegistry) ReadProgress(lib *library.Library, docID string) (bookID int64, progress Progress, found bool, err error) {
 	bookID, ok := r.Lookup(docID)
 	if !ok {
-		return Progress{}, false, nil
+		return 0, Progress{}, false, nil
 	}
 
 	raw, err := lib.ReadSidecar(bookID, "kosync.json")
 	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, library.ErrBookNotFound) {
-		return Progress{}, false, nil
+		return 0, Progress{}, false, nil
 	}
 	if err != nil {
-		return Progress{}, false, err
+		return bookID, Progress{}, false, err
 	}
 
 	var sidecar SidecarData
 	if err := json.Unmarshal(raw, &sidecar); err != nil {
-		return Progress{}, false, err
+		return bookID, Progress{}, false, err
 	}
-	return sidecar.Progress, true, nil
+	return bookID, sidecar.Progress, true, nil
 }
 
 // StoreProgress writes progress into the book's sidecar under the per-book
@@ -240,11 +240,7 @@ func (r *docRegistry) StoreProgress(lib *library.Library, docID string, progress
 func (r *docRegistry) snapshot() map[string]int64 {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	cp := make(map[string]int64, len(r.data))
-	for k, v := range r.data {
-		cp[k] = v
-	}
-	return cp
+	return maps.Clone(r.data)
 }
 
 func computeDocumentID(book *library.Book, openEpub func() (library.EpubReader, error)) (string, error) {

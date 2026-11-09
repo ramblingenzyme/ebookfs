@@ -16,11 +16,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-var (
-	makeBook = util.MakeMutableBook
-	errTest  = util.ErrTest
-)
-
 // openLibrary returns a library in a temporary directory, and that library's
 // root.
 func openLibrary(t *testing.T) (*library.Library, string) {

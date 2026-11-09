@@ -7,8 +7,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-var makeBook = util.MakeMutableBook
-
 var buildTestEpub = util.BuildTestEpub
 
 func testConfig(t *testing.T) library.Config {
