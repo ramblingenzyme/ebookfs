@@ -128,20 +128,27 @@ func TestGroupNamesAreOneComponent(t *testing.T) {
 
 // A value that names nothing would share naming.PathSafe's placeholder with
 // every other such value, and one with a control character is an entry a
-// shell cannot name. Validate refuses both, so a book carries one only from a
-// hand-edited meta.toml or an epub, and the view skips it.
+// shell cannot name. The library stores both, so the view skips them, and a
+// book keyed only by one joins no group.
 func TestGroupsSkipKeysThatCannotNameADirectory(t *testing.T) {
 	for _, v := range groupingViews {
-		if v.name != "by-tag" && v.name != "by-subjects" {
+		// Statuses are a fixed vocabulary.
+		if v.name == "by-status" {
 			continue
 		}
 		t.Run(v.name, func(t *testing.T) {
 			reg := newTestRegistry(t)
 			d := v.newDir(reg)
-			reg.Load(v.withKeys(1, "Title", "...", "sci\nfi", "kept"))
+			var want []string
+			if v.multiKey {
+				reg.Load(v.withKeys(1, "Title", "...", "sci\nfi", "kept"))
+				want = []string{"kept"}
+			} else {
+				reg.Load(v.withKeys(1, "Title", "..."))
+			}
 
-			if names := fstest.ChildNames(d); !slices.Equal(names, []string{"kept"}) {
-				t.Errorf("groups = %q, want only kept", names)
+			if names := fstest.ChildNames(d); !slices.Equal(names, want) {
+				t.Errorf("groups = %q, want %q", names, want)
 			}
 		})
 	}

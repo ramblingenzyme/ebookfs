@@ -118,14 +118,14 @@ func (d *keyedDir) entryNames(b *library.Book) []string {
 	return names
 }
 
-// nameableKeys drops the values a group directory cannot be named after: one
-// that names nothing, which naming.PathSafe would file with every other such
-// value under its placeholder, and one carrying a control character. Validate
-// refuses both on edit, so these arrive only from a file.
+// nameableKeys drops the values naming.CanName refuses, which the library
+// stores as they are. Listed, each would share PathSafe's placeholder with
+// every other such value, or name an entry a shell cannot. The book stays
+// reachable through books/, by-id/ and search.
 func nameableKeys(values []string) []string {
 	keys := make([]string, 0, len(values))
 	for _, v := range values {
-		if !naming.NamesNothing(v) && !naming.HasControl(v) {
+		if naming.CanName(v) {
 			keys = append(keys, v)
 		}
 	}

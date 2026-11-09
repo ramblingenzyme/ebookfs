@@ -195,6 +195,21 @@ func TestValidateTags(t *testing.T) {
 	}
 }
 
+// The message names what is wrong with the value, not the frontend layout
+// the rule protects.
+func TestValidateTagsMessages(t *testing.T) {
+	for _, tc := range []struct {
+		tags []string
+		want string
+	}{
+		{[]string{"fiction", "..."}, `tag 2 is "...", which is only dots and whitespace`},
+		{[]string{"sci\nfi"}, `tag 1 is "sci\nfi", which contains a control character`},
+	} {
+		err := Validate(Edits{Tags: &tc.tags}, testBook("", nil))
+		assertHasFieldError(t, err, "tags", tc.want)
+	}
+}
+
 func TestValidateSubjects(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
@@ -205,10 +220,6 @@ func TestValidateSubjects(t *testing.T) {
 		{"distinct", &[]string{"Fiction", "History"}, ""},
 		{"duplicate", &[]string{"Fiction", "History", "Fiction"}, `subject 3 duplicates "Fiction"`},
 		{"duplicate after trimming", &[]string{"Fiction", " Fiction "}, `subject 2 duplicates "Fiction"`},
-		// by-subjects groups like by-tag, so the tag directory rule applies.
-		{"names nothing", &[]string{"Fiction", "..."}, `subject 2 is "...", which cannot name a directory`},
-		{"empty", &[]string{""}, `subject 1 is "", which cannot name a directory`},
-		{"control character", &[]string{"sci\x01fi"}, `subject 1 is "sci\x01fi", which cannot name a directory`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := Validate(Edits{Subjects: tc.subjects}, testBook("", nil))

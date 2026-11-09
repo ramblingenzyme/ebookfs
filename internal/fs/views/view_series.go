@@ -115,5 +115,5 @@ func seriesKeys(b *library.Book) []string {
 	if !b.HasSeries() {
 		return nil
 	}
-	return []string{b.SeriesName()}
+	return nameableKeys([]string{b.SeriesName()})
 }

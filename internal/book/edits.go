@@ -184,8 +184,8 @@ func (e Edits) validateAuthors() string {
 	return ""
 }
 
-// validateTags rejects a tag that names no directory. A frontend groups books
-// by tag, and naming.PathSafe gives every value that trims away, "." and ".."
+// validateTags rejects a tag naming.CanName refuses. A frontend groups books by
+// tag, and naming.PathSafe gives every value that trims away, "." and ".."
 // among them, one placeholder, so accepting them files unrelated tags together.
 func (e Edits) validateTags() string {
 	if e.Tags == nil {
@@ -195,8 +195,11 @@ func (e Edits) validateTags() string {
 		if strings.TrimSpace(t) == "" {
 			return fmt.Sprintf("tag %d is empty", i+1)
 		}
-		if naming.NamesNothing(t) || naming.HasControl(t) {
-			return fmt.Sprintf("tag %d is %q, which cannot name a directory", i+1, t)
+		if naming.NamesNothing(t) {
+			return fmt.Sprintf("tag %d is %q, which is only dots and whitespace", i+1, t)
+		}
+		if !naming.CanName(t) {
+			return fmt.Sprintf("tag %d is %q, which contains a control character", i+1, t)
 		}
 	}
 	if i := firstRepeat(*e.Tags, strings.TrimSpace); i >= 0 {
@@ -205,16 +208,9 @@ func (e Edits) validateTags() string {
 	return ""
 }
 
-// validateSubjects applies validateTags's directory rule, since a frontend
-// groups books by subject the same way.
 func (e Edits) validateSubjects() string {
 	if e.Subjects == nil {
 		return ""
-	}
-	for i, s := range *e.Subjects {
-		if naming.NamesNothing(s) || naming.HasControl(s) {
-			return fmt.Sprintf("subject %d is %q, which cannot name a directory", i+1, s)
-		}
 	}
 	if i := firstRepeat(*e.Subjects, strings.TrimSpace); i >= 0 {
 		return fmt.Sprintf("subject %d duplicates %q", i+1, strings.TrimSpace((*e.Subjects)[i]))

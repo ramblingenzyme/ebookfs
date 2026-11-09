@@ -11,9 +11,9 @@ func NewByAuthorDir(reg *registry.BookRegistry) *keyedDir {
 
 func authorKeys(b *library.Book) []string {
 	authors := b.Authors()
-	keys := make([]string, 0, len(authors))
-	for _, a := range authors {
-		keys = append(keys, a.Name)
+	names := make([]string, len(authors))
+	for i, a := range authors {
+		names[i] = a.Name
 	}
-	return keys
+	return nameableKeys(names)
 }

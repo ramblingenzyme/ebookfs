@@ -73,7 +73,10 @@ func PathSafe(s string) string {
 // filing them all under the same name.
 func NamesNothing(s string) bool { return pathComponent(s) == "" }
 
-// HasControl reports whether s holds a control character. PathSafe keeps
-// one, since POSIX and 9P allow it, but a listing entry carrying a newline or
-// an escape is one a shell cannot name cleanly.
-func HasControl(s string) bool { return strings.ContainsFunc(s, unicode.IsControl) }
+// CanName reports whether s can name a directory in a listing. It must not
+// name nothing, or it shares PathSafe's placeholder with every such value. It
+// must hold no control character either: PathSafe keeps one, since POSIX and 9P
+// allow it, but a shell cannot name such an entry cleanly.
+func CanName(s string) bool {
+	return !NamesNothing(s) && !strings.ContainsFunc(s, unicode.IsControl)
+}
