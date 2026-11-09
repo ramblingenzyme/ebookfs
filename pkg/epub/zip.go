@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"strings"
 
@@ -163,13 +164,11 @@ func (a *archive) writeTo(zw *zip.Writer, replace map[string][]byte) error {
 		}
 	}
 
-	// OCF requires mimetype to be the first entry. Writing it here and skipping
-	// it below guarantees that, whatever order the original used.
 	mt := a.file(mimetypePath)
 	if mt == nil {
 		return fmt.Errorf("%w: missing mimetype declaration", ErrNotEpub)
 	}
-	if err := writeEntry(mt); err != nil {
+	if err := writeMimetype(zw, mt); err != nil {
 		return err
 	}
 
@@ -189,6 +188,31 @@ func (a *archive) writeTo(zw *zip.Writer, replace map[string][]byte) error {
 	}
 
 	return nil
+}
+
+// writeMimetype writes the entry OCF §4.3.3 requires: first, stored, with no
+// extra field, and holding exactly the media type. Sniffers read it at fixed
+// offsets 30 and 38. validate accepts a padded, deflated or extra-carrying
+// entry on read, so a copy would carry that defect into every rewrite.
+//
+// CreateRaw, since CreateHeader turns Modified into an extra field and streams
+// with a data descriptor. The original's DOS timestamp is kept.
+func writeMimetype(zw *zip.Writer, orig *zip.File) error {
+	data := []byte(mimetypeValue)
+	w, err := zw.CreateRaw(&zip.FileHeader{
+		Name:               mimetypePath,
+		Method:             zip.Store,
+		ModifiedTime:       orig.ModifiedTime,
+		ModifiedDate:       orig.ModifiedDate,
+		CRC32:              crc32.ChecksumIEEE(data),
+		CompressedSize64:   uint64(len(data)),
+		UncompressedSize64: uint64(len(data)),
+	})
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(data)
+	return err
 }
 
 // readEncryption parses META-INF/encryption.xml. It returns nil if the file is

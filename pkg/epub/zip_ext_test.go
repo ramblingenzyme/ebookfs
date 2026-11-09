@@ -3,6 +3,7 @@ package epub_test
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"io"
 	"os"
@@ -381,10 +382,10 @@ func TestSaveDeduplicatesMimetype(t *testing.T) {
 }
 
 // OCF §4.3.3: sniffers read "mimetype" at offset 30 and its content at 38, so
-// one byte check covers position, compression and the MUST NOT on extra
-// fields. Both input orders run, or writing mimetype first could be deleted
-// with nothing failing.
-func TestSaveHoistsMimetypeToTheFront(t *testing.T) {
+// the header must be stored, carry no extra field, and hold exactly the media
+// type. Save writes it that way whatever the input did. Both input orders run,
+// or writing mimetype first could be deleted with nothing failing.
+func TestSaveWritesAConformingMimetype(t *testing.T) {
 	rest := []epubtest.Entry{
 		{Name: "META-INF/container.xml", Data: []byte(epubtest.ContainerXML)},
 		{Name: "OEBPS/content.opf", Data: []byte(epubtest.OPF3)},
@@ -392,6 +393,10 @@ func TestSaveHoistsMimetypeToTheFront(t *testing.T) {
 		{Name: "OEBPS/chapter1.xhtml", Data: epubtest.ChapterBytes},
 	}
 	mimetype := epubtest.Entry{Name: epubtest.MimetypePath, Data: []byte(epubtest.MimetypeValue), Store: true}
+	deflated := mimetype
+	deflated.Store = false
+	padded := mimetype
+	padded.Data = []byte(epubtest.MimetypeValue + "\n")
 
 	for _, tc := range []struct {
 		name    string
@@ -402,6 +407,8 @@ func TestSaveHoistsMimetypeToTheFront(t *testing.T) {
 	}{
 		{name: "mimetype last", entries: append(slices.Clone(rest), mimetype)},
 		{name: "mimetype already first", entries: append([]epubtest.Entry{mimetype}, rest...), conformingInput: true},
+		{name: "mimetype deflated", entries: append([]epubtest.Entry{deflated}, rest...)},
+		{name: "mimetype with a trailing newline", entries: append([]epubtest.Entry{padded}, rest...)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := epubtest.WriteEpub(t, tc.entries)
@@ -431,6 +438,19 @@ func assertOCFHeader(t *testing.T, path, when string) {
 		string(raw[30:38]) != epubtest.MimetypePath ||
 		string(raw[38:end]) != epubtest.MimetypeValue {
 		t.Errorf("%s: OCF header = %q, want mimetype at offset 30 and %q at 38", when, raw[:end], epubtest.MimetypeValue)
+	}
+	// Local file header fields, APPNOTE §4.3.7. The size comes from the
+	// central directory, since a streamed entry leaves it zero here.
+	method := binary.LittleEndian.Uint16(raw[8:])
+	extra := binary.LittleEndian.Uint16(raw[28:])
+	zr, err := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
+	if err != nil {
+		t.Fatalf("%s: %v", when, err)
+	}
+	size := zr.File[0].UncompressedSize64
+	if method != zip.Store || extra != 0 || size != uint64(len(epubtest.MimetypeValue)) {
+		t.Errorf("%s: mimetype method %d, extra %d bytes, size %d; want stored, none, %d",
+			when, method, extra, size, len(epubtest.MimetypeValue))
 	}
 }
 

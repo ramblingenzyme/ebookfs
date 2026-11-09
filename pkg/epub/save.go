@@ -284,8 +284,7 @@ func (b *Book) syncNCX(enc *ocf.EncryptionInfo, m moved, replace map[string][]by
 }
 
 // rewrite follows calibre's safe_replace. It:
-//   - writes mimetype first and copies it unchanged, so tools that sniff a
-//     file's first bytes still recognise it;
+//   - writes a conforming mimetype first, as writeMimetype says;
 //   - fails if a key in replace matches no entry, rather than silently
 //     dropping the edit.
 func (b *Book) rewrite(replace map[string][]byte) error {
