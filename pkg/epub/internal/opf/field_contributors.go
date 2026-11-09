@@ -11,7 +11,7 @@ type Contributor struct{ Name, Role string }
 
 type contributorsField struct{ d *pkgdoc.Doc }
 
-func (o *Doc) contributors() contributorsField { return contributorsField{o.d} }
+func (o *Package) contributors() contributorsField { return contributorsField{o.d} }
 
 // get returns one entry per role of each non-empty dc:contributor, in document
 // order, so a person with two roles reads as two entries. A contributor with no

@@ -15,7 +15,7 @@ func isRasterCoverType(mediaType string) bool {
 
 // cover resolves the cover image: the cover-image manifest property first, then
 // the legacy <meta name="cover"> (§5.9.3), then a heuristic.
-func (o *Doc) cover(base string) string {
+func (o *Package) cover(base string) string {
 	manifest := o.d.Manifest()
 
 	for _, item := range manifest {

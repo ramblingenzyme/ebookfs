@@ -8,7 +8,7 @@ import (
 
 type authorsField struct{ d *pkgdoc.Doc }
 
-func (o *Doc) authors() authorsField { return authorsField{o.d} }
+func (o *Package) authors() authorsField { return authorsField{o.d} }
 
 // creators returns the creators this package owns: those with the aut role, or
 // no role. Counting a role-less creator as an author is our reading, not a

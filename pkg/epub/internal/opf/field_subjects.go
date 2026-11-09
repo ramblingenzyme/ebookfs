@@ -6,7 +6,7 @@ import (
 
 type subjectsField struct{ d *pkgdoc.Doc }
 
-func (o *Doc) subjects() subjectsField { return subjectsField{o.d} }
+func (o *Package) subjects() subjectsField { return subjectsField{o.d} }
 
 // get returns all non-empty dc:subject elements in document order.
 func (f subjectsField) get() []string {

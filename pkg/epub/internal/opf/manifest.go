@@ -15,7 +15,7 @@ const ncxMediaType = "application/x-dtbncx+xml"
 //
 // It matches the media type rather than <spine toc="…">, since §5.7.1 makes
 // that attribute optional and legacy.
-func (o *Doc) NCXPath(base string) string {
+func (o *Package) NCXPath(base string) string {
 	for _, item := range o.d.Manifest() {
 		if item.MediaType == ncxMediaType {
 			return xml.ResolveHref(base, item.Href)
@@ -31,7 +31,7 @@ func (o *Doc) NCXPath(base string) string {
 // ponytail: the landmarks nav (§7.4.4) is not consulted, which would mean
 // finding and parsing the navigation document. Add it if a book turns up whose
 // cover page neither pointer reaches.
-func (o *Doc) CoverPages(base string) []string {
+func (o *Package) CoverPages(base string) []string {
 	var out []string
 	add := func(href string) {
 		if href == "" {
@@ -54,7 +54,7 @@ func (o *Doc) CoverPages(base string) []string {
 
 // firstSpineHref returns "" for a spine with no itemref, rather than matching a
 // manifest item with no id.
-func (o *Doc) firstSpineHref() string {
+func (o *Package) firstSpineHref() string {
 	idref := o.d.SpineFirst()
 	if idref == "" {
 		return ""

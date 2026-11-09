@@ -3,13 +3,14 @@
 //
 // Each field reads and writes through one type, so the two cannot disagree,
 // and writing back what was read adds nothing the file did not carry. Nothing
-// is defaulted or rejected; Doc.Metadata says what that leaves to the caller.
+// is defaulted or rejected; Package.Metadata says what that leaves to the
+// caller.
 //
 //   - A field with an encoding of its own is a type with get and set (title,
 //     authors, series, modified, subjects, contributors). Description, language,
-//     publisher and rights are one plain element each, read by a Doc method and
-//     written by a Set method. A read-only field is a single Doc method
-//     (pubdate, identifiers, cover).
+//     publisher and rights are one plain element each, read by a Package
+//     method and written by a Set method. A read-only field is a single
+//     Package method (pubdate, identifiers, cover).
 //
 //   - A field says what a value should be, not where it is kept. pkgdoc's
 //     slots know where, and this package does not import etree.
@@ -48,24 +49,24 @@ type Metadata struct {
 	CoverPath    string
 }
 
-type Doc struct{ d *pkgdoc.Doc }
+type Package struct{ d *pkgdoc.Doc }
 
-func Parse(b []byte) (*Doc, error) {
+func Parse(b []byte) (*Package, error) {
 	d, err := pkgdoc.Parse(b)
 	if err != nil {
 		return nil, err
 	}
-	return &Doc{d}, nil
+	return &Package{d}, nil
 }
 
-func (o *Doc) Bytes() ([]byte, error) { return o.d.Bytes() }
+func (o *Package) Bytes() ([]byte, error) { return o.d.Bytes() }
 
 // Apply runs edit and returns the document's new bytes. Nil means the file
 // already said what the edit asked for.
 //
 // It takes a function rather than a struct of fields, so the dcterms:modified
 // update below brackets every write however the caller drives the setters.
-func (o *Doc) Apply(edit func(*Doc)) ([]byte, error) {
+func (o *Package) Apply(edit func(*Package)) ([]byte, error) {
 	before, err := o.Bytes()
 	if err != nil {
 		return nil, err
@@ -89,27 +90,27 @@ func (o *Doc) Apply(edit func(*Doc)) ([]byte, error) {
 // Writing a title drops the other dc:title segments, and any sort title not
 // passed with it. So a caller always passes the sort title, and passes a nil
 // title to change the sort title alone.
-func (o *Doc) SetTitle(title, sort *string) { o.title().set(title, sort) }
+func (o *Package) SetTitle(title, sort *string) { o.title().set(title, sort) }
 
-func (o *Doc) SetDescription(v string) { o.d.DC("description").Set(v) }
+func (o *Package) SetDescription(v string) { o.d.DC("description").Set(v) }
 
-func (o *Doc) SetLanguage(v string) { o.d.DC("language").Set(v) }
+func (o *Package) SetLanguage(v string) { o.d.DC("language").Set(v) }
 
-func (o *Doc) SetPublisher(v string) { o.d.DC("publisher").Set(v) }
+func (o *Package) SetPublisher(v string) { o.d.DC("publisher").Set(v) }
 
-func (o *Doc) SetRights(v string) { o.d.DC("rights").Set(v) }
+func (o *Package) SetRights(v string) { o.d.DC("rights").Set(v) }
 
-func (o *Doc) SetAuthors(authors []Author) { o.authors().set(authors) }
+func (o *Package) SetAuthors(authors []Author) { o.authors().set(authors) }
 
-func (o *Doc) SetSubjects(subjects []string) { o.subjects().set(subjects) }
+func (o *Package) SetSubjects(subjects []string) { o.subjects().set(subjects) }
 
-func (o *Doc) SetContributors(contributors []Contributor) {
+func (o *Package) SetContributors(contributors []Contributor) {
 	o.contributors().set(contributors)
 }
 
 // SetSeries writes the series, or clears it when s is nil. Both halves are
 // written, so a caller changing one passes the other as read.
-func (o *Doc) SetSeries(s *Series) { o.series().set(s) }
+func (o *Package) SetSeries(s *Series) { o.series().set(s) }
 
 // Metadata reads the book's metadata. base is the package document's
 // directory, used to resolve the cover href.
@@ -117,7 +118,7 @@ func (o *Doc) SetSeries(s *Series) { o.series().set(s) }
 // Nothing is rejected or defaulted. A book with no title, or a series position
 // the spec disallows, is reported as written, and a caller with a policy
 // applies it.
-func (o *Doc) Metadata(base string) Metadata {
+func (o *Package) Metadata(base string) Metadata {
 	// §5.5.2 allows only whitespace collapsing, which get already did.
 	title, sortTitle := o.title().get()
 	// TODO: decide whether to derive a sort title when none is set. calibre

@@ -14,7 +14,7 @@ const (
 
 type seriesField struct{ d *pkgdoc.Doc }
 
-func (o *Doc) series() seriesField { return seriesField{o.d} }
+func (o *Package) series() seriesField { return seriesField{o.d} }
 
 // get returns the series as the document records it. No position gives an
 // empty Index, not a default.

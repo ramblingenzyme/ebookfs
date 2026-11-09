@@ -30,7 +30,7 @@ type Book struct {
 	Metadata
 
 	pubdate     string
-	doc         *opf.Doc
+	pkg         *opf.Package
 	identifiers map[string]string
 	coverPath   string
 	// orig is a deep copy, so changing an exported slice cannot change what
@@ -66,17 +66,17 @@ func Open(p string) (_ *Book, err error) {
 	if err != nil {
 		return nil, err
 	}
-	doc, err := opf.Parse(raw)
+	pkg, err := opf.Parse(raw)
 	if err != nil {
 		return nil, err
 	}
-	return newBook(f, doc), nil
+	return newBook(f, pkg), nil
 }
 
-func newBook(f *File, doc *opf.Doc) *Book {
-	m := doc.Metadata(path.Dir(f.PackagePath()))
+func newBook(f *File, pkg *opf.Package) *Book {
+	m := pkg.Metadata(path.Dir(f.PackagePath()))
 
-	b := &Book{File: f, doc: doc, identifiers: m.Identifiers, coverPath: m.CoverPath}
+	b := &Book{File: f, pkg: pkg, identifiers: m.Identifiers, coverPath: m.CoverPath}
 	b.Title = m.Title
 	b.SortTitle = m.SortTitle
 	b.Description = m.Description

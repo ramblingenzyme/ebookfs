@@ -63,7 +63,7 @@ func (b *Book) SetCover(img []byte) error {
 // After Save, the Book reads from the new file, and a later Save compares
 // against the values just written.
 func (b *Book) Save() error {
-	if b.File == nil || b.doc == nil {
+	if b.File == nil || b.pkg == nil {
 		return errors.New("epub: Save on a Book that was not opened")
 	}
 	replace, err := b.stage()
@@ -109,7 +109,7 @@ func (b *Book) stage() (map[string][]byte, error) {
 		if enc.IsEncrypted(b.PackagePath()) {
 			return nil, fmt.Errorf("refusing to edit: package document %q is encrypted", b.PackagePath())
 		}
-		out, err := b.doc.Apply(func(d *opf.Doc) { b.write(d, m) })
+		out, err := b.pkg.Apply(func(d *opf.Package) { b.write(d, m) })
 		if err != nil {
 			return nil, err
 		}
@@ -161,9 +161,9 @@ func sameSeries(a, c *Series) bool {
 // write calls the package document's setters for the fields m names. It runs
 // inside Apply, which compares the document before and after to decide whether
 // to update dcterms:modified (§5.5.5).
-func (b *Book) write(d *opf.Doc, m moved) {
-	// opf.Doc.SetTitle says why the sort title is always passed, but the title
-	// only when it changed.
+func (b *Book) write(d *opf.Package, m moved) {
+	// opf.Package.SetTitle says why the sort title is always passed, but the
+	// title only when it changed.
 	if m.title || m.sortTitle {
 		var title *string
 		if m.title {
@@ -211,7 +211,7 @@ func (b *Book) write(d *opf.Doc, m moved) {
 // dimensions; package content says why. A candidate page counts only if it
 // references the cover image, so a page that cannot be parsed is skipped.
 func (b *Book) refitCoverPage(enc *ocf.EncryptionInfo, width, height int, replace map[string][]byte) error {
-	for _, entry := range b.doc.CoverPages(path.Dir(b.PackagePath())) {
+	for _, entry := range b.pkg.CoverPages(path.Dir(b.PackagePath())) {
 		if !b.has(entry) || enc.IsEncrypted(entry) {
 			continue
 		}
@@ -219,12 +219,12 @@ func (b *Book) refitCoverPage(enc *ocf.EncryptionInfo, width, height int, replac
 		if err != nil {
 			return err
 		}
-		doc, err := content.Parse(data, entry)
+		page, err := content.Parse(data, entry)
 		if err != nil {
 			continue
 		}
-		if doc.FitCover(b.coverPath, width, height) {
-			out, err := doc.Bytes()
+		if page.FitCover(b.coverPath, width, height) {
+			out, err := page.Bytes()
 			if err != nil {
 				return err
 			}
@@ -244,7 +244,7 @@ func (b *Book) syncNCX(enc *ocf.EncryptionInfo, m moved, replace map[string][]by
 	if !m.title && !m.authors {
 		return nil
 	}
-	entry := b.doc.NCXPath(path.Dir(b.PackagePath()))
+	entry := b.pkg.NCXPath(path.Dir(b.PackagePath()))
 	if entry == "" || !b.has(entry) || enc.IsEncrypted(entry) {
 		return nil
 	}

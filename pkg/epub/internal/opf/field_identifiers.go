@@ -11,7 +11,7 @@ import (
 // falling back to its XML id and then a numbered unknown key
 // (docs/DECISIONS.md #24). Where two resolve to one scheme, as ISBN-10 and
 // ISBN-13 do, the first in document order wins.
-func (o *Doc) identifiers() map[string]string {
+func (o *Package) identifiers() map[string]string {
 	out := map[string]string{}
 	for _, el := range o.d.DCAll("identifier") {
 		value := el.Get()
@@ -49,7 +49,7 @@ func (o *Doc) identifiers() map[string]string {
 //     any other duplicate scheme.
 //
 // It returns "" when none of these names the kind.
-func (o *Doc) identifierScheme(el *pkgdoc.Element) string {
+func (o *Package) identifierScheme(el *pkgdoc.Element) string {
 	if s := normalizeScheme(el.OPFAttr("scheme").Get()); s != "" && s != urnScheme {
 		return s
 	}

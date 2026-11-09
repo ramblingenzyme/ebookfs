@@ -10,7 +10,7 @@ import (
 
 type titleField struct{ d *pkgdoc.Doc }
 
-func (o *Doc) title() titleField { return titleField{o.d} }
+func (o *Package) title() titleField { return titleField{o.d} }
 
 func (f titleField) element() *pkgdoc.Element { return f.d.DC("title") }
 
@@ -71,7 +71,7 @@ func (f titleField) dropSegments(keep *pkgdoc.Element) {
 
 type modifiedField struct{ d *pkgdoc.Doc }
 
-func (o *Doc) modified() modifiedField { return modifiedField{o.d} }
+func (o *Package) modified() modifiedField { return modifiedField{o.d} }
 
 // set records the time of this rewrite: exactly one unrefined dcterms:modified
 // per §5.5.5, in the UTC format §5.5.4 fixes. EPUB 3 only.
@@ -85,13 +85,13 @@ func (f modifiedField) set(t time.Time) {
 // description, language, publisher and rights are repeatable (§5.5.3.2.1) but
 // single-valued here. pkgdoc's DC picks the primary element a read and a write
 // both mean, so they need no field type. Extras survive a write untouched.
-func (o *Doc) description() string { return o.d.DC("description").Get() }
+func (o *Package) description() string { return o.d.DC("description").Get() }
 
-func (o *Doc) language() string { return o.d.DC("language").Get() }
+func (o *Package) language() string { return o.d.DC("language").Get() }
 
-func (o *Doc) publisher() string { return o.d.DC("publisher").Get() }
+func (o *Package) publisher() string { return o.d.DC("publisher").Get() }
 
-func (o *Doc) rights() string { return o.d.DC("rights").Get() }
+func (o *Package) rights() string { return o.d.DC("rights").Get() }
 
 // elementRoles returns an element's roles in document order. An EPUB 2 opf:role
 // wins when present; otherwise every EPUB 3 role refinement counts (D.3.10).
@@ -108,7 +108,7 @@ func elementRoles(c *pkgdoc.Element) []string {
 // one untagged date is used; zero or several leave it unset.
 //
 // §5.5.3.2.4 forbids more than one dc:date, so several is a malformed file.
-func (o *Doc) pubdate() string {
+func (o *Package) pubdate() string {
 	var (
 		untagged string
 		count    int

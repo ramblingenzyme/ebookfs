@@ -16,14 +16,14 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/xml"
 )
 
-type Doc struct {
+type Page struct {
 	doc  *etree.Document
 	base string // the document's directory
 }
 
 // Parse reads a content document. entry is its path in the container, which
 // its references resolve against.
-func Parse(b []byte, entry string) (*Doc, error) {
+func Parse(b []byte, entry string) (*Page, error) {
 	doc := etree.NewDocument()
 	// §6.1.2 makes these HTML documents in XML syntax, so any HTML named entity
 	// may appear; encoding/xml knows only the five XML ones.
@@ -39,10 +39,10 @@ func Parse(b []byte, entry string) (*Doc, error) {
 	if doc.Root() == nil {
 		return nil, errors.New("no root element")
 	}
-	return &Doc{doc: doc, base: path.Dir(entry)}, nil
+	return &Page{doc: doc, base: path.Dir(entry)}, nil
 }
 
-func (d *Doc) Bytes() ([]byte, error) { return d.doc.WriteToBytes() }
+func (d *Page) Bytes() ([]byte, error) { return d.doc.WriteToBytes() }
 
 // FitCover resizes the cover image's frame to width by height, and reports
 // whether anything changed. A document that does not reference the cover image
@@ -50,7 +50,7 @@ func (d *Doc) Bytes() ([]byte, error) { return d.doc.WriteToBytes() }
 //
 // The usual cover page is an SVG whose viewBox is the old image's pixel size,
 // so a replacement of different proportions is drawn cropped.
-func (d *Doc) FitCover(coverPath string, width, height int) bool {
+func (d *Page) FitCover(coverPath string, width, height int) bool {
 	before, _ := d.Bytes()
 
 	for _, img := range d.coverImages(coverPath) {
@@ -77,7 +77,7 @@ func (d *Doc) FitCover(coverPath string, width, height int) bool {
 // coverImages returns the SVG <image> and HTML <img> elements that reference
 // the cover. Attributes match by local name, so xlink:href and a bare href are
 // both found; §6.2.3 allows either.
-func (d *Doc) coverImages(coverPath string) []*etree.Element {
+func (d *Page) coverImages(coverPath string) []*etree.Element {
 	var out []*etree.Element
 	for _, tag := range []string{"image", "img"} {
 		for _, el := range d.doc.FindElements("//" + tag) {
