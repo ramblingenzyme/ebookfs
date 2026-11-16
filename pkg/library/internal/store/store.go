@@ -198,14 +198,16 @@ func (s *Store) EmptyTrash() error {
 	return os.RemoveAll(filepath.Join(s.root, trashDirName))
 }
 
-func (s *Store) Update(oldLoc, newLoc book.Location, meta *book.Meta) (drift.PathInfo, error) {
+func (s *Store) Update(oldLoc, newLoc book.Location, meta book.Meta) (book.Meta, drift.PathInfo, error) {
+	canonicalizeMeta(&meta)
 	if err := s.Move(oldLoc, newLoc); err != nil {
-		return drift.PathInfo{}, err
+		return meta, drift.PathInfo{}, err
 	}
-	if err := s.writeMeta(newLoc, meta); err != nil {
-		return drift.PathInfo{}, err
+	if err := s.writeMeta(newLoc, &meta); err != nil {
+		return meta, drift.PathInfo{}, err
 	}
-	return s.Stat(newLoc)
+	mt, err := s.Stat(newLoc)
+	return meta, mt, err
 }
 
 // OpenSidecars returns an os.Root scoped to the book's .sidecar/ subdirectory,

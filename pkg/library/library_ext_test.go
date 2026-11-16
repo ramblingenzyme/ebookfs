@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
@@ -440,5 +441,51 @@ func TestOpenReplacesAnUnreadableLastID(t *testing.T) {
 	}
 	if got, want := strings.TrimSpace(string(data)), strconv.FormatInt(b.ID(), 10); got != want {
 		t.Errorf(".last-id = %q after Open, want %q", got, want)
+	}
+}
+
+func TestTimestampPrecisionContract(t *testing.T) {
+	lib := openTestLibrary(t)
+
+	b := ingestTestEpub(t, lib, buildTestEpub(t, "Title", "Alice"))
+	if got := b.DateAdded().Nanosecond(); got != 0 {
+		t.Errorf("Ingest returned DateAdded with nanoseconds %d, want 0", got)
+	}
+	if loc := b.DateAdded().Location(); loc != time.UTC {
+		t.Errorf("Ingest returned DateAdded in %v, want UTC", loc)
+	}
+
+	got, err := lib.Get(b.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.DateAdded().Equal(b.DateAdded()) {
+		t.Errorf("Get DateAdded %v != Ingest DateAdded %v", got.DateAdded(), b.DateAdded())
+	}
+	if !got.DateModified().Equal(b.DateModified()) {
+		t.Errorf("Get DateModified %v != Ingest DateModified %v", got.DateModified(), b.DateModified())
+	}
+
+	newStatus := "read"
+	updated, changed, err := lib.Update(b.ID(), func(*library.Book) *library.Edits {
+		return &library.Edits{Status: &newStatus}
+	})
+	if err != nil || !changed {
+		t.Fatalf("Update: changed=%v err=%v", changed, err)
+	}
+	if got := updated.DateModified().Nanosecond(); got != 0 {
+		t.Errorf("Update returned DateModified with nanoseconds %d, want 0", got)
+	}
+
+	afterEdit, err := lib.Get(b.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !afterEdit.DateModified().Equal(updated.DateModified()) {
+		t.Errorf("Get after Update DateModified %v != Update returned %v",
+			afterEdit.DateModified(), updated.DateModified())
+	}
+	if !afterEdit.DateAdded().Equal(b.DateAdded()) {
+		t.Errorf("DateAdded changed after Update: was %v, now %v", b.DateAdded(), afterEdit.DateAdded())
 	}
 }

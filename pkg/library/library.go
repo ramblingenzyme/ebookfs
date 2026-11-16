@@ -175,7 +175,7 @@ func (l *Library) Update(id int64, fn func(*Book) *Edits) (b *Book, changed bool
 	}
 
 	location := l.store.Layout(bib.Authors, bib.Title, meta.ID)
-	mt, err := l.store.Update(current.Location, location, &meta)
+	meta, mt, err := l.store.Update(current.Location, location, meta)
 	if err != nil {
 		slog.Error("edit: update failed", "book_id", current.Meta.ID, "title", current.Title, "error", err)
 		return nil, false, err

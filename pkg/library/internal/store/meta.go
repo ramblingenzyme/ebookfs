@@ -3,6 +3,7 @@ package store
 import (
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/ramblingenzyme/ebookfs/internal/atomicfs"
@@ -34,6 +35,7 @@ func readMeta(path string) (*book.Meta, error) {
 	if err = toml.Unmarshal(buf, meta); err != nil {
 		return nil, err
 	}
+	canonicalizeMeta(meta)
 	// The file is hand-editable, and the index keys tags on (book, tag).
 	meta.Tags = book.FirstOf(meta.Tags, func(t string) string { return t })
 	return meta, nil
@@ -51,4 +53,11 @@ func writeMeta(path string, meta *book.Meta) error {
 		_, err := f.Write(buf)
 		return err
 	}, path)
+}
+
+// canonicalizeMeta pins the precision and zone of the timestamps the index
+// can round-trip. The returned value is what a later Get reports.
+func canonicalizeMeta(m *book.Meta) {
+	m.DateAdded = m.DateAdded.UTC().Truncate(time.Second)
+	m.DateModified = m.DateModified.UTC().Truncate(time.Second)
 }

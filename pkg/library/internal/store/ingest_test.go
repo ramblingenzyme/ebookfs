@@ -26,7 +26,7 @@ func TestIngestSurfacesWriteMetaFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := s.Ingest(staged, loc, &book.Meta{ID: 1}); err == nil {
+	if _, _, err := s.Ingest(staged, loc, book.Meta{ID: 1}); err == nil {
 		t.Fatal("Ingest succeeded with an unwritable meta.toml, want the failure surfaced")
 	}
 	if _, err := os.Stat(bookDir); os.IsNotExist(err) {
@@ -41,7 +41,7 @@ func TestIngestMissingStagedEpub(t *testing.T) {
 	s, root := newStore(t)
 
 	loc := book.Location{EpubPath: filepath.Join("Alice/Title (1)", "Title - Alice.epub")}
-	_, err := s.Ingest(filepath.Join(t.TempDir(), "does-not-exist.epub"), loc, &book.Meta{ID: 1})
+	_, _, err := s.Ingest(filepath.Join(t.TempDir(), "does-not-exist.epub"), loc, book.Meta{ID: 1})
 	if err == nil {
 		t.Fatal("Ingest succeeded with no staged epub, want the failure surfaced")
 	}

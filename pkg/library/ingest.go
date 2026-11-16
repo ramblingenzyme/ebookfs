@@ -129,7 +129,7 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 	}
 
 	b, err := func() (*Book, error) {
-		mt, err := l.store.Ingest(processedPath, loc, &meta)
+		meta, mt, err := l.store.Ingest(processedPath, loc, meta)
 		if err != nil {
 			return nil, err
 		}

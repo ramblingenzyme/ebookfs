@@ -146,10 +146,10 @@ func NewBook(bib Bib, meta Meta, loc Location) *Book {
 		bib.Identifiers = maps.Clone(bib.Identifiers)
 	}
 	if meta.DateAdded.IsZero() {
-		meta.DateAdded = time.Now()
+		meta.DateAdded = time.Now().UTC().Truncate(time.Second)
 	}
 	if meta.DateModified.IsZero() {
-		meta.DateModified = time.Now()
+		meta.DateModified = time.Now().UTC().Truncate(time.Second)
 	}
 	if meta.Status == "" {
 		meta.Status = DefaultStatus
