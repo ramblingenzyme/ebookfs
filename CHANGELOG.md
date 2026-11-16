@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Single-instance lock on the library root.** `Open` takes an exclusive `flock` on `<root>/.lock` before touching anything. A second process opening the same root now fails with `ErrLibraryLocked` naming the holder as `<hostname>:<pid>` (read from the lock file). The lock is in the root because that's the only persistent, shared location on NFS; a local lock wouldn't stop a second host. A self-test at startup takes the lock, then tries again on a second fd — if the second succeeds, or if `flock` returns `ENOLCK`/`ENOTSUP`/`EOPNOTSUPP`, the filesystem doesn't enforce locks and a warning is logged. The same errors from the first `flock` also only log. The self-test runs on one host, so NFS startup also warns about `nolock` and `local_lock` mounts, which it can't detect. This prevents the corruption that rolling restarts and misconfigured Compose deploys caused.
+- **Single-instance lock on the library root.** `Open` takes an exclusive `flock` on `<root>/.lock`. A second process opening the same root fails with `ErrLibraryLocked`, naming the holder as `<hostname>:<pid>`. If the filesystem doesn't enforce locks (a self-test at startup checks), a warning is logged. This prevents the corruption that rolling restarts and misconfigured Compose deploys caused.
 
 - **Filesystem detection at startup.** `Open` calls `statfs` on the library root and refuses to start on SMB/CIFS (magic numbers `0xFF534D42` and `0xFE534D42`), which have unreliable atomic rename and file locking. NFS and FUSE are logged but allowed. The override `WithAllowSMB()`, `--allow-smb` on the binary, permits SMB mounts where the operator understands the risks or detection is wrong. This replaces Grimmory's manual `DISK_TYPE` flag with auto-detection.
 
@@ -32,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`identifiers` file in each book directory.** Read-only, one `scheme=value` line per identifier, sorted by scheme. Identifiers were parsed and indexed before but never surfaced anywhere.
 
-- **Ingest hooks.** `library.Hook` is a unified interface for observing and amending library operations. Embed `library.HookBase` and override only the phases you need. Pipeline phases (`PreParse`, `PreCommit`) run during ingest; `PreParse` fires before parsing (outside `ingestMu`, so bulk uploads parse in parallel), `PreCommit` fires under the ingest lock and can amend bibliographic data; both return an error to abort. Event phases (`OnIngested`, `OnEdited`, `OnDeleting`, `OnDeleted`) fire under the per-book lock after the operation commits (or before, for `OnDeleting`). They receive a `*os.Root` scoped to `.sidecar/` and a lazy `openEpub` closure; panics are recovered so one hook cannot block the rest. Register with `Library.AddHook(h Hook)`, which calls the hook's `Setup` first and returns an error without registering it if `Setup` fails or panics; hooks run in registration order.
+- **Ingest hooks.** `library.Hook` is a unified interface for observing and amending library operations. Embed `library.HookBase` and override only the phases you need. Pipeline phases (`PreParse`, `PreCommit`) run during ingest and can abort it; event phases (`OnIngested`, `OnEdited`, `OnDeleting`, `OnDeleted`) fire around edits and deletes. Register with `Library.AddHook(h Hook)`, which calls the hook's `Setup` before registering. Hooks run in registration order; panics are recovered.
 
 ### Fixed
 
@@ -56,13 +56,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Atomic file operations extracted to `internal/atomicfs`.** The atomic-rename-and-fsync pattern was duplicated across store, epub, and kosync. `internal/atomicfs` now provides `Write` and `WriteRoot` (temp file, write, fsync file, rename, fsync parent), `Rename` (rename, fsync both parents), and `Mkdir` and `MkdirAll` (create, fsync parents) for any code that needs durable writes. All call sites refactored to use the shared implementation. The `Write` function fsyncs the temp file before renaming to ensure data is on disk, preventing corruption if the system crashes after rename but before the file's data is flushed.
-
 - **One startup lifecycle for every frontend.** `internal/frontend` holds a three-method interface the 9P and OPDS servers implement, and a `Run` that starts them, waits on a context, and shuts them all down against a shared deadline. A frontend that fails to bind now takes the process down instead of being logged while the rest keep serving: a binary answering 9P with its catalog port dead looks healthy to init. `SetupServer` on both frontends is now `New`, taking a package-level `Config` in place of positional parameters, and `Server.Start` is now `Server.Serve`, carrying no listen address, since it blocks and Go reads `Start` as returning immediately. See DECISIONS.md #26.
 
 - **The epub tree no longer knows what an ebookfs book is.** `opf` and `ncx` report what the file says, with nothing rejected or defaulted; ebookfs's own rules moved to the adapter. The refusal to write an unfilable book now runs before the rewrite, so the original survives untouched instead of being replaced and then reported broken. See DECISIONS.md #25.
 
-- **`library/` and `epub/` moved under `pkg/`.** Import paths change: `github.com/ramblingenzyme/ebookfs/library` becomes `.../pkg/library`, and `.../epub` becomes `.../pkg/epub`. The Dockerfile moved to `build/`, `config.example.toml` to `configs/`, and the shared test packages under `internal/testing/`.
+- **`library/` and `epub/` moved under `pkg/`.** Import paths change: `github.com/ramblingenzyme/ebookfs/library` becomes `.../pkg/library`, and `.../epub` becomes `.../pkg/epub`.
 - **`fs/` and its subpackages moved to `internal/fs/`.** Eight packages exporting some 40 constructors and types, with `main.go` as the only caller. A `v1.0.0` tag binds every importable package in the module, and none of these were ever meant to be imported.
 - **`library.Library` is a struct, and each frontend package declares the interface it uses.** The interface had one implementation, now the exported `Library` struct returned by `Open`. Adding a library method is additive rather than a change every consumer and fake absorbs.
 - **`Reindex` excludes the other mutations.** It moves book directories and rebuilds the index wholesale, neither of which addresses a single book, so the per-book lock could not cover it. `Edit`, `Delete` and ingest now hold a shared lock that `Reindex` takes exclusively.
@@ -101,11 +99,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Title matches in `ctl` are exact (not substring), so a mutating command can only reach the book the operator named. The `help` file documents the full syntax.
 - **Query.Order, Query.Limit, Query.ExactTitles.** `Query` gains `Order` (sort by title, date added, date modified, rating, or pubdate), `Limit` (cap result count), and `ExactTitles` (exact match instead of substring, used by `ctl` to prevent accidental edits).
 - **store.Update.** A dedicated method for updating a book's files, separate from `Ingest`.
-- **HasSeries and SeriesName helpers.** Simplify nil checks on series fields.
 - **Calibre sort_title field support.** Can now read and write Calibre's sort_title metadata field.
 - **NCX sync for author and title edits.** When editing author or title fields, the NCX (navigation control file) is now synchronized to keep the table of contents consistent.
 - **Cover dimensions on edit.** Support for setting cover image dimensions when editing cover metadata.
-- **Slot abstraction for etree updates.** Field setters now use a slot abstraction that pushes etree updates out of individual field handlers, making the edit path more uniform.
 
 ### Changed
 
@@ -121,7 +117,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Library.Query(model.Filter).** Replaced by `Library.Search(model.Query)`.
 - **Query.Recent.** Replaced by `Query.Order`, which generalises "recent books" to any ordering.
 - **epub.Book.** Code uses `model.Bib` directly, eliminating a redundant type.
-- **Dead code.** Simplifications across the codebase, including unused filters, redundant conversions, and obsolete comments.
 
 ### Fixed
 

@@ -115,6 +115,33 @@ Turn history into a standing property:
   - `helpers_test.go` and `helpers_ext_test.go` hold shared helpers and no
     tests. The package rule still applies.
 
+## Changelog
+
+The audience is anyone who runs the binary, mounts over 9P, browses the OPDS
+catalog, or imports `pkg/library` or `pkg/epub`.
+
+Goes in:
+
+  - New capabilities a user can observe or invoke.
+  - Behavior changes, including fixes (name the symptom the user saw).
+  - Breaking changes to the public API or config keys.
+  - Removed features that previously served users.
+
+Stays out:
+
+  - Internal restructuring with no behavior change (extracting a helper
+    package, moving code between packages without changing what a consumer
+    imports).
+  - Implementation mechanism when the observable result already says it. The
+    "how" belongs in DECISIONS.md or code comments.
+  - Repo layout trivia (a Dockerfile's path, where test helpers moved).
+  - Internal convenience functions no caller outside the package uses.
+
+One paragraph per entry. State what changed for the reader. The mechanism
+may appear if it changes what they expect to observe (a lock, a timeout,
+an fsync boundary). Details that only help someone debugging or extending
+the code don't belong here.
+
 ## Working
 
   - **Before compressing:** check whether a premature abstraction should be
