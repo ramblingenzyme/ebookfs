@@ -64,6 +64,44 @@ With the filesystem mounted at `/mnt/ebookfs`, a downloader's post-processing de
 
 See the README for the Docker build and run commands. The container listens on 5640 and expects the library volume at `/var/lib/ebookfs/library`.
 
+## HTTP reverse proxy
+
+The OPDS catalog and kosync endpoints speak plain HTTP. Bind `http.listen` to loopback and put a TLS-terminating proxy in front. Set `http.base_url` to the public URL so generated links are absolute and correct regardless of the `Host` header a client sends.
+
+Caddy (auto-TLS, no separate certificate files):
+
+```caddyfile
+ebooks.example.com {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+nginx:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name ebooks.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/ebooks.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/ebooks.example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+```
+
+In `config.toml`:
+
+```toml
+[http]
+listen = "127.0.0.1:8080"
+base_url = "https://ebooks.example.com"
+```
+
 ## Backups
 
 The library is plain files and the SQLite index is a derived cache, rebuilt from the filesystem whenever startup finds the two disagree (DECISIONS.md #22). Any file-based backup tool pointed at `library.root` captures everything; `.index.db`, `.inbox-tmp/` and `.trash/` can be excluded. Keep `.last-id`: it records the highest book id ever issued, so a rebuilt index never hands a deleted book's id to a new one.

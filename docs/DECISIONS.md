@@ -261,3 +261,12 @@ The alternative was to model them as slices, matching the spec's allowance for r
 The cost is that a book with multiple publishers would only show the first one. If that becomes a real problem, the fields can be promoted to slices without breaking the file format: the reconciliation logic would match subjects, preserving extras rather than leaving them untouched.
 
 This decision applies to description, language, publisher, and rights. Other repeatable fields (title, authors, subjects, contributors) are genuinely multi-valued and are handled as slices.
+
+## 28. Book ids are never reused
+
+`.last-id` beside the books records the highest id ever issued. The index's
+auto-increment sequence is lost when the index is rebuilt, and a rebuild
+seeds it from the ids still on disk. Without the floor, deleting the newest
+book and reindexing would hand its id to the next ingest. The file is the
+one piece of state the index cannot derive from the epubs (#2): a backup
+that drops it silently breaks the guarantee.
