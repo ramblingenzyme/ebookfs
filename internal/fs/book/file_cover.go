@@ -1,7 +1,7 @@
 package book
 
 import (
-	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )

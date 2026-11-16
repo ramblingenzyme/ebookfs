@@ -3,7 +3,7 @@ package vfile
 import (
 	"errors"
 
-	"github.com/knusbaum/go9p/fs"
+	"github.com/ramblingenzyme/go9p/fs"
 )
 
 // Creator is implemented by directories that accept 9P file creation. The

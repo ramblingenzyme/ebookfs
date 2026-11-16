@@ -3,8 +3,8 @@ package vfile
 import (
 	"errors"
 
-	"github.com/knusbaum/go9p/fs"
-	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/go9p/fs"
+	"github.com/ramblingenzyme/go9p/proto"
 )
 
 // SnapshotFile is a base for files whose content is loaded once on Open via an

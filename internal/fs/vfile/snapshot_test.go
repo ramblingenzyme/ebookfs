@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 )

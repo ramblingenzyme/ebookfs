@@ -6,7 +6,7 @@ package inbox
 import (
 	"log/slog"
 
-	"github.com/knusbaum/go9p/fs"
+	"github.com/ramblingenzyme/go9p/fs"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )

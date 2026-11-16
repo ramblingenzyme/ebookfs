@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	go9pfs "github.com/knusbaum/go9p/fs"
+	go9pfs "github.com/ramblingenzyme/go9p/fs"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"

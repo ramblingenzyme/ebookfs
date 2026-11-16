@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/knusbaum/go9p/fs"
+	"github.com/ramblingenzyme/go9p/fs"
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 

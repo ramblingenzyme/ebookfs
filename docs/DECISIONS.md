@@ -69,8 +69,9 @@ stays simple.
 ## 10. Forked `knusbaum/go9p` for the 9P server
 
 Its API is simpler to build a synthetic filesystem on top of than the
-alternatives. The fork (`ramblingenzyme/go9p`, referenced in `go.mod`) carries a
-couple of small fixes on top of upstream.
+alternatives. The fork (`ramblingenzyme/go9p`) is imported directly in
+`go.mod` as `v0.25.1`, and carries a couple of small fixes on top of
+upstream.
 
 ## 11. Each book gets its own directory of individual files
 

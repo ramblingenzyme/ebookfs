@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	go9pfs "github.com/knusbaum/go9p/fs"
+	go9pfs "github.com/ramblingenzyme/go9p/fs"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/views"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"

@@ -11,7 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/go9p/proto"
 )
 
 // Fixed overheads from intro(5): size[4] type[1] tag[2], plus count[4] for

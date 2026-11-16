@@ -5,13 +5,11 @@ go 1.26.1
 require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/beevik/etree v1.8.0
-	github.com/knusbaum/go9p v1.18.0
 	github.com/ophymx/opds v0.5.1
+	github.com/ramblingenzyme/go9p v0.25.1
 	golang.org/x/text v0.42.0
 	modernc.org/sqlite v1.59.0
 )
-
-replace github.com/knusbaum/go9p => github.com/ramblingenzyme/go9p v0.0.0-20260726083331-ead72e9f3571
 
 require (
 	9fans.net/go v0.0.7 // indirect

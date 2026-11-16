@@ -1,8 +1,8 @@
 package vfile
 
 import (
-	"github.com/knusbaum/go9p/fs"
-	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/go9p/fs"
+	"github.com/ramblingenzyme/go9p/proto"
 )
 
 // The modes every synthesized directory is built with. The server runs with

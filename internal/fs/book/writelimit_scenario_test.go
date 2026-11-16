@@ -11,7 +11,7 @@ package book
 import (
 	"testing"
 
-	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"

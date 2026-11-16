@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/knusbaum/go9p/fs"
+	"github.com/ramblingenzyme/go9p/fs"
 )
 
 // The help file's fixed halves. The command entries between them are rendered

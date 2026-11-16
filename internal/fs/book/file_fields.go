@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/knusbaum/go9p/proto"
+	"github.com/ramblingenzyme/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 )
 

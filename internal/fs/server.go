@@ -8,8 +8,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/knusbaum/go9p"
-	"github.com/knusbaum/go9p/fs"
+	"github.com/ramblingenzyme/go9p"
+	"github.com/ramblingenzyme/go9p/fs"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/ctl"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/inbox"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
