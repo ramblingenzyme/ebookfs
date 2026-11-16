@@ -55,6 +55,11 @@ The package refuses to edit:
   control character other than tab, newline or carriage return (would leave a
   package document strict readers reject)
 
+`Save` builds the new file beside the original and renames it into place, so a
+failed save leaves the original unchanged. A crash mid-save can leave the
+temporary file behind. Its name matches `SaveTempPattern`, for a caller that
+sweeps them.
+
 ## Size limits
 
 An entry's declared size is whatever the file claims, so a small file can

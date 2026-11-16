@@ -70,9 +70,6 @@ func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
 	if err := cleanInboxTemp(cfg.InboxTemp); err != nil {
 		return nil, fmt.Errorf("cleaning inbox temp: %w", err)
 	}
-	if err := cleanStaleTmpFiles(cfg.Root); err != nil {
-		slog.Warn("cleaning stale temp files failed", "error", err)
-	}
 	if err := checkSameFilesystem(cfg.Root, cfg.InboxTemp); err != nil {
 		return nil, fmt.Errorf("inbox_temp must be on the same filesystem as library.root: %w", err)
 	}
@@ -97,6 +94,9 @@ func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
 		stateDir:  cfg.StateDir,
 		inboxTemp: cfg.InboxTemp,
 		lockFile:  lockFile,
+	}
+	if err := lib.store.RemoveStaleTemps(); err != nil {
+		slog.Warn("cleaning stale temp files failed", "error", err)
 	}
 	if err := lib.store.EmptyTrash(); err != nil {
 		slog.Warn("emptying trash failed", "error", err)

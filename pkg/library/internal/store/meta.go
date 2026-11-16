@@ -47,9 +47,7 @@ func writeMeta(path string, meta *book.Meta) error {
 		return err
 	}
 
-	dir := filepath.Dir(path)
-	pattern := ".ebookfs-*." + filepath.Base(path) + ".tmp"
-	return atomicfs.Write(dir, pattern, func(f *os.File) error {
+	return atomicfs.Write(filepath.Dir(path), tempPattern(filepath.Base(path)), func(f *os.File) error {
 		_, err := f.Write(buf)
 		return err
 	}, path)

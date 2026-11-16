@@ -53,13 +53,17 @@ func (b *Book) SetCover(img []byte) error {
 	return nil
 }
 
+// SaveTempPattern names the temporary file Save builds beside the original, in
+// os.CreateTemp form. A crash during Save leaves one behind.
+const SaveTempPattern = ".epub-save-*.tmp"
+
 // Save writes the fields that changed since Open, and any cover set by
 // SetCover. If nothing changed, the file is not touched, and §5.5.5's
 // dcterms:modified is not updated.
 //
-// The write is atomic. Save builds a temporary file next to the original,
-// checks that it opens as an epub, then renames it over the original. If any
-// step fails, the original is unchanged.
+// The write is atomic. Save builds a SaveTempPattern file next to the
+// original, checks that it opens as an epub, then renames it over the
+// original. If any step fails, the original is unchanged.
 //
 // After Save, the Book reads from the new file, and a later Save compares
 // against the values just written.
@@ -345,7 +349,7 @@ func (b *Book) syncNCX(enc *ocf.EncryptionInfo, m moved, replace map[string][]by
 //     dropping the edit.
 func (b *Book) rewrite(replace map[string][]byte) error {
 	dir := filepath.Dir(b.path)
-	tmp, err := os.CreateTemp(dir, ".ebookfs-*.epub.tmp")
+	tmp, err := os.CreateTemp(dir, SaveTempPattern)
 	if err != nil {
 		return err
 	}
