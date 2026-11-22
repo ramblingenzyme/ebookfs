@@ -137,12 +137,8 @@ func (l *Library) Edit(id int64, e Edits) (*Book, error) {
 // fn must not call back into the library. Edit, Delete and WithSidecars on the
 // same book deadlock.
 func (l *Library) Update(id int64, fn func(*Book) *Edits) (b *Book, changed bool, err error) {
-	l.mutateMu.RLock()
-	defer l.mutateMu.RUnlock()
-
-	mu := l.bookMu.For(id)
-	mu.Lock()
-	defer mu.Unlock()
+	unlock := l.lockBook(id)
+	defer unlock()
 
 	current, err := l.get(id)
 	if err != nil {
@@ -161,8 +157,8 @@ func (l *Library) Update(id int64, fn func(*Book) *Edits) (b *Book, changed bool
 		return nil, false, v
 	}
 
-	op := l.index.BeginOp()
-	if err := op.MarkPending(); err != nil {
+	op, err := l.index.MarkPending()
+	if err != nil {
 		return nil, false, err
 	}
 
@@ -194,12 +190,8 @@ func (l *Library) Update(id int64, fn func(*Book) *Edits) (b *Book, changed bool
 }
 
 func (l *Library) Delete(id int64) error {
-	l.mutateMu.RLock()
-	defer l.mutateMu.RUnlock()
-
-	mu := l.bookMu.For(id)
-	mu.Lock()
-	defer mu.Unlock()
+	unlock := l.lockBook(id)
+	defer unlock()
 
 	b, err := l.get(id)
 	if err != nil {
@@ -209,8 +201,8 @@ func (l *Library) Delete(id int64) error {
 	// Fire OnDeleting hook before deletion, while the book and epub still exist
 	l.hooks.onDeleting(l, book.NewImmutableBook(b), b.Location)
 
-	op := l.index.BeginOp()
-	if err := op.MarkPending(); err != nil {
+	op, err := l.index.MarkPending()
+	if err != nil {
 		return err
 	}
 	// Store first: a leftover index row is healed by reindex.
@@ -229,6 +221,18 @@ func (l *Library) Delete(id int64) error {
 	l.hooks.onDeleted(id)
 
 	return nil
+}
+
+// lockBook takes mutateMu for reading as well as the book's lock, so a caller
+// already holding mutateMu must not call it.
+func (l *Library) lockBook(id int64) (unlock func()) {
+	l.mutateMu.RLock()
+	mu := l.bookMu.For(id)
+	mu.Lock()
+	return func() {
+		mu.Unlock()
+		l.mutateMu.RUnlock()
+	}
 }
 
 // applyMeta stamps the modified time and leaves a nil field alone. The result
@@ -263,12 +267,8 @@ func bookFromBib(bib book.Bib, meta book.Meta, loc book.Location, obs drift.Path
 // Root tracks the directory via fd, so escaped handles remain valid after a
 // rename, but the lock is released and the handle may observe a stale state.
 func (l *Library) WithSidecars(id int64, fn func(*os.Root) error) error {
-	l.mutateMu.RLock()
-	defer l.mutateMu.RUnlock()
-
-	mu := l.bookMu.For(id)
-	mu.Lock()
-	defer mu.Unlock()
+	unlock := l.lockBook(id)
+	defer unlock()
 
 	b, err := l.get(id)
 	if err != nil {

@@ -9,37 +9,27 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index/dbsqlc"
 )
 
-// Op represents a single mutation operation. The caller calls BeginOp to
-// obtain one, then calls MarkPending before touching disk, performs the
-// store writes, then calls Op.Put or Op.Delete to commit the index write and
-// atomically clear the pending row.
+// Op is one mutation's pending row. The caller gets one from MarkPending
+// before touching disk, then Put or Delete commits the index write and clears
+// the row in one transaction.
 type Op struct {
 	idx  *Index
 	opID string
 }
 
-func (idx *Index) BeginOp() *Op {
-	return &Op{idx: idx}
-}
-
-// MarkPending writes its row by autocommit, so it survives a crash, and is
-// idempotent. A row left behind by a failed operation forces a healing reindex
-// on the next startup.
-func (o *Op) MarkPending() error {
-	if o.opID != "" {
-		return nil
-	}
+// MarkPending writes its row by autocommit, so it survives a crash. A row left
+// behind by a failed operation forces a healing reindex on the next startup.
+func (idx *Index) MarkPending() (*Op, error) {
 	id := newOpID()
-	if err := o.idx.wq.InsertPendingOp(o.idx.ctx, id); err != nil {
-		return err
+	if err := idx.wq.InsertPendingOp(idx.ctx, id); err != nil {
+		return nil, err
 	}
-	o.opID = id
-	return nil
+	return &Op{idx: idx, opID: id}, nil
 }
 
 func (o *Op) finish(fn func(*dbsqlc.Queries) error) error {
 	if o.opID == "" {
-		return errors.New("MarkPending must be called before commit")
+		return errors.New("op was cancelled")
 	}
 	return o.idx.withTx(func(q *dbsqlc.Queries, _ *sql.Tx) error {
 		if err := fn(q); err != nil {

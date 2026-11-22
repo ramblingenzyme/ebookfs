@@ -16,8 +16,8 @@ func TestIngestRejectsUnindexedBookOnDisk(t *testing.T) {
 
 	// Drop the book from the index only, leaving its files in the tree, the
 	// state a skipped directory is in after a rebuild.
-	op := lib.index.BeginOp()
-	if err := op.MarkPending(); err != nil {
+	op, err := lib.index.MarkPending()
+	if err != nil {
 		t.Fatalf("MarkPending: %v", err)
 	}
 	if err := op.Delete(b.ID()); err != nil {

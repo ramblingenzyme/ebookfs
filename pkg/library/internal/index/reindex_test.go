@@ -20,11 +20,7 @@ import (
 func TestPathInfoRoundTrip(t *testing.T) {
 	writers := map[string]func(*testing.T, *Index, *book.Book, drift.PathInfo){
 		"put": func(t *testing.T, idx *Index, b *book.Book, pi drift.PathInfo) {
-			op := idx.BeginOp()
-			if err := op.MarkPending(); err != nil {
-				t.Fatalf("MarkPending: %v", err)
-			}
-			if err := op.Put(b, pi); err != nil {
+			if err := mustMarkPending(t, idx).Put(b, pi); err != nil {
 				t.Fatalf("Put: %v", err)
 			}
 		},
@@ -183,9 +179,7 @@ func TestRebuild(t *testing.T) {
 	if _, err := idx.db.Exec("INSERT INTO pending_ops (op_id) VALUES ('leak-1')"); err != nil {
 		t.Fatalf("inject pending: %v", err)
 	}
-	op := idx.BeginOp()
-	op.MarkPending()
-	if err := op.Put(newBook(1, "Stale"), drift.PathInfo{}); err != nil {
+	if err := mustMarkPending(t, idx).Put(newBook(1, "Stale"), drift.PathInfo{}); err != nil {
 		t.Fatalf("Put stale: %v", err)
 	}
 	mustNeedReindex(t, idx, true)

@@ -99,19 +99,16 @@ func storeInIndex(t *testing.T, idx *Index, b *book.Book) {
 // book: books has one epub_size column and it is the stat's.
 func storeInIndexSized(t *testing.T, idx *Index, b *book.Book, size int64) {
 	t.Helper()
-	op := idx.BeginOp()
-	if err := op.MarkPending(); err != nil {
-		t.Fatalf("MarkPending: %v", err)
-	}
-	if err := op.Put(b, drift.PathInfo{Size: size}); err != nil {
+	if err := mustMarkPending(t, idx).Put(b, drift.PathInfo{Size: size}); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 }
 
-// mustMarkPending arms an op, for tests whose subject is the call after it.
-func mustMarkPending(t *testing.T, op *Op) {
+func mustMarkPending(t *testing.T, idx *Index) *Op {
 	t.Helper()
-	if err := op.MarkPending(); err != nil {
+	op, err := idx.MarkPending()
+	if err != nil {
 		t.Fatalf("MarkPending: %v", err)
 	}
+	return op
 }

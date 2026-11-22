@@ -123,8 +123,8 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 	}
 	loc := l.store.Layout(bib.Authors, bib.Title, id)
 
-	op := l.index.BeginOp()
-	if err := op.MarkPending(); err != nil {
+	op, err := l.index.MarkPending()
+	if err != nil {
 		return nil, err
 	}
 

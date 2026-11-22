@@ -17,8 +17,7 @@ func TestOpPendingRows(t *testing.T) {
 		wantPending int
 	}{
 		{"put clears its row", func(t *testing.T, idx *Index) {
-			op := idx.BeginOp()
-			mustMarkPending(t, op)
+			op := mustMarkPending(t, idx)
 			if err := op.Put(newBook(1, "Clean"), drift.PathInfo{}); err != nil {
 				t.Fatalf("put: %v", err)
 			}
@@ -28,8 +27,7 @@ func TestOpPendingRows(t *testing.T) {
 		}, 0},
 		{"delete clears its row", func(t *testing.T, idx *Index) {
 			storeInIndex(t, idx, newBook(1, "Gone"))
-			op := idx.BeginOp()
-			mustMarkPending(t, op)
+			op := mustMarkPending(t, idx)
 			if err := op.Delete(1); err != nil {
 				t.Fatalf("delete: %v", err)
 			}
@@ -39,37 +37,31 @@ func TestOpPendingRows(t *testing.T) {
 		}, 0},
 		// Without a pending row the preceding store writes have no crash
 		// protection.
-		{"put without MarkPending is refused", func(t *testing.T, idx *Index) {
-			if err := idx.BeginOp().Put(newBook(1, "Oops"), drift.PathInfo{}); err == nil {
-				t.Fatal("expected error when Put is called without MarkPending")
+		{"put after cancel is refused", func(t *testing.T, idx *Index) {
+			op := mustMarkPending(t, idx)
+			op.Cancel()
+			if err := op.Put(newBook(1, "Oops"), drift.PathInfo{}); err == nil {
+				t.Fatal("expected error when Put follows Cancel")
 			}
 		}, 0},
-		{"delete without MarkPending is refused", func(t *testing.T, idx *Index) {
-			if err := idx.BeginOp().Delete(1); err == nil {
-				t.Fatal("expected error when Delete is called without MarkPending")
+		{"delete after cancel is refused", func(t *testing.T, idx *Index) {
+			op := mustMarkPending(t, idx)
+			op.Cancel()
+			if err := op.Delete(1); err == nil {
+				t.Fatal("expected error when Delete follows Cancel")
 			}
 		}, 0},
-		{"a second MarkPending adds no row", func(t *testing.T, idx *Index) {
-			op := idx.BeginOp()
-			mustMarkPending(t, op)
-			mustMarkPending(t, op)
-		}, 1},
 		// A single shared dirty flag would let a success clear a failed peer's
 		// marker.
 		{"a success clears only its own row", func(t *testing.T, idx *Index) {
-			mustMarkPending(t, idx.BeginOp())
+			mustMarkPending(t, idx)
 			storeInIndex(t, idx, newBook(2, "B"))
 			if _, err := idx.Get(2); err != nil {
 				t.Fatalf("op B book missing: %v", err)
 			}
 		}, 1},
 		{"cancel clears the row", func(t *testing.T, idx *Index) {
-			op := idx.BeginOp()
-			mustMarkPending(t, op)
-			op.Cancel()
-		}, 0},
-		{"cancel without MarkPending does nothing", func(t *testing.T, idx *Index) {
-			idx.BeginOp().Cancel()
+			mustMarkPending(t, idx).Cancel()
 		}, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -36,17 +36,15 @@ func TestClosedIndexSurfacesErrors(t *testing.T) {
 			return func() error { _, err := idx.NextID(); return err }
 		}},
 		{"MarkPending", func(t *testing.T, idx *Index) func() error {
-			return idx.BeginOp().MarkPending
+			return func() error { _, err := idx.MarkPending(); return err }
 		}},
 		{"Put", func(t *testing.T, idx *Index) func() error {
-			op := idx.BeginOp()
-			mustMarkPending(t, op)
+			op := mustMarkPending(t, idx)
 			return func() error { return op.Put(newBook(1, "T"), drift.PathInfo{}) }
 		}},
 		{"Delete", func(t *testing.T, idx *Index) func() error {
 			storeInIndex(t, idx, newBook(1, "T"))
-			op := idx.BeginOp()
-			mustMarkPending(t, op)
+			op := mustMarkPending(t, idx)
 			return func() error { return op.Delete(1) }
 		}},
 		{"Rebuild", func(t *testing.T, idx *Index) func() error {
