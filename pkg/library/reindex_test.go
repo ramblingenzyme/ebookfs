@@ -177,7 +177,7 @@ func TestRestartReconcilesTheDisk(t *testing.T) {
 				t.Fatalf("Get: %v", err)
 			}
 			if got.Path() != canonical.Path {
-				t.Errorf("EpubPath = %q, want %q", got.Path(), canonical.Path)
+				t.Errorf("Path = %q, want %q", got.Path(), canonical.Path)
 			}
 			if _, err := os.Stat(filepath.Join(cfg.Root, canonical.Path)); err != nil {
 				t.Errorf("canonical epub missing after restart: %v", err)

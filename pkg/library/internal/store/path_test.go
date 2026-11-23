@@ -18,7 +18,7 @@ func TestLayout(t *testing.T) {
 	loc := s.Layout([]book.Author{{Name: "Alice"}}, "My Title", 1, book.FormatEPUB)
 	wantRel := filepath.Join("Alice/My Title (1)", "My Title - Alice.epub")
 	if loc.Path != wantRel {
-		t.Errorf("EpubPath = %q, want %q", loc.Path, wantRel)
+		t.Errorf("Path = %q, want %q", loc.Path, wantRel)
 	}
 }
 
@@ -52,7 +52,7 @@ func TestLayoutKeepsEachComponentInOneDirectory(t *testing.T) {
 				return
 			}
 			if strings.HasPrefix(loc.Path, ".") || strings.Contains(loc.Path, ".."+string(filepath.Separator)) {
-				t.Errorf("EpubPath %q leaves the library root", loc.Path)
+				t.Errorf("Path %q leaves the library root", loc.Path)
 			}
 			if got := len(strings.Split(filepath.Dir(loc.Path), string(filepath.Separator))); got != 2 {
 				t.Errorf("directory %q, want exactly two components", filepath.Dir(loc.Path))

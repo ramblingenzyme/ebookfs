@@ -29,7 +29,7 @@ func TestCloseMultiple(t *testing.T) {
 
 // Search returns the path relative to the store root, and every consumer joins
 // it to the root. An empty or absolute path would leave the result unopenable.
-func TestSearchReturnsARootRelativeEpubPath(t *testing.T) {
+func TestSearchReturnsARootRelativePath(t *testing.T) {
 	cfg := testConfig(t)
 	lib := openLib(t, cfg)
 	want := ingestTestEpub(t, lib, buildTestEpub(t, "Findable", "Alice"))
@@ -46,14 +46,14 @@ func TestSearchReturnsARootRelativeEpubPath(t *testing.T) {
 		t.Errorf("id = %d, want %d", got[0].ID(), want.ID())
 	}
 	if got[0].Path() == "" {
-		t.Fatal("EpubPath is empty — the result carries no path, so nothing can open it")
+		t.Fatal("Path is empty — the result carries no path, so nothing can open it")
 	}
 	if filepath.IsAbs(got[0].Path()) {
-		t.Errorf("EpubPath = %q, want a relative path", got[0].Path())
+		t.Errorf("Path = %q, want a relative path", got[0].Path())
 	}
 	absPath := filepath.Join(cfg.Root, got[0].Path())
 	if _, err := os.Stat(absPath); err != nil {
-		t.Errorf("EpubPath %q does not resolve: %v", got[0].Path(), err)
+		t.Errorf("Path %q does not resolve: %v", got[0].Path(), err)
 	}
 }
 
@@ -94,7 +94,7 @@ func TestEditSelfHealsLegacyUnsanitizedFilename(t *testing.T) {
 		t.Errorf("filename not sanitized after edit: %q", filepath.Base(updated.Path()))
 	}
 	if _, err := os.Stat(filepath.Join(root, updated.Path())); err != nil {
-		t.Errorf("updated EpubPath does not exist: %v", err)
+		t.Errorf("updated Path does not exist: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, legacyName)); !os.IsNotExist(err) {
 		t.Errorf("legacy filename still present after self-heal")
@@ -278,7 +278,7 @@ func TestContentServesTheBook(t *testing.T) {
 		t.Errorf("cover = %q, want %q", cover, "placeholder-cover-bytes")
 	}
 
-	opf, err := r.OPF()
+	opf, err := r.(interface{ OPF() ([]byte, error) }).OPF()
 	if err != nil {
 		t.Fatalf("OPF: %v", err)
 	}
@@ -315,7 +315,7 @@ type editCounter struct {
 	edits int
 }
 
-func (c *editCounter) OnEdited(*library.Book, *os.Root, func() (library.EpubReader, error)) {
+func (c *editCounter) OnEdited(*library.Book, *os.Root, func() (library.Reader, error)) {
 	c.edits++
 }
 

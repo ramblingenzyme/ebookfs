@@ -22,10 +22,10 @@ import (
 )
 
 type ContentReader struct {
-	ContentFn func(int64) (library.EpubReader, error)
+	ContentFn func(int64) (library.Reader, error)
 }
 
-func (c ContentReader) Content(id int64) (library.EpubReader, error) {
+func (c ContentReader) Content(id int64) (library.Reader, error) {
 	if c.ContentFn != nil {
 		return c.ContentFn(id)
 	}
@@ -99,26 +99,26 @@ func (i Ingester) CreateIngest() (library.IngestHandle, error) {
 	return IngestHandle{IngestFn: i.IngestFn}, nil
 }
 
-type EpubReader struct {
+type Reader struct {
 	*bytes.Reader
 	Closed  bool
 	OPFFn   func() ([]byte, error)
 	CoverFn func() ([]byte, error)
 }
 
-func (r *EpubReader) Close() error {
+func (r *Reader) Close() error {
 	r.Closed = true
 	return nil
 }
 
-func (r *EpubReader) OPF() ([]byte, error) {
+func (r *Reader) OPF() ([]byte, error) {
 	if r.OPFFn != nil {
 		return r.OPFFn()
 	}
 	return nil, nil
 }
 
-func (r *EpubReader) Cover() ([]byte, error) {
+func (r *Reader) Cover() ([]byte, error) {
 	if r.CoverFn != nil {
 		return r.CoverFn()
 	}

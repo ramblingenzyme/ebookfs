@@ -43,7 +43,7 @@ func (h *ingestEditDeleteHook) PreCommit(bib *library.Bib) error {
 	return nil
 }
 
-func (h *ingestEditDeleteHook) OnIngested(b *library.Book, sidecars *os.Root, openEpub func() (library.EpubReader, error)) {
+func (h *ingestEditDeleteHook) OnIngested(b *library.Book, sidecars *os.Root, openEpub func() (library.Reader, error)) {
 	h.events = append(h.events, "ingested")
 	if b.Publisher() != "Hook Publisher" {
 		h.t.Errorf("OnIngested publisher = %q, want hook amendment", b.Publisher())
@@ -67,11 +67,11 @@ func (h *ingestEditDeleteHook) OnIngested(b *library.Book, sidecars *os.Root, op
 	}
 }
 
-func (h *ingestEditDeleteHook) OnEdited(*library.Book, *os.Root, func() (library.EpubReader, error)) {
+func (h *ingestEditDeleteHook) OnEdited(*library.Book, *os.Root, func() (library.Reader, error)) {
 	h.events = append(h.events, "edited")
 }
 
-func (h *ingestEditDeleteHook) OnDeleting(*library.Book, *os.Root, func() (library.EpubReader, error)) {
+func (h *ingestEditDeleteHook) OnDeleting(*library.Book, *os.Root, func() (library.Reader, error)) {
 	h.events = append(h.events, "deleting")
 }
 
@@ -126,7 +126,7 @@ type blockingEditHook struct {
 	once    sync.Once
 }
 
-func (h *blockingEditHook) OnEdited(b *library.Book, _ *os.Root, _ func() (library.EpubReader, error)) {
+func (h *blockingEditHook) OnEdited(b *library.Book, _ *os.Root, _ func() (library.Reader, error)) {
 	if b.Title() != "First Edit" {
 		return
 	}
@@ -222,7 +222,7 @@ type epubReadingHook struct {
 	epubReadable bool
 }
 
-func (h *epubReadingHook) OnDeleting(book *library.Book, sidecars *os.Root, openEpub func() (library.EpubReader, error)) {
+func (h *epubReadingHook) OnDeleting(book *library.Book, sidecars *os.Root, openEpub func() (library.Reader, error)) {
 	if openEpub == nil {
 		return
 	}
@@ -264,7 +264,7 @@ func TestOnDeletingHookCanReadEpub(t *testing.T) {
 
 type panickingHook struct{ library.HookBase }
 
-func (panickingHook) OnEdited(*library.Book, *os.Root, func() (library.EpubReader, error)) {
+func (panickingHook) OnEdited(*library.Book, *os.Root, func() (library.Reader, error)) {
 	panic("hook bug")
 }
 
@@ -273,7 +273,7 @@ type editCountingHook struct {
 	edits int
 }
 
-func (h *editCountingHook) OnEdited(*library.Book, *os.Root, func() (library.EpubReader, error)) {
+func (h *editCountingHook) OnEdited(*library.Book, *os.Root, func() (library.Reader, error)) {
 	h.edits++
 }
 

@@ -1,7 +1,6 @@
 package epub
 
 import (
-	"io"
 	"os"
 
 	epubfile "github.com/ramblingenzyme/ebookfs/pkg/epub"
@@ -16,14 +15,6 @@ var (
 	ErrNoCover         = epubfile.ErrNoCover
 )
 
-// EpubReader is an open epub. It shows the book as it was when opened.
-type EpubReader interface {
-	io.ReaderAt
-	io.Closer
-	OPF() ([]byte, error)
-	Cover() ([]byte, error)
-}
-
 // coverPath is taken from the index so that opening a reader never parses the
 // package document. The 9P read path opens a reader for every fid.
 type reader struct {
@@ -31,10 +22,10 @@ type reader struct {
 	coverPath string
 }
 
-// OpenReader opens the epub at epubPath. coverPath is the book's
+// OpenReader opens the epub at path. coverPath is the book's
 // Bib.CoverPath, or "" if it has no cover.
-func OpenReader(epubPath, coverPath string) (EpubReader, error) {
-	f, err := epubfile.OpenFile(epubPath)
+func OpenReader(path, coverPath string) (*reader, error) {
+	f, err := epubfile.OpenFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +35,7 @@ func OpenReader(epubPath, coverPath string) (EpubReader, error) {
 // OpenReaderFromFile opens the epub from an already-open file. The caller
 // retains ownership of f; on error, f is left open. The path is used only for
 // error messages and may be empty.
-func OpenReaderFromFile(f *os.File, path, coverPath string) (EpubReader, error) {
+func OpenReaderFromFile(f *os.File, path, coverPath string) (*reader, error) {
 	ef, err := epubfile.OpenFromFile(f, path)
 	if err != nil {
 		return nil, err

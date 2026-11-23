@@ -73,7 +73,7 @@ func TestPathInfoRoundTrip(t *testing.T) {
 // ignored. The book's copy is what 9P reports as the file's length and what
 // export sizing uses, while the drift check compares the stat's, so a second
 // column here means those two can silently disagree, which is what this replaced.
-func TestEpubSizeComesFromObservation(t *testing.T) {
+func TestSizeComesFromObservation(t *testing.T) {
 	idx := openTestIndex(t)
 
 	b := newBook(1, "Sized")
@@ -85,7 +85,7 @@ func TestEpubSizeComesFromObservation(t *testing.T) {
 		t.Fatalf("Get: %v", err)
 	}
 	if got.Size != 4242 {
-		t.Errorf("EpubSize = %d, want 4242 (the observed size)", got.Size)
+		t.Errorf("Size = %d, want 4242 (the observed size)", got.Size)
 	}
 
 	info, err := idx.AllPathInfo()

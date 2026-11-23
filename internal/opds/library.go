@@ -11,7 +11,7 @@ import (
 type Library interface {
 	Search(library.Query) ([]*library.Book, error)
 	Get(int64) (*library.Book, error)
-	Content(int64) (library.EpubReader, error)
+	Content(int64) (library.Reader, error)
 	Authors() ([]library.Facet, error)
 	Series() ([]library.Facet, error)
 	Tags() ([]library.Facet, error)

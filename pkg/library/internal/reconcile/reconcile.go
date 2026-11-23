@@ -186,7 +186,7 @@ func scanEntry(files *store.Store, s *scanState, known map[string]drift.PathInfo
 	bib, err := epub.Parse(files.AbsPath(e.Path))
 	parseDur := time.Since(start)
 	if err != nil {
-		slog.Warn("reindex: skip, parse epub failed", "path", e.Dir(), "error", err)
+		slog.Warn("reindex: skip, parse failed", "path", e.Dir(), "error", err)
 		s.skip(e.Path, pi)
 		s.recordDurations(statDur, metaDur, parseDur)
 		return

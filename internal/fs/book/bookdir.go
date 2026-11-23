@@ -15,7 +15,7 @@ import (
 )
 
 type ContentReader interface {
-	Content(id int64) (library.EpubReader, error)
+	Content(id int64) (library.Reader, error)
 }
 
 var (
@@ -54,7 +54,7 @@ func (d *BookDir) SetSnapshot(b *library.Book) {
 
 // Stat reports the book's title as the entry name, recomputed live so a title
 // edit shows up wherever the bare BookDir is listed (all-books, by-author). The
-// Qid stays fixed, so a client with the epub open keeps its handle across a rename.
+// Qid stays fixed, so a client with the book open keeps its handle across a rename.
 func (d *BookDir) Stat() proto.Stat {
 	s := d.StaticDir.Stat()
 	s.Name = naming.PathSafe(d.Book().Title())
@@ -74,7 +74,7 @@ func NewBookDir(f *fs.FS, lib ContentReader, edit func(int64, library.Edits) (*l
 
 	// Child files read through d.Book so they always see the current snapshot,
 	// not the one captured at construction.
-	d.StaticDir.AddChild(newEpubFile(
+	d.StaticDir.AddChild(newContentFile(
 		newStat(f, book.Filename(), 0444),
 		lib,
 		d.Book,

@@ -111,7 +111,7 @@ func (l *Library) get(id int64) (*book.Book, error) {
 	return b, nil
 }
 
-func (l *Library) Content(id int64) (EpubReader, error) {
+func (l *Library) Content(id int64) (Reader, error) {
 	b, err := l.get(id)
 	if err != nil {
 		return nil, err

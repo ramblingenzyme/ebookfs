@@ -89,8 +89,8 @@ func newFake(t *testing.T, books ...*library.Book) (*fake, http.Handler) {
 		}
 		return nil, fmt.Errorf("book %d: %w", id, library.ErrBookNotFound)
 	}
-	f.ContentFn = func(int64) (library.EpubReader, error) {
-		return &mock.EpubReader{
+	f.ContentFn = func(int64) (library.Reader, error) {
+		return &mock.Reader{
 			Reader:  bytes.NewReader([]byte(epubBody)),
 			CoverFn: func() ([]byte, error) { return []byte("\x89PNG\r\n\x1a\n cover"), nil },
 		}, nil
@@ -277,8 +277,8 @@ func TestCoverServedDirectly(t *testing.T) {
 func TestMissesAre404(t *testing.T) {
 	b := util.MakeMutableBook(7, "Dune", "Frank Herbert")
 	f, h := newFake(t, util.WrapBook(b))
-	f.ContentFn = func(int64) (library.EpubReader, error) {
-		return &mock.EpubReader{
+	f.ContentFn = func(int64) (library.Reader, error) {
+		return &mock.Reader{
 			Reader:  bytes.NewReader(nil),
 			CoverFn: func() ([]byte, error) { return nil, library.ErrNoCover },
 		}, nil

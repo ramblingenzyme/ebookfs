@@ -128,7 +128,7 @@ func BenchmarkBookDirMemoryFootprint(b *testing.B) {
 	b.Logf("  fs.BaseFile     = %d B", unsafe.Sizeof(fs.BaseFile{}))
 	b.Logf("  fs.StaticFile   = %d B", unsafe.Sizeof(fs.StaticFile{}))
 	b.Logf("  fieldFile       = %d B", unsafe.Sizeof(fieldFile{}))
-	b.Logf("  epubFile        = %d B", unsafe.Sizeof(epubFile{}))
+	b.Logf("  contentFile        = %d B", unsafe.Sizeof(contentFile{}))
 	b.Logf("  coverFile       = %d B", unsafe.Sizeof(coverFile{}))
 	b.Logf("  library.Book      = %d B", unsafe.Sizeof(library.Book{}))
 	b.Logf("  BookDir         = %d B", unsafe.Sizeof(BookDir{}))

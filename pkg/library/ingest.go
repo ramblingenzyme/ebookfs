@@ -73,7 +73,7 @@ func (l *Library) ingestPath(srcPath string) (*Book, error) {
 	// Parsed before ingestMu is taken, so bulk uploads parse in parallel.
 	bib, err := epub.Parse(processedPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %s", ErrInvalidBook, err)
 	}
 
 	// A PreParse hook can return a different file, which Ingest's fsync never saw.
