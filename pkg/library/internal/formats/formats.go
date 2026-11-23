@@ -67,23 +67,28 @@ type Format interface {
 	// OpenReader opens the file at path for content access. coverPath is
 	// Bib.CoverPath, or "" if the book has no cover.
 	OpenReader(path, coverPath string) (Reader, error)
+
+	// TempPattern returns an os.CreateTemp pattern naming the temporary file
+	// a crash during Rewrite leaves beside the original. Formats that do not
+	// rewrite return "".
+	TempPattern() string
 }
 
-var registry []Format
+// Registry holds the ordered set of Format implementations.
+type Registry struct {
+	formats []Format
+}
 
-// Register adds a format implementation. Called from init() in format packages.
-//
-// ponytail: init() order follows the import graph, so Detect's priority is
-// implicit. Replace with an explicit ordered list once a second zip-based
-// format (cbz) would also accept an epub.
-func Register(f Format) {
-	registry = append(registry, f)
+// NewRegistry creates a Registry with the given formats in priority order
+// (stricter Detect checks first).
+func NewRegistry(fs ...Format) *Registry {
+	return &Registry{formats: fs}
 }
 
 // ByFormat returns the Format implementation for the given enum value, or an
 // error wrapping ErrUnknownFormat if none is registered.
-func ByFormat(bf book.Format) (Format, error) {
-	for _, f := range registry {
+func (r *Registry) ByFormat(bf book.Format) (Format, error) {
+	for _, f := range r.formats {
 		if f.Format() == bf {
 			return f, nil
 		}
@@ -91,11 +96,23 @@ func ByFormat(bf book.Format) (Format, error) {
 	return nil, fmt.Errorf("%w: %s", ErrUnknownFormat, bf)
 }
 
-// Detect returns the first registered format whose Detect accepts path. Order
-// is registration order, so a format whose check is stricter registers before
-// a looser one that also accepts its files.
-func Detect(path string) (Format, error) {
-	for _, f := range registry {
+// All returns the registered formats.
+func (r *Registry) All() []Format { return r.formats }
+
+// AllTempPatterns returns the non-empty temp patterns from all registered formats.
+func (r *Registry) AllTempPatterns() []string {
+	var out []string
+	for _, f := range r.formats {
+		if p := f.TempPattern(); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// Detect returns the first registered format whose Detect accepts path.
+func (r *Registry) Detect(path string) (Format, error) {
+	for _, f := range r.formats {
 		ok, err := f.Detect(path)
 		if err != nil {
 			return nil, err

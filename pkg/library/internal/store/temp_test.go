@@ -7,7 +7,11 @@ import (
 	"testing"
 
 	epubfile "github.com/ramblingenzyme/ebookfs/pkg/epub"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/formats"
 )
+
+func testRegistry() *formats.Registry { return formats.NewRegistry(epub.NewFormat()) }
 
 // Every temp name a writer in the tree mints is one the sweep removes.
 func TestRemoveStaleTempsMatchesEveryWriter(t *testing.T) {
@@ -42,7 +46,7 @@ func TestRemoveStaleTempsMatchesEveryWriter(t *testing.T) {
 		}
 	}
 
-	if err := s.RemoveStaleTemps(); err != nil {
+	if err := s.RemoveStaleTemps(testRegistry()); err != nil {
 		t.Fatalf("RemoveStaleTemps: %v", err)
 	}
 
@@ -80,7 +84,7 @@ func TestRemoveStaleTempsPastUnreadableDir(t *testing.T) {
 	}
 	t.Cleanup(func() { os.Chmod(unreadable, 0755) })
 
-	if err := s.RemoveStaleTemps(); err != nil {
+	if err := s.RemoveStaleTemps(testRegistry()); err != nil {
 		t.Fatalf("RemoveStaleTemps: %v", err)
 	}
 	if _, err := os.Stat(stale); !errors.Is(err, os.ErrNotExist) {
@@ -90,7 +94,7 @@ func TestRemoveStaleTempsPastUnreadableDir(t *testing.T) {
 
 func TestRemoveStaleTempsMissingRoot(t *testing.T) {
 	s := New(filepath.Join(t.TempDir(), "nonexistent"))
-	if err := s.RemoveStaleTemps(); err == nil {
+	if err := s.RemoveStaleTemps(testRegistry()); err == nil {
 		t.Error("RemoveStaleTemps on a missing root: want an error")
 	}
 }

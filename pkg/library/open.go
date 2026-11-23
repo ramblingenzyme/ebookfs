@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/formats"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/reconcile"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/store"
@@ -91,18 +94,19 @@ func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
 	lib := &Library{
 		store:     store.New(cfg.Root),
 		index:     idx,
+		formats:   formats.NewRegistry(epub.NewFormat()),
 		stateDir:  cfg.StateDir,
 		inboxTemp: cfg.InboxTemp,
 		lockFile:  lockFile,
 	}
-	if err := lib.store.RemoveStaleTemps(); err != nil {
+	if err := lib.store.RemoveStaleTemps(lib.formats); err != nil {
 		slog.Warn("cleaning stale temp files failed", "error", err)
 	}
 	if err := lib.store.EmptyTrash(); err != nil {
 		slog.Warn("emptying trash failed", "error", err)
 	}
 
-	if err := reconcile.Run(lib.store, idx, o.forceReindex); err != nil {
+	if err := reconcile.Run(lib.store, idx, lib.formats, o.forceReindex); err != nil {
 		// lib is never returned, so nothing else would close the index. A
 		// duplicate book id makes this a routine path (docs/DECISIONS.md #14).
 		idx.Close()
@@ -143,9 +147,10 @@ func cleanInboxTemp(dir string) error {
 		return err
 	}
 	for _, e := range entries {
-		// Releases before format detection staged uploads as bare "*.epub".
+		// Releases before the upload-* prefix staged bare files named
+		// after the detected format's extension.
 		upload := e.Type().IsRegular() &&
-			(strings.HasPrefix(e.Name(), "upload-") || strings.HasSuffix(e.Name(), ".epub"))
+			(strings.HasPrefix(e.Name(), "upload-") || isKnownExtension(e.Name()))
 		scratch := e.IsDir() && strings.HasPrefix(e.Name(), "hooks-")
 		if !upload && !scratch {
 			continue
@@ -178,4 +183,9 @@ func checkSameFilesystem(a, b string) error {
 		slog.Warn("checkSameFilesystem cleanup failed", "path", dst, "error", err)
 	}
 	return nil
+}
+
+func isKnownExtension(name string) bool {
+	_, ok := book.FormatFromExtension(strings.ToLower(filepath.Ext(name)))
+	return ok
 }

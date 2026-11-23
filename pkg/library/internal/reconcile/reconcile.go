@@ -20,7 +20,7 @@ import (
 
 // Run reconciles the index with the store. force skips the drift check and
 // rebuilds unconditionally.
-func Run(files *store.Store, idx *index.Index, force bool) error {
+func Run(files *store.Store, idx *index.Index, reg *formats.Registry, force bool) error {
 	var scan *storeScan
 	needs := force || needsReindex(idx)
 	if !needs {
@@ -30,10 +30,10 @@ func Run(files *store.Store, idx *index.Index, force bool) error {
 		slog.Info("reindex: index is clean, skipping")
 		return nil
 	}
-	return reindex(files, idx, scan)
+	return reindex(files, idx, reg, scan)
 }
 
-func reindex(files *store.Store, idx *index.Index, scan *storeScan) error {
+func reindex(files *store.Store, idx *index.Index, reg *formats.Registry, scan *storeScan) error {
 	walkStart := time.Now()
 	if scan == nil {
 		entries, err := files.Walk()
@@ -47,7 +47,7 @@ func reindex(files *store.Store, idx *index.Index, scan *storeScan) error {
 	// Record observations before moves; rename preserves size and mtime, while
 	// the scan keys each observation by its original path.
 	scanStart := time.Now()
-	s := scanEntries(files, scan)
+	s := scanEntries(files, reg, scan)
 	scanDur := time.Since(scanStart)
 
 	dedupStart := time.Now()
@@ -121,8 +121,9 @@ func storeDrifted(files *store.Store, idx *index.Index) (*storeScan, bool) {
 	return onDisk, false
 }
 
-func scanEntries(files *store.Store, scan *storeScan) *scanState {
+func scanEntries(files *store.Store, reg *formats.Registry, scan *storeScan) *scanState {
 	s := &scanState{
+		reg:       reg,
 		indexed:   make([]index.BookPath, 0, len(scan.entries)),
 		unindexed: make(map[string]drift.PathInfo),
 	}
@@ -182,7 +183,7 @@ func scanEntry(files *store.Store, s *scanState, known map[string]drift.PathInfo
 		return
 	}
 
-	f, err := formats.ByFormat(e.Format)
+	f, err := s.reg.ByFormat(e.Format)
 	if err != nil {
 		slog.Warn("reindex: skip", "path", e.Dir(), "error", err)
 		s.skip(e.Path, pi)
@@ -241,6 +242,7 @@ func needsReindex(idx *index.Index) bool {
 
 // scanState is written concurrently only through methods that hold mu.
 type scanState struct {
+	reg       *formats.Registry
 	mu        sync.Mutex
 	indexed   []index.BookPath
 	unindexed map[string]drift.PathInfo

@@ -44,18 +44,6 @@ func (h *ingestHandle) Ingest() (*Book, error) {
 	if err := h.file.Close(); err != nil {
 		return nil, fmt.Errorf("closing uploaded file: %w", err)
 	}
-	// Hooks that shell out to kepubify or ebook-convert need the extension to
-	// pick an input format. An unrecognised file stays bare, since a hook may
-	// convert it.
-	if f, err := formats.Detect(path); err == nil {
-		named := path + f.Format().Extension()
-		if err := os.Rename(path, named); err != nil {
-			return nil, err
-		}
-		path = named
-	} else if !errors.Is(err, formats.ErrUnknownFormat) {
-		return nil, err
-	}
 	return h.ingestFn(path)
 }
 
@@ -76,6 +64,19 @@ func (l *Library) ingestPath(srcPath string) (*Book, error) {
 	}
 	defer os.RemoveAll(hookTempDir)
 
+	// Hooks that shell out to kepubify or ebook-convert need the extension to
+	// pick an input format. An unrecognised file stays bare, since a hook may
+	// convert it.
+	if f, err := l.formats.Detect(srcPath); err == nil {
+		named := srcPath + f.Format().Extension()
+		if err := os.Rename(srcPath, named); err != nil {
+			return nil, err
+		}
+		srcPath = named
+	} else if !errors.Is(err, formats.ErrUnknownFormat) {
+		return nil, err
+	}
+
 	// Run PreParse hooks before parsing
 	processedPath, err := l.hooks.preParse(srcPath, hookTempDir)
 	if err != nil {
@@ -83,7 +84,7 @@ func (l *Library) ingestPath(srcPath string) (*Book, error) {
 	}
 
 	// Parsed before ingestMu is taken, so bulk uploads parse in parallel.
-	f, err := formats.Detect(processedPath)
+	f, err := l.formats.Detect(processedPath)
 	if err != nil {
 		return nil, err
 	}

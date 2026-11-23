@@ -14,7 +14,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/internal/util/syncutil"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/drift"
-	_ "github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub" // registers the epub format
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/formats"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/store"
@@ -31,6 +30,7 @@ import (
 type Library struct {
 	store     *store.Store
 	index     *index.Index
+	formats   *formats.Registry
 	stateDir  string
 	inboxTemp string
 
@@ -117,7 +117,7 @@ func (l *Library) Content(id int64) (Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	f, err := formats.ByFormat(b.Format)
+	f, err := l.formats.ByFormat(b.Format)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +162,7 @@ func (l *Library) Update(id int64, fn func(*Book) *Edits) (b *Book, changed bool
 		return nil, false, v
 	}
 
-	impl, err := formats.ByFormat(current.Format)
+	impl, err := l.formats.ByFormat(current.Format)
 	if err != nil {
 		return nil, false, err
 	}

@@ -11,9 +11,8 @@ import (
 // epubFormat implements formats.Format for EPUB files.
 type epubFormat struct{}
 
-func init() {
-	formats.Register(epubFormat{})
-}
+// NewFormat returns the EPUB format implementation.
+func NewFormat() formats.Format { return epubFormat{} }
 
 func (epubFormat) Format() book.Format { return book.FormatEPUB }
 
@@ -51,3 +50,5 @@ func (epubFormat) OpenReader(path, coverPath string) (formats.Reader, error) {
 	}
 	return r, nil
 }
+
+func (epubFormat) TempPattern() string { return epubfile.SaveTempPattern }
