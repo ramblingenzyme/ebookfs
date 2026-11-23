@@ -38,7 +38,7 @@ func TestPathInfoRoundTrip(t *testing.T) {
 		// that a second-granularity format would silently truncate.
 		{"recorded", drift.PathInfo{
 			Size:      4242,
-			Mtime: time.Unix(1700000000, 0),
+			Mtime:     time.Unix(1700000000, 0),
 			MetaSize:  17,
 			MetaMtime: time.Unix(1700000000, 123456789),
 		}},

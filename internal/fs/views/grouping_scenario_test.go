@@ -23,8 +23,8 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 
-	"github.com/ramblingenzyme/go9p/fs"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
+	"github.com/ramblingenzyme/go9p/fs"
 )
 
 // groupingView is one by-x view, described well enough to drive the table

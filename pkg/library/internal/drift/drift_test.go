@@ -8,7 +8,7 @@ import (
 func observed() PathInfo {
 	return PathInfo{
 		Size:      4242,
-		Mtime: time.Unix(1700000000, 123456789),
+		Mtime:     time.Unix(1700000000, 123456789),
 		MetaSize:  17,
 		MetaMtime: time.Unix(1700000001, 987654321),
 	}

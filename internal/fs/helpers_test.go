@@ -9,11 +9,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ramblingenzyme/go9p"
-	"github.com/ramblingenzyme/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/ninep"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
+	"github.com/ramblingenzyme/go9p"
+	"github.com/ramblingenzyme/go9p/proto"
 )
 
 // openLibrary returns a library in a temporary directory, and that library's

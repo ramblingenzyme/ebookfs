@@ -5,8 +5,8 @@ package fs
 import (
 	"testing"
 
-	"github.com/ramblingenzyme/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
+	"github.com/ramblingenzyme/go9p/proto"
 )
 
 func TestInboxUploadReachesViews(t *testing.T) {

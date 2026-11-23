@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ramblingenzyme/go9p/fs"
-	"github.com/ramblingenzyme/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
+	"github.com/ramblingenzyme/go9p/fs"
+	"github.com/ramblingenzyme/go9p/proto"
 )
 
 // searchDir is the search/ root: a clone file and one subdirectory per live

@@ -17,7 +17,7 @@ func reindexSeries(t *testing.T, path, series, index string) bookmodel.Bib {
 	t.Helper()
 	b := &bookmodel.Book{
 		File: bookmodel.File{Path: path},
-		Bib:      bookmodel.Bib{Series: &bookmodel.SeriesRef{Name: series, Index: "1"}},
+		Bib:  bookmodel.Bib{Series: &bookmodel.SeriesRef{Name: series, Index: "1"}},
 	}
 	bib, err := epub.Rewrite(path, b, bookmodel.Edits{SeriesIndex: new(index)})
 	if err != nil {

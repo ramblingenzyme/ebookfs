@@ -1,9 +1,9 @@
 package book
 
 import (
-	"github.com/ramblingenzyme/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
+	"github.com/ramblingenzyme/go9p/proto"
 )
 
 // opfFile serves a book's raw OPF XML, loading bytes from the epub on each open.
