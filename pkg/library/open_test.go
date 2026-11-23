@@ -15,11 +15,12 @@ func entryNames(entries []os.DirEntry) []string {
 	return names
 }
 
-// Regular files with the upload-* prefix and hooks-* scratch directories go. A
-// directory with the upload- prefix stays, so the type check is what keeps it.
+// Regular files with the upload-* prefix or an .epub suffix and hooks-* scratch
+// directories go. A directory with the upload- prefix stays, so the type check
+// is what keeps it.
 func TestCleanInboxTemp(t *testing.T) {
 	dir := t.TempDir()
-	for _, name := range []string{"upload-123", "upload-456", "readme.txt"} {
+	for _, name := range []string{"upload-123", "upload-456.epub", "987654.epub", "readme.txt"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("data"), 0644); err != nil {
 			t.Fatal(err)
 		}

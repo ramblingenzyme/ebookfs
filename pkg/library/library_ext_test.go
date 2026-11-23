@@ -252,6 +252,25 @@ func TestMissingBookIsErrBookNotFound(t *testing.T) {
 	}
 }
 
+// A typed-nil *reader inside the interface made `r != nil` true, so a caller's
+// deferred Close panicked.
+func TestContentOfMissingFileReturnsNilReader(t *testing.T) {
+	cfg := testConfig(t)
+	lib := openLib(t, cfg)
+	b := ingestTestEpub(t, lib, buildTestEpub(t, "Vanished"))
+	if err := os.Remove(filepath.Join(cfg.Root, b.Path())); err != nil {
+		t.Fatal(err)
+	}
+
+	r, err := lib.Content(b.ID())
+	if err == nil {
+		t.Fatal("Content succeeded on a missing file")
+	}
+	if r != nil {
+		t.Errorf("Content returned a non-nil Reader %#v with error %v", r, err)
+	}
+}
+
 func TestContentServesTheBook(t *testing.T) {
 	lib := openTestLibrary(t)
 	b := ingestTestEpub(t, lib, buildTestEpub(t, "Open Read"))

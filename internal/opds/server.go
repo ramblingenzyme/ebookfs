@@ -60,7 +60,7 @@ func NewHandler(lib Library, baseURL string) http.Handler {
 
 	// No handler reads {filename}. It is there for clients that ignore
 	// Content-Disposition and name the download after the URL's last segment.
-	mux.HandleFunc("GET "+contentBase+"{id}/{filename}", files.byID(files.serveEpub))
+	mux.HandleFunc("GET "+contentBase+"{id}/{filename}", files.byID(files.serveFile))
 	mux.HandleFunc("GET "+coverBase+"{id}", files.byID(files.serveCover))
 	return mux
 }

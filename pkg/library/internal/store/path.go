@@ -19,8 +19,7 @@ import (
 // too long". An edit that lengthens a title fails after the file is rewritten,
 // which leaves the index stale until the next startup. naming.ForFAT has the
 // same gap for the export filename. Truncate each component on a rune
-// boundary, keeping the " (id)" and extension suffixes, once a real book hits
-// it.
+// boundary, keeping the " (id)" and extension suffixes, once a real book hits it.
 func (s *Store) Layout(authors []book.Author, title string, id int64, format book.Format) book.File {
 	libPath := canonicalDir(authors, title, id)
 	filename := bookFilename(authors, title, format)

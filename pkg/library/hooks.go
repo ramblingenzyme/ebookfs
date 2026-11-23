@@ -36,7 +36,8 @@ type Hook interface {
 	Setup(root string, stateDir string) error
 
 	// PreParse rewrites the book file before parsing. srcPath is the absolute
-	// path to the staged file. tempDir is per-ingest scratch space, retained
+	// path to the staged file, named with its detected format's extension when
+	// the format is recognised. tempDir is per-ingest scratch space, retained
 	// until ingest completes. Return a replacement path, or "" to keep srcPath.
 	PreParse(srcPath string, tempDir string) (string, error)
 

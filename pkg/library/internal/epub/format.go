@@ -45,5 +45,9 @@ func (epubFormat) Rewrite(path string, current *book.Book, e book.Edits) (*book.
 }
 
 func (epubFormat) OpenReader(path, coverPath string) (formats.Reader, error) {
-	return OpenReader(path, coverPath)
+	r, err := OpenReader(path, coverPath)
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
 }

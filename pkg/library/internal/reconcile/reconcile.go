@@ -215,6 +215,7 @@ func moveToCanonical(files *store.Store, indexed []index.BookPath) {
 				slog.Warn("reindex: move to canonical location failed", "from", b.Dir(), "to", canonical.Dir(), "error", err)
 				continue
 			}
+			canonical.Size = b.Size
 			b.File = canonical
 		}
 	}

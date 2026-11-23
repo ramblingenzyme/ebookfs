@@ -180,6 +180,30 @@ func TestEditWaitsForItsHookBeforeAnotherEdit(t *testing.T) {
 	}
 }
 
+type stagedPathHook struct {
+	library.HookBase
+	staged string
+}
+
+func (h *stagedPathHook) PreParse(source, _ string) (string, error) {
+	h.staged = source
+	return "", nil
+}
+
+func TestPreParseSeesStagedFileWithFormatExtension(t *testing.T) {
+	lib := openTestLibrary(t)
+	hook := &stagedPathHook{}
+	lib.AddHook(hook)
+
+	ingestTestEpub(t, lib, buildTestEpub(t, "Extended", "Alice"))
+	if filepath.Ext(hook.staged) != ".epub" {
+		t.Errorf("PreParse srcPath = %q, want an .epub extension", hook.staged)
+	}
+	if _, err := os.Stat(hook.staged); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("staged file still exists after ingest: stat error = %v", err)
+	}
+}
+
 type failingIngestHook struct {
 	library.HookBase
 	preParseErr  error
