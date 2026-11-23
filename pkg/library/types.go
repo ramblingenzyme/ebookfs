@@ -1,10 +1,10 @@
 package library
 
 import (
-	"io"
 	"slices"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/formats"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index"
 )
 
@@ -26,11 +26,7 @@ type Contributor = book.Contributor
 type Series = book.SeriesRef
 
 // Reader is an open book file. It shows the book as it was when opened.
-type Reader interface {
-	io.ReaderAt
-	io.Closer
-	Cover() ([]byte, error)
-}
+type Reader = formats.Reader
 
 // StatusList renders the reading statuses, so a validation error and the ctl
 // help name the same set.

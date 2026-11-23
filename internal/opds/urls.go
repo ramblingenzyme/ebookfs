@@ -3,6 +3,7 @@ package opds
 import (
 	"net/url"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ophymx/opds/opdshttp"
 )
 
@@ -16,7 +17,14 @@ const (
 	coverBase   = Prefix + "/cover/"
 )
 
-const mediaTypeEpub = "application/epub+zip"
+func mediaType(f book.Format) string {
+	switch f {
+	case book.FormatEPUB:
+		return "application/epub+zip"
+	default:
+		return "application/octet-stream"
+	}
+}
 
 // valueParam carries a facet value in the query string rather than the feed
 // id, so url.Values escapes a tag containing a slash, a colon or a space.

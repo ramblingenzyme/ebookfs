@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/formats"
 )
 
 // IngestHandle stages a book upload. The frontend writes the bytes, then
@@ -71,9 +71,14 @@ func (l *Library) ingestPath(srcPath string) (*Book, error) {
 	}
 
 	// Parsed before ingestMu is taken, so bulk uploads parse in parallel.
-	bib, err := epub.Parse(processedPath)
+	// Detect format from content, then parse.
+	f, err := formats.Detect(processedPath)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s", ErrInvalidBook, err)
+		return nil, err
+	}
+	bib, err := f.Parse(processedPath)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s", formats.ErrInvalidBook, err)
 	}
 
 	// A PreParse hook can return a different file, which Ingest's fsync never saw.
@@ -103,7 +108,7 @@ func (l *Library) ingestPath(srcPath string) (*Book, error) {
 		return nil, fmt.Errorf("%q: %w", bib.Title, ErrDuplicate)
 	}
 	// The index cannot see a book it skipped.
-	if l.store.PathTaken(bib.Authors, bib.Title, book.FormatEPUB) {
+	if l.store.PathTaken(bib.Authors, bib.Title, f.Format()) {
 		return nil, fmt.Errorf("%q: %w", bib.Title, ErrDuplicateOnDisk)
 	}
 
@@ -121,7 +126,7 @@ func (l *Library) ingestPath(srcPath string) (*Book, error) {
 		DateAdded:    now,
 		DateModified: now,
 	}
-	loc := l.store.Layout(bib.Authors, bib.Title, id, book.FormatEPUB)
+	loc := l.store.Layout(bib.Authors, bib.Title, id, f.Format())
 
 	op, err := l.index.MarkPending()
 	if err != nil {

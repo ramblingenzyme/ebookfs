@@ -14,7 +14,8 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/internal/util/syncutil"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/drift"
-	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
+	_ "github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub" // registers the epub format
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/formats"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/store"
 )
@@ -116,7 +117,11 @@ func (l *Library) Content(id int64) (Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	return epub.OpenReader(l.store.AbsPath(b.Path), b.CoverPath)
+	f, ok := formats.ByFormat(b.Format)
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", formats.ErrUnknownFormat, b.Format)
+	}
+	return f.OpenReader(l.store.AbsPath(b.Path), b.CoverPath)
 }
 
 // Edit applies e and returns the updated book. A title or author change moves
@@ -163,7 +168,12 @@ func (l *Library) Update(id int64, fn func(*Book) *Edits) (b *Book, changed bool
 	}
 
 	meta := applyMeta(current.Meta, e)
-	bib, err := epub.Rewrite(l.store.AbsPath(current.Path), current, e)
+	fmt2, ok := formats.ByFormat(current.Format)
+	if !ok {
+		op.Cancel()
+		return nil, false, fmt.Errorf("%w: %s", formats.ErrUnknownFormat, current.Format)
+	}
+	bib, err := fmt2.Rewrite(l.store.AbsPath(current.Path), current, e)
 	if err != nil {
 		op.Cancel()
 		slog.Error("edit: rewrite failed", "book_id", current.Meta.ID, "title", current.Title, "error", err)
@@ -177,7 +187,7 @@ func (l *Library) Update(id int64, fn func(*Book) *Edits) (b *Book, changed bool
 		return nil, false, err
 	}
 
-	updated := bookFromBib(bib, meta, location, mt)
+	updated := bookFromBib(*bib, meta, location, mt)
 	if err := op.Put(updated, mt); err != nil {
 		return nil, false, err
 	}

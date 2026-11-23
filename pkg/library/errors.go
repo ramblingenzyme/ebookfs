@@ -3,7 +3,7 @@ package library
 import (
 	"errors"
 
-	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/formats"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/fsutil"
 )
 
@@ -29,15 +29,15 @@ var ErrDuplicate = errors.New("book already in library")
 var ErrDuplicateOnDisk = errors.New("book already on disk but not indexed")
 
 // ErrUnknownFormat means no registered format detected the file.
-var ErrUnknownFormat = errors.New("unrecognized file format")
+var ErrUnknownFormat = formats.ErrUnknownFormat
 
 // ErrInvalidBook means the format was detected but the file is corrupt or
 // invalid for it. The wrapped error names the specific failure.
-var ErrInvalidBook = errors.New("invalid book file")
+var ErrInvalidBook = formats.ErrInvalidBook
 
 // ErrClosed is returned by every Reader method after Close. A 9P client can
 // hold a fid across a re-ingest, so this is an ordinary outcome, not a caller's mistake.
-var ErrClosed = epub.ErrClosed
+var ErrClosed = formats.ErrClosed
 
 // ErrNoCover is returned by Reader.Cover when the book has no cover.
-var ErrNoCover = epub.ErrNoCover
+var ErrNoCover = formats.ErrNoCover

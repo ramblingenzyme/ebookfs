@@ -97,8 +97,8 @@ func TestIngestKeepsTheFirstOfRepeatedEntries(t *testing.T) {
 func TestIngestRejectsAFileThatIsNotAnEpub(t *testing.T) {
 	lib := openTestLibrary(t)
 
-	if _, err := tryIngest(t, lib, []byte("this is plainly not a zip archive")); !errors.Is(err, library.ErrInvalidBook) {
-		t.Fatalf("ingest err = %v, want ErrInvalidBook", err)
+	if _, err := tryIngest(t, lib, []byte("this is plainly not a zip archive")); !errors.Is(err, library.ErrUnknownFormat) {
+		t.Fatalf("ingest err = %v, want ErrUnknownFormat", err)
 	}
 }
 

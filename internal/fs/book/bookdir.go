@@ -80,11 +80,13 @@ func NewBookDir(f *fs.FS, lib ContentReader, edit func(int64, library.Edits) (*l
 		d.Book,
 	))
 
-	d.StaticDir.AddChild(newOPFFile(
-		newStat(f, "opf", 0444),
-		lib,
-		d.Book,
-	))
+	if book.Format() == "epub" {
+		d.StaticDir.AddChild(newOPFFile(
+			newStat(f, "opf", 0444),
+			lib,
+			d.Book,
+		))
+	}
 
 	// Editable fields route through the edit callback so the change is validated,
 	// persisted, and bracketed by view remove/add (rehoming if the grouping or

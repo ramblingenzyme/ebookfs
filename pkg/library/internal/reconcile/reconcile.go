@@ -13,7 +13,7 @@ import (
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/drift"
-	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/formats"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/store"
 )
@@ -183,7 +183,13 @@ func scanEntry(files *store.Store, s *scanState, known map[string]drift.PathInfo
 	}
 
 	start = time.Now()
-	bib, err := epub.Parse(files.AbsPath(e.Path))
+	f, ok := formats.ByFormat(e.Format)
+	if !ok {
+		slog.Warn("reindex: skip, unknown format", "path", e.Dir(), "format", e.Format)
+		s.skip(e.Path, pi)
+		return
+	}
+	bib, err := f.Parse(files.AbsPath(e.Path))
 	parseDur := time.Since(start)
 	if err != nil {
 		slog.Warn("reindex: skip, parse failed", "path", e.Dir(), "error", err)

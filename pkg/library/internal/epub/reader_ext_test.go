@@ -7,6 +7,7 @@ import (
 
 	"github.com/ramblingenzyme/ebookfs/internal/testing/epubtest"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/formats"
 )
 
 // Cover is implemented in this package, not pkg/epub, so it has its own
@@ -48,7 +49,7 @@ func TestReaderClosedContract(t *testing.T) {
 		{"Close again", r.Close},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := tc.call(); !errors.Is(err, epub.ErrClosed) {
+			if err := tc.call(); !errors.Is(err, formats.ErrClosed) {
 				t.Errorf("err = %v, want ErrClosed", err)
 			}
 		})
