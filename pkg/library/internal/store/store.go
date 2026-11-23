@@ -33,8 +33,8 @@ func (s *Store) AbsPath(relPath string) string {
 
 func (s *Store) Root() string { return s.root }
 
-// PathTaken reports whether the library already holds an epub file for these
-// authors and this title.
+// PathTaken reports whether the library already holds a file for these
+// authors and this title with the given format.
 // Mirrored by Index.Exists, but this covers when book wasn't indexed
 // and is still on disk.
 //
@@ -44,19 +44,19 @@ func (s *Store) Root() string { return s.root }
 // Each book lives in a subdirectory named "Title (id)" under the author
 // directory, so those are walked rather than globbed; titles may contain
 // [], ? and *.
-func (s *Store) PathTaken(authors []book.Author, title string) bool {
+func (s *Store) PathTaken(authors []book.Author, title string, format book.Format) bool {
 	authorDir := filepath.Join(s.root, authorDirName(authors))
 	entries, err := os.ReadDir(authorDir)
 	if err != nil {
 		return false
 	}
-	targetEpub := epubFilename(authors, title)
+	target := bookFilename(authors, title, format)
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
-		epubPath := filepath.Join(authorDir, entry.Name(), targetEpub)
-		if _, err := os.Stat(epubPath); err == nil {
+		path := filepath.Join(authorDir, entry.Name(), target)
+		if _, err := os.Stat(path); err == nil {
 			return true
 		}
 	}
@@ -66,8 +66,8 @@ func (s *Store) PathTaken(authors []book.Author, title string) bool {
 // Stat returns a failure rather than defaulting it away. A caller recording a
 // directory it could not observe stores the zero drift.PathInfo, which says
 // what that costs.
-func (s *Store) Stat(loc book.Location) (drift.PathInfo, error) {
-	epubFI, err := os.Stat(s.AbsPath(loc.EpubPath))
+func (s *Store) Stat(loc book.File) (drift.PathInfo, error) {
+	bookFI, err := os.Stat(s.AbsPath(loc.Path))
 	if err != nil {
 		return drift.PathInfo{}, err
 	}
@@ -76,18 +76,18 @@ func (s *Store) Stat(loc book.Location) (drift.PathInfo, error) {
 		return drift.PathInfo{}, err
 	}
 	return drift.PathInfo{
-		Size:      epubFI.Size(),
-		EpubMtime: epubFI.ModTime(),
+		Size:      bookFI.Size(),
+		Mtime:     bookFI.ModTime(),
 		MetaSize:  metaFI.Size(),
 		MetaMtime: metaFI.ModTime(),
 	}, nil
 }
 
-// Move renames the book directory, then the epub inside it, rolling the
-// directory back if the epub rename fails. It then removes the old author
+// Move renames the book directory, then the file inside it, rolling the
+// directory back if the file rename fails. It then removes the old author
 // directory if that left it empty.
-func (s *Store) Move(from, to book.Location) error {
-	if from.EpubPath == to.EpubPath {
+func (s *Store) Move(from, to book.File) error {
+	if from.Path == to.Path {
 		return nil
 	}
 
@@ -135,7 +135,7 @@ func (s *Store) renameDir(fromDir, toDir string) (func(error), error) {
 	return func(err error) {
 		rollbackErr := os.Rename(toDir, fromDir)
 		if rollbackErr != nil {
-			slog.Error("rollback failed after epub rename error; directory left in inconsistent state, will be repaired by reindex on next startup",
+			slog.Error("rollback failed after file rename error; directory left in inconsistent state, will be repaired by reindex on next startup",
 				"old_path", fromDir, "new_path", toDir, "rollback_error", rollbackErr, "original_error", err)
 		}
 		removeIfEmpty(filepath.Dir(toDir))
@@ -157,7 +157,7 @@ func removeIfEmpty(dir string) error {
 const trashDirName = ".trash"
 
 // Delete leaves the book whole when it fails, as atomicfs.RemoveAll says.
-func (s *Store) Delete(loc book.Location) error {
+func (s *Store) Delete(loc book.File) error {
 	path := s.AbsPath(loc.Dir())
 	if err := atomicfs.RemoveAll(path, filepath.Join(s.root, trashDirName)); err != nil {
 		return err
@@ -198,7 +198,7 @@ func (s *Store) EmptyTrash() error {
 	return os.RemoveAll(filepath.Join(s.root, trashDirName))
 }
 
-func (s *Store) Update(oldLoc, newLoc book.Location, meta book.Meta) (book.Meta, drift.PathInfo, error) {
+func (s *Store) Update(oldLoc, newLoc book.File, meta book.Meta) (book.Meta, drift.PathInfo, error) {
 	canonicalizeMeta(&meta)
 	if err := s.Move(oldLoc, newLoc); err != nil {
 		return meta, drift.PathInfo{}, err
@@ -216,7 +216,7 @@ func (s *Store) Update(oldLoc, newLoc book.Location, meta book.Meta) (book.Meta,
 //
 // Only .sidecar/ is created. A book directory removed outside ebookfs fails
 // with os.ErrNotExist rather than coming back empty.
-func (s *Store) OpenSidecars(loc book.Location) (*os.Root, error) {
+func (s *Store) OpenSidecars(loc book.File) (*os.Root, error) {
 	dir := filepath.Join(s.AbsPath(loc.Dir()), ".sidecar")
 	if err := atomicfs.Mkdir(dir, 0755); err != nil && !errors.Is(err, os.ErrExist) {
 		return nil, err

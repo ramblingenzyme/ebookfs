@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
 // Index.Exists cannot see a skipped book, so the store check is what refuses
@@ -76,7 +78,7 @@ func TestIngestRefusesFailedSync(t *testing.T) {
 // fails the sidecar write after the epub is in place.
 func TestFailedIngestCleansUp(t *testing.T) {
 	lib := openTestLibrary(t)
-	loc := lib.store.Layout([]Author{{Name: "Alice"}}, "Doomed", 1)
+	loc := lib.store.Layout([]Author{{Name: "Alice"}}, "Doomed", 1, book.FormatEPUB)
 	dir := lib.store.AbsPath(loc.Dir())
 	if err := os.MkdirAll(filepath.Join(dir, "meta.toml"), 0755); err != nil {
 		t.Fatal(err)

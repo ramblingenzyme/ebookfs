@@ -143,7 +143,7 @@ func cleanInboxTemp(dir string) error {
 		return err
 	}
 	for _, e := range entries {
-		upload := e.Type().IsRegular() && strings.HasSuffix(e.Name(), ".epub")
+		upload := e.Type().IsRegular() && strings.HasPrefix(e.Name(), "upload-")
 		scratch := e.IsDir() && strings.HasPrefix(e.Name(), "hooks-")
 		if !upload && !scratch {
 			continue

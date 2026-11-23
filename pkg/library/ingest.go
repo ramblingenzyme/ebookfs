@@ -13,7 +13,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
 )
 
-// IngestHandle stages an epub upload. The frontend writes the bytes, then
+// IngestHandle stages a book upload. The frontend writes the bytes, then
 // calls Ingest, which files the book and removes the temporary file.
 type IngestHandle interface {
 	io.WriterAt
@@ -38,24 +38,24 @@ func (h *ingestHandle) Ingest() (*Book, error) {
 	// certain to see a writeback error.
 	if err := h.file.Sync(); err != nil {
 		h.file.Close()
-		return nil, fmt.Errorf("syncing uploaded epub: %w", err)
+		return nil, fmt.Errorf("syncing uploaded file: %w", err)
 	}
 	// NFS can report a failed write as late as close.
 	if err := h.file.Close(); err != nil {
-		return nil, fmt.Errorf("closing uploaded epub: %w", err)
+		return nil, fmt.Errorf("closing uploaded file: %w", err)
 	}
 	return h.ingestFn(path)
 }
 
 func (l *Library) CreateIngest() (IngestHandle, error) {
-	f, err := os.CreateTemp(l.inboxTemp, "*.epub")
+	f, err := os.CreateTemp(l.inboxTemp, "upload-*")
 	if err != nil {
 		return nil, err
 	}
 	return &ingestHandle{file: f, ingestFn: l.ingestPath}, nil
 }
 
-func (l *Library) ingestPath(epubPath string) (*Book, error) {
+func (l *Library) ingestPath(srcPath string) (*Book, error) {
 	// Create a temp directory for PreParse hooks. returned path from hooks can be inside,
 	// so it can't be cleaned up until after ingest completes.
 	hookTempDir, err := os.MkdirTemp(l.inboxTemp, "hooks-*")
@@ -65,7 +65,7 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 	defer os.RemoveAll(hookTempDir)
 
 	// Run PreParse hooks before parsing
-	processedPath, err := l.hooks.preParse(epubPath, hookTempDir)
+	processedPath, err := l.hooks.preParse(srcPath, hookTempDir)
 	if err != nil {
 		return nil, fmt.Errorf("pre-parse hook: %w", err)
 	}
@@ -80,7 +80,7 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 	//
 	// Outside ingestMu, since a slow fsync would stall other uploads.
 	if err := syncFile(processedPath); err != nil {
-		return nil, fmt.Errorf("syncing uploaded epub: %w", err)
+		return nil, fmt.Errorf("syncing uploaded file: %w", err)
 	}
 
 	l.mutateMu.RLock()
@@ -103,7 +103,7 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 		return nil, fmt.Errorf("%q: %w", bib.Title, ErrDuplicate)
 	}
 	// The index cannot see a book it skipped.
-	if l.store.PathTaken(bib.Authors, bib.Title) {
+	if l.store.PathTaken(bib.Authors, bib.Title, book.FormatEPUB) {
 		return nil, fmt.Errorf("%q: %w", bib.Title, ErrDuplicateOnDisk)
 	}
 
@@ -121,7 +121,7 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 		DateAdded:    now,
 		DateModified: now,
 	}
-	loc := l.store.Layout(bib.Authors, bib.Title, id)
+	loc := l.store.Layout(bib.Authors, bib.Title, id, book.FormatEPUB)
 
 	op, err := l.index.MarkPending()
 	if err != nil {

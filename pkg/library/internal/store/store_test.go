@@ -32,8 +32,8 @@ func TestMoveCleansUpTheOldAuthorDir(t *testing.T) {
 				}
 			}
 
-			from := book.Location{EpubPath: filepath.Join("Wells, M/Some Title (1)", epubName)}
-			to := book.Location{EpubPath: filepath.Join("Wells, Martha/Some Title (1)", epubName)}
+			from := book.File{Path: filepath.Join("Wells, M/Some Title (1)", epubName)}
+			to := book.File{Path: filepath.Join("Wells, Martha/Some Title (1)", epubName)}
 			if err := s.Move(from, to); err != nil {
 				t.Fatalf("Move: %v", err)
 			}
@@ -60,8 +60,8 @@ func TestMoveDestinationAlreadyExistsError(t *testing.T) {
 	writeBook(t, root, "Alice/Book (1)", "Book - Alice.epub", "data", nil)
 	writeBook(t, root, "Bob/Book (1)", "", "", nil)
 
-	from := book.Location{EpubPath: filepath.Join("Alice/Book (1)", "Book - Alice.epub")}
-	to := book.Location{EpubPath: filepath.Join("Bob/Book (1)", "Book - Bob.epub")}
+	from := book.File{Path: filepath.Join("Alice/Book (1)", "Book - Alice.epub")}
+	to := book.File{Path: filepath.Join("Bob/Book (1)", "Book - Bob.epub")}
 
 	err := s.Move(from, to)
 	if err == nil {
@@ -82,8 +82,8 @@ func TestMoveRollsBackWhenEpubRenameFails(t *testing.T) {
 	// The directory holds an epub under a different name than `from` claims,
 	// so the directory move succeeds and the rename inside it cannot.
 	writeBook(t, root, "Alice/Title (1)", "actual.epub", "data", &book.Meta{ID: 1})
-	from := book.Location{EpubPath: filepath.Join("Alice/Title (1)", "claimed.epub")}
-	to := book.Location{EpubPath: filepath.Join("Bob/Title (1)", "renamed.epub")}
+	from := book.File{Path: filepath.Join("Alice/Title (1)", "claimed.epub")}
+	to := book.File{Path: filepath.Join("Bob/Title (1)", "renamed.epub")}
 
 	if err := s.Move(from, to); err == nil {
 		t.Fatal("Move succeeded with a missing source epub, want the failure surfaced")
@@ -104,8 +104,8 @@ func TestMoveRollsBackWhenEpubRenameFails(t *testing.T) {
 // rename must not leave it behind empty.
 func TestMoveLeavesNoAuthorDirWhenDirRenameFails(t *testing.T) {
 	s, root := newStore(t)
-	from := book.Location{EpubPath: filepath.Join("Alice/Gone (1)", "gone.epub")}
-	to := book.Location{EpubPath: filepath.Join("Bob/Gone (1)", "gone.epub")}
+	from := book.File{Path: filepath.Join("Alice/Gone (1)", "gone.epub")}
+	to := book.File{Path: filepath.Join("Bob/Gone (1)", "gone.epub")}
 
 	if err := s.Move(from, to); err == nil {
 		t.Fatal("Move succeeded with a missing source directory")
@@ -121,7 +121,7 @@ func TestDeleteRemovesBookDir(t *testing.T) {
 	dir := filepath.Join(root, "Author, A", "Test (1)")
 	writeBook(t, root, "Author, A/Test (1)", "test.epub", "data", nil)
 
-	loc := book.Location{EpubPath: filepath.Join("Author, A/Test (1)", "test.epub")}
+	loc := book.File{Path: filepath.Join("Author, A/Test (1)", "test.epub")}
 	if err := s.Delete(loc); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestDeleteWithReadOnlyDirError(t *testing.T) {
 	// Restore permissions so TempDir cleanup succeeds.
 	t.Cleanup(func() { os.Chmod(dir, 0755) })
 
-	loc := book.Location{EpubPath: filepath.Join("Author, A/Test (1)", "test.epub")}
+	loc := book.File{Path: filepath.Join("Author, A/Test (1)", "test.epub")}
 	err := s.Delete(loc)
 	if err == nil {
 		t.Error("expected error deleting a read-only book directory")

@@ -64,14 +64,14 @@ func TestConcurrentTitleAndCoverEditsBothLand(t *testing.T) {
 		}
 		book = edited
 
-		parsed, err := epub.Parse(filepath.Join(root, book.EpubPath()))
+		parsed, err := epub.Parse(filepath.Join(root, book.Path()))
 		if err != nil {
 			t.Fatalf("iteration %d: final epub does not parse: %v", i, err)
 		}
 		if parsed.Title != title {
 			t.Fatalf("iteration %d: title = %q, want %q (Edit's change was lost)", i, parsed.Title, title)
 		}
-		reader, err := epub.OpenReader(filepath.Join(root, book.EpubPath()), book.CoverPath())
+		reader, err := epub.OpenReader(filepath.Join(root, book.Path()), book.CoverPath())
 		if err != nil {
 			t.Fatalf("iteration %d: OpenReader: %v", i, err)
 		}
@@ -84,12 +84,12 @@ func TestConcurrentTitleAndCoverEditsBothLand(t *testing.T) {
 			t.Fatalf("iteration %d: cover edit reported success but the cover bytes were lost", i)
 		}
 
-		entries, err := os.ReadDir(filepath.Join(root, filepath.Dir(book.EpubPath())))
+		entries, err := os.ReadDir(filepath.Join(root, filepath.Dir(book.Path())))
 		if err != nil {
 			t.Fatalf("iteration %d: %v", i, err)
 		}
 		for _, e := range entries {
-			if name := e.Name(); name != filepath.Base(book.EpubPath()) && name != "meta.toml" {
+			if name := e.Name(); name != filepath.Base(book.Path()) && name != "meta.toml" {
 				t.Fatalf("iteration %d: unexpected file in book dir: %q", i, name)
 			}
 		}

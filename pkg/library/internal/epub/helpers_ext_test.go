@@ -8,7 +8,7 @@ import (
 )
 
 func writeBib(epubPath string, e bookmodel.Edits) (bookmodel.Bib, error) {
-	return epub.Rewrite(epubPath, &bookmodel.Book{Location: bookmodel.Location{EpubPath: epubPath}}, e)
+	return epub.Rewrite(epubPath, &bookmodel.Book{File: bookmodel.File{Path: epubPath}}, e)
 }
 
 // An empty Bib won't do: book.Validate refuses an index edit on a book with no
@@ -19,5 +19,5 @@ func book(t *testing.T, path string) *bookmodel.Book {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &bookmodel.Book{Location: bookmodel.Location{EpubPath: path}, Bib: *bib}
+	return &bookmodel.Book{File: bookmodel.File{Path: path}, Bib: *bib}
 }

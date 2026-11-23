@@ -30,7 +30,7 @@ func TestStats(t *testing.T) {
 			Series:  &book.SeriesRef{Name: "EPIC", Index: "1"},
 		},
 		book.Meta{ID: 1, Tags: []string{"sci-fi", "space"}},
-		book.Location{EpubPath: "A/First (1)/book.epub"},
+		book.File{Path: "A/First (1)/book.epub"},
 	)
 	b2 := book.NewBook(
 		book.Bib{
@@ -39,7 +39,7 @@ func TestStats(t *testing.T) {
 			Series:  &book.SeriesRef{Name: "EPIC", Index: "2"},
 		},
 		book.Meta{ID: 2, Tags: []string{"sci-fi"}},
-		book.Location{EpubPath: "A/Second (2)/book.epub"},
+		book.File{Path: "A/Second (2)/book.epub"},
 	)
 	storeInIndexSized(t, idx, b1, 100)
 	storeInIndexSized(t, idx, b2, 250)

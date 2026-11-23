@@ -18,7 +18,7 @@ func TestIngestSurfacesWriteMetaFailure(t *testing.T) {
 	if err := os.WriteFile(staged, []byte("epub"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	loc := book.Location{EpubPath: filepath.Join("Alice/Title (1)", "Title - Alice.epub")}
+	loc := book.File{Path: filepath.Join("Alice/Title (1)", "Title - Alice.epub")}
 	// Occupy meta.toml's name with a directory, so the sidecar write fails
 	// after the epub is already in place.
 	bookDir := filepath.Join(root, loc.Dir())
@@ -40,7 +40,7 @@ func TestIngestSurfacesWriteMetaFailure(t *testing.T) {
 func TestIngestMissingStagedEpub(t *testing.T) {
 	s, root := newStore(t)
 
-	loc := book.Location{EpubPath: filepath.Join("Alice/Title (1)", "Title - Alice.epub")}
+	loc := book.File{Path: filepath.Join("Alice/Title (1)", "Title - Alice.epub")}
 	_, _, err := s.Ingest(filepath.Join(t.TempDir(), "does-not-exist.epub"), loc, book.Meta{ID: 1})
 	if err == nil {
 		t.Fatal("Ingest succeeded with no staged epub, want the failure surfaced")

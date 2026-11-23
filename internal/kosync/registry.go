@@ -250,7 +250,7 @@ func computeDocumentID(book *library.Book, openEpub func() (library.EpubReader, 
 	}
 	defer epub.Close()
 
-	return PartialMD5(epub, book.EpubSize())
+	return PartialMD5(epub, book.Size())
 }
 
 func readSidecar(sidecars *os.Root) (*SidecarData, error) {

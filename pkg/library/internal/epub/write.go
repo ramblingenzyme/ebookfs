@@ -9,7 +9,7 @@ import (
 // as read back from the file. If e names no field, it returns b.Bib without
 // opening the file. Every check runs before anything is written.
 //
-// b.EpubPath is relative to the store root, so the caller passes the full path
+// b.Path is relative to the store root, so the caller passes the full path
 // as epubPath.
 func Rewrite(epubPath string, b *book.Book, e book.Edits) (book.Bib, error) {
 	if !e.HasCoverEdit() && !e.HasBibEdits() {

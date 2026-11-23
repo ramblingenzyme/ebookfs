@@ -45,15 +45,15 @@ func TestSearchReturnsARootRelativeEpubPath(t *testing.T) {
 	if got[0].ID() != want.ID() {
 		t.Errorf("id = %d, want %d", got[0].ID(), want.ID())
 	}
-	if got[0].EpubPath() == "" {
+	if got[0].Path() == "" {
 		t.Fatal("EpubPath is empty — the result carries no path, so nothing can open it")
 	}
-	if filepath.IsAbs(got[0].EpubPath()) {
-		t.Errorf("EpubPath = %q, want a relative path", got[0].EpubPath())
+	if filepath.IsAbs(got[0].Path()) {
+		t.Errorf("EpubPath = %q, want a relative path", got[0].Path())
 	}
-	absPath := filepath.Join(cfg.Root, got[0].EpubPath())
+	absPath := filepath.Join(cfg.Root, got[0].Path())
 	if _, err := os.Stat(absPath); err != nil {
-		t.Errorf("EpubPath %q does not resolve: %v", got[0].EpubPath(), err)
+		t.Errorf("EpubPath %q does not resolve: %v", got[0].Path(), err)
 	}
 }
 
@@ -70,8 +70,8 @@ func TestEditSelfHealsLegacyUnsanitizedFilename(t *testing.T) {
 	// Rename the on-disk epub to a name Layout would no longer produce, then
 	// reindex so the index records the manual rename.
 	root := cfg.Root
-	dir := filepath.Join(root, filepath.Dir(book.EpubPath()))
-	absEpub := filepath.Join(root, book.EpubPath())
+	dir := filepath.Join(root, filepath.Dir(book.Path()))
+	absEpub := filepath.Join(root, book.Path())
 	legacyName := "Some Title: With Colon - Alice.epub"
 	if err := os.Rename(absEpub, filepath.Join(dir, legacyName)); err != nil {
 		t.Fatal(err)
@@ -90,10 +90,10 @@ func TestEditSelfHealsLegacyUnsanitizedFilename(t *testing.T) {
 		t.Errorf("status = %q, want %q", updated.Status(), status)
 	}
 
-	if strings.Contains(filepath.Base(updated.EpubPath()), ":") {
-		t.Errorf("filename not sanitized after edit: %q", filepath.Base(updated.EpubPath()))
+	if strings.Contains(filepath.Base(updated.Path()), ":") {
+		t.Errorf("filename not sanitized after edit: %q", filepath.Base(updated.Path()))
 	}
-	if _, err := os.Stat(filepath.Join(root, updated.EpubPath())); err != nil {
+	if _, err := os.Stat(filepath.Join(root, updated.Path())); err != nil {
 		t.Errorf("updated EpubPath does not exist: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, legacyName)); !os.IsNotExist(err) {
@@ -112,7 +112,7 @@ func TestDeleteRemovesBook(t *testing.T) {
 	lib := openLib(t, cfg)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "To Delete"))
 	id := book.ID()
-	dir := filepath.Join(cfg.Root, filepath.Dir(book.EpubPath()))
+	dir := filepath.Join(cfg.Root, filepath.Dir(book.Path()))
 	if _, err := os.Stat(dir); err != nil {
 		t.Fatalf("book directory missing before delete: %v", err)
 	}

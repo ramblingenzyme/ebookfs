@@ -44,11 +44,11 @@ var offLayouts = []struct {
 // legacyAuthorDir with the library closed, which may be where it already is. A
 // non-empty legacyEpub also renames the epub inside it. It returns the book and the canonical location a reindex
 // must restore.
-func stageLegacyLayout(t *testing.T, cfg Config, title string, authors []string, legacyAuthorDir, legacyEpub string) (*Book, book.Location) {
+func stageLegacyLayout(t *testing.T, cfg Config, title string, authors []string, legacyAuthorDir, legacyEpub string) (*Book, book.File) {
 	t.Helper()
 
 	b := ingestStopped(t, cfg, title, authors...)
-	canonical := book.Location{EpubPath: b.EpubPath()}
+	canonical := book.File{Path: b.Path()}
 
 	legacyDir := filepath.Join(cfg.Root, legacyAuthorDir, fmt.Sprintf("%s (%d)", title, b.ID()))
 	if canonicalDir := filepath.Join(cfg.Root, canonical.Dir()); canonicalDir != legacyDir {
@@ -107,7 +107,7 @@ func TestOpenReindexesOnDrift(t *testing.T) {
 
 	book := ingestStopped(t, cfg, "Before")
 	const want = "A Completely Different And Much Longer Title"
-	writeFile(t, filepath.Join(cfg.Root, book.EpubPath()), buildTestEpub(t, want))
+	writeFile(t, filepath.Join(cfg.Root, book.Path()), buildTestEpub(t, want))
 
 	got, err := openLib(t, cfg).Get(book.ID())
 	if err != nil {
@@ -176,10 +176,10 @@ func TestRestartReconcilesTheDisk(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Get: %v", err)
 			}
-			if got.EpubPath() != canonical.EpubPath {
-				t.Errorf("EpubPath = %q, want %q", got.EpubPath(), canonical.EpubPath)
+			if got.Path() != canonical.Path {
+				t.Errorf("EpubPath = %q, want %q", got.Path(), canonical.Path)
 			}
-			if _, err := os.Stat(filepath.Join(cfg.Root, canonical.EpubPath)); err != nil {
+			if _, err := os.Stat(filepath.Join(cfg.Root, canonical.Path)); err != nil {
 				t.Errorf("canonical epub missing after restart: %v", err)
 			}
 			assertIndexMatchesStore(t, lib)
@@ -260,7 +260,7 @@ func TestDuplicateBookIDFailsOpenNamingBothPaths(t *testing.T) {
 	cfg := testConfig(t)
 	book := ingestStopped(t, cfg, "Twin")
 
-	src := filepath.Join(cfg.Root, filepath.Dir(book.EpubPath()))
+	src := filepath.Join(cfg.Root, filepath.Dir(book.Path()))
 	dst := filepath.Join(cfg.Root, "Copies", filepath.Base(src))
 	if err := os.MkdirAll(dst, 0755); err != nil {
 		t.Fatalf("mkdir copy: %v", err)
@@ -296,7 +296,7 @@ func TestBrokenBooksSettle(t *testing.T) {
 		{"corrupt epub", func(t *testing.T, cfg Config, b *Book) {
 			// store.Walk still sees a book: meta.toml is intact and an *.epub is
 			// present.
-			writeFile(t, filepath.Join(cfg.Root, b.EpubPath()), []byte("not a zip archive"))
+			writeFile(t, filepath.Join(cfg.Root, b.Path()), []byte("not a zip archive"))
 		}, true},
 		{"unstattable epub", func(t *testing.T, cfg Config, b *Book) {
 			breakEpub(t, b, cfg.Root)
@@ -318,7 +318,7 @@ func TestBrokenBooksSettle(t *testing.T) {
 				return
 			}
 
-			epub := filepath.Join(cfg.Root, b.EpubPath())
+			epub := filepath.Join(cfg.Root, b.Path())
 			if err := os.Remove(epub); err != nil {
 				t.Fatalf("remove broken epub: %v", err)
 			}

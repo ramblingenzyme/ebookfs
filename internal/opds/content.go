@@ -38,7 +38,7 @@ func (c *content) serveEpub(b *library.Book, w http.ResponseWriter, r *http.Requ
 	defer rd.Close()
 
 	name := b.Filename()
-	size := b.EpubSize()
+	size := b.Size()
 	w.Header().Set("Content-Type", mediaTypeEpub)
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
 

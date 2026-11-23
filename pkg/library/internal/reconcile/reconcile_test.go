@@ -15,18 +15,18 @@ import (
 func TestStoreDrifted(t *testing.T) {
 	tests := []struct {
 		name   string
-		change func(*testing.T, string, book.Location)
+		change func(*testing.T, string, book.File)
 	}{
-		{"new directory", func(t *testing.T, root string, _ book.Location) {
-			writeBookFiles(t, root, book.Location{EpubPath: filepath.Join("Other", "New (2)", "new.epub")})
+		{"new directory", func(t *testing.T, root string, _ book.File) {
+			writeBookFiles(t, root, book.File{Path: filepath.Join("Other", "New (2)", "new.epub")})
 		}},
-		{"removed directory", func(t *testing.T, root string, loc book.Location) {
+		{"removed directory", func(t *testing.T, root string, loc book.File) {
 			if err := os.RemoveAll(filepath.Join(root, loc.Dir())); err != nil {
 				t.Fatal(err)
 			}
 		}},
-		{"epub changed with same size", func(t *testing.T, root string, loc book.Location) {
-			path := filepath.Join(root, loc.EpubPath)
+		{"epub changed with same size", func(t *testing.T, root string, loc book.File) {
+			path := filepath.Join(root, loc.Path)
 			if err := os.WriteFile(path, []byte("xxxx"), 0644); err != nil {
 				t.Fatal(err)
 			}
@@ -35,8 +35,8 @@ func TestStoreDrifted(t *testing.T) {
 				t.Fatal(err)
 			}
 		}},
-		{"epub resized with same mtime", func(t *testing.T, root string, loc book.Location) {
-			path := filepath.Join(root, loc.EpubPath)
+		{"epub resized with same mtime", func(t *testing.T, root string, loc book.File) {
+			path := filepath.Join(root, loc.Path)
 			info, err := os.Stat(path)
 			if err != nil {
 				t.Fatal(err)
@@ -48,14 +48,14 @@ func TestStoreDrifted(t *testing.T) {
 				t.Fatal(err)
 			}
 		}},
-		{"epub renamed", func(t *testing.T, root string, loc book.Location) {
-			from := filepath.Join(root, loc.EpubPath)
+		{"epub renamed", func(t *testing.T, root string, loc book.File) {
+			from := filepath.Join(root, loc.Path)
 			to := filepath.Join(filepath.Dir(from), "renamed.epub")
 			if err := os.Rename(from, to); err != nil {
 				t.Fatal(err)
 			}
 		}},
-		{"sidecar changed", func(t *testing.T, root string, loc book.Location) {
+		{"sidecar changed", func(t *testing.T, root string, loc book.File) {
 			path := filepath.Join(root, loc.Dir(), "meta.toml")
 			if err := os.WriteFile(path, []byte("id = 1\nstatus = \"read\"\n"), 0644); err != nil {
 				t.Fatal(err)
@@ -99,7 +99,7 @@ func TestStoreDriftedCleanScanIsReusable(t *testing.T) {
 	}
 }
 
-func cleanStoreIndex(t *testing.T) (string, *store.Store, *index.Index, book.Location) {
+func cleanStoreIndex(t *testing.T) (string, *store.Store, *index.Index, book.File) {
 	t.Helper()
 	root := t.TempDir()
 	files := store.New(root)
@@ -107,21 +107,21 @@ func cleanStoreIndex(t *testing.T) (string, *store.Store, *index.Index, book.Loc
 	if err != nil {
 		t.Fatal(err)
 	}
-	loc := book.Location{EpubPath: filepath.Join("Author", "Title (1)", "book.epub")}
+	loc := book.File{Path: filepath.Join("Author", "Title (1)", "book.epub")}
 	writeBookFiles(t, root, loc)
 	info, err := files.Stat(loc)
 	if err != nil {
 		idx.Close()
 		t.Fatal(err)
 	}
-	if err := idx.Rebuild(nil, map[string]drift.PathInfo{loc.EpubPath: info}, 1); err != nil {
+	if err := idx.Rebuild(nil, map[string]drift.PathInfo{loc.Path: info}, 1); err != nil {
 		idx.Close()
 		t.Fatal(err)
 	}
 	return root, files, idx, loc
 }
 
-func writeBookFiles(t *testing.T, root string, loc book.Location) {
+func writeBookFiles(t *testing.T, root string, loc book.File) {
 	t.Helper()
 	bookDir := filepath.Join(root, loc.Dir())
 	if err := os.MkdirAll(bookDir, 0755); err != nil {

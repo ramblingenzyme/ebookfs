@@ -69,13 +69,15 @@ func (b *ImmutableBook) OpfSize() int64 { return b.inner.OpfSize }
 
 func (b *ImmutableBook) CoverSize() int64 { return b.inner.CoverSize }
 
-func (b *ImmutableBook) EpubPath() string { return b.inner.EpubPath }
+func (b *ImmutableBook) Path() string { return b.inner.Path }
+
+func (b *ImmutableBook) Format() Format { return b.inner.Format }
 
 func (b *ImmutableBook) Dir() string { return b.inner.Dir() }
 
 func (b *ImmutableBook) Filename() string { return b.inner.Filename() }
 
-func (b *ImmutableBook) EpubSize() int64 { return b.inner.EpubSize }
+func (b *ImmutableBook) Size() int64 { return b.inner.Size }
 
 func (b *ImmutableBook) DateAdded() time.Time { return b.inner.Meta.DateAdded }
 

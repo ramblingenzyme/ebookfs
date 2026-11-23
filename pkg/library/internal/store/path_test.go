@@ -15,10 +15,10 @@ func layoutStore() *Store { return New("") }
 func TestLayout(t *testing.T) {
 	s := layoutStore()
 
-	loc := s.Layout([]book.Author{{Name: "Alice"}}, "My Title", 1)
+	loc := s.Layout([]book.Author{{Name: "Alice"}}, "My Title", 1, book.FormatEPUB)
 	wantRel := filepath.Join("Alice/My Title (1)", "My Title - Alice.epub")
-	if loc.EpubPath != wantRel {
-		t.Errorf("EpubPath = %q, want %q", loc.EpubPath, wantRel)
+	if loc.Path != wantRel {
+		t.Errorf("EpubPath = %q, want %q", loc.Path, wantRel)
 	}
 }
 
@@ -44,18 +44,18 @@ func TestLayoutKeepsEachComponentInOneDirectory(t *testing.T) {
 		{"space", []book.Author{{Name: " "}}, "Title", 5, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			loc := s.Layout(tc.authors, tc.title, tc.id)
+			loc := s.Layout(tc.authors, tc.title, tc.id, book.FormatEPUB)
 			if tc.wantDir != "" {
-				if got := filepath.Dir(loc.EpubPath); got != tc.wantDir {
+				if got := filepath.Dir(loc.Path); got != tc.wantDir {
 					t.Errorf("directory = %q, want %q", got, tc.wantDir)
 				}
 				return
 			}
-			if strings.HasPrefix(loc.EpubPath, ".") || strings.Contains(loc.EpubPath, ".."+string(filepath.Separator)) {
-				t.Errorf("EpubPath %q leaves the library root", loc.EpubPath)
+			if strings.HasPrefix(loc.Path, ".") || strings.Contains(loc.Path, ".."+string(filepath.Separator)) {
+				t.Errorf("EpubPath %q leaves the library root", loc.Path)
 			}
-			if got := len(strings.Split(filepath.Dir(loc.EpubPath), string(filepath.Separator))); got != 2 {
-				t.Errorf("directory %q, want exactly two components", filepath.Dir(loc.EpubPath))
+			if got := len(strings.Split(filepath.Dir(loc.Path), string(filepath.Separator))); got != 2 {
+				t.Errorf("directory %q, want exactly two components", filepath.Dir(loc.Path))
 			}
 		})
 	}
@@ -100,9 +100,9 @@ func TestEpubFilename(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := epubFilename(tt.authors, tt.title)
+			got := bookFilename(tt.authors, tt.title, book.FormatEPUB)
 			if got != tt.want {
-				t.Errorf("epubFilename(%v, %q) = %q, want %q", tt.authors, tt.title, got, tt.want)
+				t.Errorf("bookFilename(%v, %q) = %q, want %q", tt.authors, tt.title, got, tt.want)
 			}
 		})
 	}

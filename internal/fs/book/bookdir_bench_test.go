@@ -56,8 +56,8 @@ func representativeBook(id int64, withCover bool) *library.Book {
 	}
 	libPath := "Le Guin, Ursula K/The Left Hand of Darkness (1042)"
 	epubName := "The Left Hand of Darkness - Ursula K. Le Guin.epub"
-	return util.WrapBook(book.NewBook(bib, book.Meta{ID: id, Status: "unread", Tags: []string{"sci-fi", "classic", "feminist"}}, book.Location{
-		EpubPath: filepath.Join(libPath, epubName),
+	return util.WrapBook(book.NewBook(bib, book.Meta{ID: id, Status: "unread", Tags: []string{"sci-fi", "classic", "feminist"}}, book.File{
+		Path: filepath.Join(libPath, epubName),
 	}))
 }
 

@@ -82,11 +82,11 @@ func reindex(files *store.Store, idx *index.Index, scan *storeScan) error {
 }
 
 type storeScan struct {
-	entries []book.Location
+	entries []book.File
 	info    map[string]drift.PathInfo
 }
 
-// storeDrifted compares path, size, and mtimes without parsing the epubs. It
+// storeDrifted compares path, size, and mtimes without parsing the files. It
 // returns the walk for reindex to reuse when a rebuild is needed.
 func storeDrifted(files *store.Store, idx *index.Index) (*storeScan, bool) {
 	entries, err := files.Walk()
@@ -102,7 +102,7 @@ func storeDrifted(files *store.Store, idx *index.Index) (*storeScan, bool) {
 			slog.Warn("reindex: could not stat, recording as unreadable", "path", e.Dir(), "error", err)
 			mt = drift.PathInfo{}
 		}
-		onDisk.info[e.EpubPath] = mt
+		onDisk.info[e.Path] = mt
 	}
 
 	indexed, err := idx.AllPathInfo()
@@ -151,7 +151,7 @@ func scanEntries(files *store.Store, scan *storeScan) *scanState {
 	return s
 }
 
-func scanEntry(files *store.Store, s *scanState, known map[string]drift.PathInfo, e book.Location) {
+func scanEntry(files *store.Store, s *scanState, known map[string]drift.PathInfo, e book.File) {
 	start := time.Now()
 	pi, statErr := pathInfo(files, known, e)
 	statDur := time.Since(start)
@@ -168,32 +168,32 @@ func scanEntry(files *store.Store, s *scanState, known map[string]drift.PathInfo
 		if id, ok := store.IDFromPath(e.Dir()); ok {
 			s.reserveID(id)
 		}
-		s.skip(e.EpubPath, pi)
+		s.skip(e.Path, pi)
 		s.recordDurations(statDur, metaDur, 0)
 		return
 	}
-	// Reserve the id even if the epub cannot be observed or parsed.
+	// Reserve the id even if the file cannot be observed or parsed.
 	s.reserveID(meta.ID)
 
 	if statErr != nil {
 		slog.Warn("reindex: skip, stat failed", "path", e.Dir(), "error", statErr)
-		s.skip(e.EpubPath, pi)
+		s.skip(e.Path, pi)
 		s.recordDurations(statDur, metaDur, 0)
 		return
 	}
 
 	start = time.Now()
-	bib, err := epub.Parse(files.AbsPath(e.EpubPath))
+	bib, err := epub.Parse(files.AbsPath(e.Path))
 	parseDur := time.Since(start)
 	if err != nil {
 		slog.Warn("reindex: skip, parse epub failed", "path", e.Dir(), "error", err)
-		s.skip(e.EpubPath, pi)
+		s.skip(e.Path, pi)
 		s.recordDurations(statDur, metaDur, parseDur)
 		return
 	}
 
 	b := book.NewBook(*bib, *meta, e)
-	b.EpubSize = pi.Size
+	b.Size = pi.Size
 	s.add(index.BookPath{Book: b, Info: pi})
 	s.recordDurations(statDur, metaDur, parseDur)
 }
@@ -201,21 +201,21 @@ func scanEntry(files *store.Store, s *scanState, known map[string]drift.PathInfo
 func moveToCanonical(files *store.Store, indexed []index.BookPath) {
 	for _, bp := range indexed {
 		b := bp.Book
-		canonical := files.Layout(b.Authors, b.Title, b.Meta.ID)
+		canonical := files.Layout(b.Authors, b.Title, b.Meta.ID, b.Format)
 		if canonical.Dir() != b.Dir() || canonical.Filename() != b.Filename() {
-			if err := files.Move(b.Location, canonical); err != nil {
+			if err := files.Move(b.File, canonical); err != nil {
 				slog.Warn("reindex: move to canonical location failed", "from", b.Dir(), "to", canonical.Dir(), "error", err)
 				continue
 			}
-			b.Location = canonical
+			b.File = canonical
 		}
 	}
 }
 
 // pathInfo reuses a successful drift-check observation, but retries an
 // unobserved path in case the file became readable before scanning.
-func pathInfo(files *store.Store, known map[string]drift.PathInfo, loc book.Location) (drift.PathInfo, error) {
-	if pi, ok := known[loc.EpubPath]; ok && !pi.IsUnobserved() {
+func pathInfo(files *store.Store, known map[string]drift.PathInfo, loc book.File) (drift.PathInfo, error) {
+	if pi, ok := known[loc.Path]; ok && !pi.IsUnobserved() {
 		return pi, nil
 	}
 	return files.Stat(loc)
@@ -275,7 +275,7 @@ func (s *scanState) recordDurations(stat, meta, parse time.Duration) {
 // names neither directory. Sorting keeps the reported pair stable.
 func (s *scanState) checkDuplicateIDs() error {
 	slices.SortFunc(s.indexed, func(a, b index.BookPath) int {
-		return strings.Compare(a.Book.EpubPath, b.Book.EpubPath)
+		return strings.Compare(a.Book.Path, b.Book.Path)
 	})
 	owners := make(map[int64]string, len(s.indexed))
 	for _, bp := range s.indexed {
@@ -283,9 +283,9 @@ func (s *scanState) checkDuplicateIDs() error {
 		if owner, dup := owners[id]; dup {
 			return fmt.Errorf("duplicate book id %d claimed by %q and %q: "+
 				"remove one directory, or change its id in meta.toml, then restart",
-				id, owner, bp.Book.EpubPath)
+				id, owner, bp.Book.Path)
 		}
-		owners[id] = bp.Book.EpubPath
+		owners[id] = bp.Book.Path
 	}
 	return nil
 }

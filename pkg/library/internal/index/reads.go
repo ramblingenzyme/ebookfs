@@ -40,12 +40,12 @@ func (idx *Index) AllPathInfo() (map[string]drift.PathInfo, error) {
 		// skipped_books, and nothing in the schema enforces that across tables.
 		// A path in both collapses in this map and still satisfies the caller's
 		// count comparison, masking real drift.
-		if _, dup := info[row.EpubPath]; dup {
-			return nil, fmt.Errorf("index inconsistency: %q recorded as both indexed and skipped", row.EpubPath)
+		if _, dup := info[row.FilePath]; dup {
+			return nil, fmt.Errorf("index inconsistency: %q recorded as both indexed and skipped", row.FilePath)
 		}
-		info[row.EpubPath] = drift.PathInfo{
-			Size:      row.EpubSize,
-			EpubMtime: fromUnixNano(row.EpubMtime),
+		info[row.FilePath] = drift.PathInfo{
+			Size:      row.FileSize,
+			Mtime:     fromUnixNano(row.FileMtime),
 			MetaSize:  row.MetaSize,
 			MetaMtime: fromUnixNano(row.MetaMtime),
 		}

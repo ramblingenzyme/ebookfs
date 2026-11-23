@@ -85,7 +85,7 @@ func TestIngestKeepsTheFirstOfRepeatedEntries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Edit: %v", err)
 	}
-	for _, p := range []string{got.EpubPath(), edited.EpubPath()} {
+	for _, p := range []string{got.Path(), edited.Path()} {
 		if dir, _, _ := strings.Cut(filepath.ToSlash(p), "/"); dir != "Ann Author" {
 			t.Errorf("epub path %q, want it under Ann Author/", p)
 		}

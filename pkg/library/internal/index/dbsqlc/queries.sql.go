@@ -193,15 +193,15 @@ func (q *Queries) DeletePendingOp(ctx context.Context, opID string) error {
 
 const getAllPathInfo = `-- name: GetAllPathInfo :many
 
-SELECT epub_path, epub_size, epub_mtime, meta_mtime, meta_size FROM books
+SELECT file_path, file_size, file_mtime, meta_mtime, meta_size FROM books
 UNION ALL
-SELECT epub_path, epub_size, epub_mtime, meta_mtime, meta_size FROM skipped_books
+SELECT file_path, file_size, file_mtime, meta_mtime, meta_size FROM skipped_books
 `
 
 type GetAllPathInfoRow struct {
-	EpubPath  string
-	EpubSize  int64
-	EpubMtime int64
+	FilePath  string
+	FileSize  int64
+	FileMtime int64
 	MetaMtime int64
 	MetaSize  int64
 }
@@ -217,9 +217,9 @@ func (q *Queries) GetAllPathInfo(ctx context.Context) ([]GetAllPathInfoRow, erro
 	for rows.Next() {
 		var i GetAllPathInfoRow
 		if err := rows.Scan(
-			&i.EpubPath,
-			&i.EpubSize,
-			&i.EpubMtime,
+			&i.FilePath,
+			&i.FileSize,
+			&i.FileMtime,
 			&i.MetaMtime,
 			&i.MetaSize,
 		); err != nil {
@@ -426,7 +426,7 @@ const getStats = `-- name: GetStats :one
 
 SELECT
     COUNT(*) AS books,
-    CAST(COALESCE(SUM(epub_size), 0) AS INTEGER) AS total_size,
+    CAST(COALESCE(SUM(file_size), 0) AS INTEGER) AS total_size,
     MAX(date_added) AS last_added,
     MAX(date_modified) AS last_modified,
     (SELECT COUNT(*) FROM authors) AS authors,
@@ -598,10 +598,10 @@ const insertBook = `-- name: InsertBook :exec
 
 INSERT INTO books (
     id, title, sort_title, pubdate, description, language, publisher, rights,
-    epub_path, cover_path, status, rating,
+    file_path, format, cover_path, status, rating,
     date_added, date_modified, series_id, series_index,
-    opf_size, cover_size, epub_size, epub_mtime, meta_mtime, meta_size
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    opf_size, cover_size, file_size, file_mtime, meta_mtime, meta_size
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertBookParams struct {
@@ -613,7 +613,8 @@ type InsertBookParams struct {
 	Language     string
 	Publisher    string
 	Rights       string
-	EpubPath     string
+	FilePath     string
+	Format       string
 	CoverPath    string
 	Status       string
 	Rating       float64
@@ -623,8 +624,8 @@ type InsertBookParams struct {
 	SeriesIndex  sql.NullString
 	OpfSize      int64
 	CoverSize    int64
-	EpubSize     int64
-	EpubMtime    int64
+	FileSize     int64
+	FileMtime    int64
 	MetaMtime    int64
 	MetaSize     int64
 }
@@ -644,7 +645,8 @@ func (q *Queries) InsertBook(ctx context.Context, arg InsertBookParams) error {
 		arg.Language,
 		arg.Publisher,
 		arg.Rights,
-		arg.EpubPath,
+		arg.FilePath,
+		arg.Format,
 		arg.CoverPath,
 		arg.Status,
 		arg.Rating,
@@ -654,8 +656,8 @@ func (q *Queries) InsertBook(ctx context.Context, arg InsertBookParams) error {
 		arg.SeriesIndex,
 		arg.OpfSize,
 		arg.CoverSize,
-		arg.EpubSize,
-		arg.EpubMtime,
+		arg.FileSize,
+		arg.FileMtime,
 		arg.MetaMtime,
 		arg.MetaSize,
 	)
@@ -774,23 +776,23 @@ func (q *Queries) InsertSeries(ctx context.Context, name string) error {
 }
 
 const insertSkippedBook = `-- name: InsertSkippedBook :exec
-INSERT INTO skipped_books (epub_path, epub_size, epub_mtime, meta_mtime, meta_size)
+INSERT INTO skipped_books (file_path, file_size, file_mtime, meta_mtime, meta_size)
 VALUES (?, ?, ?, ?, ?)
 `
 
 type InsertSkippedBookParams struct {
-	EpubPath  string
-	EpubSize  int64
-	EpubMtime int64
+	FilePath  string
+	FileSize  int64
+	FileMtime int64
 	MetaMtime int64
 	MetaSize  int64
 }
 
 func (q *Queries) InsertSkippedBook(ctx context.Context, arg InsertSkippedBookParams) error {
 	_, err := q.db.ExecContext(ctx, insertSkippedBook,
-		arg.EpubPath,
-		arg.EpubSize,
-		arg.EpubMtime,
+		arg.FilePath,
+		arg.FileSize,
+		arg.FileMtime,
 		arg.MetaMtime,
 		arg.MetaSize,
 	)
@@ -982,19 +984,19 @@ func (q *Queries) UpdateBookSeries(ctx context.Context, arg UpdateBookSeriesPara
 const upsertBook = `-- name: UpsertBook :exec
 INSERT INTO books (
     id, title, sort_title, pubdate, description, language, publisher, rights,
-    epub_path, cover_path, status, rating,
+    file_path, format, cover_path, status, rating,
     date_added, date_modified, series_id, series_index,
-    opf_size, cover_size, epub_size, epub_mtime, meta_mtime, meta_size
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    opf_size, cover_size, file_size, file_mtime, meta_mtime, meta_size
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     title=excluded.title, sort_title=excluded.sort_title, pubdate=excluded.pubdate,
     description=excluded.description, language=excluded.language,
     publisher=excluded.publisher, rights=excluded.rights,
-    epub_path=excluded.epub_path,
+    file_path=excluded.file_path, format=excluded.format,
     cover_path=excluded.cover_path, status=excluded.status, rating=excluded.rating,
     date_added=excluded.date_added, date_modified=excluded.date_modified,
     opf_size=excluded.opf_size, cover_size=excluded.cover_size,
-    epub_size=excluded.epub_size, epub_mtime=excluded.epub_mtime,
+    file_size=excluded.file_size, file_mtime=excluded.file_mtime,
     meta_mtime=excluded.meta_mtime, meta_size=excluded.meta_size
 `
 
@@ -1007,7 +1009,8 @@ type UpsertBookParams struct {
 	Language     string
 	Publisher    string
 	Rights       string
-	EpubPath     string
+	FilePath     string
+	Format       string
 	CoverPath    string
 	Status       string
 	Rating       float64
@@ -1017,8 +1020,8 @@ type UpsertBookParams struct {
 	SeriesIndex  sql.NullString
 	OpfSize      int64
 	CoverSize    int64
-	EpubSize     int64
-	EpubMtime    int64
+	FileSize     int64
+	FileMtime    int64
 	MetaMtime    int64
 	MetaSize     int64
 }
@@ -1033,7 +1036,8 @@ func (q *Queries) UpsertBook(ctx context.Context, arg UpsertBookParams) error {
 		arg.Language,
 		arg.Publisher,
 		arg.Rights,
-		arg.EpubPath,
+		arg.FilePath,
+		arg.Format,
 		arg.CoverPath,
 		arg.Status,
 		arg.Rating,
@@ -1043,8 +1047,8 @@ func (q *Queries) UpsertBook(ctx context.Context, arg UpsertBookParams) error {
 		arg.SeriesIndex,
 		arg.OpfSize,
 		arg.CoverSize,
-		arg.EpubSize,
-		arg.EpubMtime,
+		arg.FileSize,
+		arg.FileMtime,
 		arg.MetaMtime,
 		arg.MetaSize,
 	)

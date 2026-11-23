@@ -116,7 +116,7 @@ func (l *Library) Content(id int64) (EpubReader, error) {
 	if err != nil {
 		return nil, err
 	}
-	return epub.OpenReader(l.store.AbsPath(b.EpubPath), b.CoverPath)
+	return epub.OpenReader(l.store.AbsPath(b.Path), b.CoverPath)
 }
 
 // Edit applies e and returns the updated book. A title or author change moves
@@ -163,15 +163,15 @@ func (l *Library) Update(id int64, fn func(*Book) *Edits) (b *Book, changed bool
 	}
 
 	meta := applyMeta(current.Meta, e)
-	bib, err := epub.Rewrite(l.store.AbsPath(current.EpubPath), current, e)
+	bib, err := epub.Rewrite(l.store.AbsPath(current.Path), current, e)
 	if err != nil {
 		op.Cancel()
 		slog.Error("edit: rewrite failed", "book_id", current.Meta.ID, "title", current.Title, "error", err)
 		return nil, false, err
 	}
 
-	location := l.store.Layout(bib.Authors, bib.Title, meta.ID)
-	meta, mt, err := l.store.Update(current.Location, location, meta)
+	location := l.store.Layout(bib.Authors, bib.Title, meta.ID, current.Format)
+	meta, mt, err := l.store.Update(current.File, location, meta)
 	if err != nil {
 		slog.Error("edit: update failed", "book_id", current.Meta.ID, "title", current.Title, "error", err)
 		return nil, false, err
@@ -199,14 +199,14 @@ func (l *Library) Delete(id int64) error {
 	}
 
 	// Fire OnDeleting hook before deletion, while the book and epub still exist
-	l.hooks.onDeleting(l, book.NewImmutableBook(b), b.Location)
+	l.hooks.onDeleting(l, book.NewImmutableBook(b), b.File)
 
 	op, err := l.index.MarkPending()
 	if err != nil {
 		return err
 	}
 	// Store first: a leftover index row is healed by reindex.
-	err = l.store.Delete(b.Location)
+	err = l.store.Delete(b.File)
 	if err != nil {
 		slog.Error("delete: store delete failed", "book_id", id, "title", b.Title, "error", err)
 		return err
@@ -253,9 +253,9 @@ func applyMeta(m book.Meta, e Edits) book.Meta {
 	return m
 }
 
-func bookFromBib(bib book.Bib, meta book.Meta, loc book.Location, obs drift.PathInfo) *book.Book {
-	b := book.NewBook(bib, meta, loc)
-	b.EpubSize = obs.Size
+func bookFromBib(bib book.Bib, meta book.Meta, f book.File, obs drift.PathInfo) *book.Book {
+	b := book.NewBook(bib, meta, f)
+	b.Size = obs.Size
 	return b
 }
 
@@ -274,7 +274,7 @@ func (l *Library) WithSidecars(id int64, fn func(*os.Root) error) error {
 	if err != nil {
 		return err
 	}
-	root, err := l.store.OpenSidecars(b.Location)
+	root, err := l.store.OpenSidecars(b.File)
 	if err != nil {
 		return err
 	}

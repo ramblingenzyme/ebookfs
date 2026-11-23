@@ -23,7 +23,8 @@ type Book struct {
 	Language     string
 	Publisher    string
 	Rights       string
-	EpubPath     string
+	FilePath     string
+	Format       string
 	CoverPath    string
 	Status       string
 	Rating       float64
@@ -33,8 +34,8 @@ type Book struct {
 	SeriesIndex  sql.NullString
 	OpfSize      int64
 	CoverSize    int64
-	EpubSize     int64
-	EpubMtime    int64
+	FileSize     int64
+	FileMtime    int64
 	MetaMtime    int64
 	MetaSize     int64
 }
@@ -88,9 +89,9 @@ type Series struct {
 }
 
 type SkippedBook struct {
-	EpubPath  string
-	EpubSize  int64
-	EpubMtime int64
+	FilePath  string
+	FileSize  int64
+	FileMtime int64
 	MetaMtime int64
 	MetaSize  int64
 }

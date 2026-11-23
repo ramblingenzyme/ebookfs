@@ -15,16 +15,16 @@ func entryNames(entries []os.DirEntry) []string {
 	return names
 }
 
-// Regular files ending .epub and hooks-* scratch directories go. A directory
-// with the .epub suffix stays, so the type check is what keeps it.
+// Regular files with the upload-* prefix and hooks-* scratch directories go. A
+// directory with the upload- prefix stays, so the type check is what keeps it.
 func TestCleanInboxTemp(t *testing.T) {
 	dir := t.TempDir()
-	for _, name := range []string{"123.epub", "456.epub", "readme.txt"} {
+	for _, name := range []string{"upload-123", "upload-456", "readme.txt"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("data"), 0644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := os.Mkdir(filepath.Join(dir, "nested.epub"), 0755); err != nil {
+	if err := os.Mkdir(filepath.Join(dir, "upload-nested"), 0755); err != nil {
 		t.Fatal(err)
 	}
 	scratch := filepath.Join(dir, "hooks-123")
@@ -42,7 +42,7 @@ func TestCleanInboxTemp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := entryNames(entries), []string{"nested.epub", "readme.txt"}; !slices.Equal(got, want) {
+	if got, want := entryNames(entries), []string{"readme.txt", "upload-nested"}; !slices.Equal(got, want) {
 		t.Errorf("left %v, want %v", got, want)
 	}
 

@@ -186,7 +186,7 @@ func TestFacetHrefRoundTripsAwkwardNames(t *testing.T) {
 
 func TestEntryCarriesAcquisitionAndMetadata(t *testing.T) {
 	b := util.MakeMutableBook(7, "Dune", "Frank Herbert")
-	b.EpubPath = "Frank Herbert/Dune (7)/Dune.epub"
+	b.Path = "Frank Herbert/Dune (7)/Dune.epub"
 	b.CoverPath = "OEBPS/cover.jpg"
 	b.Meta.Tags = []string{"scifi"}
 	_, h := newFake(t, util.WrapBook(b))
@@ -228,8 +228,8 @@ func TestEntryCarriesAcquisitionAndMetadata(t *testing.T) {
 
 func TestDownloadSupportsRanges(t *testing.T) {
 	b := util.MakeMutableBook(7, "Dune", "Frank Herbert")
-	b.EpubPath = "Frank Herbert/Dune (7)/Dune.epub"
-	b.EpubSize = int64(len(epubBody))
+	b.Path = "Frank Herbert/Dune (7)/Dune.epub"
+	b.Size = int64(len(epubBody))
 	_, h := newFake(t, util.WrapBook(b))
 
 	w := get(t, h, Prefix+"/content/7/Dune.epub")

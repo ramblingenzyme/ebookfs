@@ -11,29 +11,32 @@ import (
 )
 
 // Layout is the single source of the naming convention, and ingest and move
-// both lay books down through it. Only EpubPath is set, relative to the
+// both lay books down through it. Only File.Path is set, relative to the
 // library root; the Store resolves it when it touches the filesystem.
 //
 // ponytail: neither component is capped at NAME_MAX's 255 bytes, so a
 // 90-character CJK title or a long author list fails ingest with "file name
-// too long". An edit that lengthens a title fails after the epub is rewritten,
+// too long". An edit that lengthens a title fails after the file is rewritten,
 // which leaves the index stale until the next startup. naming.ForFAT has the
 // same gap for the export filename. Truncate each component on a rune
-// boundary, keeping the " (id)" and ".epub" suffixes, once a real book hits it.
-func (s *Store) Layout(authors []book.Author, title string, id int64) book.Location {
+// boundary, keeping the " (id)" and extension suffixes, once a real book hits
+// it.
+func (s *Store) Layout(authors []book.Author, title string, id int64, format book.Format) book.File {
 	libPath := canonicalDir(authors, title, id)
-	filename := epubFilename(authors, title)
-	return book.Location{
-		EpubPath: filepath.Join(libPath, filename),
+	filename := bookFilename(authors, title, format)
+	return book.File{
+		Path:   filepath.Join(libPath, filename),
+		Format: format,
 	}
 }
 
-func epubFilename(authors []book.Author, title string) string {
+func bookFilename(authors []book.Author, title string, format book.Format) string {
 	fatTitle := naming.ForFAT(title)
+	ext := format.Extension()
 	if len(authors) == 0 {
-		return fmt.Sprintf("%s.epub", fatTitle)
+		return fatTitle + ext
 	}
-	return fmt.Sprintf("%s - %s.epub", fatTitle, naming.ForFAT(book.JoinAuthors(authors, book.AuthorSep)))
+	return fmt.Sprintf("%s - %s%s", fatTitle, naming.ForFAT(book.JoinAuthors(authors, book.AuthorSep)), ext)
 }
 
 func authorDirName(authors []book.Author) string {
@@ -41,7 +44,7 @@ func authorDirName(authors []book.Author) string {
 }
 
 // Both components are made path-safe, since a '/' in a title or an author name
-// would otherwise split one directory into two. epubFilename does its own,
+// would otherwise split one directory into two. bookFilename does its own,
 // stricter pass for the file itself.
 func canonicalDir(authors []book.Author, title string, id int64) string {
 	return filepath.Join(authorDirName(authors), fmt.Sprintf("%s (%d)", naming.PathSafe(title), id))

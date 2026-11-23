@@ -8,7 +8,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/drift"
 )
 
-func (s *Store) Ingest(epubPath string, loc book.Location, meta book.Meta) (book.Meta, drift.PathInfo, error) {
+func (s *Store) Ingest(srcPath string, loc book.File, meta book.Meta) (book.Meta, drift.PathInfo, error) {
 	dir := s.AbsPath(loc.Dir())
 
 	canonicalizeMeta(&meta)
@@ -17,7 +17,7 @@ func (s *Store) Ingest(epubPath string, loc book.Location, meta book.Meta) (book
 		return meta, drift.PathInfo{}, err
 	}
 
-	if err := atomicfs.Rename(epubPath, filepath.Join(dir, loc.Filename())); err != nil {
+	if err := atomicfs.Rename(srcPath, filepath.Join(dir, loc.Filename())); err != nil {
 		return meta, drift.PathInfo{}, err
 	}
 

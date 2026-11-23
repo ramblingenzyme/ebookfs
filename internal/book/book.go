@@ -1,8 +1,8 @@
 // Package book defines the internal book record types used by store, index,
 // and library, and Edits, the partial update to one.
 //
-// Edits spans the whole record as Book does: the fields the epub carries and
-// the fields the meta.toml sidecar holds.
+// Edits spans the whole record as Book does: the fields the file's metadata
+// carries and the fields the meta.toml sidecar holds.
 package book
 
 import (
@@ -12,6 +12,29 @@ import (
 	"strings"
 	"time"
 )
+
+// Format identifies the file format of a book.
+type Format string
+
+const (
+	FormatEPUB Format = "epub"
+)
+
+// Formats lists every recognized format, in detection priority order.
+var Formats = []Format{FormatEPUB}
+
+// Extension returns the file extension including the leading dot.
+func (f Format) Extension() string { return "." + string(f) }
+
+// FormatFromExtension maps a lowercase file extension (".epub") to a Format.
+func FormatFromExtension(ext string) (Format, bool) {
+	for _, f := range Formats {
+		if f.Extension() == strings.ToLower(ext) {
+			return f, true
+		}
+	}
+	return "", false
+}
 
 type Author struct {
 	ID       int64
@@ -85,7 +108,7 @@ type Contributor struct {
 	Role string
 }
 
-// Bib holds the bibliographic data parsed from the epub.
+// Bib holds the bibliographic data parsed from the book's file.
 type Bib struct {
 	Title        string
 	SortTitle    string
@@ -104,14 +127,17 @@ type Bib struct {
 	CoverSize    int64  // cover uncompressed size from zip central directory; 0 if unavailable
 }
 
-// Location identifies where a book lives on disk.
-type Location struct {
-	EpubPath string // relative to the store root
+// File identifies the book's file on disk: where it lives, what format it is,
+// and how large it is.
+type File struct {
+	Path   string // relative to the store root
+	Format Format
+	Size   int64 // file size on disk; 0 until observed
 }
 
-func (l Location) Dir() string { return filepath.Dir(l.EpubPath) }
+func (f File) Dir() string { return filepath.Dir(f.Path) }
 
-func (l Location) Filename() string { return filepath.Base(l.EpubPath) }
+func (f File) Filename() string { return filepath.Base(f.Path) }
 
 // Meta mirrors the meta.toml sidecar schema.
 type Meta struct {
@@ -123,18 +149,15 @@ type Meta struct {
 	Tags         []string  `toml:"custom_tags"` // toml key preserved for file compatibility
 }
 
-// Book is the complete record for a book in the library: where it lives
-// (Location), what it is (Bib), and its mutable sidecar state (Meta).
+// Book is the complete record for a book in the library: its file (File),
+// what it says about itself (Bib), and its mutable sidecar state (Meta).
 type Book struct {
-	Location
+	File
 	Bib
 	Meta Meta
-
-	// EpubSize is the epub file's size on disk.
-	EpubSize int64
 }
 
-func NewBook(bib Bib, meta Meta, loc Location) *Book {
+func NewBook(bib Bib, meta Meta, f File) *Book {
 	if bib.Authors == nil {
 		bib.Authors = []Author{}
 	} else {
@@ -157,7 +180,7 @@ func NewBook(bib Bib, meta Meta, loc Location) *Book {
 	if meta.Tags == nil {
 		meta.Tags = []string{}
 	}
-	return &Book{Location: loc, Bib: bib, Meta: meta}
+	return &Book{File: f, Bib: bib, Meta: meta}
 }
 
 // FirstOf returns a copy of xs that keeps only the first element for each key.
