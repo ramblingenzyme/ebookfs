@@ -182,13 +182,15 @@ func scanEntry(files *store.Store, s *scanState, known map[string]drift.PathInfo
 		return
 	}
 
-	start = time.Now()
-	f, ok := formats.ByFormat(e.Format)
-	if !ok {
-		slog.Warn("reindex: skip, unknown format", "path", e.Dir(), "format", e.Format)
+	f, err := formats.ByFormat(e.Format)
+	if err != nil {
+		slog.Warn("reindex: skip", "path", e.Dir(), "error", err)
 		s.skip(e.Path, pi)
+		s.recordDurations(statDur, metaDur, 0)
 		return
 	}
+
+	start = time.Now()
 	bib, err := f.Parse(files.AbsPath(e.Path))
 	parseDur := time.Since(start)
 	if err != nil {

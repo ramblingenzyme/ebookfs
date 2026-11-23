@@ -1,12 +1,12 @@
 package epub
 
 import (
-	"github.com/ramblingenzyme/ebookfs/internal/book"
-	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/formats"
-	epubfile "github.com/ramblingenzyme/ebookfs/pkg/epub"
-)
+	"errors"
 
-const mediaType = "application/epub+zip"
+	"github.com/ramblingenzyme/ebookfs/internal/book"
+	epubfile "github.com/ramblingenzyme/ebookfs/pkg/epub"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/formats"
+)
 
 // epubFormat implements formats.Format for EPUB files.
 type epubFormat struct{}
@@ -15,17 +15,21 @@ func init() {
 	formats.Register(epubFormat{})
 }
 
-func (epubFormat) Format() book.Format       { return book.FormatEPUB }
-func (epubFormat) Extension() string          { return ".epub" }
-func (epubFormat) MediaType() string          { return mediaType }
+func (epubFormat) Format() book.Format { return book.FormatEPUB }
 
 func (epubFormat) Detect(path string) (bool, error) {
 	f, err := epubfile.OpenFile(path)
-	if err != nil {
+	switch {
+	case err == nil:
+		f.Close()
+		return true, nil
+	case errors.Is(err, epubfile.ErrNotEpub):
 		return false, nil
+	case formats.IsIO(err):
+		return false, err
+	default:
+		return true, nil
 	}
-	f.Close()
-	return true, nil
 }
 
 func (epubFormat) Parse(path string) (*book.Bib, error) {

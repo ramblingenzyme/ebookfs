@@ -39,7 +39,7 @@ func (c *content) serveEpub(b *library.Book, w http.ResponseWriter, r *http.Requ
 
 	name := b.Filename()
 	size := b.Size()
-	w.Header().Set("Content-Type", mediaType(b.Format()))
+	w.Header().Set("Content-Type", b.Format().MediaType())
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
 
 	if size > 0 {

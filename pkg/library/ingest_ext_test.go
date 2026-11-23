@@ -102,6 +102,32 @@ func TestIngestRejectsAFileThatIsNotAnEpub(t *testing.T) {
 	}
 }
 
+// Both are zips. Only the one declaring the epub mimetype is a broken epub;
+// the other belongs to no format.
+func TestIngestTellsABrokenEpubFromAnotherZip(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		drop []string
+		want error
+	}{
+		{"epub missing its container", []string{"META-INF/container.xml"}, library.ErrInvalidBook},
+		{"zip with neither entry", []string{"META-INF/container.xml", epubtest.MimetypePath}, library.ErrUnknownFormat},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			entries := slices.DeleteFunc(epubtest.BaseEntries(epubtest.OPF3), func(e epubtest.Entry) bool {
+				return slices.Contains(tc.drop, e.Name)
+			})
+			data, err := os.ReadFile(epubtest.WriteEpub(t, entries))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := tryIngest(t, openTestLibrary(t), data); !errors.Is(err, tc.want) {
+				t.Fatalf("ingest err = %v, want %v", err, tc.want)
+			}
+		})
+	}
+}
+
 // TestIngestPreservesAllMetadataFields verifies that all metadata fields
 // survive the parse → index → query flow. This catches bugs where a field
 // is forgotten during translation between layers.

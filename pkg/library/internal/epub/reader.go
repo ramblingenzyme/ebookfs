@@ -1,17 +1,8 @@
 package epub
 
 import (
-	"os"
-
-	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/formats"
 	epubfile "github.com/ramblingenzyme/ebookfs/pkg/epub"
-)
-
-var (
-	ErrContainer       = epubfile.ErrContainer
-	ErrNoRootfile      = epubfile.ErrNoRootfile
-	ErrRootfileMissing = epubfile.ErrRootfileMissing
-	ErrNotEpub         = epubfile.ErrNotEpub
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/formats"
 )
 
 // coverPath is taken from the index so that opening a reader never parses the
@@ -29,17 +20,6 @@ func OpenReader(path, coverPath string) (*reader, error) {
 		return nil, err
 	}
 	return &reader{File: f, coverPath: coverPath}, nil
-}
-
-// OpenReaderFromFile opens the epub from an already-open file. The caller
-// retains ownership of f; on error, f is left open. The path is used only for
-// error messages and may be empty.
-func OpenReaderFromFile(f *os.File, path, coverPath string) (*reader, error) {
-	ef, err := epubfile.OpenFromFile(f, path)
-	if err != nil {
-		return nil, err
-	}
-	return &reader{File: ef, coverPath: coverPath}, nil
 }
 
 func (r *reader) ReadAt(p []byte, off int64) (int, error) {
@@ -64,6 +44,7 @@ func (r *reader) OPF() ([]byte, error) {
 }
 
 func (r *reader) Cover() ([]byte, error) {
+	// Checked first, so a closed reader returns ErrClosed, not ErrNoCover.
 	if r.Closed() {
 		return nil, formats.ErrClosed
 	}

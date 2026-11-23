@@ -24,6 +24,9 @@ type Facet = index.Facet
 type Author = book.Author
 type Contributor = book.Contributor
 type Series = book.SeriesRef
+type Format = book.Format
+
+const FormatEPUB = book.FormatEPUB
 
 // Reader is an open book file. It shows the book as it was when opened.
 type Reader = formats.Reader

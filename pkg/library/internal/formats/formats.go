@@ -5,7 +5,9 @@ package formats
 
 import (
 	"errors"
+	"fmt"
 	"io"
+	"io/fs"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
@@ -23,10 +25,6 @@ var ErrClosed = errors.New("file is closed")
 // ErrNoCover is returned by Reader.Cover when the book has no cover.
 var ErrNoCover = errors.New("no cover")
 
-// ErrUnsupported means the format does not support this operation (e.g.,
-// rewriting metadata for a format that lacks in-place edit support).
-var ErrUnsupported = errors.New("format does not support this operation")
-
 // ErrUnknownFormat means no registered format detected the file.
 var ErrUnknownFormat = errors.New("unrecognized file format")
 
@@ -34,13 +32,26 @@ var ErrUnknownFormat = errors.New("unrecognized file format")
 // invalid for it.
 var ErrInvalidBook = errors.New("invalid book file")
 
+// ErrUnsupported means the format does not support this operation.
+var ErrUnsupported = errors.New("format does not support this operation")
+
+// IsIO reports whether err came from reading the file rather than from its
+// contents. pkg/epub passes I/O failures through unwrapped, so they keep their
+// *fs.PathError.
+func IsIO(err error) bool {
+	var pe *fs.PathError
+	return errors.As(err, &pe)
+}
+
 // Format encapsulates the operations that differ per book-file format.
 type Format interface {
 	// Format returns the enum value that identifies this format.
 	Format() book.Format
 
 	// Detect reports whether path is a file of this format. Implementations
-	// read only enough of the file to distinguish it from other formats.
+	// read only enough of the file to distinguish it from other formats. A
+	// file of this format that is broken still reports true, so Parse can
+	// name the fault. The error is for I/O only.
 	//
 	// ponytail: consider taking io.ReaderAt instead of a path, so the
 	// registry does not open the file repeatedly. Parse must match.
@@ -56,40 +67,35 @@ type Format interface {
 	// OpenReader opens the file at path for content access. coverPath is
 	// Bib.CoverPath, or "" if the book has no cover.
 	OpenReader(path, coverPath string) (Reader, error)
-
-	// Extension returns the file extension including the leading dot (".epub").
-	Extension() string
-
-	// MediaType returns the MIME type for this format.
-	MediaType() string
 }
 
 var registry []Format
 
 // Register adds a format implementation. Called from init() in format packages.
+//
+// ponytail: init() order follows the import graph, so Detect's priority is
+// implicit. Replace with an explicit ordered list once a second zip-based
+// format (cbz) would also accept an epub.
 func Register(f Format) {
 	registry = append(registry, f)
 }
 
-// All returns the registered formats in priority order (extension preference).
-func All() []Format { return registry }
-
-// ByFormat returns the Format implementation for the given enum value.
-func ByFormat(bf book.Format) (Format, bool) {
+// ByFormat returns the Format implementation for the given enum value, or an
+// error wrapping ErrUnknownFormat if none is registered.
+func ByFormat(bf book.Format) (Format, error) {
 	for _, f := range registry {
 		if f.Format() == bf {
-			return f, true
+			return f, nil
 		}
 	}
-	return nil, false
+	return nil, fmt.Errorf("%w: %s", ErrUnknownFormat, bf)
 }
 
-// Detect iterates registered formats and returns the first whose Detect
-// reports true. Extension is used as a hint to order the check.
+// Detect returns the first registered format whose Detect accepts path. Order
+// is registration order, so a format whose check is stricter registers before
+// a looser one that also accepts its files.
 func Detect(path string) (Format, error) {
-	ext := extensionOf(path)
-	ordered := orderedBy(ext)
-	for _, f := range ordered {
+	for _, f := range registry {
 		ok, err := f.Detect(path)
 		if err != nil {
 			return nil, err
@@ -99,43 +105,4 @@ func Detect(path string) (Format, error) {
 		}
 	}
 	return nil, ErrUnknownFormat
-}
-
-func extensionOf(path string) string {
-	for i := len(path) - 1; i >= 0; i-- {
-		if path[i] == '.' {
-			return toLower(path[i:])
-		}
-		if path[i] == '/' || path[i] == '\\' {
-			break
-		}
-	}
-	return ""
-}
-
-func toLower(s string) string {
-	b := []byte(s)
-	for i := range b {
-		if b[i] >= 'A' && b[i] <= 'Z' {
-			b[i] += 32
-		}
-	}
-	return string(b)
-}
-
-// orderedBy returns formats with the given extension first, then the rest.
-func orderedBy(ext string) []Format {
-	if ext == "" {
-		return registry
-	}
-	ordered := make([]Format, 0, len(registry))
-	var rest []Format
-	for _, f := range registry {
-		if f.Extension() == ext {
-			ordered = append(ordered, f)
-		} else {
-			rest = append(rest, f)
-		}
-	}
-	return append(ordered, rest...)
 }

@@ -7,7 +7,21 @@ import (
 	"time"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/formats"
 )
+
+// store.Walk finds files by book.Formats, but reading them goes through the
+// registry. A format missing from the registry is skipped at every reindex.
+func TestEveryFormatIsRegistered(t *testing.T) {
+	for _, f := range book.Formats {
+		if _, err := formats.ByFormat(f); err != nil {
+			t.Errorf("%s: %v", f, err)
+		}
+		if f.MediaType() == "" {
+			t.Errorf("%s: no media type", f)
+		}
+	}
+}
 
 // Every case starts from the same Meta, so what a nil edit leaves alone is
 // checked alongside what a set one changes.

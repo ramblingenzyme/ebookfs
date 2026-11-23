@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`epub`, a public package for reading and writing EPUB metadata.** `github.com/ramblingenzyme/ebookfs/pkg/epub` imports nothing of ebookfs. `Open` parses a book's package document into exported fields; `Save` writes back only what moved, leaving the rest of the archive byte for byte. `OpenFile` stops at the zip and OCF container for callers that only need entries. See DECISIONS.md #25.
 
+- **`Book.Format()` and `library.Format`.** Each book reports its file format, comparable against `library.FormatEPUB`. `Format.MediaType()` returns the format's IANA media type, `application/epub+zip` for EPUB. The index records each book's format, so the first startup after upgrading reindexes.
+
 - **`Library.Get(id)`.** Returns one book by id, or an error wrapping `ErrBookNotFound`. `Content`, `Edit` and `Delete` were already id-addressed; reading one book was the gap.
 - **`library.Open` takes functional options.** `Open(cfg Config, opts ...Option)` replaces `Open(cfg Config, forceReindex bool)`, with `WithForceReindex()` as the first option. A bare `false` at the call site said nothing, and options are how the planned extension points (ingest hooks, subscribers, metadata handlers) are added without changing the signature again.
 
@@ -35,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Ingest hooks.** `library.Hook` is a unified interface for observing and amending library operations. Embed `library.HookBase` and override only the phases you need. Pipeline phases (`PreParse`, `PreCommit`) run during ingest and can abort it; event phases (`OnIngested`, `OnEdited`, `OnDeleting`, `OnDeleted`) fire around edits and deletes. Register with `Library.AddHook(h Hook)`, which calls the hook's `Setup` before registering. Hooks run in registration order; panics are recovered.
 
 ### Fixed
+
+- **A zip that is not an epub reports `ErrNotEpub`.** Opening a `.cbz` or other plain zip with `pkg/epub` failed with `ErrContainer`, which pointed at a broken epub.
 
 - **Write-path durability for renames and crash recovery.** Atomic renames now fsync both parent directories before returning, and directories created for them fsync their own parents, preventing a crash from losing a rename the caller was told succeeded. A failed directory fsync is logged rather than returned, since the rename has already happened. This covers epub saves, metadata writes, ingest moves, sidecar writes, and kosync mapping updates. `library.WriteSidecarFile` gives callers already holding a sidecar root the same write as `Library.WriteSidecar`. Stale `.ebookfs-*.tmp` files in book directories, left by epub and `meta.toml` writes, are now cleaned up on startup, instead of only sweeping the inbox temp directory. A crash mid-save previously left these behind forever.
 
@@ -55,6 +59,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sidecar access no longer recreates a deleted book directory.** A kepub stat or sidecar read for a book removed outside ebookfs left an empty `Author/Title (id)/.sidecar/` behind.
 
 ### Changed
+
+- **`EpubReader` is now `Reader`, and book paths and sizes drop the "Epub" prefix.** `Library.Content` and the `openFile` argument of `OnIngested`, `OnEdited` and `OnDeleting` return a `library.Reader`, which has no `OPF()` method. `Book.EpubPath()` and `Book.EpubSize()` are now `Path()` and `Size()`. `library.ErrClosed` and `ErrNoCover` are no longer the `pkg/epub` values, so a reader's errors match only the `library` names.
 
 - **One startup lifecycle for every frontend.** `internal/frontend` holds a three-method interface the 9P and OPDS servers implement, and a `Run` that starts them, waits on a context, and shuts them all down against a shared deadline. A frontend that fails to bind now takes the process down instead of being logged while the rest keep serving: a binary answering 9P with its catalog port dead looks healthy to init. `SetupServer` on both frontends is now `New`, taking a package-level `Config` in place of positional parameters, and `Server.Start` is now `Server.Serve`, carrying no listen address, since it blocks and Go reads `Start` as returning immediately. See DECISIONS.md #26.
 
@@ -83,6 +89,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Ingest refuses a package document over 16 MiB.** A zip entry's declared size is whatever the file says, so a small upload could inflate its package document to gigabytes in memory.
 
 ### Removed
+
+- **`library.ErrNotEpub`, `ErrContainer`, `ErrNoRootfile` and `ErrRootfileMissing`.** Ingest now reports a file no format recognizes as `ErrUnknownFormat`, and an epub with a broken container or package document as `ErrInvalidBook`. The error message still names the specific fault.
 
 - **`ctl reindex`.** Use `--reindex`, or let startup rebuild when drift detection finds the index and store disagreeing. Run live it moved book directories while the 9P tree kept serving the old names, leaving registry and store disagreeing until restart.
 

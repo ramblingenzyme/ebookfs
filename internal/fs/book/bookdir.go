@@ -80,7 +80,7 @@ func NewBookDir(f *fs.FS, lib ContentReader, edit func(int64, library.Edits) (*l
 		d.Book,
 	))
 
-	if book.Format() == "epub" {
+	if book.Format() == library.FormatEPUB {
 		d.StaticDir.AddChild(newOPFFile(
 			newStat(f, "opf", 0444),
 			lib,

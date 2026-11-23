@@ -78,6 +78,9 @@ func (l *Library) ingestPath(srcPath string) (*Book, error) {
 	}
 	bib, err := f.Parse(processedPath)
 	if err != nil {
+		if formats.IsIO(err) {
+			return nil, err
+		}
 		return nil, fmt.Errorf("%w: %s", formats.ErrInvalidBook, err)
 	}
 

@@ -211,8 +211,8 @@ func TestEntryCarriesAcquisitionAndMetadata(t *testing.T) {
 		switch l.Rel {
 		case "http://opds-spec.org/acquisition/open-access":
 			acquisition = l.Href
-			if l.Type != mediaType(book.FormatEPUB) {
-				t.Errorf("acquisition type = %q, want %q", l.Type, mediaType(book.FormatEPUB))
+			if l.Type != "application/epub+zip" {
+				t.Errorf("acquisition type = %q, want %q", l.Type, "application/epub+zip")
 			}
 		case "http://opds-spec.org/image":
 			cover = l.Href
@@ -239,7 +239,7 @@ func TestDownloadSupportsRanges(t *testing.T) {
 	if got := w.Body.String(); got != epubBody {
 		t.Errorf("body = %q", got)
 	}
-	if got := w.Header().Get("Content-Type"); got != mediaType(book.FormatEPUB) {
+	if got := w.Header().Get("Content-Type"); got != "application/epub+zip" {
 		t.Errorf("content type = %q", got)
 	}
 	if got := w.Header().Get("Content-Disposition"); !strings.Contains(got, "Dune.epub") {

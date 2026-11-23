@@ -80,7 +80,7 @@ func toPublication(b *library.Book) opds.Publication {
 	p.Acquire(opds.Acquisition{
 		Rel:  opds.AcquireOpenAccess,
 		Href: contentPath(id, b.Filename()),
-		Type: mediaType(b.Format()),
+		Type: b.Format().MediaType(),
 	})
 
 	return *p

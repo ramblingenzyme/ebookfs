@@ -49,9 +49,6 @@ func OpenFromFile(f *os.File, path string) (_ *File, err error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := a.validate(); err != nil {
-		return nil, err
-	}
 	return &File{path: path, f: f, a: a}, nil
 }
 

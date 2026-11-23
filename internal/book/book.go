@@ -20,11 +20,19 @@ const (
 	FormatEPUB Format = "epub"
 )
 
-// Formats lists every recognized format, in detection priority order.
+// Formats lists every recognized format.
 var Formats = []Format{FormatEPUB}
 
 // Extension returns the file extension including the leading dot.
 func (f Format) Extension() string { return "." + string(f) }
+
+var mediaTypes = map[Format]string{
+	FormatEPUB: "application/epub+zip",
+}
+
+// MediaType returns the format's IANA media type, or "" for an unrecognized
+// format.
+func (f Format) MediaType() string { return mediaTypes[f] }
 
 // FormatFromExtension maps a lowercase file extension (".epub") to a Format.
 func FormatFromExtension(ext string) (Format, bool) {

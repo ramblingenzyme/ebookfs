@@ -117,9 +117,9 @@ func (l *Library) Content(id int64) (Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	f, ok := formats.ByFormat(b.Format)
-	if !ok {
-		return nil, fmt.Errorf("%w: %s", formats.ErrUnknownFormat, b.Format)
+	f, err := formats.ByFormat(b.Format)
+	if err != nil {
+		return nil, err
 	}
 	return f.OpenReader(l.store.AbsPath(b.Path), b.CoverPath)
 }
@@ -162,18 +162,18 @@ func (l *Library) Update(id int64, fn func(*Book) *Edits) (b *Book, changed bool
 		return nil, false, v
 	}
 
+	impl, err := formats.ByFormat(current.Format)
+	if err != nil {
+		return nil, false, err
+	}
+
 	op, err := l.index.MarkPending()
 	if err != nil {
 		return nil, false, err
 	}
 
 	meta := applyMeta(current.Meta, e)
-	fmt2, ok := formats.ByFormat(current.Format)
-	if !ok {
-		op.Cancel()
-		return nil, false, fmt.Errorf("%w: %s", formats.ErrUnknownFormat, current.Format)
-	}
-	bib, err := fmt2.Rewrite(l.store.AbsPath(current.Path), current, e)
+	bib, err := impl.Rewrite(l.store.AbsPath(current.Path), current, e)
 	if err != nil {
 		op.Cancel()
 		slog.Error("edit: rewrite failed", "book_id", current.Meta.ID, "title", current.Title, "error", err)

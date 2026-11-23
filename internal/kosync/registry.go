@@ -244,13 +244,13 @@ func (r *docRegistry) snapshot() map[string]int64 {
 }
 
 func computeDocumentID(book *library.Book, openFile func() (library.Reader, error)) (string, error) {
-	epub, err := openFile()
+	r, err := openFile()
 	if err != nil {
 		return "", err
 	}
-	defer epub.Close()
+	defer r.Close()
 
-	return PartialMD5(epub, book.Size())
+	return PartialMD5(r, book.Size())
 }
 
 func readSidecar(sidecars *os.Root) (*SidecarData, error) {
