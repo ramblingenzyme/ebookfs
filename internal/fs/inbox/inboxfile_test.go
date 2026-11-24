@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ramblingenzyme/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
+	"github.com/ramblingenzyme/go9p/proto"
 )
 
 // Close deadlocked when an InboxFile had a real parent: it held the file's

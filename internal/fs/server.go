@@ -8,14 +8,14 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/ramblingenzyme/go9p"
-	"github.com/ramblingenzyme/go9p/fs"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/ctl"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/inbox"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/views"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
+	"github.com/ramblingenzyme/go9p"
+	"github.com/ramblingenzyme/go9p/fs"
 )
 
 type Server struct {

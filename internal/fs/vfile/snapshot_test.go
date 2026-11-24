@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/ramblingenzyme/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
+	"github.com/ramblingenzyme/go9p/proto"
 )
 
 func newTestSnapshotFile(t *testing.T, data []byte) *SnapshotFile {

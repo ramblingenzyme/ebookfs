@@ -4,8 +4,8 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/ramblingenzyme/go9p/proto"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
+	"github.com/ramblingenzyme/go9p/proto"
 )
 
 const maxFieldFileSize = 1 << 20 // 1 MiB

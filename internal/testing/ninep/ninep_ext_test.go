@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ramblingenzyme/ebookfs/internal/testing/ninep"
 	"github.com/ramblingenzyme/go9p"
 	"github.com/ramblingenzyme/go9p/fs"
 	"github.com/ramblingenzyme/go9p/proto"
-	"github.com/ramblingenzyme/ebookfs/internal/testing/ninep"
 )
 
 func serveTree(t *testing.T, root *fs.StaticDir) *ninep.Conn {

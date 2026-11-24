@@ -6,8 +6,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ramblingenzyme/go9p/fs"
 	"github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/go9p/fs"
 )
 
 func MakeBook(id int64, title string, authors ...string) *book.ImmutableBook {

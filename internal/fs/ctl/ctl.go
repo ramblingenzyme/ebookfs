@@ -1,8 +1,8 @@
 package ctl
 
 import (
-	"github.com/ramblingenzyme/go9p/fs"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
+	"github.com/ramblingenzyme/go9p/fs"
 )
 
 // ctlReadHint is all a read returns. A command's result goes to the log file,

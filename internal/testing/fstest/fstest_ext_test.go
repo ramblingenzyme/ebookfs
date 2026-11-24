@@ -10,9 +10,9 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
 	"github.com/ramblingenzyme/go9p/fs"
 	"github.com/ramblingenzyme/go9p/proto"
-	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
 )
 
 func newFS(t *testing.T) *fs.FS {
