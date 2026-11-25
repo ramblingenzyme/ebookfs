@@ -63,7 +63,9 @@ func newHookedRegistry(t *testing.T) (*library.Library, *BookRegistry, *titleVie
 	reg := NewBookRegistry(util.NewTestFS(t), lib)
 	view := &titleView{}
 	reg.AddView(view)
-	lib.AddHook(reg)
+	if err := lib.AddHook(reg); err != nil {
+		t.Fatal(err)
+	}
 	return lib, reg, view
 }
 

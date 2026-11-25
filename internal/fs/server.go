@@ -94,24 +94,20 @@ func New(lib Library, cfg Config) (*Server, error) {
 	}
 	reg.Load(books...)
 
-	root.AddChild(inbox.NewInboxDir(ebookfs, lib))
-	root.AddChild(allBooks)
-	root.AddChild(byAuthor)
-	root.AddChild(byID)
-	root.AddChild(bySeries)
-	root.AddChild(bySubjects)
-	root.AddChild(byTag)
-	root.AddChild(byStatus)
-	root.AddChild(recent)
-	root.AddChild(stats)
-
 	cmdLog := ctl.NewCommandLog(100)
-	root.AddChild(ctl.NewCtlFile(ebookfs, lib, cmdLog))
-	root.AddChild(ctl.NewLogFile(ebookfs, cmdLog))
-	root.AddChild(ctl.NewHelpFile(ebookfs))
-
 	search := views.NewSearchDir(ebookfs, reg, cfg.SearchTTL, cfg.SearchMaxHandles)
-	root.AddChild(search)
+	for _, n := range []fs.FSNode{
+		inbox.NewInboxDir(ebookfs, lib),
+		allBooks, byAuthor, byID, bySeries, bySubjects, byTag, byStatus, recent, stats,
+		ctl.NewCtlFile(ebookfs, lib, cmdLog),
+		ctl.NewLogFile(ebookfs, cmdLog),
+		ctl.NewHelpFile(ebookfs),
+		search,
+	} {
+		if err := root.AddChild(n); err != nil {
+			return nil, fmt.Errorf("building root: %w", err)
+		}
+	}
 
 	return &Server{
 		ebookfs:  ebookfs,

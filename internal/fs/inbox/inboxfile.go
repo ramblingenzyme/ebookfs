@@ -78,7 +78,7 @@ func (i *InboxFile) Close(fid uint64) error {
 
 	parent := i.Parent()
 	if md, ok := parent.(fs.ModDir); ok {
-		md.DeleteChild(i.Stat().Name)
+		_ = md.DeleteChild(i.Stat().Name)
 	}
 
 	b, err := h.Ingest()

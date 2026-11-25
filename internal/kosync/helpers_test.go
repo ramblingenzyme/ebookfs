@@ -129,7 +129,9 @@ func (e *testEnv) putProgress(t *testing.T, body map[string]any) (map[string]any
 	w := httptest.NewRecorder()
 	e.handler.ServeHTTP(w, req)
 	var resp map[string]any
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decoding response %q: %v", w.Body, err)
+	}
 	return resp, w.Code
 }
 
@@ -143,7 +145,9 @@ func (e *testEnv) getProgress(t *testing.T, docID string) (map[string]any, int) 
 	w := httptest.NewRecorder()
 	e.handler.ServeHTTP(w, req)
 	var resp map[string]any
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decoding response %q: %v", w.Body, err)
+	}
 	return resp, w.Code
 }
 

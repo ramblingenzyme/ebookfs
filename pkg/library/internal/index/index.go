@@ -233,7 +233,7 @@ func (idx *Index) withTx(fn func(*dbsqlc.Queries, *sql.Tx) error) error {
 	}
 	q := dbsqlc.New(tx)
 	if err := fn(q, tx); err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return err
 	}
 	return tx.Commit()

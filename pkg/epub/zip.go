@@ -217,8 +217,8 @@ func writeMimetype(zw *zip.Writer, orig *zip.File) error {
 	w, err := zw.CreateRaw(&zip.FileHeader{
 		Name:               mimetypePath,
 		Method:             zip.Store,
-		ModifiedTime:       orig.ModifiedTime,
-		ModifiedDate:       orig.ModifiedDate,
+		ModifiedTime:       orig.ModifiedTime, //nolint:staticcheck // CreateRaw ignores Modified.
+		ModifiedDate:       orig.ModifiedDate, //nolint:staticcheck // CreateRaw ignores Modified.
 		CRC32:              crc32.ChecksumIEEE(data),
 		CompressedSize64:   uint64(len(data)),
 		UncompressedSize64: uint64(len(data)),

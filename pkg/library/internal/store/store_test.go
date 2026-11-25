@@ -154,7 +154,7 @@ func TestDeleteWithReadOnlyDirError(t *testing.T) {
 		t.Skip("cannot chmod book dir:", err)
 	}
 	// Restore permissions so TempDir cleanup succeeds.
-	t.Cleanup(func() { os.Chmod(dir, 0755) })
+	t.Cleanup(func() { _ = os.Chmod(dir, 0755) })
 
 	loc := book.Location{EpubPath: filepath.Join("Author, A/Test (1)", "test.epub")}
 	err := s.Delete(loc)

@@ -49,7 +49,7 @@ func newHarness(t *testing.T, seeds ...func(*testing.T, *library.Library)) *harn
 	server, conn := net.Pipe()
 	served := make(chan struct{})
 	go func() {
-		go9p.ServeReadWriter(server, server, srv.ebookfs.Server())
+		_ = go9p.ServeReadWriter(server, server, srv.ebookfs.Server())
 		close(served)
 	}()
 	c, err := ninep.Dial(conn, "glenda")
@@ -61,7 +61,9 @@ func newHarness(t *testing.T, seeds ...func(*testing.T, *library.Library)) *harn
 	t.Cleanup(func() {
 		conn.Close()
 		<-served
-		srv.Shutdown(context.Background())
+		if err := srv.Shutdown(context.Background()); err != nil {
+			t.Errorf("Shutdown: %v", err)
+		}
 	})
 	return &harness{t: t, lib: lib, root: root, c: c}
 }

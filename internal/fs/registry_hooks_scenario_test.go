@@ -18,7 +18,9 @@ import (
 func TestConcurrentLibraryEditsKeepBookDirSnapshotWhole(t *testing.T) {
 	lib, _ := openLibrary(t)
 	reg := registry.NewBookRegistry(util.NewTestFS(t), lib)
-	lib.AddHook(reg)
+	if err := lib.AddHook(reg); err != nil {
+		t.Fatal(err)
+	}
 	allBooks := views.NewAllBooksDir(reg)
 	ingest("Race A", "Alice")(t, lib)
 	book, err := lib.Search(library.Query{Titles: []string{"Race A"}})

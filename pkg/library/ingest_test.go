@@ -38,7 +38,7 @@ func TestCreateIngestReadOnlyDir(t *testing.T) {
 	if err := os.Chmod(lib.inboxTemp, 0444); err != nil {
 		t.Skip("cannot chmod inbox temp:", err)
 	}
-	t.Cleanup(func() { os.Chmod(lib.inboxTemp, 0755) })
+	t.Cleanup(func() { _ = os.Chmod(lib.inboxTemp, 0755) })
 
 	_, err := lib.CreateIngest()
 	if err == nil {

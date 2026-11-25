@@ -1,0 +1,28 @@
+version: "2"
+
+linters:
+  default: standard
+  settings:
+    errcheck:
+      exclude-functions:
+        # Always returns nil.
+        - (*github.com/ramblingenzyme/go9p/fs.StaticDir).DeleteChild
+        # Cleanup calls the std-error-handling preset below misses.
+        - (*os.Root).Remove
+        - (*github.com/ramblingenzyme/ebookfs/internal/testing/ninep.Fid).Clunk
+    staticcheck:
+      # staticcheck's defaults, plus QF1008. Selectors such as
+      # d.StaticDir.AddChild name the embedded type on purpose.
+      checks:
+        - all
+        - -ST1000
+        - -ST1003
+        - -ST1016
+        - -ST1020
+        - -ST1021
+        - -ST1022
+        - -QF1008
+  exclusions:
+    presets:
+      # Close and Remove on cleanup paths. Write paths check Close explicitly.
+      - std-error-handling

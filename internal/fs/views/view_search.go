@@ -48,7 +48,7 @@ func NewSearchDir(f *fs.FS, reg *registry.BookRegistry, ttl time.Duration, maxHa
 		search:   d,
 		handles:  make(map[uint64]int64),
 	}
-	d.StaticDir.AddChild(clone)
+	vfile.AddChild(d.StaticDir, clone)
 
 	if ttl > 0 || maxHandles > 0 {
 		go d.cleanupLoop()
@@ -69,7 +69,7 @@ func (d *searchDir) allocateHandle() *searchHandleDir {
 	handle := newSearchHandleDir(d.f, id, d.reg, d)
 	d.handles[id] = handle
 	d.reg.AddView(handle.results)
-	d.StaticDir.AddChild(handle)
+	vfile.AddChild(d.StaticDir, handle)
 
 	return handle
 }

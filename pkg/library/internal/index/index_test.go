@@ -55,7 +55,7 @@ func TestCrashHelper(t *testing.T) {
 	default:
 		t.Skip("runs only as a child of the crash tests")
 	}
-	syscall.Kill(os.Getpid(), syscall.SIGKILL)
+	_ = syscall.Kill(os.Getpid(), syscall.SIGKILL)
 }
 
 func crashChild(t *testing.T, work, path string) {

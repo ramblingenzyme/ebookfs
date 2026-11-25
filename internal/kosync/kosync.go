@@ -162,7 +162,7 @@ func writeError(w http.ResponseWriter, status, code int, message string) {
 func writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+	_ = json.NewEncoder(w).Encode(data)
 }
 
 // writeServerError logs an error and writes a 502 response with codeUnknownServer.

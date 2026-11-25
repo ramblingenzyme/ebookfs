@@ -197,7 +197,7 @@ func TestRunnerWithHTTPFrontends(t *testing.T) {
 }
 
 func TestRunnerRoutesHTTPFrontends(t *testing.T) {
-	echoPath := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, r.URL.Path) })
+	echoPath := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, r.URL.Path) })
 	runner := NewRunner(":0")
 	for _, fe := range []*fakeHTTP{
 		{name: "sync", prefix: "/sync", handler: echoPath, strip: true},

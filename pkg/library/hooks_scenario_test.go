@@ -82,7 +82,9 @@ func (h *ingestEditDeleteHook) OnDeleted(id int64) {
 func TestHookLifecycleUsesCommittedOperations(t *testing.T) {
 	lib := openTestLibrary(t)
 	hook := &ingestEditDeleteHook{t: t}
-	lib.AddHook(hook)
+	if err := lib.AddHook(hook); err != nil {
+		t.Fatal(err)
+	}
 
 	data := buildTestEpub(t, "Hooked Book", "Alice")
 	b := ingestTestEpub(t, lib, data)
@@ -138,7 +140,9 @@ func TestEditWaitsForItsHookBeforeAnotherEdit(t *testing.T) {
 	lib := openTestLibrary(t)
 	b := ingestTestEpub(t, lib, buildTestEpub(t, "Before", "Alice"))
 	hook := &blockingEditHook{entered: make(chan struct{}), release: make(chan struct{})}
-	lib.AddHook(hook)
+	if err := lib.AddHook(hook); err != nil {
+		t.Fatal(err)
+	}
 
 	firstTitle := "First Edit"
 	firstDone := make(chan error, 1)
@@ -204,12 +208,14 @@ func (h amendingHook) PreCommit(bib *library.Bib) error {
 func TestPreCommitAmendmentSurvivesReindex(t *testing.T) {
 	cfg := testConfig(t)
 	lib := openLib(t, cfg)
-	lib.AddHook(amendingHook{amend: func(b *library.Bib) {
+	if err := lib.AddHook(amendingHook{amend: func(b *library.Bib) {
 		b.Title = "Amended"
 		b.Authors[0].Name = "Bob"
 		b.Publisher = "Hook Publisher"
 		b.Series = &library.Series{Name: "Saga", Index: "2"}
-	}})
+	}}); err != nil {
+		t.Fatal(err)
+	}
 	b := ingestTestEpub(t, lib, buildTestEpub(t, "Original", "Alice"))
 	lib.Close()
 
@@ -240,7 +246,9 @@ func TestPreCommitRefusedAmendmentFailsIngest(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			lib := openTestLibrary(t)
-			lib.AddHook(amendingHook{amend: amend})
+			if err := lib.AddHook(amendingHook{amend: amend}); err != nil {
+				t.Fatal(err)
+			}
 			if _, err := tryIngest(t, lib, buildTestEpub(t, "Rejected", "Alice")); err == nil {
 				t.Fatal("Ingest succeeded with an amendment the epub cannot hold")
 			}
@@ -270,7 +278,9 @@ func TestIngestHookErrorsAbortIngest(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			lib := openTestLibrary(t)
-			lib.AddHook(tc.hook)
+			if err := lib.AddHook(tc.hook); err != nil {
+				t.Fatal(err)
+			}
 			if _, err := tryIngest(t, lib, buildTestEpub(t, "Rejected", "Alice")); err == nil {
 				t.Fatal("Ingest succeeded despite hook error")
 			}
@@ -316,7 +326,9 @@ func (h *epubReadingHook) OnDeleting(book *library.Book, sidecars *os.Root, open
 func TestOnDeletingHookCanReadEpub(t *testing.T) {
 	lib := openTestLibrary(t)
 	hook := &epubReadingHook{}
-	lib.AddHook(hook)
+	if err := lib.AddHook(hook); err != nil {
+		t.Fatal(err)
+	}
 
 	data := buildTestEpub(t, "Readable Book", "Alice")
 	b := ingestTestEpub(t, lib, data)
@@ -410,8 +422,12 @@ func TestFailedSetupLeavesHookUnregistered(t *testing.T) {
 func TestPanickingHookIsContained(t *testing.T) {
 	lib := openTestLibrary(t)
 	counter := &editCountingHook{}
-	lib.AddHook(panickingHook{})
-	lib.AddHook(counter)
+	if err := lib.AddHook(panickingHook{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := lib.AddHook(counter); err != nil {
+		t.Fatal(err)
+	}
 	b := ingestTestEpub(t, lib, buildTestEpub(t, "Dune", "Frank Herbert"))
 
 	for _, status := range []string{"reading", "read"} {

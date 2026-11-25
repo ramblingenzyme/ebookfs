@@ -128,7 +128,7 @@ func (s *Store) renameDir(fromDir, toDir string) (func(error), error) {
 
 	// MkdirAll may have created the author directory for this book alone.
 	if err := atomicfs.Rename(fromDir, toDir); err != nil {
-		removeIfEmpty(filepath.Dir(toDir))
+		_ = removeIfEmpty(filepath.Dir(toDir))
 		return nil, err
 	}
 
@@ -138,7 +138,7 @@ func (s *Store) renameDir(fromDir, toDir string) (func(error), error) {
 			slog.Error("rollback failed after epub rename error; directory left in inconsistent state, will be repaired by reindex on next startup",
 				"old_path", fromDir, "new_path", toDir, "rollback_error", rollbackErr, "original_error", err)
 		}
-		removeIfEmpty(filepath.Dir(toDir))
+		_ = removeIfEmpty(filepath.Dir(toDir))
 	}, nil
 }
 

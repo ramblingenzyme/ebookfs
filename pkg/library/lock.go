@@ -60,7 +60,7 @@ func selfTestFlock(path string) error {
 	err = flock(int(fd2.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 	switch {
 	case err == nil:
-		flock(int(fd2.Fd()), syscall.LOCK_UN)
+		_ = flock(int(fd2.Fd()), syscall.LOCK_UN)
 		slog.Error("flock is not enforced on this filesystem; a second instance could corrupt the library",
 			"path", path)
 		return nil
@@ -102,6 +102,5 @@ func writeLockHolder(f *os.File) {
 	if err := f.Truncate(0); err != nil {
 		return
 	}
-	f.Seek(0, 0)
-	f.Write([]byte(content))
+	_, _ = f.WriteAt([]byte(content), 0)
 }

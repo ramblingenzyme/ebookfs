@@ -283,7 +283,7 @@ func TestCommandFailures(t *testing.T) {
 				if err := os.Chmod(dir, 0555); err != nil {
 					t.Fatal(err)
 				}
-				t.Cleanup(func() { os.Chmod(dir, 0755) })
+				t.Cleanup(func() { _ = os.Chmod(dir, 0755) })
 			}, "delete 1", []string{"error: book 1: "}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

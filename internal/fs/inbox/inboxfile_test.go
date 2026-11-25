@@ -68,7 +68,7 @@ func TestInboxFileOpen(t *testing.T) {
 		if err := os.Chmod(cfg.InboxTemp, 0555); err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { os.Chmod(cfg.InboxTemp, 0755) })
+		t.Cleanup(func() { _ = os.Chmod(cfg.InboxTemp, 0755) })
 
 		inf := NewInboxFile(util.NewTestFS(t), lib, "test.epub", 0644)
 		if err := inf.Open(1, proto.Mode(0)); err == nil {

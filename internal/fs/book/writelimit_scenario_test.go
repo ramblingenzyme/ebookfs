@@ -31,7 +31,8 @@ func TestWriteFileSizeLimits(t *testing.T) {
 	}{
 		{"coverFile", maxCoverFileSize, func(t *testing.T) limitedWriteFile {
 			b := util.MakeBook(1, "Test", "Author")
-			return newCoverFile(newStat(util.NewTestFS(t), "cover.jpg", 0644), mock.ContentReader{}, func(int64, library.Edits) (*library.Book, error) { return nil, nil }, util.Fixed(b))
+			lib := mock.ContentReader{ContentFn: func(int64) (library.EpubReader, error) { return &mock.EpubReader{}, nil }}
+			return newCoverFile(newStat(util.NewTestFS(t), "cover.jpg", 0644), lib, func(int64, library.Edits) (*library.Book, error) { return nil, nil }, util.Fixed(b))
 		}},
 		{"fieldFile", maxFieldFileSize, func(t *testing.T) limitedWriteFile {
 			return newFieldFile(newStat(util.NewTestFS(t), "field", 0644), func() string { return "" }, nil)
@@ -40,14 +41,18 @@ func TestWriteFileSizeLimits(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Run("exceeds limit rejected", func(t *testing.T) {
 				f := tc.open(t)
-				f.Open(1, proto.Mode(0))
+				if err := f.Open(1, proto.Mode(0)); err != nil {
+					t.Fatal(err)
+				}
 				if _, err := f.Write(1, tc.limit, []byte("x")); err == nil {
 					t.Fatal("expected error writing past the size limit")
 				}
 			})
 			t.Run("write at limit allowed", func(t *testing.T) {
 				f := tc.open(t)
-				f.Open(1, proto.Mode(0))
+				if err := f.Open(1, proto.Mode(0)); err != nil {
+					t.Fatal(err)
+				}
 				if _, err := f.Write(1, tc.limit-4, []byte("test")); err != nil {
 					t.Errorf("write ending at the limit should succeed, got: %v", err)
 				}

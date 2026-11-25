@@ -21,7 +21,7 @@ func serveTree(t *testing.T, root *fs.StaticDir) *ninep.Conn {
 	server, client := net.Pipe()
 	done := make(chan struct{})
 	go func() {
-		go9p.ServeReadWriter(server, server, fsys.Server())
+		_ = go9p.ServeReadWriter(server, server, fsys.Server())
 		close(done)
 	}()
 	t.Cleanup(func() {
@@ -46,7 +46,9 @@ func TestReaddirRootListsStaticFile(t *testing.T) {
 		Length: 13,
 		Mode:   0644,
 	}, []byte("hello, world!"))
-	root.AddChild(file)
+	if err := root.AddChild(file); err != nil {
+		t.Fatal(err)
+	}
 
 	conn := serveTree(t, root)
 
@@ -90,7 +92,9 @@ func TestReaddirLargeDirectory(t *testing.T) {
 			Length: 4,
 			Mode:   0644,
 		}, []byte("test"))
-		root.AddChild(file)
+		if err := root.AddChild(file); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	conn := serveTree(t, root)
@@ -113,7 +117,9 @@ func TestWalkMissing(t *testing.T) {
 		Name: "dir",
 		Mode: proto.DMDIR | 0755,
 	})
-	root.AddChild(dir)
+	if err := root.AddChild(dir); err != nil {
+		t.Fatal(err)
+	}
 
 	conn := serveTree(t, root)
 
@@ -176,7 +182,9 @@ func TestOpenRefused(t *testing.T) {
 		Name: "fails.txt",
 		Mode: 0644,
 	})
-	root.AddChild(file)
+	if err := root.AddChild(file); err != nil {
+		t.Fatal(err)
+	}
 	conn := serveTree(t, root)
 
 	done := make(chan error, 1)
@@ -217,7 +225,9 @@ func TestClunkReturnsCloseError(t *testing.T) {
 		Length: 0,
 		Mode:   0644,
 	})
-	root.AddChild(file)
+	if err := root.AddChild(file); err != nil {
+		t.Fatal(err)
+	}
 
 	conn := serveTree(t, root)
 
@@ -274,7 +284,9 @@ func TestWstatLengthZero(t *testing.T) {
 		Length: 100,
 		Mode:   0644,
 	})
-	root.AddChild(file)
+	if err := root.AddChild(file); err != nil {
+		t.Fatal(err)
+	}
 
 	conn := serveTree(t, root)
 
@@ -342,12 +354,16 @@ func TestDialRejectsHandshake(t *testing.T) {
 					Msize:   tc.msize,
 					Version: tc.version,
 				}
-				server.Write(rver.Compose())
+				if _, err := server.Write(rver.Compose()); err != nil {
+					return
+				}
 				if _, err := proto.ParseCall(server); err != nil {
 					return
 				}
 				rattach := &proto.RAttach{Header: proto.Header{Type: proto.Rattach, Tag: 1}}
-				server.Write(rattach.Compose())
+				if _, err := server.Write(rattach.Compose()); err != nil {
+					return
+				}
 			}()
 
 			if _, err := ninep.Dial(client, "glenda"); err == nil {

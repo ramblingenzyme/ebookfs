@@ -7,6 +7,7 @@ import (
 
 	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
+	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 
 	"github.com/ramblingenzyme/ebookfs/internal/util/naming"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
@@ -68,7 +69,7 @@ func (s *seriesBookListDir) Add(dir *book.BookDir) {
 		return seriesEntryName(b, &s.pad)
 	})
 	s.children[dir.Book().ID()] = n
-	s.StaticDir.AddChild(n)
+	vfile.AddChild(&s.StaticDir, n)
 	s.repad()
 }
 

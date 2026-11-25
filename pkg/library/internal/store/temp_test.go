@@ -78,7 +78,7 @@ func TestRemoveStaleTempsPastUnreadableDir(t *testing.T) {
 	if err := os.Chmod(unreadable, 0); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.Chmod(unreadable, 0755) })
+	t.Cleanup(func() { _ = os.Chmod(unreadable, 0755) })
 
 	if err := s.RemoveStaleTemps(); err != nil {
 		t.Fatalf("RemoveStaleTemps: %v", err)

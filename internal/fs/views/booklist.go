@@ -5,6 +5,7 @@ import (
 
 	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
+	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 
 	"github.com/ramblingenzyme/ebookfs/internal/util/naming"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
@@ -49,7 +50,7 @@ func (d *bookListDir) Add(dir *book.BookDir) {
 	// entries would name a child that cannot be deleted.
 	name := naming.PathSafe(b.Title())
 	if child, ok := d.Children()[name]; ok && child != dir {
-		d.AddChild(&namedBookDir{
+		vfile.AddChild(d, &namedBookDir{
 			BookDir:  dir,
 			baseStat: dir.Stat(),
 			name:     disambiguatedName,
@@ -57,7 +58,7 @@ func (d *bookListDir) Add(dir *book.BookDir) {
 		d.entries[b.ID()] = disambiguatedName(b)
 		return
 	}
-	d.AddChild(dir)
+	vfile.AddChild(d, dir)
 	d.entries[b.ID()] = name
 }
 

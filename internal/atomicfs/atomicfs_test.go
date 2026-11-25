@@ -236,7 +236,7 @@ func makeUnopenable(t *testing.T, dir string) {
 	if err := os.Chmod(dir, 0300); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.Chmod(dir, 0755) })
+	t.Cleanup(func() { _ = os.Chmod(dir, 0755) })
 }
 
 func TestRemoveAll(t *testing.T) {
@@ -285,9 +285,9 @@ func TestRemoveAllSucceedsWhenTrashRemovalFails(t *testing.T) {
 	}
 	trash := filepath.Join(dir, ".trash")
 	t.Cleanup(func() {
-		filepath.WalkDir(trash, func(p string, d os.DirEntry, err error) error {
+		_ = filepath.WalkDir(trash, func(p string, d os.DirEntry, err error) error {
 			if err == nil && d.IsDir() {
-				os.Chmod(p, 0755)
+				_ = os.Chmod(p, 0755)
 			}
 			return nil
 		})

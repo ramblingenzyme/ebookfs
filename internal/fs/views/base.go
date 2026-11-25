@@ -71,7 +71,7 @@ func (g *groupingDir) childDir(name string, factory func(*proto.Stat) fs.FSNode)
 		return child
 	}
 	ad := factory(newDirStat(g.f, name))
-	g.StaticDir.AddChild(ad)
+	vfile.AddChild(g.StaticDir, ad)
 	return ad
 }
 
