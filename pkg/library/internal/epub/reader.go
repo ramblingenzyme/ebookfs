@@ -36,13 +36,6 @@ func (r *reader) Close() error {
 	return r.File.Close()
 }
 
-func (r *reader) OPF() ([]byte, error) {
-	if r.Closed() {
-		return nil, formats.ErrClosed
-	}
-	return r.ReadEntry(r.PackagePath())
-}
-
 func (r *reader) Cover() ([]byte, error) {
 	// Checked first, so a closed reader returns ErrClosed, not ErrNoCover.
 	if r.Closed() {

@@ -20,7 +20,7 @@ func newTestBookDir(t *testing.T, b *library.Book) *BookDir {
 
 func TestBookDirListing(t *testing.T) {
 	fields := []string{"authors", "contributors", "description", "id", "identifiers", "language",
-		"opf", "pubdate", "publisher", "rating", "rights", "series", "series_index", "status",
+		"pubdate", "publisher", "rating", "rights", "series", "series_index", "status",
 		"subjects", "tags", "title"}
 	for _, tc := range []struct {
 		name  string

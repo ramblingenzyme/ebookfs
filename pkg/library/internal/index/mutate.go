@@ -79,7 +79,6 @@ func bookParams(b *book.Book, mt drift.PathInfo) dbsqlc.InsertBookParams {
 		DateModified: b.Meta.DateModified.UTC().Format(time.RFC3339),
 		SeriesID:     sql.NullInt64{},
 		SeriesIndex:  sql.NullString{},
-		OpfSize:      b.OpfSize,
 		CoverSize:    b.CoverSize,
 		FileSize:     mt.Size,
 		FileMtime:    toUnixNano(mt.Mtime),

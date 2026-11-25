@@ -9,7 +9,7 @@ import (
 )
 
 type bookRow struct {
-	id, opfSize, coverSize, fileSize                                                              int64
+	id, coverSize, fileSize                                                                       int64
 	title, pubdate, description, language, publisher, rights, filePath, format, coverPath, status string
 	rating                                                                                        float64
 	dateAdded, dateModified                                                                       string
@@ -37,7 +37,6 @@ func (r *bookRow) toBook() *book.Book {
 			Publisher:   r.publisher,
 			Rights:      r.rights,
 			CoverPath:   r.coverPath,
-			OpfSize:     r.opfSize,
 			CoverSize:   r.coverSize,
 		},
 		File: book.File{
@@ -80,7 +79,7 @@ func scanBookRows(rows *sql.Rows) ([]*book.Book, error) {
 			&r.filePath, &r.format, &r.coverPath,
 			&r.status, &r.rating, &r.dateAdded, &r.dateModified,
 			&r.seriesID, &r.seriesName, &r.seriesIndex,
-			&r.opfSize, &r.coverSize, &r.fileSize,
+			&r.coverSize, &r.fileSize,
 		); err != nil {
 			return nil, err
 		}

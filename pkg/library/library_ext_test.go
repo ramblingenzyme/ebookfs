@@ -296,14 +296,6 @@ func TestContentServesTheBook(t *testing.T) {
 	if string(cover) != "placeholder-cover-bytes" {
 		t.Errorf("cover = %q, want %q", cover, "placeholder-cover-bytes")
 	}
-
-	opf, err := r.(interface{ OPF() ([]byte, error) }).OPF()
-	if err != nil {
-		t.Fatalf("OPF: %v", err)
-	}
-	if !strings.Contains(string(opf), "Open Read") {
-		t.Errorf("OPF does not contain the title: %s", opf)
-	}
 }
 
 // fn sees a change committed after the caller's snapshot, so a list rebuilt

@@ -8,7 +8,6 @@ to the library, never to a file on the server's disk of the same name.
 ├── books/                       ← flat listing by title
 │   └── Title (id)/
 │       ├── Title - Author.epub  ← the epub itself, read-only
-│       ├── opf                  ← raw package document XML, read-only
 │       ├── title                ← read/write
 │       ├── authors              ← newline-separated, read/write
 │       ├── series               ← read/write

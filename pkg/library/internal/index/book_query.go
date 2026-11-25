@@ -20,7 +20,7 @@ func (q *bookQuery) sql() (string, []any) {
 			b.file_path, b.format, b.cover_path,
 			b.status, b.rating, b.date_added, b.date_modified,
 			s.id, s.name, b.series_index,
-			b.opf_size, b.cover_size, b.file_size
+			b.cover_size, b.file_size
 		FROM books b
 		LEFT JOIN series s ON s.id = b.series_id`
 	if len(q.where) > 0 {

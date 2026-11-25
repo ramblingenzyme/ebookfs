@@ -10,16 +10,16 @@ INSERT INTO books (
     id, title, sort_title, pubdate, description, language, publisher, rights,
     file_path, format, cover_path, status, rating,
     date_added, date_modified, series_id, series_index,
-    opf_size, cover_size, file_size, file_mtime, meta_mtime, meta_size
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    cover_size, file_size, file_mtime, meta_mtime, meta_size
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpsertBook :exec
 INSERT INTO books (
     id, title, sort_title, pubdate, description, language, publisher, rights,
     file_path, format, cover_path, status, rating,
     date_added, date_modified, series_id, series_index,
-    opf_size, cover_size, file_size, file_mtime, meta_mtime, meta_size
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    cover_size, file_size, file_mtime, meta_mtime, meta_size
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     title=excluded.title, sort_title=excluded.sort_title, pubdate=excluded.pubdate,
     description=excluded.description, language=excluded.language,
@@ -27,7 +27,7 @@ ON CONFLICT(id) DO UPDATE SET
     file_path=excluded.file_path, format=excluded.format,
     cover_path=excluded.cover_path, status=excluded.status, rating=excluded.rating,
     date_added=excluded.date_added, date_modified=excluded.date_modified,
-    opf_size=excluded.opf_size, cover_size=excluded.cover_size,
+    cover_size=excluded.cover_size,
     file_size=excluded.file_size, file_mtime=excluded.file_mtime,
     meta_mtime=excluded.meta_mtime, meta_size=excluded.meta_size;
 
