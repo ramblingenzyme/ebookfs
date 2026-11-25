@@ -7,9 +7,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// The Hook methods delegate to the registry, which owns the sidecar writes
-// and the document-ID index this package doc comments describe.
-
 // Setup runs before AddHook registers the server, so no event reaches the
 // index while Restore rebuilds it.
 func (s *Server) Setup(root, stateDir string) error {

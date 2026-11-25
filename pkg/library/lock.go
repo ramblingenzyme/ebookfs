@@ -49,7 +49,7 @@ func acquireLock(root string) (*os.File, error) {
 
 // selfTestFlock opens a second fd and tries to lock it. If the second lock
 // succeeds, or if flock returns ENOLCK/ENOTSUP/EOPNOTSUPP, the filesystem
-// doesn't enforce locks — warn and continue. Other errors fail Open.
+// doesn't enforce locks, so it warns and continues. Other errors fail Open.
 func selfTestFlock(path string) error {
 	fd2, err := os.OpenFile(path, os.O_RDWR, 0644)
 	if err != nil {

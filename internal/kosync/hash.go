@@ -6,15 +6,12 @@ import (
 	"io"
 )
 
-// PartialMD5 computes the kosync document ID using KOReader's partial MD5
-// algorithm. It takes up to 12 samples of 1024 bytes at exponentially spaced
-// offsets, concatenates them, and returns the MD5 hash as lowercase hex.
+// PartialMD5 ports KOReader's partial_md5_checksum, the kosync document ID
+// (docs/kosync.md). It hashes up to 12 samples of 1024 bytes at exponentially
+// spaced offsets and returns the MD5 as lowercase hex.
 //
-// The offsets are computed as: for i = -1..10: lshift(1024, 2*i)
-// The first offset is 0 due to LuaJIT's bit masking behavior (lshift(1024, -2)
-// wraps to 0 in 32-bit arithmetic).
-//
-// See specs/kosync-1.0.md §8.2-8.4 for the full algorithm specification.
+// The offsets are lshift(1024, 2*i) for i = -1..10. The first is 0, since
+// LuaJIT masks the shift to 32 bits and lshift(1024, -2) wraps to 0.
 func PartialMD5(r io.ReaderAt, size int64) (string, error) {
 	const sampleSize = 1024
 	h := md5.New()

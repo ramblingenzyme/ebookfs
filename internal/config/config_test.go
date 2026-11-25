@@ -156,8 +156,7 @@ index_path = "/i"
 		}
 	})
 
-	// An unset path and an empty one both follow the root, as
-	// kosync.mapping_path does.
+	// An unset path and an empty one both follow the root.
 	t.Run("paths follow root", func(t *testing.T) {
 		path := writeConfig(t, `
 [library]

@@ -5,8 +5,11 @@ package syncutil
 import "sync"
 
 // KeyedMutex hands out one mutex per int64 key, created lazily on first use.
-// Entries are never freed but keys are book ids, whose count is small and bounded by the library size.
-// ponytail: add cleanup if used in another context that requires it or library size grows
+// Entries are never freed. The keys are book ids, so the map is bounded by the
+// library's size.
+//
+// ponytail: free a mutex once no caller holds it, if KeyedMutex gets keys that
+// are not bounded, or a library grows large enough to feel it.
 type KeyedMutex struct {
 	mu    sync.Mutex
 	locks map[int64]*sync.Mutex

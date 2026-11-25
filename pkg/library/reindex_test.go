@@ -42,8 +42,8 @@ var offLayouts = []struct {
 
 // stageLegacyLayout ingests a book, then moves its directory to
 // legacyAuthorDir with the library closed, which may be where it already is. A
-// non-empty legacyEpub also renames the epub inside it. It returns the book and the canonical location a reindex
-// must restore.
+// non-empty legacyEpub also renames the epub inside it. It returns the book and
+// the canonical location a reindex must restore.
 func stageLegacyLayout(t *testing.T, cfg Config, title string, authors []string, legacyAuthorDir, legacyEpub string) (*Book, book.Location) {
 	t.Helper()
 

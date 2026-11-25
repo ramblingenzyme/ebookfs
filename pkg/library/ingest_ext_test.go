@@ -102,9 +102,7 @@ func TestIngestRejectsAFileThatIsNotAnEpub(t *testing.T) {
 	}
 }
 
-// TestIngestPreservesAllMetadataFields verifies that all metadata fields
-// survive the parse → index → query flow. This catches bugs where a field
-// is forgotten during translation between layers.
+// Catches a field forgotten in translation between parse, index and query.
 func TestIngestPreservesAllMetadataFields(t *testing.T) {
 	lib := openTestLibrary(t)
 

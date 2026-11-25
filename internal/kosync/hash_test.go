@@ -47,8 +47,7 @@ func TestPartialMD5_GoldenVectors(t *testing.T) {
 	}
 }
 
-// TestPartialMD5_Sparse1GiB exercises all 12 samples using the sparse file S
-// from spec §8.6.
+// All 12 samples, over the sparse file S from spec §8.6.
 func TestPartialMD5_Sparse1GiB(t *testing.T) {
 	// S is 1073742848 bytes (1 GiB + 1024), zero everywhere except at each
 	// offset where it contains the 16-byte ASCII decimal representation.
@@ -75,8 +74,8 @@ func TestPartialMD5_Sparse1GiB(t *testing.T) {
 	}
 }
 
-// TestPartialMD5_FirstOffsetIsZero verifies the i=-1 term produces offset 0,
-// per spec §8.3. This is the critical LuaJIT bitwise masking behavior.
+// The i=-1 term gives offset 0, which spec §8.3 takes from LuaJIT's 32-bit
+// shift masking.
 func TestPartialMD5_FirstOffsetIsZero(t *testing.T) {
 	data1 := patternFile(2048)
 	data2 := patternFile(2048)
@@ -99,8 +98,7 @@ func TestPartialMD5_FirstOffsetIsZero(t *testing.T) {
 	}
 }
 
-// TestPartialMD5_EmptyFile tests that an empty file produces a valid hash
-// (MD5 of empty input).
+// An empty file hashes to the MD5 of empty input.
 func TestPartialMD5_EmptyFile(t *testing.T) {
 	r := bytes.NewReader(nil)
 	got, err := PartialMD5(r, 0)

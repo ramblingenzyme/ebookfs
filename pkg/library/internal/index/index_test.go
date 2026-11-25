@@ -34,8 +34,8 @@ func TestMmapOffOnNetworkFilesystems(t *testing.T) {
 // crashHelperEnv selects the work TestCrashHelper does in a child process.
 const crashHelperEnv = "INDEX_CRASH_HELPER"
 
-// TestCrashHelper is not a test of its own. It dies by SIGKILL mid-work, so the
-// files it leaves are the ones a real crash leaves.
+// Not a test of its own. It dies by SIGKILL mid-work, so the files it leaves
+// are the ones a real crash leaves.
 func TestCrashHelper(t *testing.T) {
 	path := os.Getenv("INDEX_CRASH_PATH")
 	switch os.Getenv(crashHelperEnv) {

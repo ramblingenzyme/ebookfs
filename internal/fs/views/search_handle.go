@@ -14,11 +14,9 @@ import (
 	"github.com/ramblingenzyme/go9p/proto"
 )
 
-// One search handle: the subtree a client gets back from clone, and what
-// writing a query to it does. view_search.go is the other half, where handles
-// are allocated and reclaimed; a handle reaches back there once, to remove
-// itself on close.
-
+// searchHandleDir is the subtree a client gets back from clone. Writing a query
+// to it fills its results. view_search.go allocates and reclaims handles, and a
+// handle reaches back there once, to remove itself on close.
 type searchHandleDir struct {
 	*fs.StaticDir
 	id      int64

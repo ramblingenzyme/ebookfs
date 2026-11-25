@@ -182,7 +182,6 @@ func (l *Library) Update(id int64, fn func(*Book) *Edits) (b *Book, changed bool
 		return nil, false, err
 	}
 
-	// Fire OnEdited hook while still holding the per-book lock
 	immutable := book.NewImmutableBook(updated)
 	l.hooks.onEdited(l, immutable, location)
 
@@ -198,7 +197,6 @@ func (l *Library) Delete(id int64) error {
 		return err
 	}
 
-	// Fire OnDeleting hook before deletion, while the book and epub still exist
 	l.hooks.onDeleting(l, book.NewImmutableBook(b), b.Location)
 
 	op, err := l.index.MarkPending()
@@ -217,7 +215,6 @@ func (l *Library) Delete(id int64) error {
 	}
 	slog.Info("delete: book removed", "book_id", id, "title", b.Title)
 
-	// Fire OnDeleted hook while still holding the per-book lock
 	l.hooks.onDeleted(id)
 
 	return nil
@@ -260,8 +257,8 @@ func bookFromBib(bib book.Bib, meta book.Meta, loc book.Location, obs drift.Path
 }
 
 // WithSidecars calls fn with an os.Root scoped to the book's .sidecar/
-// directory. The per-book lock is held for the duration — Edit and Delete
-// block until fn returns. The Root is closed after fn returns.
+// directory. The per-book lock is held while fn runs, so Edit and Delete block
+// until it returns. The Root is closed after fn returns.
 //
 // The caller should not escape file handles from the callback: on Linux the
 // Root tracks the directory via fd, so escaped handles remain valid after a

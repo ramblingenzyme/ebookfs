@@ -33,16 +33,15 @@ const (
 	codeRegistrationOff = 2005
 )
 
-// Config holds kosync configuration.
 type Config struct {
-	Username         string  // pre-provisioned username
-	PasswordHash     string  // MD5 hash of password (lowercase hex)
-	PathPrefix       string  // URL path prefix (e.g., "/sync")
-	ReadingThreshold float64 // percentage to mark as "reading" (default: 0.05)
-	ReadThreshold    float64 // percentage to mark as "read" (default: 0.95)
+	Username         string
+	PasswordHash     string // MD5 of the password, lowercase hex
+	PathPrefix       string
+	ReadingThreshold float64 // fraction of the book, 0-1, that marks it "reading"
+	ReadThreshold    float64 // fraction of the book, 0-1, that marks it "read"
 }
 
-// Server implements both HTTPFrontend and Hook for kosync.
+// Server is both the HTTP frontend and a library.Hook.
 type Server struct {
 	library.HookBase
 	lib      *library.Library
@@ -65,7 +64,6 @@ func New(lib *library.Library, cfg Config) (*Server, error) {
 	return srv, nil
 }
 
-// NewHandler creates a kosync HTTP handler.
 func NewHandler(lib *library.Library, registry *docRegistry, cfg Config) http.Handler {
 	mux := http.NewServeMux()
 	h := newHandler(lib, registry, cfg)
@@ -73,16 +71,12 @@ func NewHandler(lib *library.Library, registry *docRegistry, cfg Config) http.Ha
 	return logRequest(checkAcceptHeader(mux))
 }
 
-// Name returns the frontend name.
 func (s *Server) Name() string { return "kosync" }
 
-// Prefix returns the URL path prefix.
 func (s *Server) Prefix() string { return s.prefix }
 
-// Handler returns the HTTP handler.
 func (s *Server) Handler() http.Handler { return s.handler }
 
-// Shutdown is a no-op for kosync.
 func (s *Server) Shutdown(ctx context.Context) error { return nil }
 
 // StripPrefix returns true because kosync uses relative routes.
@@ -94,23 +88,19 @@ func checkAcceptHeader(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		accept := r.Header.Get("Accept")
 		if accept == "" {
-			// Code 100: Accept header not set (practically unreachable)
 			writeError(w, http.StatusPreconditionFailed, codeAcceptNotSet, "Accept header not set.")
 			return
 		}
 
-		// Match pattern: application/vnd.koreader.v<version>...json
-		// The spec's Lua pattern has unescaped dots, but we use proper regex.
+		// The spec's Lua pattern leaves its dots unescaped, so it also matches
+		// any character there. This one matches them literally.
 		matches := acceptHeaderPattern.FindStringSubmatch(accept)
 		if matches == nil {
-			// Code 101: Invalid Accept header format
 			writeError(w, http.StatusPreconditionFailed, codeAcceptInvalid, "Invalid Accept header format.")
 			return
 		}
 
-		// Extract version number
 		if matches[1] != "1" {
-			// Code 102: Unsupported version
 			writeError(w, http.StatusPreconditionFailed, codeAcceptVersionUnsup, "Unsupported version specified in the Accept header.")
 			return
 		}
@@ -121,7 +111,6 @@ func checkAcceptHeader(next http.Handler) http.Handler {
 
 var acceptHeaderPattern = regexp.MustCompile(`^application/vnd\.koreader\.v(\d+).*json$`)
 
-// statusWriter captures the status code written by the handler.
 type statusWriter struct {
 	http.ResponseWriter
 	status int
@@ -132,7 +121,8 @@ func (w *statusWriter) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 
-// logRequest logs method, path, status, duration, and authenticated user.
+// logRequest logs the X-Auth-User the client sent, whether or not it
+// authenticated.
 func logRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -181,10 +171,8 @@ func writeServerError(w http.ResponseWriter, msg string, bookID int64, err error
 	writeError(w, http.StatusBadGateway, codeUnknownServer, "Unknown server error.")
 }
 
-// registerRoutes sets up the kosync HTTP endpoints using Go 1.22+ method-specific routing.
-// PUT /syncs/progress reads document from the request body (per spec §5.4).
-// GET /syncs/progress/{docID} reads document from the URL path (per spec §5.5).
-// Routes are relative — the caller mounts the handler at the configured prefix.
+// registerRoutes takes the document from the body for PUT (spec §5.4) and from
+// the path for GET (§5.5). Routes are relative to the prefix the runner strips.
 func (h *handler) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /healthcheck", h.healthcheck)
 	mux.HandleFunc("GET /users/auth", h.auth)
@@ -262,7 +250,6 @@ func (h *handler) putProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse request body to get document ID and progress data
 	var req struct {
 		Document   string   `json:"document"`
 		Percentage *float64 `json:"percentage"`
@@ -280,7 +267,7 @@ func (h *handler) putProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate required fields per [K-PUT-2]
+	// [K-PUT-2]
 	if req.Percentage == nil || req.Progress == nil || req.Device == nil {
 		writeError(w, http.StatusForbidden, codeInvalidRequest, "Invalid request")
 		return
@@ -317,11 +304,9 @@ func (h *handler) putProgress(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// updateBookStatus updates the book's reading status based on progress percentage.
-// Transitions are configurable via ReadingThreshold and ReadThreshold.
-//
-// The guards read the status under Library.Update, so a status set over 9P
-// or ctl between this PUT's lookup and its write cannot be downgraded.
+// updateBookStatus's guards read the status under Library.Update, so a status
+// set over 9P or ctl between this PUT's lookup and its write cannot be
+// downgraded.
 func (h *handler) updateBookStatus(bookID int64, percentage float64) error {
 	var targetStatus string
 	switch {

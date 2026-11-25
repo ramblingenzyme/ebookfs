@@ -9,7 +9,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// TestRestoreEmptyLibrary verifies that Restore works on an empty library.
 func TestRestoreEmptyLibrary(t *testing.T) {
 	lib := openTestLibrary(t)
 
@@ -23,8 +22,6 @@ func TestRestoreEmptyLibrary(t *testing.T) {
 	}
 }
 
-// TestRestoreCreatesMissingSidecars verifies Restore computes document IDs and
-// writes sidecars for books that arrived without one.
 func TestRestoreCreatesMissingSidecars(t *testing.T) {
 	lib := openTestLibrary(t)
 
@@ -86,9 +83,8 @@ func TestRestoreCreatesMissingSidecars(t *testing.T) {
 	}
 }
 
-// TestRestoreSkipsCorruptSidecars verifies Restore skips books with corrupt
-// sidecars and indexes the rest. The corrupt file stays as it was, since the
-// progress in it may still be recoverable by hand.
+// The corrupt file stays as it was, since the progress in it may still be
+// recoverable by hand.
 func TestRestoreSkipsCorruptSidecars(t *testing.T) {
 	lib := openTestLibrary(t)
 

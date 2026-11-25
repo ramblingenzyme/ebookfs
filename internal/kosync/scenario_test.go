@@ -13,8 +13,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// TestProgressTransitions verifies that PUT progress at various percentages
-// transitions the book status correctly, with configurable thresholds.
 func TestProgressTransitions(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -100,8 +98,7 @@ func TestProgressTransitions(t *testing.T) {
 	}
 }
 
-// TestKosyncConcurrentProgressUpdates verifies that concurrent PUT requests
-// to the same book don't corrupt the sidecar.
+// Concurrent PUTs to one book must not corrupt its sidecar.
 func TestKosyncConcurrentProgressUpdates(t *testing.T) {
 	env := setupEnv(t, defaultCfg)
 
@@ -152,8 +149,7 @@ func TestKosyncConcurrentProgressUpdates(t *testing.T) {
 	}
 }
 
-// TestGetProgressUnknownDocument verifies GET on an unknown document returns 200 {}
-// per spec §5.5 [K-GET-3].
+// An unknown document answers 200 with {}, per spec §5.5 [K-GET-3].
 func TestGetProgressUnknownDocument(t *testing.T) {
 	env := setupEnv(t, defaultCfg)
 
@@ -166,7 +162,7 @@ func TestGetProgressUnknownDocument(t *testing.T) {
 	}
 }
 
-// TestGetProgressKnownDocument verifies GET returns all stored fields including timestamp.
+// Every stored field comes back, the timestamp included.
 func TestGetProgressKnownDocument(t *testing.T) {
 	env := setupEnv(t, defaultCfg)
 
@@ -210,8 +206,8 @@ func TestGetProgressKnownDocument(t *testing.T) {
 	}
 }
 
-// TestPutProgressUnknownDocument verifies PUT on an unknown document accepts
-// but doesn't store, returning 200 with {document, timestamp}.
+// An unknown document answers 200 with {document, timestamp}, and nothing is
+// stored.
 func TestPutProgressUnknownDocument(t *testing.T) {
 	env := setupEnv(t, defaultCfg)
 
@@ -237,8 +233,8 @@ func TestPutProgressUnknownDocument(t *testing.T) {
 	}
 }
 
-// TestProgressFieldRoundTrip verifies that XPointer strings and page numbers
-// survive byte-for-byte per spec §7.2 [K-FLD-3].
+// XPointer strings and page numbers survive byte for byte, per spec §7.2
+// [K-FLD-3].
 func TestProgressFieldRoundTrip(t *testing.T) {
 	env := setupEnv(t, defaultCfg)
 
@@ -275,8 +271,8 @@ func TestProgressFieldRoundTrip(t *testing.T) {
 	}
 }
 
-// TestDeviceIdRoundTrip verifies device_id is stored and returned when sent,
-// and omitted when not sent per spec §7.5 [K-FLD-7].
+// device_id comes back when sent and is omitted otherwise, per spec §7.5
+// [K-FLD-7].
 func TestDeviceIdRoundTrip(t *testing.T) {
 	env := setupEnv(t, defaultCfg)
 
@@ -320,8 +316,7 @@ func TestDeviceIdRoundTrip(t *testing.T) {
 	}
 }
 
-// TestMetadataAcceptance verifies that PUT with metadata field doesn't fail
-// per spec §7.6 [K-FLD-10].
+// A PUT carrying a metadata field still succeeds, per spec §7.6 [K-FLD-10].
 func TestMetadataAcceptance(t *testing.T) {
 	env := setupEnv(t, defaultCfg)
 
@@ -349,9 +344,8 @@ func TestMetadataAcceptance(t *testing.T) {
 	}
 }
 
-// TestKosyncStartupCreatesMissingSidecars verifies that kosync.New() creates
-// sidecars and populates the index for books that existed before kosync
-// was enabled.
+// Books that existed before kosync was enabled get a sidecar and an index
+// entry from New.
 func TestKosyncStartupCreatesMissingSidecars(t *testing.T) {
 	// Create a library and ingest books WITHOUT kosync hook registered
 	lib := openTestLibrary(t)
@@ -367,8 +361,6 @@ func TestKosyncStartupCreatesMissingSidecars(t *testing.T) {
 		}
 	}
 
-	// Enable kosync — should create sidecars and populate the index for
-	// existing books
 	srv, err := New(lib.Library, defaultCfg)
 	if err != nil {
 		t.Fatalf("kosync.New: %v", err)
