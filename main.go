@@ -136,10 +136,8 @@ func registerOPDS(runner *frontend.Runner, lib *library.Library, cfg *config.Con
 
 func registerKOSync(runner *frontend.Runner, lib *library.Library, cfg *config.Config) {
 	if cfg.KOSync.Enable {
-		// Compute MD5 hash of plaintext password
 		passwordHash := fmt.Sprintf("%x", md5.Sum([]byte(cfg.KOSync.Password)))
 
-		// Create kosync server (handles mapping and hook setup internally)
 		kosyncSrv, err := kosync.New(lib, kosync.Config{
 			Username:         cfg.KOSync.Username,
 			PasswordHash:     passwordHash,

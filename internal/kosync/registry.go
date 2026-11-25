@@ -34,7 +34,6 @@ func newDocRegistry() *docRegistry {
 	return &docRegistry{data: make(map[string]int64)}
 }
 
-// Lookup returns the book_id for a document_id, or ok=false if not found.
 func (r *docRegistry) Lookup(docID string) (int64, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

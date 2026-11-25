@@ -166,7 +166,6 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 	_ = json.NewEncoder(w).Encode(data)
 }
 
-// writeServerError logs an error and writes a 502 response with codeUnknownServer.
 func writeServerError(w http.ResponseWriter, msg string, bookID int64, err error) {
 	slog.Error(msg, "book_id", bookID, "error", err) //nolint:sloglint // every caller passes a constant
 	writeError(w, http.StatusBadGateway, codeUnknownServer, "Unknown server error.")
