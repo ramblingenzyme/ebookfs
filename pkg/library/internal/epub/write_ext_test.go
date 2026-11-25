@@ -104,6 +104,19 @@ func TestWriteBibTitleChangeClearsStaleSortTitle(t *testing.T) {
 	}
 }
 
+// The title change clears the sort title, so a sort title sent with it has to
+// be applied after.
+func TestWriteBibTitleAndSortTitleTogether(t *testing.T) {
+	path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
+	book, err := writeBib(path, bookmodel.Edits{Title: new("Wuthering Heights"), SortTitle: new("Heights, Wuthering")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if book.Title != "Wuthering Heights" || book.SortTitle != "Heights, Wuthering" {
+		t.Errorf("title, sort title = %q, %q; want Wuthering Heights, Heights, Wuthering", book.Title, book.SortTitle)
+	}
+}
+
 // library.Edit calls Rewrite even for edits that only touch meta.toml, such as
 // a rating. Rewriting the epub then would needlessly update dcterms:modified.
 //

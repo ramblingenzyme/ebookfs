@@ -15,7 +15,7 @@ import (
 // Values sharing a prefix are OR'd within the field, different prefixes AND'd
 // across fields. author matches a display name or a sort name, as
 // Index.Search does.
-func ParseQuery(query string) (library.Query, error) {
+func ParseQuery(query string) (library.Query, error) { //nolint:cyclop // one case per query prefix
 	parts := strings.Split(query, "+")
 	var q library.Query
 	for _, part := range parts {

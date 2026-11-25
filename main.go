@@ -90,7 +90,26 @@ func main() {
 	runner := frontend.NewRunner(cfg.HTTP.Listen)
 	runner.Register(ninepSrv)
 
-	// Register OPDS as HTTPFrontend if enabled
+	registerOPDS(runner, lib, cfg)
+	registerKOSync(runner, lib, cfg)
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	// The library closes before the exit status is reported, so a frontend
+	// failure still leaves the index shut down cleanly.
+	runErr := runner.Run(ctx, 10*time.Second)
+	if err := lib.Close(); err != nil {
+		slog.Error("closing library", "error", err)
+	}
+	if runErr != nil {
+		fatal("serving", runErr)
+	}
+
+	slog.Info("server stopped")
+}
+
+func registerOPDS(runner *frontend.Runner, lib *library.Library, cfg *config.Config) {
 	if cfg.OPDS.Enable {
 		opdsSrv := opds.New(lib, opds.Config{
 			BaseURL: cfg.HTTP.BaseURL,
@@ -103,8 +122,9 @@ func main() {
 	} else {
 		slog.Info("OPDS catalog disabled", "reason", "opds.enable is false")
 	}
+}
 
-	// Register kosync as HTTPFrontend if enabled
+func registerKOSync(runner *frontend.Runner, lib *library.Library, cfg *config.Config) {
 	if cfg.KOSync.Enable {
 		// Compute MD5 hash of plaintext password
 		passwordHash := fmt.Sprintf("%x", md5.Sum([]byte(cfg.KOSync.Password)))
@@ -129,19 +149,4 @@ func main() {
 	} else {
 		slog.Info("kosync disabled", "reason", "kosync.enable is false")
 	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	// The library closes before the exit status is reported, so a frontend
-	// failure still leaves the index shut down cleanly.
-	runErr := runner.Run(ctx, 10*time.Second)
-	if err := lib.Close(); err != nil {
-		slog.Error("closing library", "error", err)
-	}
-	if runErr != nil {
-		fatal("serving", runErr)
-	}
-
-	slog.Info("server stopped")
 }

@@ -42,20 +42,24 @@ func ResolveHref(baseDir, href string) string {
 }
 
 // Representable reports whether every character of s is one XML 1.0 §2.2's
-// Char production allows. Tab, newline and carriage return are the only
-// control characters it admits, and invalid UTF-8 has no representation.
+// Char production allows. Invalid UTF-8 has no representation.
 func Representable(s string) bool {
 	if !utf8.ValidString(s) {
 		return false
 	}
 	for _, r := range s {
-		ok := r == 0x9 || r == 0xA || r == 0xD ||
-			(r >= 0x20 && r <= 0xD7FF) ||
-			(r >= 0xE000 && r <= 0xFFFD) ||
-			(r >= 0x10000 && r <= 0x10FFFF)
-		if !ok {
+		if !isChar(r) {
 			return false
 		}
 	}
 	return true
+}
+
+// isChar is XML 1.0 §2.2's Char production. Tab, newline and carriage return
+// are the only control characters it admits.
+func isChar(r rune) bool {
+	return r == 0x9 || r == 0xA || r == 0xD ||
+		(r >= 0x20 && r <= 0xD7FF) ||
+		(r >= 0xE000 && r <= 0xFFFD) ||
+		(r >= 0x10000 && r <= 0x10FFFF)
 }

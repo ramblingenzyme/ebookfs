@@ -42,13 +42,8 @@ func toPublication(b *library.Book) opds.Publication {
 		p.In(l)
 	}
 
-	if pub := b.Publisher(); pub != "" {
-		p.Publisher = pub
-	}
-
-	if rights := b.Rights(); rights != "" {
-		p.Rights = rights
-	}
+	p.Publisher = b.Publisher()
+	p.Rights = b.Rights()
 
 	for _, subject := range b.Subjects() {
 		p.Subjects = append(p.Subjects, opds.Subject{Name: subject})

@@ -3,6 +3,7 @@ package opf
 import (
 	"strings"
 
+	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/opf/pkgdoc"
 	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/xml"
 )
 
@@ -33,10 +34,15 @@ func (o *Package) cover(base string) string {
 		}
 	}
 
-	// Neither spec describes this fallback.
-	//
-	// ponytail: last match wins, where calibre takes the first. Revisit if a
-	// book shows the wrong cover.
+	return guessCover(manifest, base)
+}
+
+// guessCover takes an image item whose id mentions "cover". Neither spec
+// describes this fallback.
+//
+// ponytail: last match wins, where calibre takes the first. Revisit if a
+// book shows the wrong cover.
+func guessCover(manifest []pkgdoc.Item, base string) string {
 	found := ""
 	for _, item := range manifest {
 		if strings.HasPrefix(item.MediaType, "image") &&

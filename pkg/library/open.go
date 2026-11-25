@@ -64,14 +64,8 @@ func Open(cfg Config, opts ...Option) (*Library, error) {
 // openLocked does the work of opening the library while holding the lock.
 // If it fails, the caller is responsible for closing lockFile.
 func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
-	if err := os.MkdirAll(cfg.InboxTemp, 0o700); err != nil {
-		return nil, fmt.Errorf("creating inbox temp dir: %w", err)
-	}
-	if err := cleanInboxTemp(cfg.InboxTemp); err != nil {
-		return nil, fmt.Errorf("cleaning inbox temp: %w", err)
-	}
-	if err := checkSameFilesystem(cfg.Root, cfg.InboxTemp); err != nil {
-		return nil, fmt.Errorf("inbox_temp must be on the same filesystem as library.root: %w", err)
+	if err := prepareInboxTemp(cfg.InboxTemp, cfg.Root); err != nil {
+		return nil, err
 	}
 
 	if cfg.StateDir == "" {
@@ -135,6 +129,19 @@ func recordLastID(s *store.Store, idx *index.Index) {
 			slog.Warn("could not record the last issued book id; a deleted book's id may be reissued", "error", err)
 		}
 	}
+}
+
+func prepareInboxTemp(dir, root string) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("creating inbox temp dir: %w", err)
+	}
+	if err := cleanInboxTemp(dir); err != nil {
+		return fmt.Errorf("cleaning inbox temp: %w", err)
+	}
+	if err := checkSameFilesystem(root, dir); err != nil {
+		return fmt.Errorf("inbox_temp must be on the same filesystem as library.root: %w", err)
+	}
+	return nil
 }
 
 func cleanInboxTemp(dir string) error {

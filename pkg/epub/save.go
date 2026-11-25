@@ -95,93 +95,104 @@ func (b *Book) stage() (map[string][]byte, error) {
 	}
 
 	replace := make(map[string][]byte, 3)
-
 	if b.cover != nil {
-		if enc.IsEncrypted(b.coverPath) {
-			return nil, fmt.Errorf("refusing to replace encrypted cover: %s", b.coverPath)
-		}
-		replace[b.coverPath] = b.cover
-		cfg, _, err := image.DecodeConfig(bytes.NewReader(b.cover))
-		if err != nil {
-			return nil, err
-		}
-		if err := b.refitCoverPage(enc, cfg.Width, cfg.Height, replace); err != nil {
+		if err := b.stageCover(enc, replace); err != nil {
 			return nil, err
 		}
 	}
-
 	if m := b.moved(); m.changed() {
-		if err := b.representable(m); err != nil {
-			return nil, err
-		}
-		if enc.IsEncrypted(b.PackagePath()) {
-			return nil, fmt.Errorf("refusing to edit: package document %q is encrypted", b.PackagePath())
-		}
-		out, err := b.pkg.Apply(func(d *opf.Package) { b.write(d, m) })
-		if err != nil {
-			return nil, err
-		}
-		if out != nil {
-			replace[b.PackagePath()] = out
-		}
-		if err := b.syncNCX(enc, m, replace); err != nil {
+		if err := b.stageMetadata(enc, m, replace); err != nil {
 			return nil, err
 		}
 	}
-
 	return replace, nil
+}
+
+// stageCover replaces the cover image and refits the page that shows it.
+func (b *Book) stageCover(enc *ocf.EncryptionInfo, replace map[string][]byte) error {
+	if enc.IsEncrypted(b.coverPath) {
+		return fmt.Errorf("refusing to replace encrypted cover: %s", b.coverPath)
+	}
+	replace[b.coverPath] = b.cover
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(b.cover))
+	if err != nil {
+		return err
+	}
+	return b.refitCoverPage(enc, cfg.Width, cfg.Height, replace)
+}
+
+// stageMetadata rewrites the package document for the fields m names, and the
+// NCX beside it.
+func (b *Book) stageMetadata(enc *ocf.EncryptionInfo, m moved, replace map[string][]byte) error {
+	if err := b.representable(m); err != nil {
+		return err
+	}
+	if enc.IsEncrypted(b.PackagePath()) {
+		return fmt.Errorf("refusing to edit: package document %q is encrypted", b.PackagePath())
+	}
+	out, err := b.pkg.Apply(func(d *opf.Package) { b.write(d, m) })
+	if err != nil {
+		return err
+	}
+	if out != nil {
+		replace[b.PackagePath()] = out
+	}
+	return b.syncNCX(enc, m, replace)
 }
 
 // representable refuses a changed field holding a character XML 1.0 cannot
 // represent. Only the changed fields are checked, so a value a file already
 // carries does not block an unrelated edit.
 func (b *Book) representable(m moved) error {
-	var bad string
-	check := func(field string, values ...string) {
-		for _, v := range values {
-			if bad == "" && !xml.Representable(v) {
-				bad = fmt.Sprintf("%s %q", field, v)
+	for _, f := range []struct {
+		changed bool
+		field   string
+		values  []string
+	}{
+		{m.title, "title", []string{b.Title}},
+		{m.sortTitle, "sort title", []string{b.SortTitle}},
+		{m.description, "description", []string{b.Description}},
+		{m.language, "language", []string{b.Language}},
+		{m.publisher, "publisher", []string{b.Publisher}},
+		{m.rights, "rights", []string{b.Rights}},
+		{m.authors, "author", authorValues(b.Authors)},
+		{m.series, "series", seriesValues(b.Series)},
+		{m.subjects, "subject", b.Subjects},
+		{m.contributors, "contributor", contributorValues(b.Contributors)},
+	} {
+		if !f.changed {
+			continue
+		}
+		for _, v := range f.values {
+			if !xml.Representable(v) {
+				return fmt.Errorf("refusing to edit: %s %q holds a character XML 1.0 cannot represent", f.field, v)
 			}
 		}
 	}
-	if m.title {
-		check("title", b.Title)
-	}
-	if m.sortTitle {
-		check("sort title", b.SortTitle)
-	}
-	if m.description {
-		check("description", b.Description)
-	}
-	if m.language {
-		check("language", b.Language)
-	}
-	if m.publisher {
-		check("publisher", b.Publisher)
-	}
-	if m.rights {
-		check("rights", b.Rights)
-	}
-	if m.authors {
-		for _, a := range b.Authors {
-			check("author", a.Name, a.SortName)
-		}
-	}
-	if m.series && b.Series != nil {
-		check("series", b.Series.Name, b.Series.Index)
-	}
-	if m.subjects {
-		check("subject", b.Subjects...)
-	}
-	if m.contributors {
-		for _, c := range b.Contributors {
-			check("contributor", c.Name, c.Role)
-		}
-	}
-	if bad != "" {
-		return fmt.Errorf("refusing to edit: %s holds a character XML 1.0 cannot represent", bad)
-	}
 	return nil
+}
+
+func authorValues(as []Author) []string {
+	var out []string
+	for _, a := range as {
+		out = append(out, a.Name, a.SortName)
+	}
+	return out
+}
+
+func seriesValues(s *Series) []string {
+	if s == nil {
+		return nil
+	}
+	return []string{s.Name, s.Index}
+}
+
+func contributorValues(cs []Contributor) []string {
+	var out []string
+	for _, c := range cs {
+		out = append(out, c.Name, c.Role)
+	}
+	return out
 }
 
 // moved records which fields changed since Open. write and changed both read
@@ -222,49 +233,52 @@ func sameSeries(a, c *Series) bool {
 // inside Apply, which compares the document before and after to decide whether
 // to update dcterms:modified (§5.5.5).
 func (b *Book) write(d *opf.Package, m moved) {
-	// opf.Package.SetTitle says why the sort title is always passed, but the
-	// title only when it changed.
-	if m.title || m.sortTitle {
-		var title *string
-		if m.title {
-			title = &b.Title
+	for _, f := range []struct {
+		changed bool
+		set     func()
+	}{
+		// opf.Package.SetTitle says why the sort title is always passed, but
+		// the title only when it changed.
+		{m.title || m.sortTitle, func() { d.SetTitle(b.changedTitle(m), &b.SortTitle) }},
+		{m.description, func() { d.SetDescription(b.Description) }},
+		{m.language, func() { d.SetLanguage(b.Language) }},
+		{m.authors, func() { d.SetAuthors(opfAuthors(b.Authors)) }},
+		{m.series, func() { d.SetSeries((*opf.Series)(b.Series)) }},
+		{m.publisher, func() { d.SetPublisher(b.Publisher) }},
+		{m.rights, func() { d.SetRights(b.Rights) }},
+		{m.subjects, func() { d.SetSubjects(b.Subjects) }},
+		{m.contributors, func() { d.SetContributors(opfContributors(b.Contributors)) }},
+	} {
+		if f.changed {
+			f.set()
 		}
-		d.SetTitle(title, &b.SortTitle)
 	}
-	if m.description {
-		d.SetDescription(b.Description)
+}
+
+// changedTitle is the title when m changes it, and nil otherwise.
+func (b *Book) changedTitle(m moved) *string {
+	if m.title {
+		return &b.Title
 	}
-	if m.language {
-		d.SetLanguage(b.Language)
+	return nil
+}
+
+// Author, Contributor and Series match opf's types field for field, so they
+// convert directly, and a field added to only one side stops this compiling.
+func opfAuthors(as []Author) []opf.Author {
+	out := make([]opf.Author, len(as))
+	for i, a := range as {
+		out[i] = opf.Author(a)
 	}
-	// Author and Series match opf's types field for field, so they convert
-	// directly, and a field added to only one side stops this compiling.
-	if m.authors {
-		as := make([]opf.Author, len(b.Authors))
-		for i, a := range b.Authors {
-			as[i] = opf.Author(a)
-		}
-		d.SetAuthors(as)
+	return out
+}
+
+func opfContributors(cs []Contributor) []opf.Contributor {
+	out := make([]opf.Contributor, len(cs))
+	for i, c := range cs {
+		out[i] = opf.Contributor(c)
 	}
-	if m.series {
-		d.SetSeries((*opf.Series)(b.Series))
-	}
-	if m.publisher {
-		d.SetPublisher(b.Publisher)
-	}
-	if m.rights {
-		d.SetRights(b.Rights)
-	}
-	if m.subjects {
-		d.SetSubjects(b.Subjects)
-	}
-	if m.contributors {
-		cs := make([]opf.Contributor, len(b.Contributors))
-		for i, c := range b.Contributors {
-			cs[i] = opf.Contributor(c)
-		}
-		d.SetContributors(cs)
-	}
+	return out
 }
 
 // refitCoverPage updates the page that displays the cover to the new image's
@@ -322,17 +336,7 @@ func (b *Book) syncNCX(enc *ocf.EncryptionInfo, m moved, replace map[string][]by
 		return nil
 	}
 
-	var title *string
-	if m.title {
-		title = &b.Title
-	}
-	var names []string
-	if m.authors {
-		names = make([]string, len(b.Authors))
-		for i, a := range b.Authors {
-			names[i] = a.Name
-		}
-	}
+	title, names := b.ncxChanges(m)
 	out, err := doc.Apply(title, names)
 	if err != nil {
 		return err
@@ -341,6 +345,19 @@ func (b *Book) syncNCX(enc *ocf.EncryptionInfo, m moved, replace map[string][]by
 		replace[entry] = out
 	}
 	return nil
+}
+
+// ncxChanges returns the title and author names the NCX takes, each nil when
+// m leaves it unchanged.
+func (b *Book) ncxChanges(m moved) (title *string, names []string) {
+	title = b.changedTitle(m)
+	if m.authors {
+		names = make([]string, len(b.Authors))
+		for i, a := range b.Authors {
+			names[i] = a.Name
+		}
+	}
+	return title, names
 }
 
 // rewrite follows calibre's safe_replace. It:

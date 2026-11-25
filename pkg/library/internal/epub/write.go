@@ -27,18 +27,8 @@ func Rewrite(epubPath string, b *book.Book, e book.Edits) (book.Bib, error) {
 	}
 	defer f.Close()
 
-	if e.HasCoverEdit() {
-		if err := f.SetCover(*e.Cover); err != nil {
-			return book.Bib{}, err
-		}
-	}
-	if e.HasBibEdits() {
-		apply(f, e)
-		// Checked before Save, since setting a sort title on a package with no
-		// dc:title adds an empty title element.
-		if err := usable(f); err != nil {
-			return book.Bib{}, err
-		}
+	if err := edit(f, e); err != nil {
+		return book.Bib{}, err
 	}
 	if err := f.Save(); err != nil {
 		return book.Bib{}, err
@@ -54,37 +44,43 @@ func Rewrite(epubPath string, b *book.Book, e book.Edits) (book.Bib, error) {
 	return *bib, nil
 }
 
+// edit applies e to f in memory.
+func edit(f *epubfile.Book, e book.Edits) error {
+	if e.HasCoverEdit() {
+		if err := f.SetCover(*e.Cover); err != nil {
+			return err
+		}
+	}
+	if !e.HasBibEdits() {
+		return nil
+	}
+	apply(f, e)
+	// Checked before Save, since setting a sort title on a package with no
+	// dc:title adds an empty title element.
+	return usable(f)
+}
+
 func apply(f *epubfile.Book, e book.Edits) {
-	if e.Title != nil && *e.Title != f.Title {
-		f.Title = *e.Title
-		f.SortTitle = ""
-	}
-	if e.SortTitle != nil {
-		f.SortTitle = *e.SortTitle
-	}
-	if e.Description != nil {
-		f.Description = *e.Description
-	}
-	if e.Language != nil {
-		f.Language = *e.Language
-	}
-	if e.Publisher != nil {
-		f.Publisher = *e.Publisher
-	}
-	if e.Rights != nil {
-		f.Rights = *e.Rights
-	}
-	if e.Authors != nil {
-		f.Authors = authors(*e.Authors)
-	}
-	if e.Series != nil || e.SeriesIndex != nil {
-		f.Series = series(f.Series, e)
-	}
-	if e.Subjects != nil {
-		f.Subjects = *e.Subjects
-	}
-	if e.Contributors != nil {
-		f.Contributors = contributors(*e.Contributors)
+	for _, field := range []struct {
+		changed bool
+		set     func()
+	}{
+		// Title runs before SortTitle, since a new title clears the sort title
+		// that a SortTitle edit then sets.
+		{e.Title != nil && *e.Title != f.Title, func() { f.Title, f.SortTitle = *e.Title, "" }},
+		{e.SortTitle != nil, func() { f.SortTitle = *e.SortTitle }},
+		{e.Description != nil, func() { f.Description = *e.Description }},
+		{e.Language != nil, func() { f.Language = *e.Language }},
+		{e.Publisher != nil, func() { f.Publisher = *e.Publisher }},
+		{e.Rights != nil, func() { f.Rights = *e.Rights }},
+		{e.Authors != nil, func() { f.Authors = authors(*e.Authors) }},
+		{e.Series != nil || e.SeriesIndex != nil, func() { f.Series = series(f.Series, e) }},
+		{e.Subjects != nil, func() { f.Subjects = *e.Subjects }},
+		{e.Contributors != nil, func() { f.Contributors = contributors(*e.Contributors) }},
+	} {
+		if field.changed {
+			field.set()
+		}
 	}
 }
 

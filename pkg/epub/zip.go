@@ -152,33 +152,27 @@ func (a *archive) metadataPath() (string, error) {
 	return "", ErrRootfileMissing
 }
 
+// writeEntry writes data in f's place when replaced, and copies f otherwise.
+func writeEntry(zw *zip.Writer, f *zip.File, data []byte, replaced bool) error {
+	hdr := &zip.FileHeader{Name: f.Name, Method: f.Method, Modified: f.Modified}
+	switch {
+	case replaced:
+		w, err := zw.CreateHeader(hdr)
+		if err != nil {
+			return err
+		}
+		_, err = w.Write(data)
+		return err
+	case strings.HasSuffix(f.Name, "/"):
+		_, err := zw.CreateHeader(hdr)
+		return err
+	default:
+		return zw.Copy(f)
+	}
+}
+
 func (a *archive) writeTo(zw *zip.Writer, replace map[string][]byte) error {
 	used := make(map[string]bool, len(replace))
-	writeEntry := func(f *zip.File) error {
-		// Matched by the entry itself, not only its name. A zip can hold two
-		// entries with one name. The replacement was resolved against one of
-		// them, and the other must be copied unchanged.
-		data, ok := replace[f.Name]
-		ok = ok && a.file(f.Name) == f
-
-		hdr := &zip.FileHeader{Name: f.Name, Method: f.Method, Modified: f.Modified}
-		switch {
-		case ok:
-			used[f.Name] = true
-			w, err := zw.CreateHeader(hdr)
-			if err != nil {
-				return err
-			}
-			_, err = w.Write(data)
-			return err
-		case strings.HasSuffix(f.Name, "/"):
-			_, err := zw.CreateHeader(hdr)
-			return err
-		default:
-			return zw.Copy(f)
-		}
-	}
-
 	mt := a.file(mimetypePath)
 	if mt == nil {
 		return fmt.Errorf("%w: missing mimetype declaration", ErrNotEpub)
@@ -191,7 +185,15 @@ func (a *archive) writeTo(zw *zip.Writer, replace map[string][]byte) error {
 		if f.Name == mimetypePath {
 			continue
 		}
-		if err := writeEntry(f); err != nil {
+		// Matched by the entry itself, not only its name. A zip can hold two
+		// entries with one name. The replacement was resolved against one of
+		// them, and the other must be copied unchanged.
+		data, ok := replace[f.Name]
+		ok = ok && a.file(f.Name) == f
+		if ok {
+			used[f.Name] = true
+		}
+		if err := writeEntry(zw, f, data, ok); err != nil {
 			return err
 		}
 	}

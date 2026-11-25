@@ -5,16 +5,20 @@ linters:
   enable:
     - asasalint
     - bidichk
+    - cyclop
     - depguard
+    - dupl
     - durationcheck
     - errorlint
     - exhaustive
+    - gocognit
     - gocritic
     - makezero
     - modernize
     - nilerr
     - nolintlint
     - reassign
+    - recvcheck
     - rowserrcheck
     - sloglint
     - sqlclosecheck
@@ -44,6 +48,8 @@ linters:
             - modernc.org/sqlite
     exhaustive:
       default-signifies-exhaustive: true
+    gocognit:
+      min-complexity: 15
     sloglint:
       kv-only: true
       key-naming-case: snake
@@ -75,6 +81,12 @@ linters:
     presets:
       # Close and Remove on cleanup paths. Write paths check Close explicitly.
       - std-error-handling
+    rules:
+      # A table-driven test is long by design.
+      - path: (_test\.go|internal/testing/)
+        linters:
+          - cyclop
+          - gocognit
 
 formatters:
   enable:

@@ -113,6 +113,36 @@ func Open(path string, allowSMB bool) (*Index, error) {
 		slog.Warn("a lock left by a dead SMB client can delay opening the index", "path", path)
 	}
 
+	db, err := openWriter(path, fsType)
+	if err != nil {
+		return nil, err
+	}
+
+	// In EXCLUSIVE mode the writer connection holds the lock, so reads go
+	// through it too.
+	readDB := db
+	if !fsType.IsSMB() {
+		readDB, err = sql.Open("sqlite", dsn(path, readerPragmas(fsType)...))
+		if err != nil {
+			db.Close()
+			return nil, err
+		}
+		readDB.SetMaxOpenConns(4)
+		readDB.SetMaxIdleConns(4)
+	}
+
+	return &Index{
+		db:      db,
+		wq:      dbsqlc.New(db),
+		readDB:  readDB,
+		queries: dbsqlc.New(readDB),
+		ctx:     context.Background(),
+	}, nil
+}
+
+// openWriter opens the single writer connection, applying the schema to a
+// fresh database. It closes the connection on any failure.
+func openWriter(path string, fsType fsutil.FSType) (*sql.DB, error) {
 	db, err := sql.Open("sqlite", dsn(path, writerPragmas(fsType)...))
 	if err != nil {
 		return nil, err
@@ -146,27 +176,7 @@ func Open(path string, allowSMB bool) (*Index, error) {
 			return nil, fmt.Errorf("applying schema: %w", err)
 		}
 	}
-
-	// In EXCLUSIVE mode the writer connection holds the lock, so reads go
-	// through it too.
-	readDB := db
-	if !fsType.IsSMB() {
-		readDB, err = sql.Open("sqlite", dsn(path, readerPragmas(fsType)...))
-		if err != nil {
-			db.Close()
-			return nil, err
-		}
-		readDB.SetMaxOpenConns(4)
-		readDB.SetMaxIdleConns(4)
-	}
-
-	return &Index{
-		db:      db,
-		wq:      dbsqlc.New(db),
-		readDB:  readDB,
-		queries: dbsqlc.New(readDB),
-		ctx:     context.Background(),
-	}, nil
+	return db, nil
 }
 
 func (idx *Index) dropAllTables() error {

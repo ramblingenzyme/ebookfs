@@ -48,59 +48,78 @@ func (f contributorsField) get() []Contributor {
 // A person's existing element is reused, so refinements such as file-as
 // survive a role change. Unclaimed contributors are removed with theirs.
 func (f contributorsField) set(contributors []Contributor) {
-	existing := f.d.DCAll("contributor")
-	claimed := make([]bool, len(existing))
-	claim := func(match func(*pkgdoc.Element) bool) *pkgdoc.Element {
-		for j, el := range existing {
-			if !claimed[j] && el.Get() != "" && match(el) {
-				claimed[j] = true
-				return el
-			}
-		}
-		return nil
-	}
-	write := func(el *pkgdoc.Element, name string, roles []string) {
-		if el == nil {
-			el = f.d.NewDC("contributor")
-		}
-		el.Set(name)
-		el.Place()
-		f.setRoles(el, roles)
-	}
-
+	c := newClaims(f.d.DCAll("contributor"))
 	if f.d.EPUB3() {
 		for _, p := range people(contributors) {
-			write(claim(func(el *pkgdoc.Element) bool { return el.Get() == p.name }), p.name, p.roles)
+			f.write(c.take(func(el *pkgdoc.Element) bool { return el.Get() == p.name }), p.name, p.roles)
 		}
 	} else {
-		var entries []Contributor
-		for _, c := range contributors {
-			if !slices.Contains(entries, c) {
-				entries = append(entries, c)
-			}
-		}
-		// Exact matches are claimed first, or an entry for one role could take
-		// the element a later entry for another role was shown.
-		out := make([]*pkgdoc.Element, len(entries))
-		for i, c := range entries {
-			out[i] = claim(func(el *pkgdoc.Element) bool { return contributorOf(el) == c })
-		}
-		for i, c := range entries {
-			if out[i] == nil {
-				out[i] = claim(func(el *pkgdoc.Element) bool { return el.Get() == c.Name })
-			}
-			var roles []string
-			if c.Role != "" {
-				roles = []string{c.Role}
-			}
-			write(out[i], c.Name, roles)
-		}
+		f.setEPUB2(c, contributors)
 	}
-
 	// After the writes, since ensureID scans the tree for ids and cannot see a
 	// detached contributor.
-	for j, el := range existing {
-		if !claimed[j] {
+	c.removeRest()
+}
+
+// setEPUB2 writes one element per distinct name and role pair.
+func (f contributorsField) setEPUB2(c *claims, contributors []Contributor) {
+	var entries []Contributor
+	for _, e := range contributors {
+		if !slices.Contains(entries, e) {
+			entries = append(entries, e)
+		}
+	}
+	// Exact matches are claimed first, or an entry for one role could take
+	// the element a later entry for another role was shown.
+	out := make([]*pkgdoc.Element, len(entries))
+	for i, e := range entries {
+		out[i] = c.take(func(el *pkgdoc.Element) bool { return contributorOf(el) == e })
+	}
+	for i, e := range entries {
+		if out[i] == nil {
+			out[i] = c.take(func(el *pkgdoc.Element) bool { return el.Get() == e.Name })
+		}
+		var roles []string
+		if e.Role != "" {
+			roles = []string{e.Role}
+		}
+		f.write(out[i], e.Name, roles)
+	}
+}
+
+// write fills el, or a new element when el is nil.
+func (f contributorsField) write(el *pkgdoc.Element, name string, roles []string) {
+	if el == nil {
+		el = f.d.NewDC("contributor")
+	}
+	el.Set(name)
+	el.Place()
+	f.setRoles(el, roles)
+}
+
+// claims hands out the existing non-empty contributor elements, each once.
+type claims struct {
+	els   []*pkgdoc.Element
+	taken []bool
+}
+
+func newClaims(els []*pkgdoc.Element) *claims {
+	return &claims{els: els, taken: make([]bool, len(els))}
+}
+
+func (c *claims) take(match func(*pkgdoc.Element) bool) *pkgdoc.Element {
+	for j, el := range c.els {
+		if !c.taken[j] && el.Get() != "" && match(el) {
+			c.taken[j] = true
+			return el
+		}
+	}
+	return nil
+}
+
+func (c *claims) removeRest() {
+	for j, el := range c.els {
+		if !c.taken[j] {
 			el.Remove()
 		}
 	}

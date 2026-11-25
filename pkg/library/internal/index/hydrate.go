@@ -36,27 +36,15 @@ func (idx *Index) hydrateBooks(books []*book.Book) error {
 	}
 
 	for _, b := range books {
-		b.Authors = authors[b.Meta.ID]
-		if b.Authors == nil {
-			b.Authors = []book.Author{}
-		}
-		b.Meta.Tags = tags[b.Meta.ID]
-		if b.Meta.Tags == nil {
-			b.Meta.Tags = []string{}
-		}
+		b.Authors = orEmpty(authors[b.Meta.ID])
+		b.Meta.Tags = orEmpty(tags[b.Meta.ID])
 		if m := identifiers[b.Meta.ID]; m != nil {
 			b.Identifiers = m
 		} else {
 			b.Identifiers = make(map[string]string)
 		}
-		b.Subjects = subjects[b.Meta.ID]
-		if b.Subjects == nil {
-			b.Subjects = []string{}
-		}
-		b.Contributors = contributors[b.Meta.ID]
-		if b.Contributors == nil {
-			b.Contributors = []book.Contributor{}
-		}
+		b.Subjects = orEmpty(subjects[b.Meta.ID])
+		b.Contributors = orEmpty(contributors[b.Meta.ID])
 	}
 
 	return nil
@@ -132,4 +120,12 @@ func (idx *Index) loadContributors(ids []int64) (map[int64][]book.Contributor, e
 		})
 	}
 	return out, nil
+}
+
+// orEmpty returns s, or an empty slice for nil.
+func orEmpty[T any](s []T) []T {
+	if s == nil {
+		return []T{}
+	}
+	return s
 }

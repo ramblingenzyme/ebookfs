@@ -58,33 +58,17 @@ func (idx *Index) rebuildTx(books []BookPath, skipped map[string]drift.PathInfo,
 	}
 
 	return idx.withTx(func(q *dbsqlc.Queries, tx *sql.Tx) error {
-		for _, t := range []string{
-			"book_authors", "book_tags", "book_subjects", "book_contributors", "identifiers",
-			"books", "authors", "series", "tags", "subjects", "contributors", "skipped_books",
-		} {
-			if _, err := tx.ExecContext(idx.ctx, "DELETE FROM "+t); err != nil {
-				return err
-			}
+		if err := idx.clearTables(tx); err != nil {
+			return err
 		}
-
 		for _, bt := range books {
 			if err := idx.insertBook(q, bt.Book, bt.Info); err != nil {
 				return err
 			}
 		}
-
-		for path, info := range skipped {
-			if err := q.InsertSkippedBook(idx.ctx, dbsqlc.InsertSkippedBookParams{
-				EpubPath:  path,
-				EpubSize:  info.Size,
-				EpubMtime: toUnixNano(info.EpubMtime),
-				MetaMtime: toUnixNano(info.MetaMtime),
-				MetaSize:  info.MetaSize,
-			}); err != nil {
-				return err
-			}
+		if err := idx.insertSkipped(q, skipped); err != nil {
+			return err
 		}
-
 		if maxID > 0 {
 			if err := q.SetBookIDSequence(idx.ctx, maxID); err != nil {
 				return err
@@ -93,6 +77,33 @@ func (idx *Index) rebuildTx(books []BookPath, skipped map[string]drift.PathInfo,
 
 		return q.DeleteAllPendingOps(idx.ctx)
 	})
+}
+
+func (idx *Index) clearTables(tx *sql.Tx) error {
+	for _, t := range []string{
+		"book_authors", "book_tags", "book_subjects", "book_contributors", "identifiers",
+		"books", "authors", "series", "tags", "subjects", "contributors", "skipped_books",
+	} {
+		if _, err := tx.ExecContext(idx.ctx, "DELETE FROM "+t); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (idx *Index) insertSkipped(q *dbsqlc.Queries, skipped map[string]drift.PathInfo) error {
+	for path, info := range skipped {
+		if err := q.InsertSkippedBook(idx.ctx, dbsqlc.InsertSkippedBookParams{
+			EpubPath:  path,
+			EpubSize:  info.Size,
+			EpubMtime: toUnixNano(info.EpubMtime),
+			MetaMtime: toUnixNano(info.MetaMtime),
+			MetaSize:  info.MetaSize,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Rebuild records each directory it could not index in skipped, rather than

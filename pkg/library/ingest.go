@@ -95,26 +95,13 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 		return nil, fmt.Errorf("pre-commit hook: %w", err)
 	}
 
-	dupe, err := l.index.Exists(bib.Title, authorNames(bib.Authors))
+	if err := l.rejectDuplicate(bib); err != nil {
+		return nil, err
+	}
+	id, err := l.allocateID()
 	if err != nil {
 		return nil, err
 	}
-	if dupe {
-		return nil, fmt.Errorf("%q: %w", bib.Title, ErrDuplicate)
-	}
-	// The index cannot see a book it skipped.
-	if l.store.PathTaken(bib.Authors, bib.Title) {
-		return nil, fmt.Errorf("%q: %w", bib.Title, ErrDuplicateOnDisk)
-	}
-
-	id, err := l.index.NextID()
-	if err != nil {
-		return nil, err
-	}
-	if err := l.store.RecordID(id); err != nil {
-		return nil, fmt.Errorf("recording book id %d: %w", id, err)
-	}
-
 	now := time.Now()
 	meta := book.Meta{
 		ID:           id,
@@ -122,12 +109,55 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 		DateModified: now,
 	}
 	loc := l.store.Layout(bib.Authors, bib.Title, id)
-
-	op, err := l.index.MarkPending()
+	b, err := l.place(processedPath, bib, loc, meta)
 	if err != nil {
 		return nil, err
 	}
 
+	slog.Info("ingest: book added", "book_id", b.ID(), "title", b.Title(), "authors", book.JoinAuthors(b.Authors(), ", "))
+
+	// Serialize the event with later edits and deletes of this newly indexed book.
+	mu := l.bookMu.For(b.ID())
+	mu.Lock()
+	l.hooks.onIngested(l, b, loc)
+	mu.Unlock()
+
+	return b, nil
+}
+
+func (l *Library) rejectDuplicate(bib *book.Bib) error {
+	dupe, err := l.index.Exists(bib.Title, authorNames(bib.Authors))
+	if err != nil {
+		return err
+	}
+	if dupe {
+		return fmt.Errorf("%q: %w", bib.Title, ErrDuplicate)
+	}
+	// The index cannot see a book it skipped.
+	if l.store.PathTaken(bib.Authors, bib.Title) {
+		return fmt.Errorf("%q: %w", bib.Title, ErrDuplicateOnDisk)
+	}
+	return nil
+}
+
+func (l *Library) allocateID() (int64, error) {
+	id, err := l.index.NextID()
+	if err != nil {
+		return 0, err
+	}
+	if err := l.store.RecordID(id); err != nil {
+		return 0, fmt.Errorf("recording book id %d: %w", id, err)
+	}
+	return id, nil
+}
+
+// place moves the epub to loc and indexes it, removing what it placed if the
+// index write fails.
+func (l *Library) place(processedPath string, bib *book.Bib, loc book.Location, meta book.Meta) (*Book, error) {
+	op, err := l.index.MarkPending()
+	if err != nil {
+		return nil, err
+	}
 	b, err := func() (*Book, error) {
 		meta, mt, err := l.store.Ingest(processedPath, loc, meta)
 		if err != nil {
@@ -151,15 +181,6 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 
 		return nil, err
 	}
-
-	slog.Info("ingest: book added", "book_id", b.ID(), "title", b.Title(), "authors", book.JoinAuthors(b.Authors(), ", "))
-
-	// Serialize the event with later edits and deletes of this newly indexed book.
-	mu := l.bookMu.For(b.ID())
-	mu.Lock()
-	l.hooks.onIngested(l, b, loc)
-	mu.Unlock()
-
 	return b, nil
 }
 
