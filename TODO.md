@@ -77,7 +77,7 @@ replace the 9P server.
   `rename-tag`, `rename-author` and `rename-series` commands.
 - Startup reindex, narrowed to run only when the store and index disagree.
 - Multi-author filenames joined with `" & "`.
-- OPDS 1.2 / 2.0 catalog, read-only, off unless `opds.listen` is set.
+- OPDS 1.2 / 2.0 catalog, read-only, off unless `opds.enable` is set.
 - Interface segregation, done the other way round from the original plan: the
   library is a concrete struct and each frontend package declares the interface
   it consumes, so adding a method stays additive.

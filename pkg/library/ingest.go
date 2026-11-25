@@ -71,7 +71,7 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 	}
 
 	// Parsed before ingestMu is taken, so bulk uploads parse in parallel.
-	bib, err := epub.Parse(processedPath)
+	parsed, err := epub.Parse(processedPath)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +91,8 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 
 	// Hooks may amend the bibliographic fields used for duplicate detection
 	// and filing, so run them before checking those fields.
-	if err := l.hooks.preCommit(bib); err != nil {
+	bib, err := l.hooks.preCommit(processedPath, parsed)
+	if err != nil {
 		return nil, fmt.Errorf("pre-commit hook: %w", err)
 	}
 

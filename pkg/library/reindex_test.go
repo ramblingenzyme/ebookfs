@@ -254,6 +254,34 @@ func TestRepeatedTagInMetaDoesNotFailOpen(t *testing.T) {
 	}
 }
 
+// A nan rating failed every startup on the rebuild's NOT NULL constraint, and
+// the other values loaded unchecked. Each sidecar here skips its own book and
+// leaves the rest of the library opening.
+func TestInvalidMetaSkipsOnlyItsBook(t *testing.T) {
+	for _, tc := range []struct{ name, meta string }{
+		{"nan rating", "id = %d\nrating = nan\n"},
+		{"rating above 5", "id = %d\nrating = 9.0\n"},
+		{"unknown status", "id = %d\nstatus = \"bogus\"\n"},
+		{"zero id", "id = 0\n# %d\n"},
+		{"missing id", "rating = 1.0\n# %d\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := testConfig(t)
+			bad := ingestStopped(t, cfg, "Broken")
+			good := ingestStopped(t, cfg, "Fine")
+			writeFile(t, metaPathOf(bad, cfg.Root), fmt.Appendf(nil, tc.meta, bad.ID()))
+
+			got, err := openLib(t, cfg).Search(Query{})
+			if err != nil {
+				t.Fatalf("Search: %v", err)
+			}
+			if len(got) != 1 || got[0].ID() != good.ID() {
+				t.Errorf("indexed %v, want only book %d", got, good.ID())
+			}
+		})
+	}
+}
+
 // Two directories claiming one id is fatal (DECISIONS #14). The error names
 // both, where the bare SQLite constraint error names neither.
 func TestDuplicateBookIDFailsOpenNamingBothPaths(t *testing.T) {

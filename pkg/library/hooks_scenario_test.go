@@ -180,6 +180,65 @@ func TestEditWaitsForItsHookBeforeAnotherEdit(t *testing.T) {
 	}
 }
 
+type amendingHook struct {
+	library.HookBase
+	amend func(*library.Bib)
+}
+
+func (h amendingHook) PreCommit(bib *library.Bib) error {
+	h.amend(bib)
+	return nil
+}
+
+// The epub is the source of truth (DECISIONS #13), so an amendment held only
+// in the index was undone by the next rebuild.
+func TestPreCommitAmendmentSurvivesReindex(t *testing.T) {
+	cfg := testConfig(t)
+	lib := openLib(t, cfg)
+	lib.AddHook(amendingHook{amend: func(b *library.Bib) {
+		b.Title = "Amended"
+		b.Authors[0].Name = "Bob"
+		b.Publisher = "Hook Publisher"
+		b.Series = &library.Series{Name: "Saga", Index: "2"}
+	}})
+	b := ingestTestEpub(t, lib, buildTestEpub(t, "Original", "Alice"))
+	lib.Close()
+
+	got, err := openLib(t, cfg, library.WithForceReindex()).Get(b.ID())
+	if err != nil {
+		t.Fatalf("Get after reindex: %v", err)
+	}
+	if got.Title() != "Amended" || got.Authors()[0].Name != "Bob" || got.Publisher() != "Hook Publisher" {
+		t.Errorf("after reindex title %q, author %q, publisher %q, want the hook's amendments",
+			got.Title(), got.Authors()[0].Name, got.Publisher())
+	}
+	if s := got.Series(); s == nil || s.Name != "Saga" || s.Index != "2" {
+		t.Errorf("after reindex series %+v, want Saga 2", s)
+	}
+	if got.EpubPath() != b.EpubPath() {
+		t.Errorf("reindex moved the book from %q to %q", b.EpubPath(), got.EpubPath())
+	}
+}
+
+// pkg/epub has no setter for identifiers or pubdate, so ingest refuses rather
+// than indexing a value the file does not hold. An empty title is what an edit
+// refuses.
+func TestPreCommitRefusedAmendmentFailsIngest(t *testing.T) {
+	for name, amend := range map[string]func(*library.Bib){
+		"identifiers": func(b *library.Bib) { b.Identifiers = map[string]string{"isbn": "9780000000000"} },
+		"pubdate":     func(b *library.Bib) { b.Pubdate = "1999" },
+		"empty title": func(b *library.Bib) { b.Title = "" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			lib := openTestLibrary(t)
+			lib.AddHook(amendingHook{amend: amend})
+			if _, err := tryIngest(t, lib, buildTestEpub(t, "Rejected", "Alice")); err == nil {
+				t.Fatal("Ingest succeeded with an amendment the epub cannot hold")
+			}
+		})
+	}
+}
+
 type failingIngestHook struct {
 	library.HookBase
 	preParseErr  error
