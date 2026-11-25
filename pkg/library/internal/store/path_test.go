@@ -15,10 +15,28 @@ func layoutStore() *Store { return New("") }
 func TestLayout(t *testing.T) {
 	s := layoutStore()
 
-	loc := s.Layout([]book.Author{{Name: "Alice"}}, "My Title", 1)
-	wantRel := filepath.Join("Alice/My Title (1)", "My Title - Alice.epub")
-	if loc.EpubPath != wantRel {
-		t.Errorf("EpubPath = %q, want %q", loc.EpubPath, wantRel)
+	for _, tc := range []struct {
+		name    string
+		authors []book.Author
+		title   string
+		want    string
+	}{
+		{"single author", []book.Author{{Name: "Alice"}}, "My Title",
+			"Alice/My Title (1)/My Title - Alice.epub"},
+		{"two authors", []book.Author{{Name: "Alice"}, {Name: "Bob"}}, "The Title",
+			"Alice & Bob/The Title (1)/The Title - Alice & Bob.epub"},
+		{"nil authors", nil, "No Author", "Unknown/No Author (1)/No Author.epub"},
+		{"empty authors", []book.Author{}, "No Author", "Unknown/No Author (1)/No Author.epub"},
+		{"colon in title", []book.Author{{Name: "Alice"}}, "Title: Sub",
+			"Alice/Title: Sub (1)/Title- Sub - Alice.epub"},
+		{"slash in author", []book.Author{{Name: "Alice/Author"}}, "Title",
+			"Alice-Author/Title (1)/Title - Alice-Author.epub"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := s.Layout(tc.authors, tc.title, 1).EpubPath; got != tc.want {
+				t.Errorf("EpubPath = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -56,53 +74,6 @@ func TestLayoutKeepsEachComponentInOneDirectory(t *testing.T) {
 			}
 			if got := len(strings.Split(filepath.Dir(loc.EpubPath), string(filepath.Separator))); got != 2 {
 				t.Errorf("directory %q, want exactly two components", filepath.Dir(loc.EpubPath))
-			}
-		})
-	}
-}
-
-func TestCanonicalDir(t *testing.T) {
-	tests := []struct {
-		name    string
-		authors []book.Author
-		title   string
-		id      int64
-		want    string
-	}{
-		{"basic", []book.Author{{Name: "Alice"}}, "The Title", 42, "Alice/The Title (42)"},
-		{"two authors", []book.Author{{Name: "Alice"}, {Name: "Bob"}}, "The Title", 42, "Alice & Bob/The Title (42)"},
-		{"unknown author", nil, "No Author", 1, "Unknown/No Author (1)"},
-		{"title with id", []book.Author{{Name: "Bob"}}, "My Book", 7, "Bob/My Book (7)"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := canonicalDir(tt.authors, tt.title, tt.id)
-			if got != tt.want {
-				t.Errorf("canonicalDir(%v, %q, %d) = %q, want %q", tt.authors, tt.title, tt.id, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestEpubFilename(t *testing.T) {
-	tests := []struct {
-		name    string
-		authors []book.Author
-		title   string
-		want    string
-	}{
-		{"single author", []book.Author{{Name: "Alice"}}, "Wonderful Title", "Wonderful Title - Alice.epub"},
-		{"two authors", []book.Author{{Name: "Alice"}, {Name: "Bob"}}, "Title", "Title - Alice & Bob.epub"},
-		{"no authors", nil, "No Author Book", "No Author Book.epub"},
-		{"empty authors", []book.Author{}, "Empty Authors", "Empty Authors.epub"},
-		{"colon in title", []book.Author{{Name: "Alice"}}, "Title: Sub", "Title- Sub - Alice.epub"},
-		{"slash in author", []book.Author{{Name: "Alice/Author"}}, "Title", "Title - Alice-Author.epub"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := epubFilename(tt.authors, tt.title)
-			if got != tt.want {
-				t.Errorf("epubFilename(%v, %q) = %q, want %q", tt.authors, tt.title, got, tt.want)
 			}
 		})
 	}

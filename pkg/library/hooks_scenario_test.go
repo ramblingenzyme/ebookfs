@@ -161,6 +161,8 @@ func TestEditWaitsForItsHookBeforeAnotherEdit(t *testing.T) {
 		secondDone <- err
 	}()
 	<-secondStarted
+	// synctest.Wait cannot replace this window, since it never counts a
+	// goroutine waiting on the per-book sync.Mutex as durably blocked.
 	select {
 	case err := <-secondDone:
 		t.Fatalf("second edit returned before first hook completed: %v", err)
@@ -177,6 +179,13 @@ func TestEditWaitsForItsHookBeforeAnotherEdit(t *testing.T) {
 		case <-time.After(3 * time.Second):
 			t.Errorf("%s did not finish after releasing OnEdited", name)
 		}
+	}
+	got, err := lib.Get(b.ID())
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Title() != secondTitle {
+		t.Errorf("title after both edits = %q, want %q", got.Title(), secondTitle)
 	}
 }
 

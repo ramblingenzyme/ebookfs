@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -11,42 +12,26 @@ import (
 
 func TestRecentDirCapsAtLimitAndBackfillsOnRemove(t *testing.T) {
 	reg, d := overfilledRecentDir(t)
+	wantRecent(t, d, 2, 3, 4, 5, 6)
 
-	if len(d.visible) != recentLimit {
-		t.Fatalf("expected %d visible books, got %d: %v", recentLimit, len(d.visible), d.visible)
-	}
-	// id 1 is the oldest of the batch and should have been evicted.
-	if _, ok := d.visible[1]; ok {
-		t.Errorf("oldest book (id 1) should not be visible, got %v", d.visible)
-	}
-
-	// Removing the newest book should backfill with the next-most-recent,
-	// which was previously evicted (id 1).
+	// Removing the newest book backfills the slot with the evicted oldest.
 	removeBookFromView(t, reg, d, int64(recentLimit)+1)
+	wantRecent(t, d, 1, 2, 3, 4, 5)
 
-	if len(d.visible) != recentLimit {
-		t.Fatalf("expected %d visible books after remove, got %d: %v", recentLimit, len(d.visible), d.visible)
-	}
-	if _, ok := d.visible[1]; !ok {
-		t.Errorf("expected backfilled book (id 1) to become visible, got %v", d.visible)
-	}
-	fstest.HasChild(t, d, "Title 1")
-
-	// id 1 is the oldest and not shown, so removing it changes nothing.
+	// The oldest is not shown, so removing it changes nothing.
 	reg, d = overfilledRecentDir(t)
 	removeBookFromView(t, reg, d, 1)
-	fstest.ChildCount(t, d, recentLimit)
+	wantRecent(t, d, 2, 3, 4, 5, 6)
 }
 
-// Books arriving in an order unrelated to their DateAdded. The population is
-// kept ordered by insertion rather than re-sorted, so a book landing in the
-// middle of the ranking is the path most likely to break.
+// Books arriving in an order unrelated to their DateAdded. Add inserts into a
+// ranked population rather than re-sorting, so a book landing in the middle of
+// the ranking is the path most likely to break.
 func TestRecentDirOutOfOrderArrival(t *testing.T) {
 	reg := newTestRegistry(t)
 	d := NewRecentDir(reg)
 
 	base := time.Now()
-	const total = recentLimit + 3
 	// Book i was added i minutes after base, so the newest ids rank highest, but
 	// they arrive in a scrambled order.
 	for _, id := range []int64{4, 1, 8, 6, 2, 7, 3, 5} {
@@ -54,24 +39,17 @@ func TestRecentDirOutOfOrderArrival(t *testing.T) {
 		b.Meta.DateAdded = base.Add(time.Duration(id) * time.Minute)
 		reg.Load(wrapBook(b))
 	}
+	wantRecent(t, d, 4, 5, 6, 7, 8)
+}
 
-	if len(d.visible) != recentLimit {
-		t.Fatalf("expected %d visible, got %d: %v", recentLimit, len(d.visible), d.visible)
+func wantRecent(t *testing.T, d *recentDir, ids ...int64) {
+	t.Helper()
+	var want []string
+	for _, id := range ids {
+		want = append(want, fmt.Sprintf("Title %d", id))
 	}
-	for id := int64(1); id <= total; id++ {
-		_, shown := d.visible[id]
-		want := id > total-recentLimit
-		if shown != want {
-			t.Errorf("book %d visible = %v, want %v (visible: %v)", id, shown, want, d.visible)
-		}
-	}
-
-	// All must stay ordered newest-first for the binary insert to hold.
-	for i := 1; i < len(d.all); i++ {
-		prev, cur := d.all[i-1].Book(), d.all[i].Book()
-		if prev.DateAdded().Before(cur.DateAdded()) {
-			t.Fatalf("all out of order at %d: %s before %s", i, prev.Title(), cur.Title())
-		}
+	if got := fstest.ChildNames(d); !slices.Equal(got, want) {
+		t.Errorf("recent/ lists %v, want %v", got, want)
 	}
 }
 

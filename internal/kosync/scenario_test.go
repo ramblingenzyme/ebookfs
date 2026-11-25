@@ -347,17 +347,15 @@ func TestMetadataAcceptance(t *testing.T) {
 // Books that existed before kosync was enabled get a sidecar and an index
 // entry from New.
 func TestKosyncStartupCreatesMissingSidecars(t *testing.T) {
-	// Create a library and ingest books WITHOUT kosync hook registered
 	lib := openTestLibrary(t)
 
 	book1 := ingestTestEpub(t, lib.Library, buildTestEpub(t, "Book One", "Alice"))
 	book2 := ingestTestEpub(t, lib.Library, buildTestEpub(t, "Book Two", "Bob"))
+	books := []*library.Book{book1, book2}
 
-	// Verify no sidecars were created (kosync wasn't enabled)
-	for _, book := range []*library.Book{book1, book2} {
-		_, err := lib.Library.ReadSidecar(book.ID(), "kosync.json")
-		if err == nil {
-			t.Fatalf("book %d has sidecar before kosync.New()", book.ID())
+	for _, book := range books {
+		if _, err := lib.Library.ReadSidecar(book.ID(), "kosync.json"); err == nil {
+			t.Fatalf("book %d has a sidecar before kosync.New", book.ID())
 		}
 	}
 
@@ -368,21 +366,43 @@ func TestKosyncStartupCreatesMissingSidecars(t *testing.T) {
 
 	snap := srv.registry.snapshot()
 	if len(snap) != 2 {
-		t.Errorf("index has %d entries, want 2", len(snap))
+		t.Fatalf("restored index has %d entries, want 2", len(snap))
 	}
 
-	// Verify each book's document ID is in the index
-	for _, book := range []*library.Book{book1, book2} {
-		data, _ := lib.Library.ReadSidecar(book.ID(), "kosync.json")
-		var sidecar SidecarData
-		json.Unmarshal(data, &sidecar)
-
-		bookID, ok := snap[sidecar.DocumentIDs[0]]
-		if !ok {
-			t.Errorf("book %d document ID not in index", book.ID())
+	for _, book := range books {
+		raw, err := lib.Library.ReadSidecar(book.ID(), "kosync.json")
+		if err != nil {
+			t.Fatalf("reading sidecar after kosync.New: %v", err)
 		}
-		if bookID != book.ID() {
-			t.Errorf("index[docID] = %d, want %d", bookID, book.ID())
+		var sidecar SidecarData
+		if err := json.Unmarshal(raw, &sidecar); err != nil {
+			t.Fatalf("unmarshaling sidecar: %v", err)
+		}
+		if len(sidecar.DocumentIDs) != 1 || sidecar.DocumentIDs[0] == "" {
+			t.Fatalf("book %d sidecar has invalid document IDs: %v", book.ID(), sidecar.DocumentIDs)
+		}
+		if bookID := snap[sidecar.DocumentIDs[0]]; bookID != book.ID() {
+			t.Errorf("index[%s] = %d, want %d", sidecar.DocumentIDs[0], bookID, book.ID())
+		}
+
+		// A wrong size still hashes to a non-empty ID, just not the one
+		// KOReader sends, so compare against the file as KOReader sees it.
+		f, err := os.Open(filepath.Join(lib.tmpDir, book.EpubPath()))
+		if err != nil {
+			t.Fatalf("opening epub: %v", err)
+		}
+		fi, err := f.Stat()
+		if err != nil {
+			f.Close()
+			t.Fatalf("stat epub: %v", err)
+		}
+		want, err := PartialMD5(f, fi.Size())
+		f.Close()
+		if err != nil {
+			t.Fatalf("hashing epub: %v", err)
+		}
+		if got := sidecar.DocumentIDs[0]; got != want {
+			t.Errorf("book %d document ID = %s, want %s", book.ID(), got, want)
 		}
 	}
 }

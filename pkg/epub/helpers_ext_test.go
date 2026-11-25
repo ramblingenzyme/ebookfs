@@ -115,7 +115,6 @@ func authorNames(b *epub.Book) []string {
 // §5.5.2: values MUST be non-empty "after leading and trailing ASCII whitespace
 // is stripped", and internal runs are "collapsed to a single space during
 // processing". A conforming reader does both.
-
 var opfSpecStyleWhitespace = epubtest.EPUB3(`    <dc:identifier id="pub-id">
       urn:uuid:A1B0D67E
     </dc:identifier>

@@ -15,7 +15,6 @@ import (
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
-	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
 )
 
 // A title edit, which moves the book directory, races a cover edit on the same
@@ -64,23 +63,14 @@ func TestConcurrentTitleAndCoverEditsBothLand(t *testing.T) {
 		}
 		book = edited
 
-		parsed, err := epub.Parse(filepath.Join(root, book.EpubPath()))
+		got, err := lib.Get(id)
 		if err != nil {
-			t.Fatalf("iteration %d: final epub does not parse: %v", i, err)
+			t.Fatalf("iteration %d: Get: %v", i, err)
 		}
-		if parsed.Title != title {
-			t.Fatalf("iteration %d: title = %q, want %q (Edit's change was lost)", i, parsed.Title, title)
+		if got.Title() != title {
+			t.Fatalf("iteration %d: title = %q, want %q (Edit's change was lost)", i, got.Title(), title)
 		}
-		reader, err := epub.OpenReader(filepath.Join(root, book.EpubPath()), book.CoverPath())
-		if err != nil {
-			t.Fatalf("iteration %d: OpenReader: %v", i, err)
-		}
-		defer reader.Close()
-		got, err := reader.Cover()
-		if err != nil {
-			t.Fatalf("iteration %d: Cover: %v", i, err)
-		}
-		if !bytes.Equal(got, newCover.Bytes()) {
+		if cover := readCover(t, lib, id); !bytes.Equal(cover, newCover.Bytes()) {
 			t.Fatalf("iteration %d: cover edit reported success but the cover bytes were lost", i)
 		}
 
@@ -94,6 +84,20 @@ func TestConcurrentTitleAndCoverEditsBothLand(t *testing.T) {
 			}
 		}
 	}
+}
+
+func readCover(t *testing.T, lib *library.Library, id int64) []byte {
+	t.Helper()
+	r, err := lib.Content(id)
+	if err != nil {
+		t.Fatalf("Content: %v", err)
+	}
+	defer r.Close()
+	cover, err := r.Cover()
+	if err != nil {
+		t.Fatalf("Cover: %v", err)
+	}
+	return cover
 }
 
 func TestConcurrentDuplicateIngestRejected(t *testing.T) {

@@ -176,23 +176,6 @@ func TestRunnerRegisterHTTPDuplicatePrefix(t *testing.T) {
 	}
 }
 
-func TestRunnerRegisterHTTPSuccess(t *testing.T) {
-	runner := NewRunner(":8080")
-	fe1 := newFakeHTTP("first", "/api")
-	fe2 := newFakeHTTP("second", "/sync")
-
-	if err := runner.RegisterHTTP(fe1); err != nil {
-		t.Fatalf("RegisterHTTP first: %v", err)
-	}
-	if err := runner.RegisterHTTP(fe2); err != nil {
-		t.Fatalf("RegisterHTTP second: %v", err)
-	}
-
-	if len(runner.httpFrontends) != 2 {
-		t.Errorf("httpFrontends: %d, want 2", len(runner.httpFrontends))
-	}
-}
-
 func TestRunnerWithHTTPFrontends(t *testing.T) {
 	runner := NewRunner(":0") // :0 lets the OS pick a port
 	fe := newFakeHTTP("test", "/test")
