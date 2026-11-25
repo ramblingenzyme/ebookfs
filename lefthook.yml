@@ -1,0 +1,16 @@
+# Git hooks, installed by `lefthook install`. lefthook hides unstaged changes
+# while pre-commit runs, so the job sees exactly what will be committed.
+pre-commit:
+  jobs:
+    - name: golangci-lint
+      glob: "*.go"
+      stage_fixed: true
+      # The staged diff limits fixes and reports to the staged files, though
+      # golangci-lint still loads whole packages to type-check them.
+      run: |
+        patch=$(mktemp)
+        git diff --cached > "$patch"
+        golangci-lint run --fix --new-from-patch="$patch" --whole-files ./...
+        status=$?
+        rm -f "$patch"
+        exit $status

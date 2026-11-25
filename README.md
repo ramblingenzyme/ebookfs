@@ -92,12 +92,20 @@ See `configs/config.example.toml` for all options.
 ```bash
 go test ./...
 golangci-lint run
-golangci-lint fmt   # fixes import grouping
+golangci-lint run --fix   # applies the formatters and wsl
 CGO_ENABLED=0 go build -trimpath .
 ```
 
 CI runs golangci-lint v2.15.0 with the config in `.golangci.yml`. Older
 releases cannot read Go 1.27 export data and crash or report a typecheck error.
+
+A pre-commit hook fixes and lints the staged Go files. It needs
+[lefthook](https://lefthook.dev) and golangci-lint on `PATH`:
+
+```bash
+go install github.com/evilmartians/lefthook/v2@v2.2.3
+lefthook install
+```
 
 ## License
 
