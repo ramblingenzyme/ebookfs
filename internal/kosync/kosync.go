@@ -163,9 +163,10 @@ func newHandler(lib *library.Library, registry *docRegistry, cfg Config) *handle
 }
 
 func writeError(w http.ResponseWriter, status, code int, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	fmt.Fprintf(w, `{"code":%d,"message":"%s"}`, code, message)
+	writeJSON(w, status, struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}{code, message})
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {

@@ -125,3 +125,27 @@ func TestExists(t *testing.T) {
 		}
 	}
 }
+
+// A title search matches its term literally. Unescaped, "%" and "_" are LIKE
+// wildcards and "\" is the ESCAPE character, so each would match more books
+// than its title holds.
+func TestSearchTitleTermIsLiteral(t *testing.T) {
+	idx := openTestIndex(t)
+	books := []*book.Book{
+		newBook(1, "100% Pure"), newBook(2, "100 Pure"),
+		newBook(3, "a_b"), newBook(4, "axb"),
+		newBook(5, `C:\x`), newBook(6, "C:x"),
+	}
+	if err := idx.Rebuild(bookPaths(books...), nil, 6); err != nil {
+		t.Fatalf("Rebuild: %v", err)
+	}
+	for term, want := range map[string]int64{"0%": 1, "a_b": 3, `:\x`: 5} {
+		got, err := idx.Search(Query{Titles: []string{term}})
+		if err != nil {
+			t.Fatalf("Search(%q): %v", term, err)
+		}
+		if len(got) != 1 || got[0].Meta.ID != want {
+			t.Errorf("Search(%q) matched %d books, want only book %d", term, len(got), want)
+		}
+	}
+}

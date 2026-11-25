@@ -19,11 +19,10 @@ func ParseQuery(query string) (library.Query, error) {
 	parts := strings.Split(query, "+")
 	var q library.Query
 	for _, part := range parts {
-		split := strings.SplitN(part, ":", 2)
-		if len(split) != 2 {
+		prefix, val, ok := strings.Cut(part, ":")
+		if !ok {
 			return q, fmt.Errorf("invalid term %q: want prefix:value", part)
 		}
-		prefix, val := split[0], split[1]
 		switch prefix {
 		case "author":
 			q.Authors = append(q.Authors, val)

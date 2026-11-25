@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/textfmt"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
@@ -206,9 +207,9 @@ func renameAuthor(f *CtlFile, args []string) string {
 		}
 
 		// Renaming onto an author the book already has would duplicate it, so
-		// dedupeAuthors makes rename a merge, as rename-tag is. It also
-		// collapses duplicates the book already carried.
-		updated = dedupeAuthors(updated)
+		// keeping the first of each name makes rename a merge, as rename-tag
+		// is. It also collapses duplicates the book already carried.
+		updated = book.FirstOf(updated, func(a library.Author) string { return a.Name })
 		return &library.Edits{Authors: &updated}
 	})
 }
@@ -234,21 +235,6 @@ func idsOnly(q library.Query) bool {
 	filters := q
 	filters.IDs, filters.Order, filters.Limit, filters.ExactTitles = nil, 0, 0, false
 	return len(q.IDs) > 0 && reflect.DeepEqual(filters, library.Query{})
-}
-
-// dedupeAuthors keeps the first occurrence of each display name, so
-// rename-author folds a renamed author into one the book already carries.
-func dedupeAuthors(authors []library.Author) []library.Author {
-	seen := make(map[string]bool, len(authors))
-	out := make([]library.Author, 0, len(authors))
-	for _, a := range authors {
-		if seen[a.Name] {
-			continue
-		}
-		seen[a.Name] = true
-		out = append(out, a)
-	}
-	return out
 }
 
 // editSpec is editSelection for a command that names its books with an id-spec

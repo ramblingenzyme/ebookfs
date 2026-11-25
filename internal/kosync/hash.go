@@ -19,9 +19,7 @@ func PartialMD5(r io.ReaderAt, size int64) (string, error) {
 	const sampleSize = 1024
 	h := md5.New()
 
-	// Compute offsets: i=-1 produces 0 (LuaJIT masking), then 1024<<(2*i) for i=0..10
 	var offsets [12]int64
-	offsets[0] = 0 // lshift(1024, -2) wraps to 0 in LuaJIT's 32-bit masking
 	for i := 0; i <= 10; i++ {
 		offsets[i+1] = 1024 << (2 * i)
 	}
@@ -30,24 +28,8 @@ func PartialMD5(r io.ReaderAt, size int64) (string, error) {
 		if offset >= size {
 			break
 		}
-
-		// Calculate how many bytes to read (up to sampleSize, but not past EOF)
-		remaining := size - offset
-		toRead := int64(sampleSize)
-		if remaining < toRead {
-			toRead = remaining
-		}
-
-		buf := make([]byte, toRead)
-		n, err := r.ReadAt(buf, offset)
-		if err != nil && err != io.EOF {
-			return "", err
-		}
-		if n != int(toRead) {
-			return "", io.ErrUnexpectedEOF
-		}
-
-		if _, err := h.Write(buf); err != nil {
+		n := min(sampleSize, size-offset)
+		if _, err := io.CopyN(h, io.NewSectionReader(r, offset, n), n); err != nil {
 			return "", err
 		}
 	}
