@@ -71,7 +71,7 @@ type Config struct {
 // WriteStat on the synthetic nodes, or accept only a length change, once a
 // client is seen doing it.
 func New(lib Library, cfg Config) (*Server, error) {
-	ebookfs, root := fs.NewFS("glenda", "glenda", 0555, fs.IgnorePermissions())
+	ebookfs, root := fs.NewFS("glenda", "glenda", 0o555, fs.IgnorePermissions())
 	reg := registry.NewBookRegistry(ebookfs, lib)
 	if err := lib.AddHook(reg); err != nil {
 		return nil, fmt.Errorf("registering book registry: %w", err)

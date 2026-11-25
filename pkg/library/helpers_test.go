@@ -137,7 +137,7 @@ func ingestStopped(t *testing.T, cfg Config, title string, authors ...string) *B
 
 func writeFile(t *testing.T, path string, data []byte) {
 	t.Helper()
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
 }

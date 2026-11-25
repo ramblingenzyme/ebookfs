@@ -23,7 +23,7 @@ type CtlFile struct {
 
 func NewCtlFile(f *fs.FS, lib Library, cmdLog *CommandLog) *CtlFile {
 	return &CtlFile{
-		BaseFile: *fs.NewBaseFile(newStat(f, "ctl", 0644)),
+		BaseFile: *fs.NewBaseFile(newStat(f, "ctl", 0o644)),
 		writes:   vfile.NewWriteBuffer(4096),
 		lib:      lib,
 		cmdLog:   cmdLog,

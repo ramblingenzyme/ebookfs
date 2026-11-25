@@ -33,7 +33,8 @@ func TestApplyMeta(t *testing.T) {
 		{
 			"all fields",
 			Edits{Status: new("read"), Rating: new(5.0), Tags: new([]string{"all"})},
-			"read", 5.0, []string{"all"},
+			"read", 5.0,
+			[]string{"all"},
 		},
 	}
 	for _, tc := range tests {

@@ -63,6 +63,7 @@ linters:
 formatters:
   enable:
     - gci
+    - gofumpt
     - goimports
   settings:
     gci:

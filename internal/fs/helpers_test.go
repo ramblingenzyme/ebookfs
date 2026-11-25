@@ -96,7 +96,7 @@ func edited(id int64, e library.Edits) func(*testing.T, *library.Library) {
 }
 
 func (h *harness) upload(name string, epub []byte) error {
-	f, err := h.c.Create("/inbox/"+name, 0644, proto.Owrite)
+	f, err := h.c.Create("/inbox/"+name, 0o644, proto.Owrite)
 	if err != nil {
 		return err
 	}

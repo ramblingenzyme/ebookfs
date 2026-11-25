@@ -13,7 +13,7 @@ func (s *Store) Ingest(epubPath string, loc book.Location, meta book.Meta) (book
 
 	canonicalizeMeta(&meta)
 
-	if err := atomicfs.MkdirAll(dir, 0755); err != nil {
+	if err := atomicfs.MkdirAll(dir, 0o755); err != nil {
 		return meta, drift.PathInfo{}, err
 	}
 

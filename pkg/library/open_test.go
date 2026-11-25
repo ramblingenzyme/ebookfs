@@ -20,18 +20,18 @@ func entryNames(entries []os.DirEntry) []string {
 func TestCleanInboxTemp(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"123.epub", "456.epub", "readme.txt"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte("data"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("data"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := os.Mkdir(filepath.Join(dir, "nested.epub"), 0755); err != nil {
+	if err := os.Mkdir(filepath.Join(dir, "nested.epub"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	scratch := filepath.Join(dir, "hooks-123")
-	if err := os.Mkdir(scratch, 0755); err != nil {
+	if err := os.Mkdir(scratch, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(scratch, "converted.epub"), []byte("data"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(scratch, "converted.epub"), []byte("data"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -83,10 +83,10 @@ func TestOpenCreatesStateAndIndexDirs(t *testing.T) {
 func TestOpenEmptiesTrash(t *testing.T) {
 	cfg := testConfig(t)
 	left := filepath.Join(cfg.Root, ".trash", "x", "Deleted (5)")
-	if err := os.MkdirAll(left, 0755); err != nil {
+	if err := os.MkdirAll(left, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(left, "meta.toml"), []byte("id = 5\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(left, "meta.toml"), []byte("id = 5\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

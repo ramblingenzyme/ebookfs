@@ -44,7 +44,7 @@ func WriteRoot(root *os.Root, name string, data []byte) error {
 	tmpName := "." + name + ".tmp"
 	defer root.Remove(tmpName)
 
-	tmp, err := root.OpenFile(tmpName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	tmp, err := root.OpenFile(tmpName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func Rename(src, dst string) error {
 // The removal has happened once the rename lands, so a failure to delete the
 // trashed copy is logged and returns nil. The caller empties trash later.
 func RemoveAll(path, trash string) error {
-	if err := MkdirAll(trash, 0755); err != nil {
+	if err := MkdirAll(trash, 0o755); err != nil {
 		return err
 	}
 	// A directory per call, since an earlier copy under the same name may

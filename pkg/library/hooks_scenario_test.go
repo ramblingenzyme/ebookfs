@@ -27,7 +27,7 @@ func (h *ingestEditDeleteHook) PreParse(source, tempDir string) (string, error) 
 		return "", err
 	}
 	h.converted = filepath.Join(tempDir, "converted.epub")
-	if err := os.WriteFile(h.converted, data, 0600); err != nil {
+	if err := os.WriteFile(h.converted, data, 0o600); err != nil {
 		return "", err
 	}
 	return h.converted, nil
@@ -48,11 +48,11 @@ func (h *ingestEditDeleteHook) OnIngested(b *library.Book, sidecars *os.Root, op
 	if b.Publisher() != "Hook Publisher" {
 		h.t.Errorf("OnIngested publisher = %q, want hook amendment", b.Publisher())
 	}
-	if err := sidecars.Mkdir("consumer", 0700); err != nil {
+	if err := sidecars.Mkdir("consumer", 0o700); err != nil {
 		h.t.Errorf("create sidecar namespace in OnIngested: %v", err)
 		return
 	}
-	if err := sidecars.WriteFile("consumer/data", []byte("stored"), 0600); err != nil {
+	if err := sidecars.WriteFile("consumer/data", []byte("stored"), 0o600); err != nil {
 		h.t.Errorf("write sidecar in OnIngested: %v", err)
 	}
 	reader, err := openEpub()

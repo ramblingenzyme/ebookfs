@@ -73,5 +73,5 @@ func helpText() string {
 }
 
 func NewHelpFile(f *fs.FS) *fs.StaticFile {
-	return fs.NewStaticFile(newStat(f, "help", 0444), []byte(helpText()))
+	return fs.NewStaticFile(newStat(f, "help", 0o444), []byte(helpText()))
 }

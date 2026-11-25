@@ -590,7 +590,7 @@ func TestMetadataDirectionalitySurvives(t *testing.T) {
 }
 
 func TestUnmodelledMetadataSurvives(t *testing.T) {
-	var opf = epubtest.EPUB3(`    <dc:subject>Science Fiction</dc:subject>
+	opf := epubtest.EPUB3(`    <dc:subject>Science Fiction</dc:subject>
     <dc:subject>Space Opera</dc:subject>
     <dc:publisher>Acme Press</dc:publisher>
     <dc:rights>All rights reserved.</dc:rights>
@@ -654,7 +654,6 @@ func TestSchemedCollectionTypeSurvivesASeriesEdit(t *testing.T) {
 // A collection the reader cannot resolve is invisible to the writer too, so a
 // rename would add a second one without a position.
 func TestSeriesRenameDoesNotDuplicate(t *testing.T) {
-
 	path := epubtest.Build(t, opfSpecStyleWhitespace)
 	want := "Renamed"
 	if _, err := save(t, path, func(b *epub.Book) { rename(b, want) }); err != nil {

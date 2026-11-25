@@ -37,7 +37,7 @@ func Fixed(b *book.ImmutableBook) func() *book.ImmutableBook {
 
 func NewTestFS(t *testing.T) *fs.FS {
 	t.Helper()
-	f, _ := fs.NewFS("glenda", "glenda", 0555, fs.IgnorePermissions())
+	f, _ := fs.NewFS("glenda", "glenda", 0o555, fs.IgnorePermissions())
 	return f
 }
 

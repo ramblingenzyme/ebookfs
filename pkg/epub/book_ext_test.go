@@ -50,8 +50,7 @@ func TestOpenResolvesEncodedCoverHref(t *testing.T) {
 }
 
 func TestFirstDescriptionWins(t *testing.T) {
-
-	var opf = epubtest.EPUB3(`    <dc:description>FIRST description.</dc:description>
+	opf := epubtest.EPUB3(`    <dc:description>FIRST description.</dc:description>
     <dc:description>SECOND description.</dc:description>`)
 
 	bib, err := parse(t, epubtest.Build(t, opf))
@@ -65,7 +64,6 @@ func TestFirstDescriptionWins(t *testing.T) {
 
 // The spec says nothing here. calibre keeps looking, and so does this.
 func TestDanglingCoverMetaFallsThrough(t *testing.T) {
-
 	opf := epubtest.EPUB2(`    <meta name="cover" content="does-not-exist"/>`)
 
 	bib, err := parse(t, epubtest.Build(t, opf))
@@ -102,12 +100,10 @@ func TestEmptyCreatorIsSkippedNotFatal(t *testing.T) {
 			t.Errorf("authors = %v, want [Ann Rand]", got)
 		}
 	})
-
 }
 
 func TestEmptyFirstTitleFallsThrough(t *testing.T) {
-
-	var opf = epubtest.EPUB3(`    <dc:title>   </dc:title>
+	opf := epubtest.EPUB3(`    <dc:title>   </dc:title>
     <dc:title>The Real Title</dc:title>`)
 
 	bib, err := parse(t, epubtest.Build(t, opf))

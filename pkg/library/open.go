@@ -39,7 +39,7 @@ func Open(cfg Config, opts ...Option) (*Library, error) {
 		opt(&o)
 	}
 
-	if err := os.MkdirAll(cfg.Root, 0755); err != nil {
+	if err := os.MkdirAll(cfg.Root, 0o755); err != nil {
 		return nil, fmt.Errorf("creating library root: %w", err)
 	}
 
@@ -64,7 +64,7 @@ func Open(cfg Config, opts ...Option) (*Library, error) {
 // openLocked does the work of opening the library while holding the lock.
 // If it fails, the caller is responsible for closing lockFile.
 func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
-	if err := os.MkdirAll(cfg.InboxTemp, 0700); err != nil {
+	if err := os.MkdirAll(cfg.InboxTemp, 0o700); err != nil {
 		return nil, fmt.Errorf("creating inbox temp dir: %w", err)
 	}
 	if err := cleanInboxTemp(cfg.InboxTemp); err != nil {
@@ -77,10 +77,10 @@ func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
 	if cfg.StateDir == "" {
 		cfg.StateDir = cfg.Root
 	}
-	if err := os.MkdirAll(cfg.StateDir, 0755); err != nil {
+	if err := os.MkdirAll(cfg.StateDir, 0o755); err != nil {
 		return nil, fmt.Errorf("creating state dir: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(cfg.IndexPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(cfg.IndexPath), 0o755); err != nil {
 		return nil, fmt.Errorf("creating index dir: %w", err)
 	}
 

@@ -27,7 +27,7 @@ func TestMoveCleansUpTheOldAuthorDir(t *testing.T) {
 			writeBook(t, root, "Wells, M/Some Title (1)", epubName, "epub-bytes", nil)
 			siblingDir := filepath.Join(root, "Wells, M", "Other Title (2)")
 			if tc.sibling {
-				if err := os.MkdirAll(siblingDir, 0755); err != nil {
+				if err := os.MkdirAll(siblingDir, 0o755); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -143,18 +143,18 @@ func TestDeleteWithReadOnlyDirError(t *testing.T) {
 	writeBook(t, root, "Author, A/Test (1)", "test.epub", "data", nil)
 
 	sidecar := filepath.Join(dir, ".sidecar", "kosync.json")
-	if err := os.MkdirAll(filepath.Dir(sidecar), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(sidecar), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(sidecar, []byte("{}"), 0644); err != nil {
+	if err := os.WriteFile(sidecar, []byte("{}"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := os.Chmod(dir, 0555); err != nil {
+	if err := os.Chmod(dir, 0o555); err != nil {
 		t.Skip("cannot chmod book dir:", err)
 	}
 	// Restore permissions so TempDir cleanup succeeds.
-	t.Cleanup(func() { _ = os.Chmod(dir, 0755) })
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 
 	loc := book.Location{EpubPath: filepath.Join("Author, A/Test (1)", "test.epub")}
 	err := s.Delete(loc)
@@ -185,7 +185,7 @@ func TestLastID(t *testing.T) {
 	if id, err := s.LastID(); err != nil || id != 7 {
 		t.Errorf("LastID after RecordID(7) = %d, %v; want 7, nil", id, err)
 	}
-	if err := os.WriteFile(filepath.Join(root, lastIDName), []byte("garbage"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, lastIDName), []byte("garbage"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.LastID(); err == nil {

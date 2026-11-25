@@ -44,7 +44,7 @@ func TestWriteError(t *testing.T) {
 	path := filepath.Join(dir, "test.txt")
 	// A non-empty directory at path fails the rename after the temp file is
 	// written.
-	if err := os.MkdirAll(filepath.Join(path, "occupied"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(path, "occupied"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -74,7 +74,7 @@ func TestRenameSuccess(t *testing.T) {
 	dst := filepath.Join(dir, "dst.txt")
 
 	// Create source file
-	if err := os.WriteFile(src, []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(src, []byte("test"), 0o644); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
 
@@ -120,11 +120,11 @@ func TestRenameLogsDirSyncFailure(t *testing.T) {
 			src := filepath.Join(base, "from", "f")
 			dst := filepath.Join(base, "to", "f")
 			for _, dir := range []string{"from", "to"} {
-				if err := os.Mkdir(filepath.Join(base, dir), 0755); err != nil {
+				if err := os.Mkdir(filepath.Join(base, dir), 0o755); err != nil {
 					t.Fatal(err)
 				}
 			}
-			if err := os.WriteFile(src, []byte("x"), 0644); err != nil {
+			if err := os.WriteFile(src, []byte("x"), 0o644); err != nil {
 				t.Fatal(err)
 			}
 			failing := filepath.Join(base, unopenable)
@@ -147,13 +147,13 @@ func TestRenameLogsDirSyncFailure(t *testing.T) {
 func TestMkdirAllSyncsParentsOfNewDirs(t *testing.T) {
 	logs := captureLogs(t)
 	base := filepath.Join(t.TempDir(), "base")
-	if err := os.Mkdir(base, 0755); err != nil {
+	if err := os.Mkdir(base, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	makeUnopenable(t, base)
 	path := filepath.Join(base, "a", "b")
 
-	if err := MkdirAll(path, 0755); err != nil {
+	if err := MkdirAll(path, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 	if fi, err := os.Stat(path); err != nil || !fi.IsDir() {
@@ -164,7 +164,7 @@ func TestMkdirAllSyncsParentsOfNewDirs(t *testing.T) {
 	}
 
 	logs.Reset()
-	if err := MkdirAll(path, 0755); err != nil {
+	if err := MkdirAll(path, 0o755); err != nil {
 		t.Fatalf("MkdirAll on existing path: %v", err)
 	}
 	if logs.Len() != 0 {
@@ -174,10 +174,10 @@ func TestMkdirAllSyncsParentsOfNewDirs(t *testing.T) {
 
 func TestMkdirAllUnderFile(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "file")
-	if err := os.WriteFile(file, nil, 0644); err != nil {
+	if err := os.WriteFile(file, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := MkdirAll(filepath.Join(file, "a", "b"), 0755); err == nil {
+	if err := MkdirAll(filepath.Join(file, "a", "b"), 0o755); err == nil {
 		t.Fatal("MkdirAll under a file should fail")
 	}
 }
@@ -233,16 +233,16 @@ func makeUnopenable(t *testing.T, dir string) {
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores directory permissions")
 	}
-	if err := os.Chmod(dir, 0300); err != nil {
+	if err := os.Chmod(dir, 0o300); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(dir, 0755) })
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 }
 
 func TestRemoveAll(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "book")
-	if err := os.MkdirAll(filepath.Join(path, ".sidecar"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(path, ".sidecar"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	trash := filepath.Join(dir, ".trash")
@@ -274,20 +274,20 @@ func TestRemoveAllSucceedsWhenTrashRemovalFails(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "book")
 	stuck := filepath.Join(path, "stuck")
-	if err := os.MkdirAll(stuck, 0755); err != nil {
+	if err := os.MkdirAll(stuck, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(stuck, "f"), nil, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(stuck, "f"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(stuck, 0555); err != nil {
+	if err := os.Chmod(stuck, 0o555); err != nil {
 		t.Skip("cannot chmod:", err)
 	}
 	trash := filepath.Join(dir, ".trash")
 	t.Cleanup(func() {
 		_ = filepath.WalkDir(trash, func(p string, d os.DirEntry, err error) error {
 			if err == nil && d.IsDir() {
-				_ = os.Chmod(p, 0755)
+				_ = os.Chmod(p, 0o755)
 			}
 			return nil
 		})

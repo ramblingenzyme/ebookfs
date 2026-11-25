@@ -71,7 +71,7 @@ type LogFile struct {
 func NewLogFile(f *fs.FS, cmdLog *CommandLog) *LogFile {
 	return &LogFile{
 		SnapshotFile: vfile.NewSnapshotFile(
-			newStat(f, "log", 0444),
+			newStat(f, "log", 0o444),
 			func() ([]byte, error) {
 				entries := cmdLog.Entries()
 				if len(entries) == 0 {

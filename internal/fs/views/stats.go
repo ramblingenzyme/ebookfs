@@ -29,7 +29,7 @@ type statsFile struct {
 
 func NewStatsFile(f *fs.FS, lib StatsReader) *statsFile {
 	sf := &statsFile{lib: lib}
-	sf.SnapshotFile = vfile.NewSnapshotFile(newStat(f, "stats", 0444), sf.content)
+	sf.SnapshotFile = vfile.NewSnapshotFile(newStat(f, "stats", 0o444), sf.content)
 	return sf
 }
 

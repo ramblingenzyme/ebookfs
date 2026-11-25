@@ -50,81 +50,140 @@ func TestCommandEdits(t *testing.T) {
 		result  string
 		check   func(t *testing.T, b *library.Book)
 	}{
-		{"add-tag", nil, library.Edits{Tags: &[]string{"existing"}},
+		{
+			"add-tag", nil,
+			library.Edits{Tags: &[]string{"existing"}},
 			`add-tag "newtag" *`, "ok: 1 books edited",
-			wantTags("existing", "newtag")},
-		{"remove-tag", nil, library.Edits{Tags: &[]string{"keep", "remove"}},
+			wantTags("existing", "newtag"),
+		},
+		{
+			"remove-tag", nil,
+			library.Edits{Tags: &[]string{"keep", "remove"}},
 			`remove-tag "remove" *`, "ok: 1 books edited",
-			wantTags("keep")},
-		{"remove-tag the book does not have", nil, library.Edits{Tags: &[]string{"keep"}},
+			wantTags("keep"),
+		},
+		{
+			"remove-tag the book does not have", nil,
+			library.Edits{Tags: &[]string{"keep"}},
 			`remove-tag "absent" *`, "ok: no books edited\n1 skipped",
-			wantTags("keep")},
+			wantTags("keep"),
+		},
 		// A bare id list is walked as given, so a typo surfaces.
-		{"bare id that does not exist", nil, library.Edits{},
+		{
+			"bare id that does not exist", nil,
+			library.Edits{},
 			"add-tag foo 99", "error: no books edited\nerrors: 1 book(s)\n  book 99: not found",
-			wantTags()},
-		{"set-status", nil, library.Edits{},
+			wantTags(),
+		},
+		{
+			"set-status", nil,
+			library.Edits{},
 			"set-status reading *", "ok: 1 books edited",
 			func(t *testing.T, b *library.Book) {
 				if b.Status() != "reading" {
 					t.Errorf("status = %q, want reading", b.Status())
 				}
-			}},
-		{"set-rating", nil, library.Edits{},
+			},
+		},
+		{
+			"set-rating", nil,
+			library.Edits{},
 			"set-rating 4 *", "ok: 1 books edited",
-			wantRating(4)},
+			wantRating(4),
+		},
 		// The skip shows in the result, since an edit would also bump the
 		// modification time.
-		{"set-rating already in place", nil, library.Edits{Rating: new(4.0)},
+		{
+			"set-rating already in place", nil,
+			library.Edits{Rating: new(4.0)},
 			"set-rating 4 *", "ok: no books edited\n1 skipped",
-			wantRating(4)},
+			wantRating(4),
+		},
 		// A query naming an id alongside a filter must not report the id as not
 		// found when the filter excludes it. Only a bare id list gets that check.
-		{"filtered-out id is not reported missing", nil, library.Edits{},
+		{
+			"filtered-out id is not reported missing", nil,
+			library.Edits{},
 			"add-tag foo id:1+status:read", "ok: no books edited",
-			wantTags()},
+			wantTags(),
+		},
 		// An id paired with one of these filters once read as a bare id list,
 		// so the book was edited without the filter being checked.
-		{"id filtered out by subject", nil, library.Edits{},
+		{
+			"id filtered out by subject", nil,
+			library.Edits{},
 			"add-tag foo id:1+subject:absent", "ok: no books edited",
-			wantTags()},
-		{"id filtered out by publisher", nil, library.Edits{},
+			wantTags(),
+		},
+		{
+			"id filtered out by publisher", nil,
+			library.Edits{},
 			"add-tag foo id:1+publisher:absent", "ok: no books edited",
-			wantTags()},
-		{"id filtered out by language", nil, library.Edits{},
+			wantTags(),
+		},
+		{
+			"id filtered out by language", nil,
+			library.Edits{},
 			"add-tag foo id:1+language:absent", "ok: no books edited",
-			wantTags()},
-		{"rename-tag", nil, library.Edits{Tags: &[]string{"scifi"}},
+			wantTags(),
+		},
+		{
+			"rename-tag", nil,
+			library.Edits{Tags: &[]string{"scifi"}},
 			`rename-tag "scifi" "sci-fi"`, "ok: 1 books renamed",
-			wantTags("sci-fi")},
-		{"rename-tag onto a tag the book has", nil, library.Edits{Tags: &[]string{"old", "other", "new"}},
+			wantTags("sci-fi"),
+		},
+		{
+			"rename-tag onto a tag the book has", nil,
+			library.Edits{Tags: &[]string{"old", "other", "new"}},
 			`rename-tag "old" "new"`, "ok: 1 books renamed",
-			wantTags("new", "other")},
+			wantTags("new", "other"),
+		},
 		// The merge branch once took a tag renamed onto itself for a tag the
 		// book already had, and dropped it.
-		{"rename-tag onto itself", nil, library.Edits{Tags: &[]string{"same", "other"}},
+		{
+			"rename-tag onto itself", nil,
+			library.Edits{Tags: &[]string{"same", "other"}},
 			`rename-tag "same" "same"`, "ok: no books renamed\n1 skipped",
-			wantTags("same", "other")},
-		{"rename-author with a sort name", []string{"Asimov"}, library.Edits{},
+			wantTags("same", "other"),
+		},
+		{
+			"rename-author with a sort name",
+			[]string{"Asimov"},
+			library.Edits{},
 			`rename-author "Asimov" "Isaac Asimov|Asimov, Isaac"`, "ok: 1 books renamed",
-			wantAuthors(library.Author{Name: "Isaac Asimov", SortName: "Asimov, Isaac"})},
-		{"rename-author matched by sort name", nil, library.Edits{Authors: &asimov},
+			wantAuthors(library.Author{Name: "Isaac Asimov", SortName: "Asimov, Isaac"}),
+		},
+		{
+			"rename-author matched by sort name", nil,
+			library.Edits{Authors: &asimov},
 			`rename-author "Asimov, Isaac" "I. Asimov"`, "ok: 1 books renamed",
-			wantAuthors(library.Author{Name: "I. Asimov"})},
+			wantAuthors(library.Author{Name: "I. Asimov"}),
+		},
 		// Renaming onto an author the book already carries collapses to one.
-		{"rename-author merges", []string{"Isaac Asimov", "Paul French"}, library.Edits{},
+		{
+			"rename-author merges",
+			[]string{"Isaac Asimov", "Paul French"},
+			library.Edits{},
 			`rename-author "Paul French" "Isaac Asimov"`, "ok: 1 books renamed",
-			wantAuthors(library.Author{Name: "Isaac Asimov"})},
-		{"rename-series", nil, library.Edits{Series: new("Old"), SeriesIndex: new("1")},
+			wantAuthors(library.Author{Name: "Isaac Asimov"}),
+		},
+		{
+			"rename-series", nil,
+			library.Edits{Series: new("Old"), SeriesIndex: new("1")},
 			`rename-series "Old" "New"`, "ok: 1 books renamed",
 			func(t *testing.T, b *library.Book) {
 				if b.SeriesName() != "New" || b.SeriesIndex() != "1" {
 					t.Errorf("series = %q at %q, want New at 1", b.SeriesName(), b.SeriesIndex())
 				}
-			}},
-		{"delete", nil, library.Edits{},
+			},
+		},
+		{
+			"delete", nil,
+			library.Edits{},
 			"delete 1", "ok: book 1 deleted",
-			nil},
+			nil,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.authors == nil {
@@ -200,23 +259,35 @@ func TestCommandResults(t *testing.T) {
 		cmd   string
 		want  string
 	}{
-		{"one book edited",
+		{
+			"one book edited",
 			seeds(ingest("Plain", "Author")),
-			`add-tag "new" *`, "ok: 1 books edited"},
-		{"several books edited",
+			`add-tag "new" *`, "ok: 1 books edited",
+		},
+		{
+			"several books edited",
 			seeds(ingest("Plain", "Author"), ingest("Other", "Author")),
-			`add-tag "new" *`, "ok: 2 books edited"},
-		{"book already tagged",
+			`add-tag "new" *`, "ok: 2 books edited",
+		},
+		{
+			"book already tagged",
 			seeds(ingest("Tagged", "Author"), edited(1, tagNew)),
-			`add-tag "new" *`, "ok: no books edited\n1 skipped"},
-		{"mixed edited and skipped",
+			`add-tag "new" *`, "ok: no books edited\n1 skipped",
+		},
+		{
+			"mixed edited and skipped",
 			seeds(ingest("Plain", "Author"), ingest("Tagged", "Author"), edited(2, tagNew)),
-			`add-tag "new" *`, "ok: 1 books edited\n1 skipped"},
-		{"selection matches nothing", nil,
-			`add-tag "new" *`, "ok: no books edited"},
-		{"rename matches nothing",
+			`add-tag "new" *`, "ok: 1 books edited\n1 skipped",
+		},
+		{
+			"selection matches nothing", nil,
+			`add-tag "new" *`, "ok: no books edited",
+		},
+		{
+			"rename matches nothing",
 			seeds(ingest("Plain", "Author")),
-			`rename-tag "absent" "x"`, "ok: no books renamed"},
+			`rename-tag "absent" "x"`, "ok: no books renamed",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newHarness(t, tc.books...)
@@ -257,34 +328,58 @@ func TestCommandFailures(t *testing.T) {
 		cmd    string
 		want   []string // the result's lines, each a prefix
 	}{
-		{"edit fails for one book",
+		{
+			"edit fails for one book",
 			seeds(ingest("Kept", "Author"), ingest("Gone", "Author")), removeBook(2),
-			`add-tag "new" *`, []string{"ok: 1 books edited", "errors: 1 book(s)", "  book 2: "}},
-		{"edit fails for every book",
+			`add-tag "new" *`,
+			[]string{"ok: 1 books edited", "errors: 1 book(s)", "  book 2: "},
+		},
+		{
+			"edit fails for every book",
 			seeds(ingest("Gone", "Author")), removeBook(1),
-			`add-tag "new" *`, []string{"error: no books edited", "errors: 1 book(s)", "  book 1: "}},
-		{"search fails", nil, closeLibrary,
-			`add-tag "new" *`, []string{"error: query failed: "}},
-		{"rename-tag query fails", nil, closeLibrary,
-			`rename-tag "a" "b"`, []string{"error: query failed: "}},
-		{"rename-author query fails", nil, closeLibrary,
-			`rename-author "a" "b"`, []string{"error: query failed: "}},
-		{"rename-series query fails", nil, closeLibrary,
-			`rename-series "a" "b"`, []string{"error: query failed: "}},
-		{"delete a missing book", nil, nil,
-			"delete 1", []string{"error: book 1: not found"}},
-		{"delete fails",
+			`add-tag "new" *`,
+			[]string{"error: no books edited", "errors: 1 book(s)", "  book 1: "},
+		},
+		{
+			"search fails", nil, closeLibrary,
+			`add-tag "new" *`,
+			[]string{"error: query failed: "},
+		},
+		{
+			"rename-tag query fails", nil, closeLibrary,
+			`rename-tag "a" "b"`,
+			[]string{"error: query failed: "},
+		},
+		{
+			"rename-author query fails", nil, closeLibrary,
+			`rename-author "a" "b"`,
+			[]string{"error: query failed: "},
+		},
+		{
+			"rename-series query fails", nil, closeLibrary,
+			`rename-series "a" "b"`,
+			[]string{"error: query failed: "},
+		},
+		{
+			"delete a missing book", nil, nil,
+			"delete 1",
+			[]string{"error: book 1: not found"},
+		},
+		{
+			"delete fails",
 			seeds(ingest("Kept", "Author")), func(t *testing.T, h *harness) {
 				if os.Geteuid() == 0 {
 					t.Skip("root ignores directory permissions")
 				}
 				b, _ := h.lib.Get(1)
 				dir := filepath.Join(h.root, b.Dir())
-				if err := os.Chmod(dir, 0555); err != nil {
+				if err := os.Chmod(dir, 0o555); err != nil {
 					t.Fatal(err)
 				}
-				t.Cleanup(func() { _ = os.Chmod(dir, 0755) })
-			}, "delete 1", []string{"error: book 1: "}},
+				t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+			}, "delete 1",
+			[]string{"error: book 1: "},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newHarness(t, tc.books...)

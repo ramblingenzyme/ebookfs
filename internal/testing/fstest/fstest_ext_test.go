@@ -18,22 +18,22 @@ import (
 
 func newFS(t *testing.T) *fs.FS {
 	t.Helper()
-	f, _ := fs.NewFS("glenda", "glenda", 0555, fs.IgnorePermissions())
+	f, _ := fs.NewFS("glenda", "glenda", 0o555, fs.IgnorePermissions())
 	return f
 }
 
 func staticFile(t *testing.T) *fs.StaticFile {
 	t.Helper()
 	f := newFS(t)
-	return fs.NewStaticFile(f.NewStat("x", "glenda", "glenda", 0644), []byte("hello"))
+	return fs.NewStaticFile(f.NewStat("x", "glenda", "glenda", 0o644), []byte("hello"))
 }
 
 func staticDir(t *testing.T, children ...string) *fs.StaticDir {
 	t.Helper()
 	f := newFS(t)
-	d := fs.NewStaticDir(f.NewStat("d", "glenda", "glenda", 0555|proto.DMDIR))
+	d := fs.NewStaticDir(f.NewStat("d", "glenda", "glenda", 0o555|proto.DMDIR))
 	for _, name := range children {
-		if err := d.AddChild(fs.NewStaticFile(f.NewStat(name, "glenda", "glenda", 0644), nil)); err != nil {
+		if err := d.AddChild(fs.NewStaticFile(f.NewStat(name, "glenda", "glenda", 0o644), nil)); err != nil {
 			t.Fatalf("AddChild %q: %v", name, err)
 		}
 	}

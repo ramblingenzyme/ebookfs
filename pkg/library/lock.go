@@ -20,7 +20,7 @@ var flock = syscall.Flock
 // If the filesystem has no flock, logs an error and returns the file unlocked.
 func acquireLock(root string) (*os.File, error) {
 	path := filepath.Join(root, lockFileName)
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
 		return nil, fmt.Errorf("open lock file: %w", err)
 	}
@@ -51,7 +51,7 @@ func acquireLock(root string) (*os.File, error) {
 // succeeds, or if flock returns ENOLCK/ENOTSUP/EOPNOTSUPP, the filesystem
 // doesn't enforce locks, so it warns and continues. Other errors fail Open.
 func selfTestFlock(path string) error {
-	fd2, err := os.OpenFile(path, os.O_RDWR, 0644)
+	fd2, err := os.OpenFile(path, os.O_RDWR, 0o644)
 	if err != nil {
 		return fmt.Errorf("self-test: open second fd: %w", err)
 	}

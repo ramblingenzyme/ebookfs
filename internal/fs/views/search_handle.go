@@ -47,7 +47,7 @@ func newSearchHandleDir(f *fs.FS, id int64, reg *registry.BookRegistry, search *
 	d.results = newSearchResultsDir(resultsStat)
 	vfile.AddChild(d.StaticDir, d.results)
 
-	ctlStat := newStat(f, "ctl", 0644)
+	ctlStat := newStat(f, "ctl", 0o644)
 	vfile.AddChild(d.StaticDir, newSearchCtlFile(ctlStat, d))
 
 	return d

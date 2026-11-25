@@ -52,7 +52,7 @@ func stageLegacyLayout(t *testing.T, cfg Config, title string, authors []string,
 
 	legacyDir := filepath.Join(cfg.Root, legacyAuthorDir, fmt.Sprintf("%s (%d)", title, b.ID()))
 	if canonicalDir := filepath.Join(cfg.Root, canonical.Dir()); canonicalDir != legacyDir {
-		if err := os.MkdirAll(filepath.Dir(legacyDir), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(legacyDir), 0o755); err != nil {
 			t.Fatalf("mkdir legacy parent: %v", err)
 		}
 		if err := os.Rename(canonicalDir, legacyDir); err != nil {
@@ -290,7 +290,7 @@ func TestDuplicateBookIDFailsOpenNamingBothPaths(t *testing.T) {
 
 	src := filepath.Join(cfg.Root, filepath.Dir(book.EpubPath()))
 	dst := filepath.Join(cfg.Root, "Copies", filepath.Base(src))
-	if err := os.MkdirAll(dst, 0755); err != nil {
+	if err := os.MkdirAll(dst, 0o755); err != nil {
 		t.Fatalf("mkdir copy: %v", err)
 	}
 	for _, name := range []string{"meta.toml", book.Filename()} {

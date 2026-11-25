@@ -12,8 +12,8 @@ import (
 // permission. inbox is the only one that accepts a Tcreate; DispatchCreate
 // answers the rest with "cannot create files here".
 const (
-	DirMode          = 0555 | proto.DMDIR
-	CreatableDirMode = 0755 | proto.DMDIR
+	DirMode          = 0o555 | proto.DMDIR
+	CreatableDirMode = 0o755 | proto.DMDIR
 )
 
 // NewStat builds a proto.Stat owned by glenda/glenda, the single owner every

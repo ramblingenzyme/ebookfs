@@ -47,10 +47,10 @@ func TestWalkFailsOnUnsearchableBookDir(t *testing.T) {
 	s, root := newStore(t)
 	writeBook(t, root, "Author, A/Book One (1)", "Book One - A.epub", "book1", &book.Meta{ID: 1})
 	dir := filepath.Join(root, "Author, A/Book One (1)")
-	if err := os.Chmod(dir, 0644); err != nil {
+	if err := os.Chmod(dir, 0o644); err != nil {
 		t.Skip("cannot chmod book dir:", err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(dir, 0755) })
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 	if _, err := os.Stat(filepath.Join(dir, metaFilename)); err == nil {
 		t.Skip("permissions not enforced, as for root")
 	}

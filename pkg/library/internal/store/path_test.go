@@ -21,16 +21,32 @@ func TestLayout(t *testing.T) {
 		title   string
 		want    string
 	}{
-		{"single author", []book.Author{{Name: "Alice"}}, "My Title",
-			"Alice/My Title (1)/My Title - Alice.epub"},
-		{"two authors", []book.Author{{Name: "Alice"}, {Name: "Bob"}}, "The Title",
-			"Alice & Bob/The Title (1)/The Title - Alice & Bob.epub"},
+		{
+			"single author",
+			[]book.Author{{Name: "Alice"}},
+			"My Title",
+			"Alice/My Title (1)/My Title - Alice.epub",
+		},
+		{
+			"two authors",
+			[]book.Author{{Name: "Alice"}, {Name: "Bob"}},
+			"The Title",
+			"Alice & Bob/The Title (1)/The Title - Alice & Bob.epub",
+		},
 		{"nil authors", nil, "No Author", "Unknown/No Author (1)/No Author.epub"},
 		{"empty authors", []book.Author{}, "No Author", "Unknown/No Author (1)/No Author.epub"},
-		{"colon in title", []book.Author{{Name: "Alice"}}, "Title: Sub",
-			"Alice/Title: Sub (1)/Title- Sub - Alice.epub"},
-		{"slash in author", []book.Author{{Name: "Alice/Author"}}, "Title",
-			"Alice-Author/Title (1)/Title - Alice-Author.epub"},
+		{
+			"colon in title",
+			[]book.Author{{Name: "Alice"}},
+			"Title: Sub",
+			"Alice/Title: Sub (1)/Title- Sub - Alice.epub",
+		},
+		{
+			"slash in author",
+			[]book.Author{{Name: "Alice/Author"}},
+			"Title",
+			"Alice-Author/Title (1)/Title - Alice-Author.epub",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := s.Layout(tc.authors, tc.title, 1).EpubPath; got != tc.want {
@@ -54,8 +70,12 @@ func TestLayoutKeepsEachComponentInOneDirectory(t *testing.T) {
 		id      int64
 		wantDir string // empty means check escape properties instead
 	}{
-		{"slash", []book.Author{{Name: "AC/DC"}}, "Either/Or", 7,
-			filepath.Join("AC-DC", "Either-Or (7)")},
+		{
+			"slash",
+			[]book.Author{{Name: "AC/DC"}},
+			"Either/Or", 7,
+			filepath.Join("AC-DC", "Either-Or (7)"),
+		},
 		{"dotdot", []book.Author{{Name: ".."}}, "Title", 5, ""},
 		{"dot", []book.Author{{Name: "."}}, "Title", 5, ""},
 		{"ellipsis", []book.Author{{Name: "..."}}, "Title", 5, ""},

@@ -15,14 +15,14 @@ func TestIngestSurfacesWriteMetaFailure(t *testing.T) {
 	s, root := newStore(t)
 
 	staged := filepath.Join(t.TempDir(), "staged.epub")
-	if err := os.WriteFile(staged, []byte("epub"), 0644); err != nil {
+	if err := os.WriteFile(staged, []byte("epub"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	loc := book.Location{EpubPath: filepath.Join("Alice/Title (1)", "Title - Alice.epub")}
 	// Occupy meta.toml's name with a directory, so the sidecar write fails
 	// after the epub is already in place.
 	bookDir := filepath.Join(root, loc.Dir())
-	if err := os.MkdirAll(filepath.Join(bookDir, metaFilename), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(bookDir, metaFilename), 0o755); err != nil {
 		t.Fatal(err)
 	}
 

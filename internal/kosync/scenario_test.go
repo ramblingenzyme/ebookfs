@@ -465,10 +465,10 @@ func TestFailedDeleteKeepsDocumentIDs(t *testing.T) {
 	env := setupEnv(t, defaultCfg)
 
 	dir := filepath.Join(env.lib.tmpDir, env.book.Dir())
-	if err := os.Chmod(dir, 0555); err != nil {
+	if err := os.Chmod(dir, 0o555); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(dir, 0755) })
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 
 	if err := env.lib.Delete(env.book.ID()); err == nil {
 		t.Fatal("Delete succeeded on a read-only book directory")

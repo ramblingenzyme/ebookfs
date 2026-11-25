@@ -26,11 +26,15 @@ type parityBook struct {
 
 func TestSearchMatcherAgreesWithSQL(t *testing.T) {
 	books := []parityBook{
-		{"Findable", []string{"Alice"}, library.Edits{Tags: &[]string{"sf"}, Status: new("reading"), Series: new("Saga"), SeriesIndex: new("1"),
-			Subjects: &[]string{"space"}, Publisher: new("Tor"), Language: new("fr")}},
+		{"Findable", []string{"Alice"}, library.Edits{
+			Tags: &[]string{"sf"}, Status: new("reading"), Series: new("Saga"), SeriesIndex: new("1"),
+			Subjects: &[]string{"space"}, Publisher: new("Tor"), Language: new("fr"),
+		}},
 		{"Plain Book", []string{"Alice"}, library.Edits{}},
-		{"Ünderland", []string{"Bob"}, library.Edits{Tags: &[]string{"fantasy"}, Status: new("read"), Series: new("Saga"), SeriesIndex: new("2"), Authors: &[]library.Author{{Name: "Bob", SortName: "Bobson, Bob"}},
-			Subjects: &[]string{"space", "myth"}, Publisher: new("Gollancz")}},
+		{"Ünderland", []string{"Bob"}, library.Edits{
+			Tags: &[]string{"fantasy"}, Status: new("read"), Series: new("Saga"), SeriesIndex: new("2"), Authors: &[]library.Author{{Name: "Bob", SortName: "Bobson, Bob"}},
+			Subjects: &[]string{"space", "myth"}, Publisher: new("Gollancz"),
+		}},
 		{"STRAÜSS", []string{"Carol"}, library.Edits{}},
 		{"Good Omens", []string{"Neil Gaiman", "Terry Pratchett"}, library.Edits{}},
 		{"100% Wool", []string{"Dave"}, library.Edits{}},

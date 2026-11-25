@@ -30,7 +30,7 @@ func TestSidecarsRoundTrip(t *testing.T) {
 	}
 
 	if err := lib.WithSidecars(id, func(r *os.Root) error {
-		return r.WriteFile("custom.txt", []byte("custom content"), 0644)
+		return r.WriteFile("custom.txt", []byte("custom content"), 0o644)
 	}); err != nil {
 		t.Fatalf("WithSidecars: %v", err)
 	}

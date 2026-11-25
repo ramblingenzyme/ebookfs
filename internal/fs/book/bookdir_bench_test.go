@@ -102,7 +102,7 @@ func measureBooksOnly(n int, withCover bool) float64 {
 // a settled baseline so the delta between the two functions is the BookDir
 // tree cost, uncontaminated by garbage from the other phase.
 func measureBooksWithDirs(n int, withCover bool) float64 {
-	f, _ := fs.NewFS("glenda", "glenda", 0555, fs.IgnorePermissions())
+	f, _ := fs.NewFS("glenda", "glenda", 0o555, fs.IgnorePermissions())
 	noEdit := func(int64, library.Edits) (*library.Book, error) { return nil, nil }
 
 	settleGC()

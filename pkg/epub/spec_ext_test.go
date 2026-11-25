@@ -92,7 +92,6 @@ func TestSpecCreatorOrderIsDocumentOrder(t *testing.T) {
 // §5.5.5 requires exactly one dcterms:modified, in UTC and the extended format.
 // Updating it on a change is only a lowercase "should" (§1.5), so that half is ours.
 func TestSpecModifiedIsUpdated(t *testing.T) {
-
 	path := epubtest.Build(t, epubtest.RichOPF3) // carries dcterms:modified 2020-01-02T00:00:00Z
 	want := "A New Title"
 	if _, err := save(t, path, func(b *epub.Book) { b.Title = want }); err != nil {
@@ -163,7 +162,7 @@ func TestSpecOnlySeriesCollectionIsTheSeries(t *testing.T) {
 // party "responsible for the creation of the content" (EPUB 3.3 §5.5.3.2.3) and
 // "A primary creator or author of the publication" (OPF 2.0 §2.2.2).
 func TestSpecOnlyAuthorRoleCreatorsAreAuthors(t *testing.T) {
-	var opf = epubtest.EPUB3(`    <dc:creator id="c1">Ann Rand</dc:creator>
+	opf := epubtest.EPUB3(`    <dc:creator id="c1">Ann Rand</dc:creator>
     <meta refines="#c1" property="role" scheme="marc:relators">aut</meta>
     <dc:creator id="c2">Acme Editorial Board</dc:creator>
     <meta refines="#c2" property="role" scheme="marc:relators">edt</meta>
@@ -190,7 +189,7 @@ func TestSpecOnlyAuthorRoleCreatorsAreAuthors(t *testing.T) {
 // §5.5.3.1.3: the first dc:language is primary. OPF 2.0 §2.2.12 allows several
 // and names no rule, so first-wins for EPUB 2 is ours.
 func TestSpecFirstLanguageWins(t *testing.T) {
-	var opf = epubtest.EPUB3(`    <dc:language>en</dc:language>
+	opf := epubtest.EPUB3(`    <dc:language>en</dc:language>
     <dc:language>fr</dc:language>`)
 
 	path := epubtest.Build(t, opf)
@@ -336,7 +335,6 @@ func titleByID(md *etree.Element, id string) string {
 
 // §5.5.2, on a fixture formatted the way the spec prints its own examples.
 func TestSpecWhitespaceIsCollapsed(t *testing.T) {
-
 	bib, err := parse(t, epubtest.Build(t, opfSpecStyleWhitespace))
 	if err != nil {
 		t.Fatalf("a document formatted the way the spec prints its own examples must parse: %v", err)
@@ -358,7 +356,6 @@ func TestSpecWhitespaceIsCollapsed(t *testing.T) {
 // XML 1.0 §3.3.3 turns a newline inside an attribute value into a space without
 // trimming it, so a wrapped opf:role arrives padded.
 func TestSpecWhitespaceInEPUB2RoleAttribute(t *testing.T) {
-
 	opf := epubtest.EPUB2(`    <dc:title>Alice in Wonderland</dc:title>
     <dc:creator opf:role=" aut " opf:file-as="Carroll, Lewis">Lewis Carroll</dc:creator>`)
 
@@ -574,7 +571,6 @@ func TestSpecLegacyMetadataWrappers(t *testing.T) {
 // D.3.10 gives role cardinality "zero or more", so aut in either position makes
 // an author. Ours: a role we do not model survives an edit.
 func TestSpecMultipleRoleRefines(t *testing.T) {
-
 	opf := func(first, second string) epubtest.PackageDoc {
 		return epubtest.EPUB3(`    <dc:title>Where the Wild Things Are</dc:title>
     <dc:creator id="creator01">Maurice Sendak</dc:creator>
@@ -622,8 +618,7 @@ func TestSpecMultipleRoleRefines(t *testing.T) {
 //
 // so refines="content.opf#creator01" is conformant.
 func TestSpecPathQualifiedRefines(t *testing.T) {
-
-	var opf = epubtest.EPUB3(`    <dc:title id="t1">The Title</dc:title>
+	opf := epubtest.EPUB3(`    <dc:title id="t1">The Title</dc:title>
     <meta refines="content.opf#t1" property="file-as">Title, The</meta>
     <dc:creator id="creator01">Lewis Carroll</dc:creator>
     <meta refines="content.opf#creator01" property="role" scheme="marc:relators">aut</meta>
@@ -741,8 +736,7 @@ func TestSpecGroupPositionMultiLevelRoundTrips(t *testing.T) {
 //
 // So "series" under someone else's scheme is not the EPUB series type.
 func TestSpecSchemedCollectionTypeIsNotOurSeries(t *testing.T) {
-
-	var opf = epubtest.EPUB3(`    <meta property="belongs-to-collection" id="c01">Acme Bundle</meta>
+	opf := epubtest.EPUB3(`    <meta property="belongs-to-collection" id="c01">Acme Bundle</meta>
     <meta refines="#c01" property="collection-type" scheme="onix:codelist148">series</meta>`)
 
 	bib, err := parse(t, epubtest.Build(t, opf))
@@ -801,7 +795,7 @@ func TestSpecCoverImagePropertyBeatsLegacyMeta(t *testing.T) {
 // OPF 2.0 §2.2.7: "the set of values for event are not defined by this
 // specification". Ours: only "publication" is recognised.
 func TestSpecUnrecognisedDateEventsLeaveNoPubdate(t *testing.T) {
-	var opf = epubtest.EPUB2(`    <dc:date opf:event="creation">1999-01-01</dc:date>
+	opf := epubtest.EPUB2(`    <dc:date opf:event="creation">1999-01-01</dc:date>
     <dc:date opf:event="original-publication">2000-01-01</dc:date>
     <dc:date opf:event="modification">2001-01-01</dc:date>`)
 

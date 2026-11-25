@@ -69,20 +69,20 @@ func NewBookDir(f *fs.FS, lib ContentReader, edit func(int64, library.Edits) (*l
 	d.book.Store(book)
 
 	vfile.AddChild(&d.StaticDir, fs.NewStaticFile(
-		newStat(f, "id", 0444),
+		newStat(f, "id", 0o444),
 		fmt.Appendf(nil, "%d\n", book.ID()),
 	))
 
 	// Child files read through d.Book so they always see the current snapshot,
 	// not the one captured at construction.
 	vfile.AddChild(&d.StaticDir, newEpubFile(
-		newStat(f, book.Filename(), 0444),
+		newStat(f, book.Filename(), 0o444),
 		lib,
 		d.Book,
 	))
 
 	vfile.AddChild(&d.StaticDir, newOPFFile(
-		newStat(f, "opf", 0444),
+		newStat(f, "opf", 0o444),
 		lib,
 		d.Book,
 	))
@@ -100,17 +100,17 @@ func NewBookDir(f *fs.FS, lib ContentReader, edit func(int64, library.Edits) (*l
 			_, err = edit(d.Book().ID(), edits)
 			return err
 		}
-		vfile.AddChild(&d.StaticDir, newFieldFile(newStat(f, name, 0644), get, set))
+		vfile.AddChild(&d.StaticDir, newFieldFile(newStat(f, name, 0o644), get, set))
 	}
 
-	vfile.AddChild(&d.StaticDir, newFieldFile(newStat(f, "pubdate", 0444), func() string { return d.Book().Pubdate() }, nil))
-	vfile.AddChild(&d.StaticDir, newFieldFile(newStat(f, "identifiers", 0444), func() string {
+	vfile.AddChild(&d.StaticDir, newFieldFile(newStat(f, "pubdate", 0o444), func() string { return d.Book().Pubdate() }, nil))
+	vfile.AddChild(&d.StaticDir, newFieldFile(newStat(f, "identifiers", 0o444), func() string {
 		return formatIdentifiers(d.Book().Identifiers())
 	}, nil))
 
 	if book.CoverPath() != "" {
 		vfile.AddChild(&d.StaticDir, newCoverFile(
-			newStat(f, "cover"+filepath.Ext(book.CoverPath()), 0644),
+			newStat(f, "cover"+filepath.Ext(book.CoverPath()), 0o644),
 			lib,
 			edit,
 			d.Book,

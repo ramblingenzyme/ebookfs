@@ -13,7 +13,7 @@ import (
 
 func newTestSnapshotFile(t *testing.T, data []byte) *SnapshotFile {
 	t.Helper()
-	stat := NewStat(util.NewTestFS(t), "snap", 0444)
+	stat := NewStat(util.NewTestFS(t), "snap", 0o444)
 	sf := NewSnapshotFile(stat, func() ([]byte, error) { return data, nil })
 	return &sf
 }
@@ -44,7 +44,7 @@ func TestSnapshotFile(t *testing.T) {
 	})
 
 	t.Run("open propagates load error", func(t *testing.T) {
-		stat := NewStat(util.NewTestFS(t), "snap", 0444)
+		stat := NewStat(util.NewTestFS(t), "snap", 0o444)
 		sf := NewSnapshotFile(stat, func() ([]byte, error) { return nil, util.ErrTest })
 		if err := sf.Open(1, proto.Mode(0)); !errors.Is(err, util.ErrTest) {
 			t.Errorf("Open error = %v, want %v", err, util.ErrTest)

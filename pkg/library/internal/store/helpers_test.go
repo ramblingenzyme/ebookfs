@@ -18,11 +18,11 @@ func newStore(t *testing.T) (*Store, string) {
 func writeBook(t *testing.T, root, libPath, epubName, content string, meta *book.Meta) {
 	t.Helper()
 	dir := filepath.Join(root, libPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if epubName != "" {
-		if err := os.WriteFile(filepath.Join(dir, epubName), []byte(content), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, epubName), []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}

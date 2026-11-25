@@ -56,7 +56,7 @@ func TestInboxFailedIngestLeavesNoBook(t *testing.T) {
 func TestCreateOutsideTheInboxIsRefused(t *testing.T) {
 	h := newHarness(t)
 
-	if _, err := h.c.Create("/books/x.epub", 0644, proto.Owrite); err == nil {
+	if _, err := h.c.Create("/books/x.epub", 0o644, proto.Owrite); err == nil {
 		t.Error("creating /books/x.epub was accepted")
 	}
 	if got := h.ls("/books"); len(got) != 0 {

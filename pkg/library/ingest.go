@@ -141,7 +141,6 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 
 		return book.NewImmutableBook(b), nil
 	}()
-
 	if err != nil {
 		if rmErr := l.store.Delete(loc); rmErr == nil {
 			// Nothing is left on disk to heal.

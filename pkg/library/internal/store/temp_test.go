@@ -13,7 +13,7 @@ import (
 func TestRemoveStaleTempsMatchesEveryWriter(t *testing.T) {
 	s, root := newStore(t)
 	dir := filepath.Join(root, "Author", "Title (1)")
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -37,7 +37,7 @@ func TestRemoveStaleTempsMatchesEveryWriter(t *testing.T) {
 		filepath.Join(dir, ".syncthing.book.epub.tmp"),
 	}
 	for _, path := range append(kept, legacy) {
-		if err := os.WriteFile(path, nil, 0644); err != nil {
+		if err := os.WriteFile(path, nil, 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -67,18 +67,18 @@ func TestRemoveStaleTempsPastUnreadableDir(t *testing.T) {
 	unreadable := filepath.Join(root, "A")
 	later := filepath.Join(root, "Z")
 	for _, dir := range []string{unreadable, later} {
-		if err := os.Mkdir(dir, 0755); err != nil {
+		if err := os.Mkdir(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
 	stale := filepath.Join(later, ".ebookfs-1.epub.tmp")
-	if err := os.WriteFile(stale, nil, 0644); err != nil {
+	if err := os.WriteFile(stale, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chmod(unreadable, 0); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(unreadable, 0755) })
+	t.Cleanup(func() { _ = os.Chmod(unreadable, 0o755) })
 
 	if err := s.RemoveStaleTemps(); err != nil {
 		t.Fatalf("RemoveStaleTemps: %v", err)

@@ -16,7 +16,7 @@ import (
 
 func serveTree(t *testing.T, root *fs.StaticDir) *ninep.Conn {
 	t.Helper()
-	fsys, _ := fs.NewFS("root", "root", 0755, fs.IgnorePermissions())
+	fsys, _ := fs.NewFS("root", "root", 0o755, fs.IgnorePermissions())
 	fsys.Root = root
 
 	server, client := net.Pipe()
@@ -40,12 +40,12 @@ func serveTree(t *testing.T, root *fs.StaticDir) *ninep.Conn {
 func TestReaddirRootListsStaticFile(t *testing.T) {
 	root := fs.NewStaticDir(&proto.Stat{
 		Name: "/",
-		Mode: proto.DMDIR | 0755,
+		Mode: proto.DMDIR | 0o755,
 	})
 	file := fs.NewStaticFile(&proto.Stat{
 		Name:   "test.txt",
 		Length: 13,
-		Mode:   0644,
+		Mode:   0o644,
 	}, []byte("hello, world!"))
 	if err := root.AddChild(file); err != nil {
 		t.Fatal(err)
@@ -82,7 +82,7 @@ func TestReaddirRootListsStaticFile(t *testing.T) {
 func TestReaddirLargeDirectory(t *testing.T) {
 	root := fs.NewStaticDir(&proto.Stat{
 		Name: "/",
-		Mode: proto.DMDIR | 0755,
+		Mode: proto.DMDIR | 0o755,
 	})
 
 	const count = 2000
@@ -91,7 +91,7 @@ func TestReaddirLargeDirectory(t *testing.T) {
 		file := fs.NewStaticFile(&proto.Stat{
 			Name:   name,
 			Length: 4,
-			Mode:   0644,
+			Mode:   0o644,
 		}, []byte("test"))
 		if err := root.AddChild(file); err != nil {
 			t.Fatal(err)
@@ -112,11 +112,11 @@ func TestReaddirLargeDirectory(t *testing.T) {
 func TestWalkMissing(t *testing.T) {
 	root := fs.NewStaticDir(&proto.Stat{
 		Name: "/",
-		Mode: proto.DMDIR | 0755,
+		Mode: proto.DMDIR | 0o755,
 	})
 	dir := fs.NewStaticDir(&proto.Stat{
 		Name: "dir",
-		Mode: proto.DMDIR | 0755,
+		Mode: proto.DMDIR | 0o755,
 	})
 	if err := root.AddChild(dir); err != nil {
 		t.Fatal(err)
@@ -140,13 +140,13 @@ func TestWalkMissing(t *testing.T) {
 func TestCreateRefused(t *testing.T) {
 	root := fs.NewStaticDir(&proto.Stat{
 		Name: "/",
-		Mode: proto.DMDIR | 0755,
+		Mode: proto.DMDIR | 0o755,
 	})
 	conn := serveTree(t, root)
 
 	done := make(chan error, 1)
 	go func() {
-		_, err := conn.Create("/new.txt", 0644, proto.Owrite)
+		_, err := conn.Create("/new.txt", 0o644, proto.Owrite)
 		done <- err
 	}()
 	select {
@@ -176,12 +176,12 @@ func (f *openFailsFile) Open(fid uint64, omode proto.Mode) error {
 func TestOpenRefused(t *testing.T) {
 	root := fs.NewStaticDir(&proto.Stat{
 		Name: "/",
-		Mode: proto.DMDIR | 0755,
+		Mode: proto.DMDIR | 0o755,
 	})
 	file := &openFailsFile{}
 	file.BaseFile = *fs.NewBaseFile(&proto.Stat{
 		Name: "fails.txt",
-		Mode: 0644,
+		Mode: 0o644,
 	})
 	if err := root.AddChild(file); err != nil {
 		t.Fatal(err)
@@ -218,13 +218,13 @@ func (f *closeFailsFile) Close(fid uint64) error {
 func TestClunkReturnsCloseError(t *testing.T) {
 	root := fs.NewStaticDir(&proto.Stat{
 		Name: "/",
-		Mode: proto.DMDIR | 0755,
+		Mode: proto.DMDIR | 0o755,
 	})
 	file := &closeFailsFile{}
 	file.BaseFile = *fs.NewBaseFile(&proto.Stat{
 		Name:   "fails.txt",
 		Length: 0,
-		Mode:   0644,
+		Mode:   0o644,
 	})
 	if err := root.AddChild(file); err != nil {
 		t.Fatal(err)
@@ -277,13 +277,13 @@ func (f *wstatFile) Stat() proto.Stat {
 func TestWstatLengthZero(t *testing.T) {
 	root := fs.NewStaticDir(&proto.Stat{
 		Name: "/",
-		Mode: proto.DMDIR | 0755,
+		Mode: proto.DMDIR | 0o755,
 	})
 	file := &wstatFile{length: 100}
 	file.BaseFile = *fs.NewBaseFile(&proto.Stat{
 		Name:   "resizable.txt",
 		Length: 100,
-		Mode:   0644,
+		Mode:   0o644,
 	})
 	if err := root.AddChild(file); err != nil {
 		t.Fatal(err)
@@ -307,8 +307,8 @@ func TestWstatLengthZero(t *testing.T) {
 	if stat.Name != "resizable.txt" {
 		t.Fatalf("initial Name = %q, want %q", stat.Name, "resizable.txt")
 	}
-	if stat.Mode != 0644 {
-		t.Fatalf("initial Mode = %o, want %o", stat.Mode, 0644)
+	if stat.Mode != 0o644 {
+		t.Fatalf("initial Mode = %o, want %o", stat.Mode, 0o644)
 	}
 
 	wstat := ninep.DontTouch()
@@ -328,8 +328,8 @@ func TestWstatLengthZero(t *testing.T) {
 	if stat.Name != "resizable.txt" {
 		t.Errorf("Name after WStat = %q, want %q", stat.Name, "resizable.txt")
 	}
-	if stat.Mode != 0644 {
-		t.Errorf("Mode after WStat = %o, want %o", stat.Mode, 0644)
+	if stat.Mode != 0o644 {
+		t.Errorf("Mode after WStat = %o, want %o", stat.Mode, 0o644)
 	}
 }
 

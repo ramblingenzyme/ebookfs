@@ -28,7 +28,7 @@ func TestRestoreSkipsCorruptSidecars(t *testing.T) {
 
 	const corrupt = "{corrupt json"
 	if err := lib.Library.WithSidecars(book2.ID(), func(root *os.Root) error {
-		return root.WriteFile("kosync.json", []byte(corrupt), 0644)
+		return root.WriteFile("kosync.json", []byte(corrupt), 0o644)
 	}); err != nil {
 		t.Fatalf("corrupting sidecar: %v", err)
 	}

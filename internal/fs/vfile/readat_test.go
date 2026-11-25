@@ -14,7 +14,7 @@ import (
 
 func newTestReadAtFile(t *testing.T, data string) *ReadAtFile {
 	t.Helper()
-	stat := NewStat(util.NewTestFS(t), "reader", 0444)
+	stat := NewStat(util.NewTestFS(t), "reader", 0o444)
 	raf := NewReadAtFile(stat, func() (ReaderAtCloser, error) {
 		return &mock.EpubReader{Reader: bytes.NewReader([]byte(data))}, nil
 	})
@@ -41,7 +41,7 @@ func TestReadAtFile(t *testing.T) {
 	})
 
 	t.Run("open propagates error", func(t *testing.T) {
-		stat := NewStat(util.NewTestFS(t), "reader", 0444)
+		stat := NewStat(util.NewTestFS(t), "reader", 0o444)
 		raf := NewReadAtFile(stat, func() (ReaderAtCloser, error) { return nil, util.ErrTest })
 		if err := raf.Open(1, proto.Mode(0)); !errors.Is(err, util.ErrTest) {
 			t.Errorf("Open error = %v, want %v", err, util.ErrTest)
@@ -62,7 +62,7 @@ func TestReadAtFile(t *testing.T) {
 
 	t.Run("close releases reader", func(t *testing.T) {
 		r := &mock.EpubReader{Reader: bytes.NewReader([]byte("data"))}
-		stat := NewStat(util.NewTestFS(t), "reader", 0444)
+		stat := NewStat(util.NewTestFS(t), "reader", 0o444)
 		raf := NewReadAtFile(stat, func() (ReaderAtCloser, error) { return r, nil })
 
 		fid := fstest.Fid(t, &raf, 1)

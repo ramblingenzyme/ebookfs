@@ -30,7 +30,7 @@ func TestCoverFileWrite(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			lib, b := ingestedBook(t)
 
-			cf := newCoverFile(newStat(util.NewTestFS(t), "cover.jpg", 0644), lib, lib.Edit, util.Fixed(b))
+			cf := newCoverFile(newStat(util.NewTestFS(t), "cover.jpg", 0o644), lib, lib.Edit, util.Fixed(b))
 			fid := fstest.Fid(t, cf, 1)
 			fid.Open(proto.Mode(0))
 			fid.Write(0, tc.write)

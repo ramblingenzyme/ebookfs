@@ -35,10 +35,10 @@ func TestCreateIngestReadOnlyDir(t *testing.T) {
 	}
 	lib := openTestLibrary(t)
 
-	if err := os.Chmod(lib.inboxTemp, 0444); err != nil {
+	if err := os.Chmod(lib.inboxTemp, 0o444); err != nil {
 		t.Skip("cannot chmod inbox temp:", err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(lib.inboxTemp, 0755) })
+	t.Cleanup(func() { _ = os.Chmod(lib.inboxTemp, 0o755) })
 
 	_, err := lib.CreateIngest()
 	if err == nil {
@@ -78,7 +78,7 @@ func TestFailedIngestCleansUp(t *testing.T) {
 	lib := openTestLibrary(t)
 	loc := lib.store.Layout([]Author{{Name: "Alice"}}, "Doomed", 1)
 	dir := lib.store.AbsPath(loc.Dir())
-	if err := os.MkdirAll(filepath.Join(dir, "meta.toml"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "meta.toml"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 

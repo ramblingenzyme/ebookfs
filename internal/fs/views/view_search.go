@@ -45,7 +45,7 @@ func NewSearchDir(f *fs.FS, reg *registry.BookRegistry, ttl time.Duration, maxHa
 	}
 
 	clone := &cloneFile{
-		BaseFile: *fs.NewBaseFile(newStat(f, "clone", 0444)),
+		BaseFile: *fs.NewBaseFile(newStat(f, "clone", 0o444)),
 		search:   d,
 		handles:  make(map[uint64]int64),
 	}

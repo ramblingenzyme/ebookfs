@@ -430,7 +430,7 @@ func TestOpenReplacesAnUnreadableLastID(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(cfg.Root, ".last-id")
-	if err := os.WriteFile(path, []byte("garbage"), 0644); err != nil {
+	if err := os.WriteFile(path, []byte("garbage"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

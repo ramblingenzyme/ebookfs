@@ -29,10 +29,14 @@ func TestFieldEdits(t *testing.T) {
 		{field: "rights", input: "All rights reserved", want: library.Edits{Rights: new("All rights reserved")}},
 		{field: "series", input: "Dune", want: library.Edits{Series: new("Dune")}},
 		{field: "series_index", input: "2.1", want: library.Edits{SeriesIndex: new("2.1")}},
-		{field: "tags", input: "sf\n\nclassic\n", want: library.Edits{Tags: &[]string{"sf", "classic"}},
-			reads: "sf\nclassic"},
-		{field: "subjects", input: "\nFiction\nDeserts", want: library.Edits{Subjects: &[]string{"Fiction", "Deserts"}},
-			reads: "Fiction\nDeserts"},
+		{
+			field: "tags", input: "sf\n\nclassic\n", want: library.Edits{Tags: &[]string{"sf", "classic"}},
+			reads: "sf\nclassic",
+		},
+		{
+			field: "subjects", input: "\nFiction\nDeserts", want: library.Edits{Subjects: &[]string{"Fiction", "Deserts"}},
+			reads: "Fiction\nDeserts",
+		},
 		{field: "contributors", input: "Ann | ill\n\n  Bob  \n | edt", want: library.Edits{
 			Contributors: &[]library.Contributor{{Name: "Ann", Role: "ill"}, {Name: "Bob"}},
 		}, reads: "Ann | ill\nBob"},
