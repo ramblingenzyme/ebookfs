@@ -2,6 +2,7 @@ package opds
 
 import (
 	"github.com/ophymx/opds"
+
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 

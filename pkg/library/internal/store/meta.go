@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+
 	"github.com/ramblingenzyme/ebookfs/internal/atomicfs"
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )

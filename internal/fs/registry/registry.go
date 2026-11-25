@@ -8,9 +8,10 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/ramblingenzyme/go9p/fs"
+
 	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
-	"github.com/ramblingenzyme/go9p/fs"
 )
 
 // Editor supplies the content reader and edit operation installed in each

@@ -5,8 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/go9p/fs"
+
+	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 )
 
 type LogEntry struct {

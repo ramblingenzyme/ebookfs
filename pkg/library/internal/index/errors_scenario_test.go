@@ -13,7 +13,6 @@ import (
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index/dbsqlc"
 )

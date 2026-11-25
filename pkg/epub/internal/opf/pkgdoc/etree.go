@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/beevik/etree"
+
 	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/xml"
 )
 

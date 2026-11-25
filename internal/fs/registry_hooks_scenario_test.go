@@ -7,12 +7,13 @@ import (
 	"sync"
 	"testing"
 
+	go9pfs "github.com/ramblingenzyme/go9p/fs"
+
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/views"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
-	go9pfs "github.com/ramblingenzyme/go9p/fs"
 )
 
 func TestConcurrentLibraryEditsKeepBookDirSnapshotWhole(t *testing.T) {

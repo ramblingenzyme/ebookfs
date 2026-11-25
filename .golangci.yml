@@ -59,3 +59,14 @@ linters:
     presets:
       # Close and Remove on cleanup paths. Write paths check Close explicitly.
       - std-error-handling
+
+formatters:
+  enable:
+    - gci
+    - goimports
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - localmodule

@@ -11,9 +11,10 @@ import (
 	"net/url"
 	"path/filepath"
 
+	_ "modernc.org/sqlite"
+
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/fsutil"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index/dbsqlc"
-	_ "modernc.org/sqlite"
 )
 
 //go:embed schema.sql

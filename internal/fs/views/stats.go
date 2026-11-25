@@ -5,10 +5,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
-	"github.com/ramblingenzyme/ebookfs/pkg/library"
 	"github.com/ramblingenzyme/go9p/fs"
 	"github.com/ramblingenzyme/go9p/proto"
+
+	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
+	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
 // StatsReader is the half of the library this package uses: the stats file is

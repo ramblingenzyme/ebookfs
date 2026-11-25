@@ -92,6 +92,7 @@ See `configs/config.example.toml` for all options.
 ```bash
 go test ./...
 golangci-lint run
+golangci-lint fmt   # fixes import grouping
 CGO_ENABLED=0 go build -trimpath .
 ```
 

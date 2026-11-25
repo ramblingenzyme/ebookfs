@@ -7,13 +7,12 @@ import (
 
 	go9pfs "github.com/ramblingenzyme/go9p/fs"
 
-	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
-	"github.com/ramblingenzyme/ebookfs/pkg/library"
-
 	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
+	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
 var (

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/drift"
 )
 

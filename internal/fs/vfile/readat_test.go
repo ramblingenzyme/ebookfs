@@ -5,10 +5,11 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/ramblingenzyme/go9p/proto"
+
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
-	"github.com/ramblingenzyme/go9p/proto"
 )
 
 func newTestReadAtFile(t *testing.T, data string) *ReadAtFile {

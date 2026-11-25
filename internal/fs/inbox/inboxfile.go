@@ -4,9 +4,10 @@ import (
 	"errors"
 	"log/slog"
 
-	"github.com/ramblingenzyme/ebookfs/pkg/library"
 	"github.com/ramblingenzyme/go9p/fs"
 	"github.com/ramblingenzyme/go9p/proto"
+
+	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
 type InboxFile struct {

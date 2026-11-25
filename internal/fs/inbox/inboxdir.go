@@ -6,9 +6,10 @@ package inbox
 import (
 	"log/slog"
 
+	"github.com/ramblingenzyme/go9p/fs"
+
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
-	"github.com/ramblingenzyme/go9p/fs"
 )
 
 type Ingester interface {
