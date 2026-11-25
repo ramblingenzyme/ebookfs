@@ -2,6 +2,7 @@ package vfile
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
@@ -41,7 +42,7 @@ func TestReadAtFile(t *testing.T) {
 	t.Run("open propagates error", func(t *testing.T) {
 		stat := NewStat(util.NewTestFS(t), "reader", 0444)
 		raf := NewReadAtFile(stat, func() (ReaderAtCloser, error) { return nil, util.ErrTest })
-		if err := raf.Open(1, proto.Mode(0)); err != util.ErrTest {
+		if err := raf.Open(1, proto.Mode(0)); !errors.Is(err, util.ErrTest) {
 			t.Errorf("Open error = %v, want %v", err, util.ErrTest)
 		}
 	})

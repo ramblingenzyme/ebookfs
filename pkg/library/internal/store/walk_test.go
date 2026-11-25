@@ -1,6 +1,10 @@
 package store
 
 import (
+	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
@@ -34,5 +38,24 @@ func TestWalk(t *testing.T) {
 		if !found[want] {
 			t.Errorf("Walk did not return %q", want)
 		}
+	}
+}
+
+// A book directory a reader can list but not search fails meta.toml's stat
+// with EACCES. Taken as "not a book", it dropped the book on reindex.
+func TestWalkFailsOnUnsearchableBookDir(t *testing.T) {
+	s, root := newStore(t)
+	writeBook(t, root, "Author, A/Book One (1)", "Book One - A.epub", "book1", &book.Meta{ID: 1})
+	dir := filepath.Join(root, "Author, A/Book One (1)")
+	if err := os.Chmod(dir, 0644); err != nil {
+		t.Skip("cannot chmod book dir:", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0755) })
+	if _, err := os.Stat(filepath.Join(dir, metaFilename)); err == nil {
+		t.Skip("permissions not enforced, as for root")
+	}
+
+	if _, err := s.Walk(); !errors.Is(err, fs.ErrPermission) {
+		t.Errorf("Walk: err = %v, want a permission error", err)
 	}
 }

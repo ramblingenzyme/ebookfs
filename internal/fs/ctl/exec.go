@@ -96,7 +96,7 @@ func (f *CtlFile) dispatch(name string, args []string) string {
 func addTag(f *CtlFile, args []string) string {
 	tag := args[0]
 
-	return f.editSpec("edited", args[1], func(b *library.Book) *library.Edits {
+	return f.editSpec(args[1], func(b *library.Book) *library.Edits {
 		if slices.Contains(b.Tags(), tag) {
 			return nil // already has tag
 		}
@@ -108,7 +108,7 @@ func addTag(f *CtlFile, args []string) string {
 func removeTag(f *CtlFile, args []string) string {
 	tag := args[0]
 
-	return f.editSpec("edited", args[1], func(b *library.Book) *library.Edits {
+	return f.editSpec(args[1], func(b *library.Book) *library.Edits {
 		if !slices.Contains(b.Tags(), tag) {
 			return nil // doesn't have tag
 		}
@@ -122,7 +122,7 @@ func removeTag(f *CtlFile, args []string) string {
 func setStatus(f *CtlFile, args []string) string {
 	status := args[0]
 
-	return f.editSpec("edited", args[1], func(b *library.Book) *library.Edits {
+	return f.editSpec(args[1], func(b *library.Book) *library.Edits {
 		if b.Status() == status {
 			return nil
 		}
@@ -136,7 +136,7 @@ func setRating(f *CtlFile, args []string) string {
 		return fmt.Sprintf("error: invalid rating %q", args[0])
 	}
 
-	return f.editSpec("edited", args[1], func(b *library.Book) *library.Edits {
+	return f.editSpec(args[1], func(b *library.Book) *library.Edits {
 		if b.Rating() == rating {
 			return nil
 		}
@@ -239,12 +239,12 @@ func idsOnly(q library.Query) bool {
 
 // editSpec is editSelection for a command that names its books with an id-spec
 // rather than building the query itself.
-func (f *CtlFile) editSpec(op, spec string, editFn func(*library.Book) *library.Edits) string {
+func (f *CtlFile) editSpec(spec string, editFn func(*library.Book) *library.Edits) string {
 	query, err := parseSelection(spec)
 	if err != nil {
 		return fmt.Sprintf("error: %v", err)
 	}
-	return f.editSelection(op, query, editFn)
+	return f.editSelection("edited", query, editFn)
 }
 
 // editSelection applies editFn to each book the selection addresses, reporting

@@ -1,7 +1,9 @@
 package store
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,8 +24,10 @@ func (s *Store) Walk() ([]book.Location, error) {
 		if path == filepath.Join(s.root, trashDirName) {
 			return filepath.SkipDir // deleted books; reindexing them would undo the delete
 		}
-		if _, err := os.Stat(filepath.Join(path, metaFilename)); err != nil {
+		if _, err := os.Stat(filepath.Join(path, metaFilename)); errors.Is(err, fs.ErrNotExist) {
 			return nil // not a book directory; keep descending
+		} else if err != nil {
+			return err
 		}
 
 		rel, err := filepath.Rel(s.root, path)

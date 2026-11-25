@@ -37,9 +37,7 @@ func TestConcurrentLibraryEditsKeepBookDirSnapshotWhole(t *testing.T) {
 
 	var wg sync.WaitGroup
 	done := make(chan struct{})
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		defer close(done)
 		for i := range 100 {
 			title := titles[i%len(titles)]
@@ -48,12 +46,10 @@ func TestConcurrentLibraryEditsKeepBookDirSnapshotWhole(t *testing.T) {
 				return
 			}
 		}
-	}()
+	})
 
 	for range 3 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for {
 				select {
 				case <-done:
@@ -67,7 +63,7 @@ func TestConcurrentLibraryEditsKeepBookDirSnapshotWhole(t *testing.T) {
 				}
 				_ = titleFile.Stat()
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }

@@ -91,8 +91,12 @@ See `configs/config.example.toml` for all options.
 
 ```bash
 go test ./...
+golangci-lint run
 CGO_ENABLED=0 go build -trimpath .
 ```
+
+CI runs golangci-lint v2.15.0 with the config in `.golangci.yml`. Older
+releases cannot read Go 1.27 export data and crash or report a typecheck error.
 
 ## License
 

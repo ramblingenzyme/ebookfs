@@ -1147,7 +1147,7 @@ func TestSetCoverReplacesTheImage(t *testing.T) {
 func TestSetCoverRefusesEncrypted(t *testing.T) {
 	enc := epubtest.EncryptionXML(epubtest.AES256, "OEBPS/cover.jpg")
 	path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3, epubtest.Entry{Name: "META-INF/encryption.xml", Data: []byte(enc)}))
-	if _, err := setCover(t, path, tinyJPEG(t)); err == nil {
+	if err := setCover(t, path, tinyJPEG(t)); err == nil {
 		t.Fatal("expected refusal on encrypted cover, got nil")
 	}
 }
@@ -1169,7 +1169,7 @@ func TestSetCoverRefusesAGIFEntry(t *testing.T) {
 	if err := gif.Encode(&img, image.NewRGBA(image.Rect(0, 0, 1, 1)), nil); err != nil {
 		t.Fatal(err)
 	}
-	_, err := setCover(t, path, img.Bytes())
+	err := setCover(t, path, img.Bytes())
 	if err == nil || !strings.Contains(err.Error(), "not replaceable in place") {
 		t.Fatalf("err = %v, want the GIF entry refused as not replaceable in place", err)
 	}
@@ -1182,7 +1182,7 @@ func TestSetCoverRejectsNonImage(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
-			if _, err := setCover(t, path, []byte(tc.data)); err == nil {
+			if err := setCover(t, path, []byte(tc.data)); err == nil {
 				t.Fatal("expected rejection of non-image cover data, got nil")
 			}
 		})
@@ -1191,14 +1191,14 @@ func TestSetCoverRejectsNonImage(t *testing.T) {
 
 func TestSetCoverWithNoCoverIsErrNoCover(t *testing.T) {
 	path := epubtest.Build(t, epubtest.Pkg{Manifest: epubtest.ChapterOnlyManifest}.EPUB3())
-	if _, err := setCover(t, path, tinyJPEG(t)); !errors.Is(err, epub.ErrNoCover) {
+	if err := setCover(t, path, tinyJPEG(t)); !errors.Is(err, epub.ErrNoCover) {
 		t.Fatalf("err = %v, want ErrNoCover", err)
 	}
 }
 
 func TestSetCoverRejectsFormatMismatch(t *testing.T) {
 	path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
-	if _, err := setCover(t, path, tinyPNG(t)); err == nil {
+	if err := setCover(t, path, tinyPNG(t)); err == nil {
 		t.Fatal("expected rejection of PNG bytes into a .jpg cover entry, got nil")
 	}
 }
@@ -1575,7 +1575,7 @@ func jpegSized(t *testing.T, w, h int) []byte {
 func coverPageEpub(t *testing.T, opf epubtest.PackageDoc, page string, w, h int) string {
 	t.Helper()
 	path := epubtest.WriteEpub(t, epubtest.BaseEntries(opf, epubtest.Entry{Name: "OEBPS/cover.xhtml", Data: []byte(page)}))
-	if _, err := setCover(t, path, jpegSized(t, w, h)); err != nil {
+	if err := setCover(t, path, jpegSized(t, w, h)); err != nil {
 		t.Fatal(err)
 	}
 	return path
@@ -1841,8 +1841,7 @@ func fillMetadata(t *testing.T, m *epub.Metadata) {
 func mutateSlices(t *testing.T, m *epub.Metadata) {
 	t.Helper()
 	v := reflect.ValueOf(m).Elem()
-	for i := range v.NumField() {
-		f := v.Field(i)
+	for _, f := range v.Fields() {
 		if f.Kind() != reflect.Slice || f.Len() == 0 {
 			continue
 		}

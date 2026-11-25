@@ -60,7 +60,7 @@ var groupingViews = []groupingView{
 		name:   "by-series",
 		newDir: func(reg *registry.BookRegistry) fs.Dir { return NewBySeriesDir(reg) },
 		withKeys: func(id int64, title string, keys ...string) *library.Book {
-			return makeBookWithSeries(id, title, "Author", keys[0], strconv.FormatInt(id, 10))
+			return makeBookWithSeries(id, title, keys[0], strconv.FormatInt(id, 10))
 		},
 		keyless: func(id int64, title string) *library.Book { return util.MakeBook(id, title, "Author") },
 		// Series entries lead with the index so a plain readdir reads in order.

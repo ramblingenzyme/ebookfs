@@ -2,6 +2,7 @@ package vfile
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
@@ -44,7 +45,7 @@ func TestSnapshotFile(t *testing.T) {
 	t.Run("open propagates load error", func(t *testing.T) {
 		stat := NewStat(util.NewTestFS(t), "snap", 0444)
 		sf := NewSnapshotFile(stat, func() ([]byte, error) { return nil, util.ErrTest })
-		if err := sf.Open(1, proto.Mode(0)); err != util.ErrTest {
+		if err := sf.Open(1, proto.Mode(0)); !errors.Is(err, util.ErrTest) {
 			t.Errorf("Open error = %v, want %v", err, util.ErrTest)
 		}
 	})

@@ -85,7 +85,7 @@ func TestReaddirLargeDirectory(t *testing.T) {
 	})
 
 	const count = 2000
-	for i := 0; i < count; i++ {
+	for i := range count {
 		name := fmt.Sprintf("file%d.txt", i)
 		file := fs.NewStaticFile(&proto.Stat{
 			Name:   name,

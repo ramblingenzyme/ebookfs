@@ -2,7 +2,40 @@ version: "2"
 
 linters:
   default: standard
+  enable:
+    - depguard
+    - errorlint
+    - modernize
+    - nilerr
+    - nolintlint
+    - rowserrcheck
+    - sqlclosecheck
+    - unparam
+    - usestdlibvars
   settings:
+    depguard:
+      rules:
+        # pkg/epub and pkg/library are standalone libraries, so they carry no
+        # ebookfs concept. Domain-free utilities are fine. Third-party modules
+        # are listed since each one becomes a dependency of every importer.
+        public-libraries:
+          files:
+            - "**/pkg/**"
+          allow:
+            - $gostd
+            - github.com/ramblingenzyme/ebookfs/pkg
+            - github.com/ramblingenzyme/ebookfs/internal/atomicfs
+            - github.com/ramblingenzyme/ebookfs/internal/util
+            # TODO: drop once the library owns its domain model (TODO.md,
+            # Boundaries).
+            - github.com/ramblingenzyme/ebookfs/internal/book
+            - github.com/ramblingenzyme/ebookfs/internal/testing
+            - github.com/BurntSushi/toml
+            - github.com/beevik/etree
+            - modernc.org/sqlite
+    nolintlint:
+      require-explanation: true
+      require-specific: true
     errcheck:
       exclude-functions:
         # Always returns nil.

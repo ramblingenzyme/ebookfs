@@ -34,8 +34,8 @@ func makeBookWithSubjects(id int64, title, author string, subjects ...string) *l
 	return wrapBook(b)
 }
 
-func makeBookWithSeries(id int64, title, author string, seriesName, seriesIndex string) *library.Book {
-	b := makeBook(id, title, author)
+func makeBookWithSeries(id int64, title, seriesName, seriesIndex string) *library.Book {
+	b := makeBook(id, title, "Author")
 	b.Series = &library.Series{Name: seriesName, Index: seriesIndex}
 	return wrapBook(b)
 }

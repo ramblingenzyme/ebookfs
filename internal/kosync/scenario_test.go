@@ -105,7 +105,7 @@ func TestKosyncConcurrentProgressUpdates(t *testing.T) {
 	const numRequests = 10
 	errors := make(chan error, numRequests)
 
-	for i := 0; i < numRequests; i++ {
+	for i := range numRequests {
 		go func(percentage float64) {
 			body := map[string]any{
 				"document":   env.docID,
@@ -122,7 +122,7 @@ func TestKosyncConcurrentProgressUpdates(t *testing.T) {
 		}(float64(i+1) / 10.0)
 	}
 
-	for i := 0; i < numRequests; i++ {
+	for i := range numRequests {
 		if err := <-errors; err != nil {
 			t.Errorf("concurrent request %d failed: %v", i, err)
 		}

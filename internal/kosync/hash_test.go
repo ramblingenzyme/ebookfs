@@ -10,7 +10,7 @@ import (
 // Byte at index i is (i * 31 + (i >> 8)) mod 256.
 func patternFile(n int) []byte {
 	b := make([]byte, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		b[i] = byte((i*31 + (i >> 8)) % 256)
 	}
 	return b

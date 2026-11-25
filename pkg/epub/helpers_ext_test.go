@@ -41,16 +41,16 @@ func save(t *testing.T, path string, edit func(*epub.Book)) (*epub.Book, error) 
 	return b, b.Save()
 }
 
-func setCover(t *testing.T, path string, img []byte) (*epub.Book, error) {
+func setCover(t *testing.T, path string, img []byte) error {
 	t.Helper()
 	b, err := parse(t, path)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if err := b.SetCover(img); err != nil {
-		return nil, err
+		return err
 	}
-	return b, b.Save()
+	return b.Save()
 }
 
 // rename and reposition change one half of a series and keep the other, as
@@ -159,10 +159,10 @@ func wantDirEntries(t *testing.T, path string, want ...string) {
 	}
 }
 
-func swapCover(t *testing.T, path string) []byte {
+func swapCover(t *testing.T, path string) {
 	t.Helper()
 	newCover := tinyJPEG(t)
-	if _, err := setCover(t, path, newCover); err != nil {
+	if err := setCover(t, path, newCover); err != nil {
 		t.Fatal(err)
 	}
 	got, err := open(t, path).Cover()
@@ -172,7 +172,6 @@ func swapCover(t *testing.T, path string) []byte {
 	if !bytes.Equal(got, newCover) {
 		t.Errorf("cover = %q, want the supplied JPEG bytes", got)
 	}
-	return newCover
 }
 
 func saveSortName(t *testing.T, opf epubtest.PackageDoc) string {

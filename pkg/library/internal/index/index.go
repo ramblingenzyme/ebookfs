@@ -173,16 +173,15 @@ func (idx *Index) dropAllTables() error {
 	if err != nil {
 		return err
 	}
+	defer rows.Close()
 	var tables []string
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {
-			rows.Close()
 			return err
 		}
 		tables = append(tables, name)
 	}
-	rows.Close()
 	if err := rows.Err(); err != nil {
 		return err
 	}

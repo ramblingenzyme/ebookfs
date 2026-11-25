@@ -21,10 +21,10 @@ func newFS(t *testing.T) *fs.FS {
 	return f
 }
 
-func staticFile(t *testing.T, name, data string) *fs.StaticFile {
+func staticFile(t *testing.T) *fs.StaticFile {
 	t.Helper()
 	f := newFS(t)
-	return fs.NewStaticFile(f.NewStat(name, "glenda", "glenda", 0644), []byte(data))
+	return fs.NewStaticFile(f.NewStat("x", "glenda", "glenda", 0644), []byte("hello"))
 }
 
 func staticDir(t *testing.T, children ...string) *fs.StaticDir {
@@ -40,7 +40,7 @@ func staticDir(t *testing.T, children ...string) *fs.StaticDir {
 }
 
 func TestReadReturnsTheContent(t *testing.T) {
-	f := staticFile(t, "x", "hello")
+	f := staticFile(t)
 
 	if got := fstest.Fid(t, f, 1).Get(proto.Mode(0), 16); got != "hello" {
 		t.Errorf("Get = %q, want %q", got, "hello")
@@ -49,7 +49,7 @@ func TestReadReturnsTheContent(t *testing.T) {
 
 // Tests that exist to prove per-fid isolation depend on this.
 func TestTwoFidsAreIndependent(t *testing.T) {
-	f := &fidFile{File: staticFile(t, "x", "hello"), open: map[uint64]bool{}}
+	f := &fidFile{File: staticFile(t), open: map[uint64]bool{}}
 
 	fid1, fid2 := fstest.Fid(t, f, 1), fstest.Fid(t, f, 2)
 	fid1.Open(proto.Mode(0))
@@ -88,17 +88,17 @@ func (f *fidFile) Close(fid uint64) error {
 
 func TestCloseErrReturnsTheError(t *testing.T) {
 	want := errors.New("commit rejected")
-	f := &fidFile{File: staticFile(t, "x", "hello"), open: map[uint64]bool{}, closeErr: want}
+	f := &fidFile{File: staticFile(t), open: map[uint64]bool{}, closeErr: want}
 
 	fid := fstest.Fid(t, f, 1)
 	fid.Open(proto.Mode(0))
-	if got := fid.CloseErr(); got != want {
+	if got := fid.CloseErr(); !errors.Is(got, want) {
 		t.Errorf("CloseErr = %v, want %v", got, want)
 	}
 }
 
 func TestWantReadErrorAcceptsAClunkedFid(t *testing.T) {
-	f := &fidFile{File: staticFile(t, "x", "hello"), open: map[uint64]bool{}}
+	f := &fidFile{File: staticFile(t), open: map[uint64]bool{}}
 
 	fid := fstest.Fid(t, f, 1)
 	fid.Open(proto.Mode(0))
@@ -140,5 +140,5 @@ func TestChildAsAssertsTheType(t *testing.T) {
 }
 
 func TestStatLength(t *testing.T) {
-	fstest.StatLength(t, staticFile(t, "x", "hello"), 5)
+	fstest.StatLength(t, staticFile(t), 5)
 }

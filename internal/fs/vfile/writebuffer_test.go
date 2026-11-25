@@ -188,7 +188,7 @@ func TestWriteBufferCommit(t *testing.T) {
 		w := NewWriteBuffer(4096)
 		mustWrite(t, &w, 1, 0, "data", nil)
 		wantErr := errors.New("commit failed")
-		if err := w.Commit(1, func([]byte) error { return wantErr }); err != wantErr {
+		if err := w.Commit(1, func([]byte) error { return wantErr }); !errors.Is(err, wantErr) {
 			t.Errorf("Commit returned %v, want %v", err, wantErr)
 		}
 	})

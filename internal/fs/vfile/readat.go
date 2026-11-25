@@ -55,7 +55,7 @@ func (f *ReadAtFile) Read(fid uint64, offset uint64, count uint64) ([]byte, erro
 	}
 	buf := make([]byte, count)
 	n, err := r.ReadAt(buf, int64(offset))
-	if err == io.EOF {
+	if errors.Is(err, io.EOF) {
 		err = nil
 	}
 	return buf[:n], err
