@@ -14,6 +14,15 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
+// Progress represents a reading position for a document.
+type Progress struct {
+	Percentage float64 `json:"percentage"`
+	Progress   string  `json:"progress"`
+	Device     string  `json:"device"`
+	DeviceID   string  `json:"device_id,omitempty"`
+	Timestamp  int64   `json:"timestamp"`
+}
+
 // SidecarData is the structure stored in .sidecar/kosync.json
 type SidecarData struct {
 	DocumentIDs []string `json:"document_ids"`

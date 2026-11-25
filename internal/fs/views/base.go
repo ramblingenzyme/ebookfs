@@ -152,3 +152,38 @@ func (d *keyedDir) Remove(dir *book.BookDir) {
 		d.removeFromChild(name, dir)
 	}
 }
+
+func NewByAuthorDir(reg *registry.BookRegistry) *keyedDir {
+	return newKeyedDir(reg, "by-author", authorKeys, bookListFactory)
+}
+
+func authorKeys(b *library.Book) []string {
+	authors := b.Authors()
+	names := make([]string, len(authors))
+
+	for i, a := range authors {
+		names[i] = a.Name
+	}
+
+	return nameableKeys(names)
+}
+
+func NewByTagDir(reg *registry.BookRegistry) *keyedDir {
+	return newKeyedDir(reg, "by-tag", tagKeys, bookListFactory)
+}
+
+func tagKeys(b *library.Book) []string { return nameableKeys(b.Tags()) }
+
+func NewBySubjectsDir(reg *registry.BookRegistry) *keyedDir {
+	return newKeyedDir(reg, "by-subjects", subjectKeys, bookListFactory)
+}
+
+func subjectKeys(b *library.Book) []string { return nameableKeys(b.Subjects()) }
+
+func NewByStatusDir(reg *registry.BookRegistry) *keyedDir {
+	return newKeyedDir(reg, "by-status", statusKeys, bookListFactory)
+}
+
+// statusKeys is the one by-status entry b belongs under. Status is drawn from a
+// fixed vocabulary, so it needs no name mapping.
+func statusKeys(b *library.Book) []string { return []string{b.Status()} }

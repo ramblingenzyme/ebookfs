@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -174,9 +175,9 @@ func writeServerError(w http.ResponseWriter, msg string, bookID int64, err error
 // registerRoutes takes the document from the body for PUT (spec §5.4) and from
 // the path for GET (§5.5). Routes are relative to the prefix the runner strips.
 func (h *handler) registerRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /healthcheck", h.healthcheck)
+	mux.HandleFunc("GET /healthcheck", healthcheck)
 	mux.HandleFunc("GET /users/auth", h.auth)
-	mux.HandleFunc("POST /users/create", h.usersCreate)
+	mux.HandleFunc("POST /users/create", usersCreate)
 	mux.HandleFunc("GET /syncs/progress/{docID}", h.getProgress)
 	mux.HandleFunc("PUT /syncs/progress", h.putProgress)
 }
@@ -190,7 +191,7 @@ func (h *handler) authenticate(r *http.Request) bool {
 	return user&key == 1
 }
 
-func (h *handler) validateDocumentID(w http.ResponseWriter, docID string) bool {
+func validateDocumentID(w http.ResponseWriter, docID string) bool {
 	if docID == "" || strings.Contains(docID, ":") {
 		writeError(w, http.StatusForbidden, codeDocumentMissing, "Field 'document' not provided.")
 		return false
@@ -199,7 +200,7 @@ func (h *handler) validateDocumentID(w http.ResponseWriter, docID string) bool {
 	return true
 }
 
-func (h *handler) healthcheck(w http.ResponseWriter, r *http.Request) {
+func healthcheck(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"state": "OK"})
 }
 
@@ -212,7 +213,7 @@ func (h *handler) auth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"authorized": "OK"})
 }
 
-func (h *handler) usersCreate(w http.ResponseWriter, r *http.Request) {
+func usersCreate(w http.ResponseWriter, r *http.Request) {
 	writeError(w, http.StatusPaymentRequired, codeRegistrationOff, "User registration is disabled.")
 }
 
@@ -223,7 +224,7 @@ func (h *handler) getProgress(w http.ResponseWriter, r *http.Request) {
 	}
 
 	docID := r.PathValue("docID")
-	if !h.validateDocumentID(w, docID) {
+	if !validateDocumentID(w, docID) {
 		return
 	}
 
@@ -267,7 +268,7 @@ func (h *handler) putProgress(w http.ResponseWriter, r *http.Request) {
 	}
 
 	docID := req.Document
-	if !h.validateDocumentID(w, docID) {
+	if !validateDocumentID(w, docID) {
 		return
 	}
 
@@ -354,4 +355,26 @@ func (h *handler) updateBookStatus(bookID int64, percentage float64) error {
 	}
 
 	return nil
+}
+
+// Setup runs before AddHook registers the server, so no event reaches the
+// index while Restore rebuilds it.
+func (s *Server) Setup(root, stateDir string) error {
+	if err := s.registry.Restore(s.lib); err != nil {
+		return fmt.Errorf("restoring kosync index: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Server) OnIngested(book *library.Book, sidecars *os.Root, openEpub func() (library.EpubReader, error)) {
+	s.registry.Assign(book, sidecars, openEpub)
+}
+
+func (s *Server) OnEdited(book *library.Book, sidecars *os.Root, openEpub func() (library.EpubReader, error)) {
+	s.registry.Refresh(book, sidecars, openEpub)
+}
+
+func (s *Server) OnDeleted(bookID int64) {
+	s.registry.Forget(bookID)
 }

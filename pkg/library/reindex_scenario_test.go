@@ -1,3 +1,7 @@
+// Startup reconciliation, driven through Open. Pins how a library reopened
+// over a changed tree settles: drift detection, edits surviving a restart,
+// unreadable or duplicate books, and the ids they reserve.
+
 package library
 
 import (

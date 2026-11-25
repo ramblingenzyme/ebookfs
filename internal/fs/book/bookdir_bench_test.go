@@ -20,6 +20,7 @@ import (
 	"github.com/ramblingenzyme/go9p/proto"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
@@ -124,7 +125,7 @@ func measureBooksWithDirs(n int, withCover bool) float64 {
 	dirs := make([]*BookDir, 0, n)
 	for i := int64(0); i < int64(n); i++ {
 		b := representativeBook(i, withCover)
-		dirs = append(dirs, NewBookDir(f, nil, noEdit, b))
+		dirs = append(dirs, NewBookDir(f, mock.ContentReader{}, noEdit, b))
 	}
 
 	after := settleGC()

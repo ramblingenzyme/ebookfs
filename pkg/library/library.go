@@ -16,6 +16,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/reconcile"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/store"
 )
 
@@ -232,6 +233,15 @@ func (l *Library) Delete(id int64) error {
 	l.hooks.onDeleted(id)
 
 	return nil
+}
+
+// Reindex rebuilds the index from the store. A book that cannot be read is
+// logged and skipped rather than failing the rebuild.
+func (l *Library) Reindex() error {
+	l.mutateMu.Lock()
+	defer l.mutateMu.Unlock()
+
+	return reconcile.Run(l.store, l.index, true)
 }
 
 // lockBook takes mutateMu for reading as well as the book's lock, so a caller

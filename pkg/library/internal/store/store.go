@@ -208,6 +208,28 @@ func (s *Store) EmptyTrash() error {
 	return os.RemoveAll(filepath.Join(s.root, trashDirName))
 }
 
+func (s *Store) Ingest(epubPath string, loc book.Location, meta book.Meta) (book.Meta, drift.PathInfo, error) {
+	dir := s.AbsPath(loc.Dir())
+
+	canonicalizeMeta(&meta)
+
+	if err := atomicfs.MkdirAll(dir, 0o755); err != nil {
+		return meta, drift.PathInfo{}, err
+	}
+
+	if err := atomicfs.Rename(epubPath, filepath.Join(dir, loc.Filename())); err != nil {
+		return meta, drift.PathInfo{}, err
+	}
+
+	if err := s.writeMeta(loc, &meta); err != nil {
+		return meta, drift.PathInfo{}, err
+	}
+
+	mt, err := s.Stat(loc)
+
+	return meta, mt, err
+}
+
 func (s *Store) Update(oldLoc, newLoc book.Location, meta book.Meta) (book.Meta, drift.PathInfo, error) {
 	canonicalizeMeta(&meta)
 
