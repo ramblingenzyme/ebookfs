@@ -63,7 +63,7 @@ func (r *bookRow) toBook() *book.Book {
 func parseDateField(s, field string, where ...any) time.Time {
 	t, err := time.Parse(time.RFC3339, s)
 	if err != nil {
-		slog.Warn("invalid "+field, append(where, field, s, "error", err)...)
+		slog.Warn("invalid date", append(where, "field", field, "value", s, "error", err)...)
 		return time.Time{}
 	}
 	return t

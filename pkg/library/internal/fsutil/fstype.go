@@ -84,9 +84,9 @@ func Check(dir string, allowSMB bool, role string) (FSType, error) {
 		return fsType, err
 	}
 	if fsType.IsSMB() {
-		slog.Warn("detected SMB filesystem for "+role+", proceeding with override enabled", "path", dir)
+		slog.Warn("detected SMB filesystem, proceeding with override enabled", "role", role, "path", dir)
 	} else {
-		slog.Info("detected "+fsType.String()+" filesystem for "+role, "path", dir)
+		slog.Info("detected filesystem", "type", fsType.String(), "role", role, "path", dir)
 	}
 	return fsType, nil
 }

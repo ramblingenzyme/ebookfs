@@ -44,11 +44,9 @@ type groupingView struct {
 
 var groupingViews = []groupingView{
 	{
-		name:   "by-author",
-		newDir: func(reg *registry.BookRegistry) fs.Dir { return NewByAuthorDir(reg) },
-		withKeys: func(id int64, title string, keys ...string) *library.Book {
-			return util.MakeBook(id, title, keys...)
-		},
+		name:     "by-author",
+		newDir:   func(reg *registry.BookRegistry) fs.Dir { return NewByAuthorDir(reg) },
+		withKeys: util.MakeBook,
 		keyless: func(id int64, title string) *library.Book {
 			b := makeBook(id, title)
 			b.Authors = nil

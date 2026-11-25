@@ -41,7 +41,7 @@ func setupLogging(cfg config.LogConfig) {
 // fatal logs at error level, which no valid log.level filters, and exits.
 // log.Fatalf bridges at info level and could be silenced.
 func fatal(msg string, err error) {
-	slog.Error(msg, "error", err)
+	slog.Error(msg, "error", err) //nolint:sloglint // every caller passes a constant
 	os.Exit(1)
 }
 

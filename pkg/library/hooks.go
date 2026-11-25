@@ -243,7 +243,7 @@ func (s *hookSet) dispatchEvent(l *Library, b *Book, loc book.Location, name str
 	}
 	root, err := l.store.OpenSidecars(loc)
 	if err != nil {
-		slog.Error("hook "+name+": failed to open sidecars", "book_id", b.ID(), "error", err)
+		slog.Error("hook failed to open sidecars", "hook", name, "book_id", b.ID(), "error", err)
 		return
 	}
 	defer root.Close()

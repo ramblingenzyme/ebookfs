@@ -10,6 +10,7 @@ import (
 )
 
 func testFieldFileStat(t *testing.T, mode uint32) *proto.Stat {
+	t.Helper()
 	return newStat(util.NewTestFS(t), "test", mode)
 }
 

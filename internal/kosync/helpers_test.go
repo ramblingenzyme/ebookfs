@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
@@ -21,11 +20,7 @@ type testLibrary struct {
 // openTestLibrary creates a test library with a temporary directory
 func openTestLibrary(t *testing.T) *testLibrary {
 	t.Helper()
-	tmpDir, err := os.MkdirTemp("", "kosync-test-*")
-	if err != nil {
-		t.Fatalf("creating temp dir: %v", err)
-	}
-
+	tmpDir := t.TempDir()
 	lib, err := library.Open(library.Config{
 		Root:      tmpDir,
 		IndexPath: tmpDir + "/.index.db",
@@ -33,7 +28,6 @@ func openTestLibrary(t *testing.T) *testLibrary {
 		StateDir:  tmpDir,
 	})
 	if err != nil {
-		os.RemoveAll(tmpDir)
 		t.Fatalf("opening library: %v", err)
 	}
 
@@ -42,10 +36,7 @@ func openTestLibrary(t *testing.T) *testLibrary {
 		tmpDir:  tmpDir,
 	}
 
-	t.Cleanup(func() {
-		lib.Close()
-		os.RemoveAll(tmpDir)
-	})
+	t.Cleanup(func() { lib.Close() })
 
 	return tl
 }

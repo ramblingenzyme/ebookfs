@@ -3,15 +3,24 @@ version: "2"
 linters:
   default: standard
   enable:
+    - asasalint
+    - bidichk
     - depguard
+    - durationcheck
     - errorlint
+    - exhaustive
+    - gocritic
+    - makezero
     - modernize
     - nilerr
     - nolintlint
+    - reassign
     - rowserrcheck
+    - sloglint
     - sqlclosecheck
     - unparam
     - usestdlibvars
+    - usetesting
   settings:
     depguard:
       rules:
@@ -33,6 +42,13 @@ linters:
             - github.com/BurntSushi/toml
             - github.com/beevik/etree
             - modernc.org/sqlite
+    exhaustive:
+      default-signifies-exhaustive: true
+    sloglint:
+      kv-only: true
+      key-naming-case: snake
+      # A value built into the message splits one event across many messages.
+      static-msg: true
     nolintlint:
       require-explanation: true
       require-specific: true

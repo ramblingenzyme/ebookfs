@@ -35,7 +35,7 @@ func TestEqualComparesEveryField(t *testing.T) {
 			if observed().Equal(changed) {
 				t.Errorf("Equal = true despite %s; that change would never be detected as drift", tc.name)
 			}
-			if !changed.Equal(changed) {
+			if !changed.Equal(changed) { //nolint:gocritic // reflexivity is the property under test
 				t.Error("Equal is not reflexive")
 			}
 		})
