@@ -11,34 +11,30 @@ import (
 	"path/filepath"
 )
 
-// Write atomically writes to path by creating a temp file in dir, calling writeFunc,
-// fsyncing the file, closing it, renaming to path, and fsyncing the parent directory.
-// The writeFunc receives an open file handle and is responsible for writing data.
-// If writeFunc returns an error, the temp file is removed and path is left unchanged.
-func Write(dir, pattern string, writeFunc func(*os.File) error, path string) error {
-	tmp, err := os.CreateTemp(dir, pattern)
+// Write replaces path with data through a temp file named by pattern, in
+// os.CreateTemp form, beside it. A failure leaves path unchanged.
+func Write(path, pattern string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), pattern)
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)
 	}
 	tmpPath := tmp.Name()
-	defer os.Remove(tmpPath) // Clean up on any error path
+	defer os.Remove(tmpPath)
 
-	if err := writeFunc(tmp); err != nil {
-		tmp.Close()
-		return fmt.Errorf("write func: %w", err)
+	_, err = tmp.Write(data)
+	if err == nil {
+		err = tmp.Sync()
 	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return fmt.Errorf("syncing temp: %w", err)
+	if closeErr := tmp.Close(); err == nil {
+		err = closeErr
 	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("closing temp: %w", err)
+	if err != nil {
+		return fmt.Errorf("writing temp file: %w", err)
 	}
 
 	if err := Rename(tmpPath, path); err != nil {
 		return fmt.Errorf("renaming: %w", err)
 	}
-
 	return nil
 }
 

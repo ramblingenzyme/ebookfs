@@ -2,7 +2,6 @@ package atomicfs
 
 import (
 	"bytes"
-	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -14,10 +13,7 @@ func TestWriteSuccess(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.txt")
 
-	err := Write(dir, "test-*.tmp", func(f *os.File) error {
-		_, err := f.WriteString("hello world")
-		return err
-	}, path)
+	err := Write(path, "test-*.tmp", []byte("hello world"))
 	if err != nil {
 		t.Fatalf("Write failed: %v", err)
 	}
@@ -46,18 +42,18 @@ func TestWriteSuccess(t *testing.T) {
 func TestWriteError(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.txt")
-	expectedErr := errors.New("write failed")
+	// A non-empty directory at path fails the rename after the temp file is
+	// written.
+	if err := os.MkdirAll(filepath.Join(path, "occupied"), 0755); err != nil {
+		t.Fatal(err)
+	}
 
-	err := Write(dir, "test-*.tmp", func(f *os.File) error {
-		return expectedErr
-	}, path)
-	if err == nil {
+	if err := Write(path, "test-*.tmp", []byte("hello world")); err == nil {
 		t.Fatal("Write should have failed")
 	}
 
-	// Verify target file does not exist
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Errorf("target file should not exist after failed Write")
+	if fi, err := os.Stat(path); err != nil || !fi.IsDir() {
+		t.Errorf("path should still be the directory after failed Write")
 	}
 
 	// Verify no temp files remain

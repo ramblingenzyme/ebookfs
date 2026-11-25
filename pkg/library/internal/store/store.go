@@ -187,10 +187,7 @@ func (s *Store) LastID() (int64, error) {
 // anything on disk carries it, so a crash between the two cannot leave an id
 // the floor misses.
 func (s *Store) RecordID(id int64) error {
-	return atomicfs.Write(s.root, tempPattern(lastIDName), func(f *os.File) error {
-		_, err := fmt.Fprintf(f, "%d\n", id)
-		return err
-	}, filepath.Join(s.root, lastIDName))
+	return atomicfs.Write(filepath.Join(s.root, lastIDName), tempPattern(lastIDName), fmt.Appendf(nil, "%d\n", id))
 }
 
 // EmptyTrash removes what a Delete moved to the trash but could not remove.

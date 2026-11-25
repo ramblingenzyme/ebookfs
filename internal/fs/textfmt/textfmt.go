@@ -9,10 +9,27 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
+// ParsePair splits one "First | Second" line of the authors and contributors
+// field files, trimming both halves. The second half is "" when the line has
+// no "|".
+func ParsePair(line string) (first, second string) {
+	first, second, _ = strings.Cut(line, "|")
+	return strings.TrimSpace(first), strings.TrimSpace(second)
+}
+
+// FormatPair is the inverse of ParsePair, omitting the separator when second
+// is "".
+func FormatPair(first, second string) string {
+	if second == "" {
+		return first
+	}
+	return first + " | " + second
+}
+
 // ParseAuthor parses an author spec in "Name | Sort" form, used by the authors
 // field file and by ctl rename-author. A blank Name comes back as-is for the
 // caller to reject, so this stays a pure parse.
 func ParseAuthor(spec string) library.Author {
-	name, sortName, _ := strings.Cut(spec, "|")
-	return library.Author{Name: strings.TrimSpace(name), SortName: strings.TrimSpace(sortName)}
+	name, sortName := ParsePair(spec)
+	return library.Author{Name: name, SortName: sortName}
 }

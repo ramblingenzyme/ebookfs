@@ -152,16 +152,19 @@ func scanEntries(files *store.Store, scan *storeScan) *scanState {
 }
 
 func scanEntry(files *store.Store, s *scanState, known map[string]drift.PathInfo, e book.Location) {
+	var statDur, metaDur, parseDur time.Duration
+	defer func() { s.recordDurations(statDur, metaDur, parseDur) }()
+
 	start := time.Now()
 	pi, statErr := pathInfo(files, known, e)
-	statDur := time.Since(start)
+	statDur = time.Since(start)
 	if statErr != nil {
 		pi = drift.PathInfo{}
 	}
 
 	start = time.Now()
 	meta, err := files.ReadMeta(e)
-	metaDur := time.Since(start)
+	metaDur = time.Since(start)
 	if err != nil {
 		slog.Warn("reindex: skip, read meta failed", "path", e.Dir(), "error", err)
 		// The directory suffix can still reserve an id the sidecar cannot expose.
@@ -169,7 +172,6 @@ func scanEntry(files *store.Store, s *scanState, known map[string]drift.PathInfo
 			s.reserveID(id)
 		}
 		s.skip(e.EpubPath, pi)
-		s.recordDurations(statDur, metaDur, 0)
 		return
 	}
 	// Reserve the id even if the epub cannot be observed or parsed.
@@ -178,24 +180,21 @@ func scanEntry(files *store.Store, s *scanState, known map[string]drift.PathInfo
 	if statErr != nil {
 		slog.Warn("reindex: skip, stat failed", "path", e.Dir(), "error", statErr)
 		s.skip(e.EpubPath, pi)
-		s.recordDurations(statDur, metaDur, 0)
 		return
 	}
 
 	start = time.Now()
 	bib, err := epub.Parse(files.AbsPath(e.EpubPath))
-	parseDur := time.Since(start)
+	parseDur = time.Since(start)
 	if err != nil {
 		slog.Warn("reindex: skip, parse epub failed", "path", e.Dir(), "error", err)
 		s.skip(e.EpubPath, pi)
-		s.recordDurations(statDur, metaDur, parseDur)
 		return
 	}
 
 	b := book.NewBook(*bib, *meta, e)
 	b.EpubSize = pi.Size
 	s.add(index.BookPath{Book: b, Info: pi})
-	s.recordDurations(statDur, metaDur, parseDur)
 }
 
 func moveToCanonical(files *store.Store, indexed []index.BookPath) {

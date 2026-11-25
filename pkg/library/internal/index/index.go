@@ -146,25 +146,18 @@ func Open(path string, allowSMB bool) (*Index, error) {
 		}
 	}
 
-	// In EXCLUSIVE mode, the writer connection holds the exclusive lock,
-	// so we can't have separate reader connections. Use the writer for reads.
-	if fsType.IsSMB() {
-		return &Index{
-			db:      db,
-			wq:      dbsqlc.New(db),
-			readDB:  db,
-			queries: dbsqlc.New(db),
-			ctx:     context.Background(),
-		}, nil
+	// In EXCLUSIVE mode the writer connection holds the lock, so reads go
+	// through it too.
+	readDB := db
+	if !fsType.IsSMB() {
+		readDB, err = sql.Open("sqlite", dsn(path, readerPragmas(fsType)...))
+		if err != nil {
+			db.Close()
+			return nil, err
+		}
+		readDB.SetMaxOpenConns(4)
+		readDB.SetMaxIdleConns(4)
 	}
-
-	readDB, err := sql.Open("sqlite", dsn(path, readerPragmas(fsType)...))
-	if err != nil {
-		db.Close()
-		return nil, err
-	}
-	readDB.SetMaxOpenConns(4)
-	readDB.SetMaxIdleConns(4)
 
 	return &Index{
 		db:      db,

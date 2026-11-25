@@ -36,6 +36,10 @@ func TestFieldEdits(t *testing.T) {
 		{field: "contributors", input: "Ann | ill\n\n  Bob  \n | edt", want: library.Edits{
 			Contributors: &[]library.Contributor{{Name: "Ann", Role: "ill"}, {Name: "Bob"}},
 		}, reads: "Ann | ill\nBob"},
+		// Split as the authors field splits, so a bare "|" separates too.
+		{field: "contributors", input: "Ann|ill", want: library.Edits{
+			Contributors: &[]library.Contributor{{Name: "Ann", Role: "ill"}},
+		}, reads: "Ann | ill"},
 		{field: "authors", input: "Alice\nBob", want: library.Edits{
 			Authors: &[]library.Author{{Name: "Alice"}, {Name: "Bob"}},
 		}, reads: "Alice\nBob"},

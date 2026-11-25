@@ -73,10 +73,7 @@ func writeMeta(path string, meta *book.Meta) error {
 		return err
 	}
 
-	return atomicfs.Write(filepath.Dir(path), tempPattern(filepath.Base(path)), func(f *os.File) error {
-		_, err := f.Write(buf)
-		return err
-	}, path)
+	return atomicfs.Write(path, tempPattern(filepath.Base(path)), buf)
 }
 
 // canonicalizeMeta pins the precision and zone of the timestamps the index

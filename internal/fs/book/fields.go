@@ -2,6 +2,7 @@ package book
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -81,28 +82,16 @@ var fields = map[string]field{
 	},
 	"contributors": {
 		get: func(b *library.Book) string {
-			contributors := b.Contributors()
-			lines := make([]string, len(contributors))
-			for i, c := range contributors {
-				if c.Role != "" {
-					lines[i] = fmt.Sprintf("%s | %s", c.Name, c.Role)
-				} else {
-					lines[i] = c.Name
-				}
-			}
-			return strings.Join(lines, "\n")
+			return joinLines(b.Contributors(), func(c library.Contributor) string {
+				return textfmt.FormatPair(c.Name, c.Role)
+			})
 		},
 		edits: func(s string) (library.Edits, error) {
 			var contributors []library.Contributor
 			for line := range strings.SplitSeq(s, "\n") {
-				parts := strings.SplitN(line, " | ", 2)
-				name := strings.TrimSpace(parts[0])
+				name, role := textfmt.ParsePair(line)
 				if name == "" {
 					continue
-				}
-				role := ""
-				if len(parts) > 1 {
-					role = strings.TrimSpace(parts[1])
 				}
 				contributors = append(contributors, library.Contributor{Name: name, Role: role})
 			}
@@ -111,16 +100,9 @@ var fields = map[string]field{
 	},
 	"authors": {
 		get: func(b *library.Book) string {
-			authors := b.Authors()
-			lines := make([]string, len(authors))
-			for i, a := range authors {
-				if a.SortName != "" {
-					lines[i] = fmt.Sprintf("%s | %s", a.Name, a.SortName)
-				} else {
-					lines[i] = a.Name
-				}
-			}
-			return strings.Join(lines, "\n")
+			return joinLines(b.Authors(), func(a library.Author) string {
+				return textfmt.FormatPair(a.Name, a.SortName)
+			})
 		},
 		edits: func(s string) (library.Edits, error) {
 			var authors []library.Author
@@ -159,19 +141,18 @@ var fields = map[string]field{
 	},
 }
 
-// formatIdentifiers renders the identifier map as sorted "scheme=value" lines.
-// Read-only, so nothing parses this back.
-// Sorted by scheme: sorting lines puts the ONIX scheme isbn-a before isbn.
-func formatIdentifiers(ids map[string]string) string {
-	schemes := make([]string, 0, len(ids))
-	for scheme := range ids {
-		schemes = append(schemes, scheme)
-	}
-	slices.Sort(schemes)
-
-	lines := make([]string, 0, len(schemes))
-	for _, scheme := range schemes {
-		lines = append(lines, scheme+"="+ids[scheme])
+func joinLines[T any](xs []T, format func(T) string) string {
+	lines := make([]string, len(xs))
+	for i, x := range xs {
+		lines[i] = format(x)
 	}
 	return strings.Join(lines, "\n")
+}
+
+// formatIdentifiers sorts by scheme, since sorting the "scheme=value" lines
+// would put the ONIX scheme isbn-a before isbn.
+func formatIdentifiers(ids map[string]string) string {
+	return joinLines(slices.Sorted(maps.Keys(ids)), func(scheme string) string {
+		return scheme + "=" + ids[scheme]
+	})
 }
