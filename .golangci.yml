@@ -25,6 +25,7 @@ linters:
     - unparam
     - usestdlibvars
     - usetesting
+    - wsl_v5
   settings:
     depguard:
       rules:
@@ -55,6 +56,11 @@ linters:
       key-naming-case: snake
       # A value built into the message splits one event across many messages.
       static-msg: true
+    wsl_v5:
+      # Keeps a group of related statements together and puts the blank line
+      # above the block, where the default splits the group.
+      enable:
+        - cuddle-group
     nolintlint:
       require-explanation: true
       require-specific: true

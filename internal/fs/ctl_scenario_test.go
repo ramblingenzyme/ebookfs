@@ -20,6 +20,7 @@ func TestCtlUnknownCommandLeavesTheTreeAlone(t *testing.T) {
 	if result := h.ctl("explode 1"); !strings.Contains(result, "unknown command") {
 		t.Errorf("ctl result = %q, want 'unknown command'", result)
 	}
+
 	if after := h.tree("/"); !slices.Equal(before, after) {
 		t.Errorf("tree changed after an unknown command\nbefore: %v\nafter: %v", before, after)
 	}
@@ -33,6 +34,7 @@ func TestReadingCtlRunsNothing(t *testing.T) {
 	if got := h.read("/ctl"); got == "" || strings.Contains(got, "ok:") {
 		t.Errorf("read /ctl = %q, want a usage hint", got)
 	}
+
 	if log := h.read("/log"); log != "(no commands yet)\n" {
 		t.Errorf("log = %q, want %q", log, "(no commands yet)\n")
 	}
@@ -189,25 +191,31 @@ func TestCommandEdits(t *testing.T) {
 			if tc.authors == nil {
 				tc.authors = []string{"Author"}
 			}
+
 			books := seeds(ingest("Title", tc.authors...))
 			if tc.edits != (library.Edits{}) {
 				books = append(books, edited(1, tc.edits))
 			}
+
 			h := newHarness(t, books...)
 
 			if got := h.ctl(tc.cmd); got != tc.result {
 				t.Errorf("ctl %q = %q, want %q", tc.cmd, got, tc.result)
 			}
+
 			b, err := h.lib.Get(1)
 			if tc.check == nil {
 				if !errors.Is(err, library.ErrBookNotFound) {
 					t.Errorf("Get after delete: err = %v, want ErrBookNotFound", err)
 				}
+
 				return
 			}
+
 			if err != nil {
 				t.Fatalf("Get: %v", err)
 			}
+
 			tc.check(t, b)
 		})
 	}
@@ -216,9 +224,11 @@ func TestCommandEdits(t *testing.T) {
 func wantTags(want ...string) func(*testing.T, *library.Book) {
 	return func(t *testing.T, b *library.Book) {
 		t.Helper()
+
 		got := b.Tags()
 		slices.Sort(got)
 		slices.Sort(want)
+
 		if !slices.Equal(got, want) {
 			t.Errorf("tags = %v, want %v", got, want)
 		}
@@ -228,6 +238,7 @@ func wantTags(want ...string) func(*testing.T, *library.Book) {
 func wantRating(want float64) func(*testing.T, *library.Book) {
 	return func(t *testing.T, b *library.Book) {
 		t.Helper()
+
 		if b.Rating() != want {
 			t.Errorf("rating = %v, want %v", b.Rating(), want)
 		}
@@ -237,10 +248,12 @@ func wantRating(want float64) func(*testing.T, *library.Book) {
 func wantAuthors(want ...library.Author) func(*testing.T, *library.Book) {
 	return func(t *testing.T, b *library.Book) {
 		t.Helper()
+
 		got := b.Authors()
 		if len(got) != len(want) {
 			t.Fatalf("authors = %+v, want %+v", got, want)
 		}
+
 		for i := range got {
 			if got[i].Name != want[i].Name || got[i].SortName != want[i].SortName {
 				t.Errorf("authors = %+v, want %+v", got, want)
@@ -314,6 +327,7 @@ func TestCommandFailures(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			if err := os.RemoveAll(filepath.Join(h.root, b.Dir())); err != nil {
 				t.Fatal(err)
 			}
@@ -371,11 +385,14 @@ func TestCommandFailures(t *testing.T) {
 				if os.Geteuid() == 0 {
 					t.Skip("root ignores directory permissions")
 				}
+
 				b, _ := h.lib.Get(1)
 				dir := filepath.Join(h.root, b.Dir())
+
 				if err := os.Chmod(dir, 0o555); err != nil {
 					t.Fatal(err)
 				}
+
 				t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 			}, "delete 1",
 			[]string{"error: book 1: "},
@@ -389,9 +406,11 @@ func TestCommandFailures(t *testing.T) {
 
 			got := h.ctl(tc.cmd)
 			lines := strings.Split(got, "\n")
+
 			if len(lines) != len(tc.want) {
 				t.Fatalf("ctl %q = %q, want %d lines starting %q", tc.cmd, got, len(tc.want), tc.want)
 			}
+
 			for i, prefix := range tc.want {
 				if !strings.HasPrefix(lines[i], prefix) {
 					t.Errorf("ctl %q line %d = %q, want it to start %q", tc.cmd, i, lines[i], prefix)

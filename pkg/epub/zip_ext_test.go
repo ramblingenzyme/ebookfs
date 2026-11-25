@@ -19,32 +19,38 @@ import (
 func withContainer(entries []epubtest.Entry, container string) []epubtest.Entry {
 	out := make([]epubtest.Entry, len(entries))
 	copy(out, entries)
+
 	for i := range out {
 		if out[i].Name == "META-INF/container.xml" {
 			out[i].Data = []byte(container)
 		}
 	}
+
 	return out
 }
 
 func withMimetype(entries []epubtest.Entry, value string) []epubtest.Entry {
 	out := make([]epubtest.Entry, len(entries))
 	copy(out, entries)
+
 	for i := range out {
 		if out[i].Name == "mimetype" {
 			out[i].Data = []byte(value)
 		}
 	}
+
 	return out
 }
 
 func withoutEntry(entries []epubtest.Entry, name string) []epubtest.Entry {
 	var out []epubtest.Entry
+
 	for _, e := range entries {
 		if e.Name != name {
 			out = append(out, e)
 		}
 	}
+
 	return out
 }
 
@@ -64,13 +70,16 @@ func TestOpenResolvesEncodedRootfilePath(t *testing.T) {
 	if _, err := parse(t, path); err != nil {
 		t.Fatalf("Parse failed for a percent-encoded full-path: %v", err)
 	}
+
 	if _, err := save(t, path, func(b *epub.Book) { b.Title = "Another Title" }); err != nil {
 		t.Fatalf("edit failed for a percent-encoded full-path: %v", err)
 	}
+
 	bib, err := parse(t, path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Title != "Another Title" {
 		t.Errorf("title = %q, want the edit to have landed in the resolved package document", bib.Title)
 	}
@@ -102,6 +111,7 @@ func TestOpenAndSaveAgreeOnADuplicateEntry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Title != "First Copy" {
 		t.Errorf("title = %q, want First Copy, the copy Save resolves", bib.Title)
 	}
@@ -109,10 +119,12 @@ func TestOpenAndSaveAgreeOnADuplicateEntry(t *testing.T) {
 	if _, err := save(t, path, func(b *epub.Book) { b.Title = "Edited Title" }); err != nil {
 		t.Fatal(err)
 	}
+
 	bib, err = parse(t, path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Title != "Edited Title" {
 		t.Errorf("title = %q, want the edit to be visible to the next read", bib.Title)
 	}
@@ -155,15 +167,18 @@ func TestOpenRootfilePathEdgeCases(t *testing.T) {
 // file keeps its os error.
 func TestEntryPointsAgreeOnABadEpub(t *testing.T) {
 	good := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
+
 	raw, err := os.ReadFile(good)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	write := func(name string, data []byte) string {
 		p := filepath.Join(t.TempDir(), name)
 		if err := os.WriteFile(p, data, 0o644); err != nil {
 			t.Fatal(err)
 		}
+
 		return p
 	}
 
@@ -190,10 +205,12 @@ func TestEntryPointsAgreeOnABadEpub(t *testing.T) {
 					t.Errorf("%s returned no error", e.from)
 					continue
 				}
+
 				if got := errors.Is(e.err, epub.ErrNotEpub); got != tc.notEpub {
 					t.Errorf("%s: errors.Is(err, ErrNotEpub) = %v, want %v (err = %v)",
 						e.from, got, tc.notEpub, e.err)
 				}
+
 				if !tc.notEpub && !errors.Is(e.err, os.ErrNotExist) {
 					t.Errorf("%s: err = %v, want the os error to survive", e.from, e.err)
 				}
@@ -207,6 +224,7 @@ func TestOpenRejectsNonZip(t *testing.T) {
 	if err := os.WriteFile(p, []byte("this is plainly not a zip archive"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+
 	if _, err := parse(t, p); !errors.Is(err, epub.ErrNotEpub) {
 		t.Fatalf("err = %v, want ErrNotEpub", err)
 	}
@@ -254,19 +272,24 @@ func TestSaveReplacesOnlyTheResolvedDuplicate(t *testing.T) {
 	defer zrc.Close()
 
 	var copies []string
+
 	for _, f := range zrc.File {
 		if f.Name != "OEBPS/content.opf" {
 			continue
 		}
+
 		rc, err := f.Open()
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		b, err := io.ReadAll(rc)
 		rc.Close()
+
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		switch {
 		case bytes.Contains(b, []byte("Edited Title")):
 			copies = append(copies, "edited")
@@ -276,6 +299,7 @@ func TestSaveReplacesOnlyTheResolvedDuplicate(t *testing.T) {
 			copies = append(copies, "other")
 		}
 	}
+
 	if want := []string{"edited", "second, untouched"}; !slices.Equal(copies, want) {
 		t.Errorf("content.opf copies = %v, want %v", copies, want)
 	}
@@ -309,6 +333,7 @@ func TestOpenDistinguishesMissingFromUndeclared(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			path := epubtest.WriteEpub(t, withContainer(epubtest.BaseEntries(epubtest.OPF3), tc.container))
 			_, err := parse(t, path)
+
 			if !errors.Is(err, tc.want) {
 				t.Errorf("err = %v, want %v", err, tc.want)
 			}
@@ -323,6 +348,7 @@ func TestMultipleRootfilesKobo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse failed on Kobo multi-rootfile epub: %v", err)
 	}
+
 	if book.Title != "Original Title" {
 		t.Errorf("title = %q, want Original Title", book.Title)
 	}
@@ -331,6 +357,7 @@ func TestMultipleRootfilesKobo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Save failed on Kobo multi-rootfile epub: %v", err)
 	}
+
 	if edited.Title != "Edited Title" {
 		t.Errorf("edited title = %q, want Edited Title", edited.Title)
 	}
@@ -346,6 +373,7 @@ func TestSavePreservesContainerLayout(t *testing.T) {
 	if !ok || !bytes.Equal(got, epubtest.ChapterBytes) {
 		t.Errorf("chapter bytes changed: %q", got)
 	}
+
 	cover, ok := epubtest.ReadEntryFromFile(t, path, "OEBPS/cover.jpg")
 	if !ok || !bytes.Equal(cover, epubtest.CoverBytes) {
 		t.Errorf("cover bytes changed by a metadata-only edit")
@@ -371,14 +399,17 @@ func TestSaveDeduplicatesMimetype(t *testing.T) {
 	defer zrc.Close()
 
 	var n int
+
 	for _, f := range zrc.File {
 		if f.Name == epubtest.MimetypePath {
 			n++
 		}
 	}
+
 	if n != 1 {
 		t.Errorf("mimetype entries = %d, want exactly one", n)
 	}
+
 	assertOCFHeader(t, path, "after the write")
 }
 
@@ -420,6 +451,7 @@ func TestSaveWritesAConformingMimetype(t *testing.T) {
 			if _, err := save(t, path, func(b *epub.Book) { b.Title = "Another Title" }); err != nil {
 				t.Fatal(err)
 			}
+
 			assertOCFHeader(t, path, "after the write")
 		})
 	}
@@ -427,14 +459,17 @@ func TestSaveWritesAConformingMimetype(t *testing.T) {
 
 func assertOCFHeader(t *testing.T, path, when string) {
 	t.Helper()
+
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	end := 38 + len(epubtest.MimetypeValue)
 	if len(raw) < end {
 		t.Fatalf("%s: archive is %d bytes, too short to carry an OCF header", when, len(raw))
 	}
+
 	if !bytes.HasPrefix(raw, []byte("PK\x03\x04")) ||
 		string(raw[30:38]) != epubtest.MimetypePath ||
 		string(raw[38:end]) != epubtest.MimetypeValue {
@@ -444,10 +479,12 @@ func assertOCFHeader(t *testing.T, path, when string) {
 	// central directory, since a streamed entry leaves it zero here.
 	method := binary.LittleEndian.Uint16(raw[8:])
 	extra := binary.LittleEndian.Uint16(raw[28:])
+
 	zr, err := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
 	if err != nil {
 		t.Fatalf("%s: %v", when, err)
 	}
+
 	size := zr.File[0].UncompressedSize64
 	if method != zip.Store || extra != 0 || size != uint64(len(epubtest.MimetypeValue)) {
 		t.Errorf("%s: mimetype method %d, extra %d bytes, size %d; want stored, none, %d",
@@ -464,6 +501,7 @@ func TestEncryptionAttributesAreCollapsed(t *testing.T) {
 			epubtest.Entry{Name: "META-INF/encryption.xml", Data: []byte(enc)},
 			epubtest.Entry{Name: "OEBPS/fonts/x.otf", Data: []byte("obfuscated")},
 		))
+
 		if _, err := save(t, path, func(b *epub.Book) { b.Title = "Fine" }); err != nil {
 			t.Errorf("font obfuscation with a wrapped algorithm blocked the edit: %v", err)
 		}
@@ -472,6 +510,7 @@ func TestEncryptionAttributesAreCollapsed(t *testing.T) {
 	t.Run("wrapped URI still identifies the encrypted OPF", func(t *testing.T) {
 		enc := epubtest.EncryptionXML(epubtest.AES256, epubtest.Wrapped("OEBPS/content.opf"))
 		path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3, epubtest.Entry{Name: "META-INF/encryption.xml", Data: []byte(enc)}))
+
 		if _, err := save(t, path, func(b *epub.Book) { b.Title = "Hack" }); err == nil {
 			t.Error("edited an encrypted OPF whose URI was wrapped")
 		}
@@ -486,10 +525,12 @@ func TestSaveWithDirectoryEntries(t *testing.T) {
 		epubtest.Entry{Name: "text/", Data: nil},
 	)
 	path := epubtest.WriteEpub(t, entries)
+
 	book, err := save(t, path, func(b *epub.Book) { b.Title = "New Title" })
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if book.Title != "New Title" {
 		t.Errorf("title = %q, want New Title", book.Title)
 	}
@@ -519,11 +560,13 @@ func TestReadRefusesAnEntryOverTheCap(t *testing.T) {
 			entries[i].Data = overCap
 		}
 	}
+
 	b := open(t, epubtest.WriteEpub(t, entries))
 
 	if _, err := b.Cover(); err == nil || !strings.Contains(err.Error(), "over the") {
 		t.Errorf("Cover() err = %v, want the size limit", err)
 	}
+
 	if _, err := b.ReadEntry("OEBPS/cover.jpg"); err == nil {
 		t.Error("ReadEntry read an entry over the cap")
 	}
@@ -535,11 +578,13 @@ func TestReadRefusesAnEntryOverTheCap(t *testing.T) {
 func TestOpenRefusesAMimetypeOverTheCap(t *testing.T) {
 	padded := append([]byte(epubtest.MimetypeValue), bytes.Repeat([]byte(" "), len(overCap))...)
 	entries := epubtest.BaseEntries(epubtest.OPF3)
+
 	for i := range entries {
 		if entries[i].Name == epubtest.MimetypePath {
 			entries[i] = epubtest.Entry{Name: epubtest.MimetypePath, Data: padded}
 		}
 	}
+
 	if _, err := parse(t, epubtest.WriteEpub(t, entries)); err == nil || !strings.Contains(err.Error(), "over the") {
 		t.Errorf("Open err = %v, want the size limit", err)
 	}

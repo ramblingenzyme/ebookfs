@@ -60,6 +60,7 @@ func (h *searchHandleDir) close() {
 func (h *searchHandleDir) currentQueryText() string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
 	return h.queryText
 }
 
@@ -68,6 +69,7 @@ func (h *searchHandleDir) currentQueryText() string {
 func (h *searchHandleDir) lastQuery() time.Time {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
 	return h.lastQueryTime
 }
 
@@ -82,6 +84,7 @@ func (h *searchHandleDir) executeSearch(q library.Query, queryText string) {
 	h.mu.Unlock()
 
 	fn := makeMatchesFn(q)
+
 	h.reg.ResyncView(h.results, func() {
 		h.results.mu.Lock()
 		h.results.matchesFn = fn
@@ -113,16 +116,20 @@ func (f *searchCtlFile) Write(fid uint64, offset uint64, data []byte) (uint32, e
 
 func (f *searchCtlFile) Close(fid uint64) error {
 	_ = f.SnapshotFile.Close(fid)
+
 	return f.writes.CommitText(fid, func(s string) error {
 		if s == "close" {
 			f.handle.close()
 			return nil
 		}
+
 		q, err := textfmt.ParseQuery(s)
 		if err != nil {
 			return err
 		}
+
 		f.handle.executeSearch(q, s)
+
 		return nil
 	})
 }
@@ -145,6 +152,7 @@ func (d *searchResultsDir) Add(dir *book.BookDir) {
 	d.mu.RLock()
 	fn := d.matchesFn
 	d.mu.RUnlock()
+
 	if fn != nil && fn(dir.Book()) {
 		d.bookListDir.Add(dir)
 	}

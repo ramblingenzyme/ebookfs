@@ -31,7 +31,9 @@ func (b *ImmutableBook) Series() *SeriesRef {
 	if b.inner.Series == nil {
 		return nil
 	}
+
 	s := *b.inner.Series
+
 	return &s
 }
 
@@ -43,6 +45,7 @@ func (b *ImmutableBook) SeriesIndex() string {
 	if b.inner.Series == nil {
 		return ""
 	}
+
 	return b.inner.Series.Index
 }
 

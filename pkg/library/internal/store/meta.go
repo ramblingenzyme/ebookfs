@@ -33,16 +33,20 @@ func readMeta(path string) (*book.Meta, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	meta := &book.Meta{}
 	if err = toml.Unmarshal(buf, meta); err != nil {
 		return nil, err
 	}
+
 	if err := validMeta(meta); err != nil {
 		return nil, err
 	}
+
 	canonicalizeMeta(meta)
 	// The file is hand-editable, and the index keys tags on (book, tag).
 	meta.Tags = book.FirstOf(meta.Tags, func(t string) string { return t })
+
 	return meta, nil
 }
 
@@ -56,13 +60,16 @@ func validMeta(m *book.Meta) error {
 	if m.ID <= 0 {
 		return fmt.Errorf("id must be positive, got %d", m.ID)
 	}
+
 	e := book.Edits{Rating: &m.Rating}
 	if m.Status != "" {
 		e.Status = &m.Status
 	}
+
 	if v := book.Validate(e, nil); v != nil {
 		return v
 	}
+
 	return nil
 }
 

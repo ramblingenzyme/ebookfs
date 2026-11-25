@@ -26,5 +26,6 @@ func (s *Store) Ingest(epubPath string, loc book.Location, meta book.Meta) (book
 	}
 
 	mt, err := s.Stat(loc)
+
 	return meta, mt, err
 }

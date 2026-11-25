@@ -90,6 +90,7 @@ func published(s string) (time.Time, bool) {
 			return t, true
 		}
 	}
+
 	return time.Time{}, false
 }
 
@@ -101,6 +102,7 @@ func seriesPosition(index string) float64 {
 	if err != nil {
 		return 0
 	}
+
 	return pos
 }
 
@@ -113,5 +115,6 @@ func identifierURN(scheme, value string) string {
 	case "":
 		return value
 	}
+
 	return scheme + ":" + value
 }

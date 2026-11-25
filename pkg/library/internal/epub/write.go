@@ -30,6 +30,7 @@ func Rewrite(epubPath string, b *book.Book, e book.Edits) (book.Bib, error) {
 	if err := edit(f, e); err != nil {
 		return book.Bib{}, err
 	}
+
 	if err := f.Save(); err != nil {
 		return book.Bib{}, err
 	}
@@ -41,6 +42,7 @@ func Rewrite(epubPath string, b *book.Book, e book.Edits) (book.Bib, error) {
 	if err != nil {
 		return book.Bib{}, err
 	}
+
 	return *bib, nil
 }
 
@@ -51,9 +53,11 @@ func edit(f *epubfile.Book, e book.Edits) error {
 			return err
 		}
 	}
+
 	if !e.HasBibEdits() {
 		return nil
 	}
+
 	apply(f, e)
 	// Checked before Save, since setting a sort title on a package with no
 	// dc:title adds an empty title element.
@@ -89,6 +93,7 @@ func authors(as []book.Author) []epubfile.Author {
 	for i, a := range as {
 		out[i] = epubfile.Author{Name: a.Name, SortName: a.SortName}
 	}
+
 	return out
 }
 
@@ -97,6 +102,7 @@ func contributors(cs []book.Contributor) []epubfile.Contributor {
 	for i, c := range cs {
 		out[i] = epubfile.Contributor{Name: c.Name, Role: c.Role}
 	}
+
 	return out
 }
 
@@ -109,14 +115,18 @@ func series(cur *epubfile.Series, e book.Edits) *epubfile.Series {
 	if cur != nil {
 		s = *cur
 	}
+
 	if e.Series != nil {
 		s.Name = *e.Series
 	}
+
 	if e.SeriesIndex != nil {
 		s.Index = *e.SeriesIndex
 	}
+
 	if s.Name == "" {
 		return nil
 	}
+
 	return &s
 }

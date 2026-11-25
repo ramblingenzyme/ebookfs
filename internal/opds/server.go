@@ -33,6 +33,7 @@ func New(lib Library, cfg Config) *Server {
 	if cfg.BaseURL == "" {
 		slog.Warn("http.base_url is unset; absolute URLs in served documents follow the client's Host and X-Forwarded-* headers")
 	}
+
 	return &Server{
 		handler: handler,
 		base:    cfg.BaseURL,
@@ -62,6 +63,7 @@ func NewHandler(lib Library, baseURL string) http.Handler {
 	// Content-Disposition and name the download after the URL's last segment.
 	mux.HandleFunc("GET "+contentBase+"{id}/{filename}", files.byID(files.serveEpub))
 	mux.HandleFunc("GET "+coverBase+"{id}", files.byID(files.serveCover))
+
 	return mux
 }
 

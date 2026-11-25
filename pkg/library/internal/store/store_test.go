@@ -34,6 +34,7 @@ func TestMoveCleansUpTheOldAuthorDir(t *testing.T) {
 
 			from := book.Location{EpubPath: filepath.Join("Wells, M/Some Title (1)", epubName)}
 			to := book.Location{EpubPath: filepath.Join("Wells, Martha/Some Title (1)", epubName)}
+
 			if err := s.Move(from, to); err != nil {
 				t.Fatalf("Move: %v", err)
 			}
@@ -41,10 +42,12 @@ func TestMoveCleansUpTheOldAuthorDir(t *testing.T) {
 			if _, err := os.Stat(filepath.Join(root, to.Dir(), epubName)); err != nil {
 				t.Errorf("book not found at new location: %v", err)
 			}
+
 			_, err := os.Stat(filepath.Join(root, "Wells, M"))
 			if gotOldAuthor := err == nil; gotOldAuthor != tc.wantOldAuthor {
 				t.Errorf("old author directory exists = %v, want %v (stat err = %v)", gotOldAuthor, tc.wantOldAuthor, err)
 			}
+
 			if tc.sibling {
 				if _, err := os.Stat(siblingDir); err != nil {
 					t.Errorf("sibling book directory should survive: %v", err)
@@ -67,6 +70,7 @@ func TestMoveDestinationAlreadyExistsError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error: destination already exists")
 	}
+
 	if !strings.Contains(err.Error(), "destination already exists") {
 		t.Errorf("error = %q, want 'destination already exists'", err)
 	}
@@ -82,6 +86,7 @@ func TestMoveRollsBackWhenEpubRenameFails(t *testing.T) {
 	// The directory holds an epub under a different name than `from` claims,
 	// so the directory move succeeds and the rename inside it cannot.
 	writeBook(t, root, "Alice/Title (1)", "actual.epub", "data", &book.Meta{ID: 1})
+
 	from := book.Location{EpubPath: filepath.Join("Alice/Title (1)", "claimed.epub")}
 	to := book.Location{EpubPath: filepath.Join("Bob/Title (1)", "renamed.epub")}
 
@@ -92,9 +97,11 @@ func TestMoveRollsBackWhenEpubRenameFails(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, from.Dir(), "actual.epub")); err != nil {
 		t.Errorf("book did not return to %q after the failed rename: %v", from.Dir(), err)
 	}
+
 	if _, err := os.Stat(filepath.Join(root, to.Dir())); !os.IsNotExist(err) {
 		t.Errorf("destination %q still exists after rollback", to.Dir())
 	}
+
 	if _, err := os.Stat(filepath.Join(root, "Bob")); !os.IsNotExist(err) {
 		t.Errorf("author directory Bob left behind by the rollback: %v", err)
 	}
@@ -110,6 +117,7 @@ func TestMoveLeavesNoAuthorDirWhenDirRenameFails(t *testing.T) {
 	if err := s.Move(from, to); err == nil {
 		t.Fatal("Move succeeded with a missing source directory")
 	}
+
 	if _, err := os.Stat(filepath.Join(root, "Bob")); !os.IsNotExist(err) {
 		t.Errorf("author directory Bob left behind by the failed rename: %v", err)
 	}
@@ -125,9 +133,11 @@ func TestDeleteRemovesBookDir(t *testing.T) {
 	if err := s.Delete(loc); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
+
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
 		t.Errorf("book directory should be removed after delete")
 	}
+
 	if _, err := os.Stat(filepath.Join(root, "Author, A")); !os.IsNotExist(err) {
 		t.Errorf("empty author directory should also be removed after last book is deleted")
 	}
@@ -137,6 +147,7 @@ func TestDeleteWithReadOnlyDirError(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores directory permissions")
 	}
+
 	s, root := newStore(t)
 
 	dir := filepath.Join(root, "Author, A", "Test (1)")
@@ -146,6 +157,7 @@ func TestDeleteWithReadOnlyDirError(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(sidecar), 0o755); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := os.WriteFile(sidecar, []byte("{}"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -157,6 +169,7 @@ func TestDeleteWithReadOnlyDirError(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 
 	loc := book.Location{EpubPath: filepath.Join("Author, A/Test (1)", "test.epub")}
+
 	err := s.Delete(loc)
 	if err == nil {
 		t.Error("expected error deleting a read-only book directory")
@@ -169,6 +182,7 @@ func TestDeleteWithReadOnlyDirError(t *testing.T) {
 			t.Errorf("%s after a failed delete: %v", path, err)
 		}
 	}
+
 	if entries, _ := os.ReadDir(filepath.Join(root, trashDirName)); len(entries) != 0 {
 		t.Errorf("trash after a failed delete holds %d entries, want none", len(entries))
 	}
@@ -179,15 +193,19 @@ func TestLastID(t *testing.T) {
 	if id, err := s.LastID(); err != nil || id != 0 {
 		t.Errorf("LastID with no record = %d, %v; want 0, nil", id, err)
 	}
+
 	if err := s.RecordID(7); err != nil {
 		t.Fatal(err)
 	}
+
 	if id, err := s.LastID(); err != nil || id != 7 {
 		t.Errorf("LastID after RecordID(7) = %d, %v; want 7, nil", id, err)
 	}
+
 	if err := os.WriteFile(filepath.Join(root, lastIDName), []byte("garbage"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+
 	if _, err := s.LastID(); err == nil {
 		t.Error("LastID read a corrupt record without an error")
 	}

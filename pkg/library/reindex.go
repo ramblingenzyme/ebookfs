@@ -7,5 +7,6 @@ import "github.com/ramblingenzyme/ebookfs/pkg/library/internal/reconcile"
 func (l *Library) Reindex() error {
 	l.mutateMu.Lock()
 	defer l.mutateMu.Unlock()
+
 	return reconcile.Run(l.store, l.index, true)
 }

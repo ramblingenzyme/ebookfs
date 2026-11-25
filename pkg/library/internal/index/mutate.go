@@ -16,6 +16,7 @@ func toUnixNano(t time.Time) int64 {
 	if t.IsZero() {
 		return 0
 	}
+
 	return t.UnixNano()
 }
 
@@ -23,6 +24,7 @@ func fromUnixNano(n int64) time.Time {
 	if n == 0 {
 		return time.Time{}
 	}
+
 	return time.Unix(0, n)
 }
 
@@ -94,9 +96,11 @@ func (idx *Index) putRelations(q *dbsqlc.Queries, b *book.Book) error {
 	if err := idx.replaceAuthors(q, b.Meta.ID, b.Authors); err != nil {
 		return err
 	}
+
 	if err := idx.replaceTags(q, b.Meta.ID, b.Meta.Tags); err != nil {
 		return err
 	}
+
 	if err := idx.setSeries(q, b); err != nil {
 		return err
 	}
@@ -104,6 +108,7 @@ func (idx *Index) putRelations(q *dbsqlc.Queries, b *book.Book) error {
 	if err := q.DeleteBookIdentifiers(idx.ctx, b.Meta.ID); err != nil {
 		return err
 	}
+
 	for scheme, value := range b.Identifiers {
 		if err := q.InsertIdentifier(idx.ctx, dbsqlc.InsertIdentifierParams{
 			BookID: b.Meta.ID,
@@ -117,6 +122,7 @@ func (idx *Index) putRelations(q *dbsqlc.Queries, b *book.Book) error {
 	if err := idx.replaceSubjects(q, b.Meta.ID, b.Subjects); err != nil {
 		return err
 	}
+
 	if err := idx.replaceContributors(q, b.Meta.ID, b.Contributors); err != nil {
 		return err
 	}
@@ -128,6 +134,7 @@ func (idx *Index) replaceAuthors(q *dbsqlc.Queries, bookID int64, authors []book
 	if err := q.DeleteBookAuthors(idx.ctx, bookID); err != nil {
 		return err
 	}
+
 	for i, a := range authors {
 		// Overwrites sort_name only with a real value onto an empty one, so a
 		// missing file-as is filled in and a correction is not stomped.
@@ -137,10 +144,12 @@ func (idx *Index) replaceAuthors(q *dbsqlc.Queries, bookID int64, authors []book
 		}); err != nil {
 			return err
 		}
+
 		author, err := q.GetAuthorByName(idx.ctx, a.Name)
 		if err != nil {
 			return err
 		}
+
 		if err := q.InsertBookAuthor(idx.ctx, dbsqlc.InsertBookAuthorParams{
 			BookID:   bookID,
 			AuthorID: author.ID,
@@ -149,6 +158,7 @@ func (idx *Index) replaceAuthors(q *dbsqlc.Queries, bookID int64, authors []book
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -156,14 +166,17 @@ func (idx *Index) replaceTags(q *dbsqlc.Queries, bookID int64, tags []string) er
 	if err := q.DeleteBookTags(idx.ctx, bookID); err != nil {
 		return err
 	}
+
 	for _, tag := range tags {
 		if err := q.InsertTag(idx.ctx, tag); err != nil {
 			return err
 		}
+
 		tagRow, err := q.GetTagByName(idx.ctx, tag)
 		if err != nil {
 			return err
 		}
+
 		if err := q.InsertBookTag(idx.ctx, dbsqlc.InsertBookTagParams{
 			BookID: bookID,
 			TagID:  tagRow.ID,
@@ -171,6 +184,7 @@ func (idx *Index) replaceTags(q *dbsqlc.Queries, bookID int64, tags []string) er
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -178,14 +192,17 @@ func (idx *Index) replaceSubjects(q *dbsqlc.Queries, bookID int64, subjects []st
 	if err := q.DeleteBookSubjects(idx.ctx, bookID); err != nil {
 		return err
 	}
+
 	for _, subject := range subjects {
 		if err := q.InsertSubject(idx.ctx, subject); err != nil {
 			return err
 		}
+
 		subjectRow, err := q.GetSubjectByName(idx.ctx, subject)
 		if err != nil {
 			return err
 		}
+
 		if err := q.InsertBookSubject(idx.ctx, dbsqlc.InsertBookSubjectParams{
 			BookID:    bookID,
 			SubjectID: subjectRow.ID,
@@ -193,6 +210,7 @@ func (idx *Index) replaceSubjects(q *dbsqlc.Queries, bookID int64, subjects []st
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -200,6 +218,7 @@ func (idx *Index) replaceContributors(q *dbsqlc.Queries, bookID int64, contribut
 	if err := q.DeleteBookContributors(idx.ctx, bookID); err != nil {
 		return err
 	}
+
 	for i, c := range contributors {
 		if err := q.InsertContributor(idx.ctx, dbsqlc.InsertContributorParams{
 			Name: c.Name,
@@ -207,6 +226,7 @@ func (idx *Index) replaceContributors(q *dbsqlc.Queries, bookID int64, contribut
 		}); err != nil {
 			return err
 		}
+
 		contributorRow, err := q.GetContributorByNameAndRole(idx.ctx, dbsqlc.GetContributorByNameAndRoleParams{
 			Name: c.Name,
 			Role: c.Role,
@@ -214,6 +234,7 @@ func (idx *Index) replaceContributors(q *dbsqlc.Queries, bookID int64, contribut
 		if err != nil {
 			return err
 		}
+
 		if err := q.InsertBookContributor(idx.ctx, dbsqlc.InsertBookContributorParams{
 			BookID:        bookID,
 			ContributorID: contributorRow.ID,
@@ -222,22 +243,27 @@ func (idx *Index) replaceContributors(q *dbsqlc.Queries, bookID int64, contribut
 			return err
 		}
 	}
+
 	return nil
 }
 
 // setSeries runs after the books row exists, since it updates that row.
 func (idx *Index) setSeries(q *dbsqlc.Queries, b *book.Book) error {
-	var seriesID sql.NullInt64
-	var seriesIndex sql.NullString
+	var (
+		seriesID    sql.NullInt64
+		seriesIndex sql.NullString
+	)
 
 	if b.Series != nil {
 		if err := q.InsertSeries(idx.ctx, b.Series.Name); err != nil {
 			return err
 		}
+
 		series, err := q.GetSeriesByName(idx.ctx, b.Series.Name)
 		if err != nil {
 			return err
 		}
+
 		seriesID = sql.NullInt64{Int64: series.ID, Valid: true}
 		seriesIndex = sql.NullString{String: b.Series.Index, Valid: true}
 	}
@@ -259,6 +285,7 @@ func (idx *Index) deleteBook(q *dbsqlc.Queries, id int64) error {
 	if err := q.DeleteBook(idx.ctx, id); err != nil {
 		return err
 	}
+
 	return idx.cleanupOrphans(q)
 }
 
@@ -266,17 +293,22 @@ func (idx *Index) cleanupOrphans(q *dbsqlc.Queries) error {
 	if err := q.DeleteOrphanedAuthors(idx.ctx); err != nil {
 		return err
 	}
+
 	if err := q.DeleteOrphanedSeries(idx.ctx); err != nil {
 		return err
 	}
+
 	if err := q.DeleteOrphanedTags(idx.ctx); err != nil {
 		return err
 	}
+
 	if err := q.DeleteOrphanedSubjects(idx.ctx); err != nil {
 		return err
 	}
+
 	if err := q.DeleteOrphanedContributors(idx.ctx); err != nil {
 		return err
 	}
+
 	return nil
 }

@@ -25,9 +25,11 @@ func (d *Doc) DC(tag string) *Element { return d.dcSlot(tag, d.md.primary(tag)) 
 func (d *Doc) DCAll(tag string) []*Element {
 	els := d.md.children(tag)
 	out := make([]*Element, len(els))
+
 	for i, el := range els {
 		out[i] = d.dcSlot(tag, el)
 	}
+
 	return out
 }
 
@@ -44,6 +46,7 @@ func (d *Doc) metaSlot(property, idPrefix string, el *etree.Element) *Element {
 			// Spelled, since in a document that rebound the vocabulary the
 			// literal would mean something else.
 			m.CreateAttr("property", d.vocab.spell(property))
+
 			return m
 		},
 		parent: d.md.metaParent,
@@ -59,16 +62,19 @@ func (d *Doc) UnrefinedMeta(property string) *Element {
 			return d.metaSlot(property, "", m)
 		}
 	}
+
 	return d.metaSlot(property, "", nil)
 }
 
 func (d *Doc) PropertyMetas(property, idPrefix string) []*Element {
 	var out []*Element
+
 	for _, m := range d.md.children("meta") {
 		if d.vocab.Same(attr(m, "property"), property) {
 			out = append(out, d.metaSlot(property, idPrefix, m))
 		}
 	}
+
 	return out
 }
 

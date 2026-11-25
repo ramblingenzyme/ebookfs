@@ -18,13 +18,16 @@ type KeyedMutex struct {
 func (k *KeyedMutex) For(key int64) *sync.Mutex {
 	k.mu.Lock()
 	defer k.mu.Unlock()
+
 	if k.locks == nil {
 		k.locks = make(map[int64]*sync.Mutex)
 	}
+
 	m, ok := k.locks[key]
 	if !ok {
 		m = &sync.Mutex{}
 		k.locks[key] = m
 	}
+
 	return m
 }

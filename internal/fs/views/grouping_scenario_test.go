@@ -50,6 +50,7 @@ var groupingViews = []groupingView{
 		keyless: func(id int64, title string) *library.Book {
 			b := makeBook(id, title)
 			b.Authors = nil
+
 			return wrapBook(b)
 		},
 		multiKey: true,
@@ -88,6 +89,7 @@ var groupingViews = []groupingView{
 		withKeys: func(id int64, title string, keys ...string) *library.Book {
 			b := makeBook(id, title, "Author")
 			b.Meta.Status = keys[0]
+
 			return wrapBook(b)
 		},
 		// Every book carries a status, so there is no keyless case.
@@ -104,6 +106,7 @@ func TestGroupNamesAreOneComponent(t *testing.T) {
 		if v.name == "by-status" {
 			continue
 		}
+
 		t.Run(v.name, func(t *testing.T) {
 			reg := newTestRegistry(t)
 			d := v.newDir(reg)
@@ -113,6 +116,7 @@ func TestGroupNamesAreOneComponent(t *testing.T) {
 			if len(names) != 1 {
 				t.Fatalf("groups = %v, want one", names)
 			}
+
 			if strings.Contains(names[0], "/") {
 				t.Errorf("group name = %q, want no path separator", names[0])
 			}
@@ -134,12 +138,16 @@ func TestGroupsSkipKeysThatCannotNameADirectory(t *testing.T) {
 		if v.name == "by-status" {
 			continue
 		}
+
 		t.Run(v.name, func(t *testing.T) {
 			reg := newTestRegistry(t)
 			d := v.newDir(reg)
+
 			var want []string
+
 			if v.multiKey {
 				reg.Load(v.withKeys(1, "Title", "...", "sci\nfi", "kept"))
+
 				want = []string{"kept"}
 			} else {
 				reg.Load(v.withKeys(1, "Title", "..."))
@@ -158,6 +166,7 @@ func TestGroupingViews(t *testing.T) {
 			setup := func(t *testing.T) (*registry.BookRegistry, fs.Dir) {
 				t.Helper()
 				reg := newTestRegistry(t)
+
 				return reg, v.newDir(reg)
 			}
 
@@ -215,6 +224,7 @@ func TestGroupingViews(t *testing.T) {
 				if _, ok := groupEntries(t, d, "alpha"); ok {
 					t.Errorf("alpha group outlived the re-key; view holds %v", fstest.ChildNames(d))
 				}
+
 				wantGroup(t, d, "beta", v.entry(1, "Moved"))
 			})
 
@@ -250,19 +260,23 @@ func (v groupingView) entry(id int64, title string) string {
 	if v.entryName == nil {
 		return title
 	}
+
 	return v.entryName(id, title)
 }
 
 func groupEntries(t *testing.T, d fs.Dir, key string) ([]string, bool) {
 	t.Helper()
+
 	child, ok := d.Children()[key]
 	if !ok {
 		return nil, false
 	}
+
 	group, ok := child.(fs.Dir)
 	if !ok {
 		t.Fatalf("group %q is a %T, want a directory", key, child)
 	}
+
 	return fstest.ChildNames(group), true
 }
 
@@ -273,7 +287,9 @@ func wantGroup(t *testing.T, d fs.Dir, key string, want ...string) {
 	if !ok {
 		t.Fatalf("no %q group; view holds %v", key, fstest.ChildNames(d))
 	}
+
 	slices.Sort(want)
+
 	if !slices.Equal(got, want) {
 		t.Errorf("%s group = %v, want %v", key, got, want)
 	}

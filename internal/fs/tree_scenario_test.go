@@ -17,6 +17,7 @@ func TestRootListing(t *testing.T) {
 	h := newHarness(t)
 	got := h.ls("/")
 	want := []string{"books", "by-author", "by-id", "by-series", "by-status", "by-subjects", "by-tag", "ctl", "help", "inbox", "log", "recent", "search", "stats"}
+
 	if !slices.Equal(got, want) {
 		t.Errorf("ls / = %v, want %v", got, want)
 	}
@@ -68,6 +69,7 @@ func TestEditsReachTheTree(t *testing.T) {
 			if tt.extraSeed != nil {
 				seeds = append(seeds, tt.extraSeed)
 			}
+
 			h := newHarness(t, seeds...)
 
 			for _, path := range tt.gone {
@@ -79,6 +81,7 @@ func TestEditsReachTheTree(t *testing.T) {
 			for _, path := range tt.gone {
 				h.mustNotExist(path)
 			}
+
 			for _, path := range tt.appear {
 				h.mustExist(path)
 			}
@@ -122,6 +125,7 @@ func TestLinuxRedirectTruncates(t *testing.T) {
 	if err := h.writeLikeLinux("/books/Dune Messiah/title", "Dune\n"); err != nil {
 		t.Fatalf("writeLikeLinux: %v", err)
 	}
+
 	if got := h.read("/books/Dune/title"); got != "Dune\n" {
 		t.Errorf("title = %q, want %q", got, "Dune\n")
 	}
@@ -142,6 +146,7 @@ func TestSearchOverNinep(t *testing.T) {
 	if results := h.ls(dir + "/results"); !slices.Equal(results, []string{"Dune"}) {
 		t.Errorf("ls %s/results = %v, want [Dune]", dir, results)
 	}
+
 	if ctl := h.read(dir + "/ctl"); !strings.Contains(ctl, "tag:sf") {
 		t.Errorf("ctl = %q, want tag:sf", ctl)
 	}
@@ -156,9 +161,11 @@ func TestSearchHandlesAreIndependent(t *testing.T) {
 	if sf == classic {
 		t.Fatalf("two searches share the handle %s", sf)
 	}
+
 	if got := h.ls(sf + "/results"); !slices.Equal(got, []string{"Dune"}) {
 		t.Errorf("tag:sf results = %v, want [Dune]", got)
 	}
+
 	if got := h.ls(classic + "/results"); !slices.Equal(got, []string{"Emma"}) {
 		t.Errorf("tag:classic results = %v, want [Emma]", got)
 	}
@@ -172,6 +179,7 @@ func TestUploadReadsBackByteForByte(t *testing.T) {
 	if err := h.upload("Test Book.epub", epub); err != nil {
 		t.Fatalf("upload: %v", err)
 	}
+
 	if got := h.readBytes("/books/Test Book/Test Book - Alice Author.epub"); !bytes.Equal(got, epub) {
 		t.Errorf("read back %d bytes, want the %d uploaded", len(got), len(epub))
 	}
@@ -180,11 +188,13 @@ func TestUploadReadsBackByteForByte(t *testing.T) {
 func TestCoverOverNinep(t *testing.T) {
 	h := newHarness(t, ingest("Dune", "Frank Herbert"))
 	path := "/books/Dune/cover.jpg"
+
 	const cover = "placeholder-cover-bytes"
 
 	if got := h.read(path); got != cover {
 		t.Fatalf("cover = %q, want %q", got, cover)
 	}
+
 	if got := h.stat(path).Length; got != uint64(len(cover)) {
 		t.Errorf("cover length = %d, want %d", got, len(cover))
 	}
@@ -193,9 +203,11 @@ func TestCoverOverNinep(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open for write: %v", err)
 	}
+
 	if err := f.Clunk(); err != nil {
 		t.Errorf("clunk of an unwritten cover: %v", err)
 	}
+
 	if got := h.read(path); got != cover {
 		t.Errorf("cover after an empty write = %q, want it unchanged", got)
 	}

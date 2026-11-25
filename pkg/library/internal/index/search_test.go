@@ -37,6 +37,7 @@ func TestSearchOrders(t *testing.T) {
 	top.Meta.DateAdded = added
 	tied.Meta.DateAdded = added.Add(-time.Hour)
 	untied.Meta.DateAdded = added.Add(-2 * time.Hour)
+
 	for _, b := range []*book.Book{mid, top, tied, untied} {
 		storeInIndex(t, idx, b)
 	}
@@ -61,10 +62,12 @@ func TestSearchOrders(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			ids := make([]int64, len(got))
 			for i, b := range got {
 				ids[i] = b.Meta.ID
 			}
+
 			if !slices.Equal(ids, tc.want) {
 				t.Errorf("ids = %v, want %v", ids, tc.want)
 			}
@@ -81,6 +84,7 @@ func TestExists(t *testing.T) {
 
 	solo := makeTestBook(1, "Foundation", []string{"Isaac Asimov"}, "", book.StatusUnread)
 	duo := makeTestBook(2, "Good Omens", []string{"Neil Gaiman", "Terry Pratchett"}, "", book.StatusUnread)
+
 	if err := idx.Rebuild(bookPaths(solo, duo), nil, 2); err != nil {
 		t.Fatalf("Rebuild: %v", err)
 	}
@@ -98,6 +102,7 @@ func TestExists(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		if !ok {
 			t.Errorf("Exists(%q, %q) = false, want true", tc.title, tc.names)
 		}
@@ -120,6 +125,7 @@ func TestExists(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		if ok {
 			t.Errorf("Exists(%q, %q) = true, want false (%s)", tc.title, tc.names, tc.why)
 		}
@@ -136,14 +142,17 @@ func TestSearchTitleTermIsLiteral(t *testing.T) {
 		newBook(3, "a_b"), newBook(4, "axb"),
 		newBook(5, `C:\x`), newBook(6, "C:x"),
 	}
+
 	if err := idx.Rebuild(bookPaths(books...), nil, 6); err != nil {
 		t.Fatalf("Rebuild: %v", err)
 	}
+
 	for term, want := range map[string]int64{"0%": 1, "a_b": 3, `:\x`: 5} {
 		got, err := idx.Search(Query{Titles: []string{term}})
 		if err != nil {
 			t.Fatalf("Search(%q): %v", term, err)
 		}
+
 		if len(got) != 1 || got[0].Meta.ID != want {
 			t.Errorf("Search(%q) matched %d books, want only book %d", term, len(got), want)
 		}

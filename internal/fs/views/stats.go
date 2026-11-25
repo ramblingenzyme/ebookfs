@@ -30,6 +30,7 @@ type statsFile struct {
 func NewStatsFile(f *fs.FS, lib StatsReader) *statsFile {
 	sf := &statsFile{lib: lib}
 	sf.SnapshotFile = vfile.NewSnapshotFile(newStat(f, "stats", 0o444), sf.content)
+
 	return sf
 }
 
@@ -38,6 +39,7 @@ func (f *statsFile) content() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return []byte(formatStats(s)), nil
 }
 
@@ -51,6 +53,7 @@ func (f *statsFile) Stat() proto.Stat {
 	if data, err := f.content(); err == nil {
 		s.Length = uint64(len(data))
 	}
+
 	return s
 }
 
@@ -66,6 +69,7 @@ func formatStats(s *library.Stats) string {
 	fmt.Fprintf(&b, "total-size: %d\n", s.TotalSize)
 	fmt.Fprintf(&b, "last-added: %s\n", formatTime(s.LastAdded))
 	fmt.Fprintf(&b, "last-modified: %s\n", formatTime(s.LastModified))
+
 	return b.String()
 }
 
@@ -73,5 +77,6 @@ func formatTime(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}
+
 	return t.UTC().Format(time.RFC3339)
 }

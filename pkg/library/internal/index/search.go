@@ -29,10 +29,12 @@ func (idx *Index) Search(q Query) ([]*book.Book, error) {
 	} else if len(q.Titles) > 0 {
 		clauses := make([]string, len(q.Titles))
 		args := make([]any, len(q.Titles))
+
 		for i, t := range q.Titles {
 			clauses[i] = "b.title LIKE ? ESCAPE '\\'"
 			args[i] = "%" + likeEscaper.Replace(t) + "%"
 		}
+
 		bq.addCondition("("+strings.Join(clauses, " OR ")+")", args...)
 	}
 
@@ -51,6 +53,7 @@ func orderClause(o Order) string {
 	// on the bare column would put all of those in one NULL tie and list them
 	// by id.
 	const byTitle = "COALESCE(b.sort_title, b.title), b.id"
+
 	switch o {
 	case OrderDateAdded:
 		return "b.date_added DESC, b.id DESC"

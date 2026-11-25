@@ -21,6 +21,7 @@ func TestSearchHandleResyncRebuildsMembership(t *testing.T) {
 	handle.executeSearch(library.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
 	fstest.HasChild(t, handle.results, "Foundation")
 	fstest.ChildCount(t, handle.results, 1)
+
 	if got := handle.currentQueryText(); got != "tag:sci-fi" {
 		t.Errorf("currentQueryText = %q, want %q", got, "tag:sci-fi")
 	}
@@ -43,10 +44,13 @@ func TestSearchHandleConcurrentRequeryAndRegistryEvents(t *testing.T) {
 	reg, handle := newTestSearchHandle(t)
 
 	const perTag = 100
+
 	var wg sync.WaitGroup
 	wg.Add(3)
+
 	go func() {
 		defer wg.Done()
+
 		for i := range 2 * perTag {
 			if i%2 == 0 {
 				handle.executeSearch(library.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
@@ -57,21 +61,25 @@ func TestSearchHandleConcurrentRequeryAndRegistryEvents(t *testing.T) {
 	}()
 	go func() {
 		defer wg.Done()
+
 		for i := range 2 * perTag {
 			tag := "sci-fi"
 			if i%2 == 1 {
 				tag = "fantasy"
 			}
+
 			reg.Load(makeBookWithTags(int64(i+1), fmt.Sprintf("Book %d", i+1), "Author", tag))
 		}
 	}()
 	go func() {
 		defer wg.Done()
+
 		for range 2 * perTag {
 			_ = handle.currentQueryText()
 			_ = handle.lastQuery()
 		}
 	}()
+
 	wg.Wait()
 
 	handle.executeSearch(library.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
@@ -99,14 +107,17 @@ func TestSearchCtlExecutesQueryOnClunk(t *testing.T) {
 
 	// The query is deferred until the fid closes.
 	fstest.ChildCount(t, handle.results, 0)
+
 	if got := handle.currentQueryText(); got != "" {
 		t.Errorf("currentQueryText = %q before clunk, want no query committed yet", got)
 	}
+
 	query := first + rest
 
 	fid.Close()
 	fstest.HasChild(t, handle.results, "Foundation")
 	fstest.ChildCount(t, handle.results, 1)
+
 	if got := handle.currentQueryText(); got != query {
 		t.Errorf("currentQueryText = %q, want %q — ctl reads back the committed query", got, query)
 	}
@@ -123,12 +134,14 @@ func TestSearchCtlRejectsUnparseableQuery(t *testing.T) {
 	handle.executeSearch(library.Query{Tags: []string{"sci-fi"}}, "tag:sci-fi")
 
 	fstest.Fid(t, ctl, 3).Write(0, "foo:bar")
+
 	if err := ctl.Close(3); err == nil {
 		t.Error("Close on an unparseable query returned nil, want the parse error surfaced to the client")
 	}
 
 	// The rejected query must leave the previous results standing.
 	fstest.HasChild(t, handle.results, "Foundation")
+
 	if got := handle.currentQueryText(); got != "tag:sci-fi" {
 		t.Errorf("currentQueryText = %q, want the last accepted query %q", got, "tag:sci-fi")
 	}

@@ -35,9 +35,11 @@ func (f *ReadAtFile) Open(fid uint64, _ proto.Mode) error {
 	if err != nil {
 		return err
 	}
+
 	f.Lock()
 	f.fids[fid] = r
 	f.Unlock()
+
 	return nil
 }
 
@@ -50,23 +52,29 @@ func (f *ReadAtFile) Read(fid uint64, offset uint64, count uint64) ([]byte, erro
 	f.RLock()
 	r := f.fids[fid]
 	f.RUnlock()
+
 	if r == nil {
 		return nil, errors.New("not open")
 	}
+
 	buf := make([]byte, count)
 	n, err := r.ReadAt(buf, int64(offset))
+
 	if errors.Is(err, io.EOF) {
 		err = nil
 	}
+
 	return buf[:n], err
 }
 
 func (f *ReadAtFile) Close(fid uint64) error {
 	f.Lock()
 	defer f.Unlock()
+
 	if r, ok := f.fids[fid]; ok {
 		r.Close()
 		delete(f.fids, fid)
 	}
+
 	return nil
 }

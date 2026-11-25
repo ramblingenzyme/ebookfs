@@ -13,6 +13,7 @@ func patternFile(n int) []byte {
 	for i := range n {
 		b[i] = byte((i*31 + (i >> 8)) % 256)
 	}
+
 	return b
 }
 
@@ -36,10 +37,12 @@ func TestPartialMD5_GoldenVectors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			data := patternFile(tt.size)
 			r := bytes.NewReader(data)
+
 			got, err := PartialMD5(r, int64(tt.size))
 			if err != nil {
 				t.Fatalf("PartialMD5: %v", err)
 			}
+
 			if got != tt.expect {
 				t.Errorf("got %s, want %s", got, tt.expect)
 			}
@@ -52,22 +55,26 @@ func TestPartialMD5_Sparse1GiB(t *testing.T) {
 	// S is 1073742848 bytes (1 GiB + 1024), zero everywhere except at each
 	// offset where it contains the 16-byte ASCII decimal representation.
 	const size = 1073742848
+
 	offsets := []int64{
 		0, 1024, 4096, 16384, 65536, 262144,
 		1048576, 4194304, 16777216, 67108864, 268435456, 1073741824,
 	}
 
 	data := make([]byte, size)
+
 	for _, off := range offsets {
 		s := fmt.Sprintf("%016d", off)
 		copy(data[off:off+16], s)
 	}
 
 	r := bytes.NewReader(data)
+
 	got, err := PartialMD5(r, size)
 	if err != nil {
 		t.Fatalf("PartialMD5: %v", err)
 	}
+
 	expect := "266ff27c24919f4cec96f90f9b3231ca"
 	if got != expect {
 		t.Errorf("got %s, want %s", got, expect)
@@ -82,12 +89,14 @@ func TestPartialMD5_FirstOffsetIsZero(t *testing.T) {
 	data2[0] = 0xFF // change byte at offset 0
 
 	r1 := bytes.NewReader(data1)
+
 	h1, err := PartialMD5(r1, 2048)
 	if err != nil {
 		t.Fatalf("PartialMD5(data1): %v", err)
 	}
 
 	r2 := bytes.NewReader(data2)
+
 	h2, err := PartialMD5(r2, 2048)
 	if err != nil {
 		t.Fatalf("PartialMD5(data2): %v", err)
@@ -101,6 +110,7 @@ func TestPartialMD5_FirstOffsetIsZero(t *testing.T) {
 // An empty file hashes to the MD5 of empty input.
 func TestPartialMD5_EmptyFile(t *testing.T) {
 	r := bytes.NewReader(nil)
+
 	got, err := PartialMD5(r, 0)
 	if err != nil {
 		t.Fatalf("PartialMD5: %v", err)

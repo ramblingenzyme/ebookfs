@@ -18,6 +18,7 @@ func newTestReadAtFile(t *testing.T, data string) *ReadAtFile {
 	raf := NewReadAtFile(stat, func() (ReaderAtCloser, error) {
 		return &mock.EpubReader{Reader: bytes.NewReader([]byte(data))}, nil
 	})
+
 	return &raf
 }
 
@@ -43,6 +44,7 @@ func TestReadAtFile(t *testing.T) {
 	t.Run("open propagates error", func(t *testing.T) {
 		stat := NewStat(util.NewTestFS(t), "reader", 0o444)
 		raf := NewReadAtFile(stat, func() (ReaderAtCloser, error) { return nil, util.ErrTest })
+
 		if err := raf.Open(1, proto.Mode(0)); !errors.Is(err, util.ErrTest) {
 			t.Errorf("Open error = %v, want %v", err, util.ErrTest)
 		}
@@ -55,6 +57,7 @@ func TestReadAtFile(t *testing.T) {
 		fid2.Open(proto.Mode(0))
 
 		fid1.Close()
+
 		if got := fid2.Read(0, 6); got != "shared" {
 			t.Errorf("fid2 read = %q, want %q", got, "shared")
 		}
@@ -67,10 +70,13 @@ func TestReadAtFile(t *testing.T) {
 
 		fid := fstest.Fid(t, &raf, 1)
 		fid.Open(proto.Mode(0))
+
 		if r.Closed {
 			t.Fatal("reader should not be closed before Close")
 		}
+
 		fid.Close()
+
 		if !r.Closed {
 			t.Error("reader should be closed after Close")
 		}

@@ -27,6 +27,7 @@ func TestRestoreSkipsCorruptSidecars(t *testing.T) {
 	book2 := ingestTestEpub(t, lib.Library, buildTestEpub(t, "Corrupt Book", "Bob"))
 
 	const corrupt = "{corrupt json"
+
 	if err := lib.Library.WithSidecars(book2.ID(), func(root *os.Root) error {
 		return root.WriteFile("kosync.json", []byte(corrupt), 0o644)
 	}); err != nil {
@@ -53,6 +54,7 @@ func TestRestoreSkipsCorruptSidecars(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading corrupt sidecar after Restore: %v", err)
 	}
+
 	if string(raw) != corrupt {
 		t.Errorf("corrupt sidecar = %q after Restore, want it left as %q", raw, corrupt)
 	}

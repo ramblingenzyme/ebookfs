@@ -29,12 +29,15 @@ func setupLogging(cfg config.LogConfig) {
 		"error": slog.LevelError,
 	}
 	opts := &slog.HandlerOptions{Level: levels[cfg.Level]}
+
 	var h slog.Handler
+
 	if cfg.Format == "json" {
 		h = slog.NewJSONHandler(os.Stderr, opts)
 	} else {
 		h = slog.NewTextHandler(os.Stderr, opts)
 	}
+
 	slog.SetDefault(slog.New(h))
 }
 
@@ -49,6 +52,7 @@ func main() {
 	configPath := flag.String("config", "/etc/ebookfs/config.toml", "path to config file")
 	forceReindex := flag.Bool("reindex", false, "force a full index rebuild from disk")
 	allowSMB := flag.Bool("allow-smb", false, "start on an SMB/CIFS library root, where atomic rename and file locking are unreliable")
+
 	flag.Parse()
 
 	cfg, err := config.Load(*configPath)
@@ -56,6 +60,7 @@ func main() {
 		// Logging isn't configured yet; fall back to plain stdlib output.
 		log.Fatalf("loading config: %v", err)
 	}
+
 	setupLogging(cfg.Log)
 	// Warned rather than refused, so a config naming a key a later version
 	// removed still loads.
@@ -67,13 +72,16 @@ func main() {
 	if *forceReindex {
 		opts = append(opts, library.WithForceReindex())
 	}
+
 	if *allowSMB {
 		opts = append(opts, library.WithAllowSMB())
 	}
+
 	lib, err := library.Open(library.Config(cfg.Library), opts...)
 	if errors.Is(err, library.ErrSMBFilesystem) {
 		fatal("opening library: pass --allow-smb to override", err)
 	}
+
 	if err != nil {
 		fatal("opening library", err)
 	}
@@ -99,9 +107,11 @@ func main() {
 	// The library closes before the exit status is reported, so a frontend
 	// failure still leaves the index shut down cleanly.
 	runErr := runner.Run(ctx, 10*time.Second)
+
 	if err := lib.Close(); err != nil {
 		slog.Error("closing library", "error", err)
 	}
+
 	if runErr != nil {
 		fatal("serving", runErr)
 	}

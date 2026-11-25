@@ -23,6 +23,7 @@ import (
 func (s *Store) Layout(authors []book.Author, title string, id int64) book.Location {
 	libPath := canonicalDir(authors, title, id)
 	filename := epubFilename(authors, title)
+
 	return book.Location{
 		EpubPath: filepath.Join(libPath, filename),
 	}
@@ -33,6 +34,7 @@ func epubFilename(authors []book.Author, title string) string {
 	if len(authors) == 0 {
 		return fmt.Sprintf("%s.epub", fatTitle)
 	}
+
 	return fmt.Sprintf("%s - %s.epub", fatTitle, naming.ForFAT(book.JoinAuthors(authors, book.AuthorSep)))
 }
 
@@ -58,13 +60,16 @@ func IDFromPath(libraryPath string) (int64, bool) {
 	if !strings.HasSuffix(base, ")") {
 		return 0, false
 	}
+
 	open := strings.LastIndex(base, " (")
 	if open < 0 {
 		return 0, false
 	}
+
 	id, err := strconv.ParseInt(base[open+2:len(base)-1], 10, 64)
 	if err != nil || id <= 0 {
 		return 0, false
 	}
+
 	return id, true
 }

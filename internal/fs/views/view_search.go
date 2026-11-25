@@ -78,6 +78,7 @@ func (d *searchDir) allocateHandle() *searchHandleDir {
 func (d *searchDir) removeHandle(id int64) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
 	d.removeHandleLocked(id)
 }
 
@@ -86,6 +87,7 @@ func (d *searchDir) removeHandleLocked(id int64) {
 	if !ok {
 		return
 	}
+
 	d.reg.RemoveView(handle.results)
 	d.StaticDir.DeleteChild(strconv.FormatInt(id, 10))
 	delete(d.handles, id)
@@ -131,6 +133,7 @@ func (d *searchDir) Close() {
 func (d *searchDir) cleanupLoop() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ticker.C:
@@ -160,31 +163,38 @@ type cloneFile struct {
 func (f *cloneFile) Open(fid uint64, _ proto.Mode) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	if _, exists := f.handles[fid]; !exists {
 		f.handles[fid] = 0
 	}
+
 	return nil
 }
 
 func (f *cloneFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	id, ok := f.handles[fid]
 	if !ok {
 		return nil, fmt.Errorf("not open")
 	}
+
 	if id == 0 {
 		id = f.search.allocateHandle().id
 		f.handles[fid] = id
 	}
 
 	data := []byte(strconv.FormatInt(id, 10) + "\n")
+
 	return vfile.ClampRead(data, offset, count), nil
 }
 
 func (f *cloneFile) Close(fid uint64) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	delete(f.handles, fid)
+
 	return nil
 }

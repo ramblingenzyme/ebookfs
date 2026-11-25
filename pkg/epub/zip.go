@@ -30,6 +30,7 @@ func notEpub(path string, err error) error {
 	if errors.Is(err, zip.ErrFormat) {
 		return fmt.Errorf("%w: %s: %w", ErrNotEpub, path, err)
 	}
+
 	return err
 }
 
@@ -58,7 +59,9 @@ func openArchive(zr *zip.Reader) (*archive, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	a.opf = opf
+
 	return a, nil
 }
 
@@ -71,6 +74,7 @@ func (a *archive) size(name string) int64 {
 	if f == nil {
 		return 0
 	}
+
 	return int64(f.UncompressedSize64)
 }
 
@@ -86,6 +90,7 @@ func openEntry(f *zip.File) (io.ReadCloser, error) {
 	if f.UncompressedSize64 > maxEntrySize {
 		return nil, fmt.Errorf("entry %s declares %d bytes, over the %d-byte limit", f.Name, f.UncompressedSize64, maxEntrySize)
 	}
+
 	return f.Open()
 }
 
@@ -94,11 +99,13 @@ func (a *archive) read(name string) ([]byte, error) {
 	if f == nil {
 		return nil, fmt.Errorf("entry not found in epub: %s", name)
 	}
+
 	rc, err := openEntry(f)
 	if err != nil {
 		return nil, err
 	}
 	defer rc.Close()
+
 	return io.ReadAll(rc)
 }
 
@@ -109,13 +116,16 @@ func (a *archive) validate() error {
 	if !a.has(mimetypePath) {
 		return fmt.Errorf("%w: missing mimetype declaration", ErrNotEpub)
 	}
+
 	data, err := a.read(mimetypePath)
 	if err != nil {
 		return err
 	}
+
 	if got := strings.TrimSpace(string(data)); got != mimetypeValue {
 		return fmt.Errorf("%w: unexpected mimetype %q", ErrNotEpub, got)
 	}
+
 	return nil
 }
 
@@ -129,6 +139,7 @@ func (a *archive) metadataPath() (string, error) {
 	if f == nil {
 		return "", ErrContainer
 	}
+
 	r, err := openEntry(f)
 	if err != nil {
 		return "", err
@@ -144,11 +155,13 @@ func (a *archive) metadataPath() (string, error) {
 	if len(paths) == 0 {
 		return "", ErrNoRootfile
 	}
+
 	for _, p := range paths {
 		if a.has(p) {
 			return p, nil
 		}
 	}
+
 	return "", ErrRootfileMissing
 }
 
@@ -161,7 +174,9 @@ func writeEntry(zw *zip.Writer, f *zip.File, data []byte, replaced bool) error {
 		if err != nil {
 			return err
 		}
+
 		_, err = w.Write(data)
+
 		return err
 	case strings.HasSuffix(f.Name, "/"):
 		_, err := zw.CreateHeader(hdr)
@@ -174,9 +189,11 @@ func writeEntry(zw *zip.Writer, f *zip.File, data []byte, replaced bool) error {
 func (a *archive) writeTo(zw *zip.Writer, replace map[string][]byte) error {
 	used := make(map[string]bool, len(replace))
 	mt := a.file(mimetypePath)
+
 	if mt == nil {
 		return fmt.Errorf("%w: missing mimetype declaration", ErrNotEpub)
 	}
+
 	if err := writeMimetype(zw, mt); err != nil {
 		return err
 	}
@@ -190,9 +207,11 @@ func (a *archive) writeTo(zw *zip.Writer, replace map[string][]byte) error {
 		// them, and the other must be copied unchanged.
 		data, ok := replace[f.Name]
 		ok = ok && a.file(f.Name) == f
+
 		if ok {
 			used[f.Name] = true
 		}
+
 		if err := writeEntry(zw, f, data, ok); err != nil {
 			return err
 		}
@@ -216,6 +235,7 @@ func (a *archive) writeTo(zw *zip.Writer, replace map[string][]byte) error {
 // with a data descriptor. The original's DOS timestamp is kept.
 func writeMimetype(zw *zip.Writer, orig *zip.File) error {
 	data := []byte(mimetypeValue)
+
 	w, err := zw.CreateRaw(&zip.FileHeader{
 		Name:               mimetypePath,
 		Method:             zip.Store,
@@ -228,7 +248,9 @@ func writeMimetype(zw *zip.Writer, orig *zip.File) error {
 	if err != nil {
 		return err
 	}
+
 	_, err = w.Write(data)
+
 	return err
 }
 
@@ -240,6 +262,7 @@ func (a *archive) readEncryption() (*ocf.EncryptionInfo, error) {
 	if f == nil {
 		return nil, nil
 	}
+
 	rc, err := openEntry(f)
 	if err != nil {
 		return nil, err

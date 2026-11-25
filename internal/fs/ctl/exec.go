@@ -26,11 +26,13 @@ func (f *CtlFile) execute(cmd string) string {
 	if err != nil {
 		r := fmt.Sprintf("error: %v", err)
 		f.cmdLog.Append(cmd, r)
+
 		return r
 	}
 
 	r := f.dispatch(name, args)
 	f.cmdLog.Append(cmd, r)
+
 	return r
 }
 
@@ -83,11 +85,14 @@ func (f *CtlFile) dispatch(name string, args []string) string {
 		if c.name != name {
 			continue
 		}
+
 		if len(args) != c.arity() {
 			return c.usage()
 		}
+
 		return c.run(f, args)
 	}
+
 	return fmt.Sprintf("error: unknown command %q", name)
 }
 
@@ -100,7 +105,9 @@ func addTag(f *CtlFile, args []string) string {
 		if slices.Contains(b.Tags(), tag) {
 			return nil // already has tag
 		}
+
 		newTags := append(slices.Clone(b.Tags()), tag)
+
 		return &library.Edits{Tags: &newTags}
 	})
 }
@@ -112,9 +119,11 @@ func removeTag(f *CtlFile, args []string) string {
 		if !slices.Contains(b.Tags(), tag) {
 			return nil // doesn't have tag
 		}
+
 		newTags := slices.DeleteFunc(slices.Clone(b.Tags()), func(t string) bool {
 			return t == tag
 		})
+
 		return &library.Edits{Tags: &newTags}
 	})
 }
@@ -126,6 +135,7 @@ func setStatus(f *CtlFile, args []string) string {
 		if b.Status() == status {
 			return nil
 		}
+
 		return &library.Edits{Status: &status}
 	})
 }
@@ -140,6 +150,7 @@ func setRating(f *CtlFile, args []string) string {
 		if b.Rating() == rating {
 			return nil
 		}
+
 		return &library.Edits{Rating: &rating}
 	})
 }
@@ -155,6 +166,7 @@ func deleteBook(f *CtlFile, args []string) string {
 	if err := f.lib.Delete(id64); err != nil {
 		return "error: " + bookError(id64, err)
 	}
+
 	return fmt.Sprintf("ok: book %d deleted", id64)
 }
 
@@ -169,6 +181,7 @@ func renameTag(f *CtlFile, args []string) string {
 		if old == newName || !slices.Contains(b.Tags(), old) {
 			return nil
 		}
+
 		updated := slices.Clone(b.Tags())
 		if slices.Contains(updated, newName) {
 			updated = slices.DeleteFunc(updated, func(t string) bool { return t == old })
@@ -179,6 +192,7 @@ func renameTag(f *CtlFile, args []string) string {
 				}
 			}
 		}
+
 		return &library.Edits{Tags: &updated}
 	})
 }
@@ -194,6 +208,7 @@ func renameAuthor(f *CtlFile, args []string) string {
 	return f.editSelection("renamed", library.Query{Authors: []string{old}}, func(b *library.Book) *library.Edits {
 		matched := false
 		updated := slices.Clone(b.Authors())
+
 		for i, a := range updated {
 			if a.Name == old || a.SortName == old {
 				updated[i] = newAuthor
@@ -210,6 +225,7 @@ func renameAuthor(f *CtlFile, args []string) string {
 		// keeping the first of each name makes rename a merge, as rename-tag
 		// is. It also collapses duplicates the book already carried.
 		updated = book.FirstOf(updated, func(a library.Author) string { return a.Name })
+
 		return &library.Edits{Authors: &updated}
 	})
 }
@@ -221,6 +237,7 @@ func renameSeries(f *CtlFile, args []string) string {
 		if b.SeriesName() != old {
 			return nil
 		}
+
 		return &library.Edits{Series: &newName}
 	})
 }
@@ -234,6 +251,7 @@ func renameSeries(f *CtlFile, args []string) string {
 func idsOnly(q library.Query) bool {
 	filters := q
 	filters.IDs, filters.Order, filters.Limit, filters.ExactTitles = nil, 0, 0, false
+
 	return len(q.IDs) > 0 && reflect.DeepEqual(filters, library.Query{})
 }
 
@@ -244,6 +262,7 @@ func (f *CtlFile) editSpec(spec string, editFn func(*library.Book) *library.Edit
 	if err != nil {
 		return fmt.Sprintf("error: %v", err)
 	}
+
 	return f.editSelection("edited", query, editFn)
 }
 
@@ -266,20 +285,25 @@ func (f *CtlFile) editSelection(op string, query library.Query, editFn func(*lib
 		if err != nil {
 			return fmt.Sprintf("error: query failed: %v", err)
 		}
+
 		visit = make([]int64, 0, len(books))
 		for _, b := range books {
 			visit = append(visit, b.ID())
 		}
 	}
 
-	var affected, skipped int64
-	var errs []string
+	var (
+		affected, skipped int64
+		errs              []string
+	)
+
 	seen := make(map[int64]bool, len(visit))
 
 	for _, id := range visit {
 		if seen[id] {
 			continue
 		}
+
 		seen[id] = true
 
 		_, changed, err := f.lib.Update(id, editFn)
@@ -303,21 +327,25 @@ func formatResult(op string, affected, skipped int64, errs []string) string {
 	if affected == 0 && len(errs) > 0 {
 		status = "error"
 	}
+
 	var parts []string
 	if affected > 0 {
 		parts = append(parts, fmt.Sprintf("%s: %d books %s", status, affected, op))
 	} else {
 		parts = append(parts, fmt.Sprintf("%s: no books %s", status, op))
 	}
+
 	if skipped > 0 {
 		parts = append(parts, fmt.Sprintf("%d skipped", skipped))
 	}
+
 	if len(errs) > 0 {
 		parts = append(parts, fmt.Sprintf("errors: %d book(s)", len(errs)))
 		for _, e := range errs {
 			parts = append(parts, "  "+e)
 		}
 	}
+
 	return strings.Join(parts, "\n")
 }
 
@@ -327,9 +355,11 @@ func bookError(id int64, err error) string {
 	if errors.Is(err, library.ErrBookNotFound) {
 		return fmt.Sprintf("book %d: not found", id)
 	}
+
 	prefix := fmt.Sprintf("book %d: ", id)
 	if msg := err.Error(); strings.HasPrefix(msg, prefix) {
 		return msg
 	}
+
 	return prefix + err.Error()
 }

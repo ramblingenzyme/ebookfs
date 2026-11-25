@@ -59,6 +59,7 @@ func (d *BookDir) SetSnapshot(b *library.Book) {
 func (d *BookDir) Stat() proto.Stat {
 	s := d.StaticDir.Stat()
 	s.Name = naming.PathSafe(d.Book().Title())
+
 	return s
 }
 
@@ -97,7 +98,9 @@ func NewBookDir(f *fs.FS, lib ContentReader, edit func(int64, library.Edits) (*l
 			if err != nil {
 				return err
 			}
+
 			_, err = edit(d.Book().ID(), edits)
+
 			return err
 		}
 		vfile.AddChild(&d.StaticDir, newFieldFile(newStat(f, name, 0o644), get, set))

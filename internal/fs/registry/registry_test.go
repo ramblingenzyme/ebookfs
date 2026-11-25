@@ -39,6 +39,7 @@ func newTestRegistry(t *testing.T) (*BookRegistry, *recordingView) {
 	reg := NewBookRegistry(util.NewTestFS(t), mock.Editor{})
 	view := &recordingView{}
 	reg.AddView(view)
+
 	return reg, view
 }
 
@@ -55,6 +56,7 @@ func TestViewSubscription(t *testing.T) {
 
 		got := slices.Clone(lateView.added)
 		slices.Sort(got)
+
 		if !slices.Equal(got, []int64{1, 2}) {
 			t.Errorf("late view saw %v, want both registered books", got)
 		}
@@ -70,6 +72,7 @@ func TestViewSubscription(t *testing.T) {
 		if !slices.Equal(view.added, []int64{1}) {
 			t.Errorf("view saw adds %v after removal, want only [1]", view.added)
 		}
+
 		if len(view.removed) != 0 {
 			t.Errorf("view saw removes %v after removal, want none", view.removed)
 		}
@@ -83,19 +86,24 @@ func TestViewSubscription(t *testing.T) {
 		)
 
 		lateView := &recordingView{}
+
 		var resetRan bool
+
 		reg.ResyncView(lateView, func() {
 			if len(lateView.added) != 0 {
 				t.Error("reset ran after books were replayed, want it first")
 			}
+
 			resetRan = true
 		})
 
 		if !resetRan {
 			t.Fatal("reset callback was not called")
 		}
+
 		got := slices.Clone(lateView.added)
 		slices.Sort(got)
+
 		if !slices.Equal(got, []int64{1, 2}) {
 			t.Errorf("resynced view saw %v, want both registered books", got)
 		}

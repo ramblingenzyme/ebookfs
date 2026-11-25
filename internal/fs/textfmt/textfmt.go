@@ -23,6 +23,7 @@ func FormatPair(first, second string) string {
 	if second == "" {
 		return first
 	}
+
 	return first + " | " + second
 }
 

@@ -15,12 +15,14 @@ func (o *Package) authors() authorsField { return authorsField{o.d} }
 // spec rule.
 func (f authorsField) creators() []*pkgdoc.Element {
 	var out []*pkgdoc.Element
+
 	for _, c := range f.d.DCAll("creator") {
 		roles := elementRoles(c)
 		if len(roles) == 0 || slices.Contains(roles, "aut") {
 			out = append(out, c)
 		}
 	}
+
 	return out
 }
 
@@ -28,6 +30,7 @@ func (f authorsField) creators() []*pkgdoc.Element {
 // order.
 func (f authorsField) get() []Author {
 	var out []Author
+
 	for _, c := range f.creators() {
 		// §5.5.2 requires a non-empty value, so an empty creator is not an
 		// author.
@@ -35,12 +38,15 @@ func (f authorsField) get() []Author {
 		if name == "" {
 			continue
 		}
+
 		sortAs := c.OPFAttr("file-as").Get() // EPUB 2
 		if sortAs == "" {
 			sortAs = c.Refine("file-as").Get()
 		}
+
 		out = append(out, Author{Name: name, SortName: sortAs})
 	}
+
 	return out
 }
 
@@ -55,6 +61,7 @@ func (f authorsField) set(authors []Author) {
 			c.OPFAttr("role").Set("aut")
 			// Put clears a sort name the author no longer has.
 			pkgdoc.Put(c.OPFAttr("file-as"), a.SortName)
+
 			continue
 		}
 
@@ -64,6 +71,7 @@ func (f authorsField) set(authors []Author) {
 		if !slices.Contains(elementRoles(c), "aut") {
 			c.Refine("role").Add("aut", "marc:relators")
 		}
+
 		pkgdoc.Put(c.Refine("file-as"), a.SortName)
 
 		if legacy := c.OPFAttr("file-as"); legacy.Get() != "" {
@@ -88,6 +96,7 @@ func (f authorsField) reconcileCreators(authors []Author) []*pkgdoc.Element {
 	// shown.
 	byName := map[string]*pkgdoc.Element{}
 	unclaimed := map[*pkgdoc.Element]bool{}
+
 	for _, c := range f.creators() {
 		unclaimed[c] = true
 		if name := c.Get(); name != "" {
@@ -101,16 +110,19 @@ func (f authorsField) reconcileCreators(authors []Author) []*pkgdoc.Element {
 	// from its first position to the end.
 	out := make([]*pkgdoc.Element, len(authors))
 	placed := map[*pkgdoc.Element]bool{}
+
 	for i, a := range authors {
 		c, reused := byName[a.Name]
 		if !reused {
 			c = f.d.NewDC("creator")
 			byName[a.Name] = c
 		}
+
 		if !placed[c] {
 			c.Place()
 			placed[c] = true
 		}
+
 		delete(unclaimed, c)
 		out[i] = c
 	}
@@ -118,5 +130,6 @@ func (f authorsField) reconcileCreators(authors []Author) []*pkgdoc.Element {
 	for c := range unclaimed {
 		c.Remove()
 	}
+
 	return out
 }

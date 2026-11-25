@@ -50,6 +50,7 @@ func TestQueryBatchLoadsMultipleBooks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
+
 	if len(got) != 3 {
 		t.Fatalf("len = %d, want 3", len(got))
 	}
@@ -60,12 +61,15 @@ func TestQueryBatchLoadsMultipleBooks(t *testing.T) {
 			if len(b.Authors) != 2 || b.Authors[0].Name != "Alice" || b.Authors[1].Name != "Ariel" {
 				t.Errorf("book 1 authors = %v, want [Alice, Ariel]", b.Authors)
 			}
+
 			if !slices.Equal(b.Meta.Tags, []string{"fiction", "sci-fi"}) {
 				t.Errorf("book 1 tags = %v, want [fiction, sci-fi]", b.Meta.Tags)
 			}
+
 			if b.Identifiers["isbn"] != "111" {
 				t.Errorf("book 1 isbn = %q, want 111", b.Identifiers["isbn"])
 			}
+
 			if len(b.Identifiers) != 1 {
 				t.Errorf("book 1 identifiers = %v, want 1 entry", b.Identifiers)
 			}
@@ -73,9 +77,11 @@ func TestQueryBatchLoadsMultipleBooks(t *testing.T) {
 			if len(b.Authors) != 1 || b.Authors[0].Name != "Bob" {
 				t.Errorf("book 2 authors = %v, want [Bob]", b.Authors)
 			}
+
 			if !slices.Equal(b.Meta.Tags, []string{"non-fiction"}) {
 				t.Errorf("book 2 tags = %v, want [non-fiction]", b.Meta.Tags)
 			}
+
 			if b.Identifiers["isbn"] != "222" || b.Identifiers["doi"] != "10.1234/beta" {
 				t.Errorf("book 2 identifiers = %v", b.Identifiers)
 			}
@@ -83,9 +89,11 @@ func TestQueryBatchLoadsMultipleBooks(t *testing.T) {
 			if len(b.Authors) != 3 || b.Authors[0].Name != "Carol" || b.Authors[2].Name != "Cecil" {
 				t.Errorf("book 3 authors = %v, want [Carol, Charlie, Cecil]", b.Authors)
 			}
+
 			if len(b.Meta.Tags) != 0 {
 				t.Errorf("book 3 tags = %v, want empty", b.Meta.Tags)
 			}
+
 			if len(b.Identifiers) != 0 {
 				t.Errorf("book 3 identifiers = %v, want empty", b.Identifiers)
 			}

@@ -38,7 +38,9 @@ func newDocRegistry() *docRegistry {
 func (r *docRegistry) Lookup(docID string) (int64, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	bookID, ok := r.data[docID]
+
 	return bookID, ok
 }
 
@@ -53,17 +55,22 @@ func (r *docRegistry) Restore(lib *library.Library) error {
 
 	// Built without the lock; swapped in atomically at the end.
 	newData := make(map[string]int64)
+
 	for _, book := range books {
 		var docIDs []string
+
 		err := lib.WithSidecars(book.ID(), func(root *os.Root) error {
 			var err error
+
 			docIDs, err = restoreDocumentIDs(lib, book.ID(), root)
+
 			return err
 		})
 		if err != nil {
 			slog.Error("kosync: failed to restore sidecar", "book_id", book.ID(), "error", err)
 			continue
 		}
+
 		for _, docID := range docIDs {
 			if docID != "" {
 				newData[docID] = book.ID()
@@ -76,6 +83,7 @@ func (r *docRegistry) Restore(lib *library.Library) error {
 	r.mu.Unlock()
 
 	slog.Info("kosync: index restored", "books", len(books), "indexed", len(newData))
+
 	return nil
 }
 
@@ -89,15 +97,19 @@ func restoreDocumentIDs(lib *library.Library, id int64, root *os.Root) ([]string
 		if err != nil {
 			return nil, err
 		}
+
 		docID, err := computeDocumentID(book, func() (library.EpubReader, error) { return lib.Content(id) })
 		if err != nil {
 			return nil, fmt.Errorf("computing document ID: %w", err)
 		}
+
 		if err := writeSidecar(root, SidecarData{DocumentIDs: []string{docID}}); err != nil {
 			return nil, fmt.Errorf("writing sidecar: %w", err)
 		}
+
 		return []string{docID}, nil
 	}
+
 	if err != nil {
 		return nil, fmt.Errorf("reading sidecar: %w", err)
 	}
@@ -106,6 +118,7 @@ func restoreDocumentIDs(lib *library.Library, id int64, root *os.Root) ([]string
 	if err := json.Unmarshal(raw, &sidecar); err != nil {
 		return nil, fmt.Errorf("corrupt sidecar: %w", err)
 	}
+
 	return sidecar.DocumentIDs, nil
 }
 
@@ -191,6 +204,7 @@ func (r *docRegistry) ReadProgress(lib *library.Library, docID string) (bookID i
 	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, library.ErrBookNotFound) {
 		return 0, Progress{}, false, nil
 	}
+
 	if err != nil {
 		return bookID, Progress{}, false, err
 	}
@@ -199,6 +213,7 @@ func (r *docRegistry) ReadProgress(lib *library.Library, docID string) (bookID i
 	if err := json.Unmarshal(raw, &sidecar); err != nil {
 		return bookID, Progress{}, false, err
 	}
+
 	return bookID, sidecar.Progress, true, nil
 }
 
@@ -222,17 +237,21 @@ func (r *docRegistry) StoreProgress(lib *library.Library, docID string, progress
 		if len(sidecar.DocumentIDs) == 0 {
 			sidecar.DocumentIDs = []string{docID}
 		}
+
 		progress.Timestamp = time.Now().Unix()
 		sidecar.Progress = progress
 		timestamp = progress.Timestamp
+
 		return writeSidecar(root, *sidecar)
 	})
 	if errors.Is(err, library.ErrBookNotFound) {
 		return 0, 0, false, nil
 	}
+
 	if err != nil {
 		return bookID, 0, true, err
 	}
+
 	return bookID, timestamp, true, nil
 }
 
@@ -240,6 +259,7 @@ func (r *docRegistry) StoreProgress(lib *library.Library, docID string, progress
 func (r *docRegistry) snapshot() map[string]int64 {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	return maps.Clone(r.data)
 }
 
@@ -259,6 +279,7 @@ func readSidecar(sidecars *os.Root) (*SidecarData, error) {
 		if os.IsNotExist(err) {
 			return &SidecarData{DocumentIDs: []string{}}, nil
 		}
+
 		return nil, err
 	}
 	defer f.Close()
@@ -267,6 +288,7 @@ func readSidecar(sidecars *os.Root) (*SidecarData, error) {
 	if err := json.NewDecoder(f).Decode(&data); err != nil {
 		return nil, err
 	}
+
 	return &data, nil
 }
 
@@ -277,5 +299,6 @@ func writeSidecar(sidecars *os.Root, data SidecarData) error {
 	if err != nil {
 		return err
 	}
+
 	return library.WriteSidecarFile(sidecars, "kosync.json", raw)
 }

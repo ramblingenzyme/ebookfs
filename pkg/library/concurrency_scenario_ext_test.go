@@ -34,6 +34,7 @@ func TestConcurrentTitleAndCoverEditsBothLand(t *testing.T) {
 
 	titles := [2]string{"Race Book Alpha", "Race Book Beta"}
 	root := cfg.Root
+
 	for i := range 10 {
 		title := titles[i%2]
 
@@ -44,32 +45,40 @@ func TestConcurrentTitleAndCoverEditsBothLand(t *testing.T) {
 			coverErr error
 		)
 		wg.Add(2)
+
 		go func() {
 			defer wg.Done()
+
 			edited, editErr = lib.Edit(id, library.Edits{Title: &title})
 		}()
 		go func() {
 			defer wg.Done()
+
 			coverData := newCover.Bytes()
 			_, coverErr = lib.Edit(id, library.Edits{Cover: &coverData})
 		}()
+
 		wg.Wait()
 
 		if editErr != nil {
 			t.Fatalf("iteration %d: Edit: %v", i, editErr)
 		}
+
 		if coverErr != nil {
 			t.Fatalf("iteration %d: cover edit: %v", i, coverErr)
 		}
+
 		book = edited
 
 		got, err := lib.Get(id)
 		if err != nil {
 			t.Fatalf("iteration %d: Get: %v", i, err)
 		}
+
 		if got.Title() != title {
 			t.Fatalf("iteration %d: title = %q, want %q (Edit's change was lost)", i, got.Title(), title)
 		}
+
 		if cover := readCover(t, lib, id); !bytes.Equal(cover, newCover.Bytes()) {
 			t.Fatalf("iteration %d: cover edit reported success but the cover bytes were lost", i)
 		}
@@ -78,6 +87,7 @@ func TestConcurrentTitleAndCoverEditsBothLand(t *testing.T) {
 		if err != nil {
 			t.Fatalf("iteration %d: %v", i, err)
 		}
+
 		for _, e := range entries {
 			if name := e.Name(); name != filepath.Base(book.EpubPath()) && name != "meta.toml" {
 				t.Fatalf("iteration %d: unexpected file in book dir: %q", i, name)
@@ -88,15 +98,18 @@ func TestConcurrentTitleAndCoverEditsBothLand(t *testing.T) {
 
 func readCover(t *testing.T, lib *library.Library, id int64) []byte {
 	t.Helper()
+
 	r, err := lib.Content(id)
 	if err != nil {
 		t.Fatalf("Content: %v", err)
 	}
 	defer r.Close()
+
 	cover, err := r.Cover()
 	if err != nil {
 		t.Fatalf("Cover: %v", err)
 	}
+
 	return cover
 }
 
@@ -117,38 +130,50 @@ func TestConcurrentDuplicateIngestRejected(t *testing.T) {
 			h, err := lib.CreateIngest()
 			if err != nil {
 				mu.Lock()
+
 				errs = append(errs, err)
 				mu.Unlock()
+
 				return
 			}
+
 			if _, err := h.WriteAt(data, 0); err != nil {
 				mu.Lock()
+
 				errs = append(errs, err)
 				mu.Unlock()
+
 				return
 			}
+
 			b, err := h.Ingest()
+
 			mu.Lock()
 			if err != nil {
 				errs = append(errs, err)
 			} else {
 				books = append(books, b)
 			}
+
 			count++
 			mu.Unlock()
 		})
 	}
+
 	wg.Wait()
 
 	if count != 3 {
 		t.Fatalf("expected 3 ingests to complete (some with errors), got %d", count)
 	}
+
 	if len(books) != 1 {
 		t.Fatalf("expected exactly 1 successful ingest, got %d", len(books))
 	}
+
 	if len(errs) < 2 {
 		t.Fatalf("expected at least 2 errors for duplicate ingests, got %d", len(errs))
 	}
+
 	for _, err := range errs {
 		if !errors.Is(err, library.ErrDuplicate) {
 			t.Errorf("losing ingest err = %v, want ErrDuplicate", err)
@@ -159,9 +184,11 @@ func TestConcurrentDuplicateIngestRejected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
+
 	if len(got) != 1 {
 		t.Fatalf("expected 1 book by Alice, got %d", len(got))
 	}
+
 	if got[0].Title() != "Concurrent Dupe" {
 		t.Errorf("book title = %q, want %q", got[0].Title(), "Concurrent Dupe")
 	}

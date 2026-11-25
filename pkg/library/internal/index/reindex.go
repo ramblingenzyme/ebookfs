@@ -14,6 +14,7 @@ func (idx *Index) NeedsReindex() (bool, error) {
 	if err != nil {
 		return true, err
 	}
+
 	if v != schemaVersion {
 		return true, nil
 	}
@@ -22,6 +23,7 @@ func (idx *Index) NeedsReindex() (bool, error) {
 	if err != nil {
 		return true, err
 	}
+
 	return count > 0, nil
 }
 
@@ -40,14 +42,17 @@ func (idx *Index) ensureSchema() error {
 	if err != nil {
 		return err
 	}
+
 	if v != schemaVersion {
 		if err := idx.dropAllTables(); err != nil {
 			return fmt.Errorf("resetting index schema: %w", err)
 		}
+
 		if _, err := idx.db.ExecContext(idx.ctx, schema); err != nil {
 			return fmt.Errorf("resetting index schema: %w", err)
 		}
 	}
+
 	return nil
 }
 
@@ -61,14 +66,17 @@ func (idx *Index) rebuildTx(books []BookPath, skipped map[string]drift.PathInfo,
 		if err := idx.clearTables(tx); err != nil {
 			return err
 		}
+
 		for _, bt := range books {
 			if err := idx.insertBook(q, bt.Book, bt.Info); err != nil {
 				return err
 			}
 		}
+
 		if err := idx.insertSkipped(q, skipped); err != nil {
 			return err
 		}
+
 		if maxID > 0 {
 			if err := q.SetBookIDSequence(idx.ctx, maxID); err != nil {
 				return err
@@ -88,6 +96,7 @@ func (idx *Index) clearTables(tx *sql.Tx) error {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -103,6 +112,7 @@ func (idx *Index) insertSkipped(q *dbsqlc.Queries, skipped map[string]drift.Path
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -128,5 +138,6 @@ func (idx *Index) Rebuild(books []BookPath, skipped map[string]drift.PathInfo, m
 	if _, err := idx.db.ExecContext(idx.ctx, "ANALYZE"); err != nil {
 		return fmt.Errorf("analyzing: %w", err)
 	}
+
 	return nil
 }

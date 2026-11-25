@@ -13,10 +13,12 @@ func TestSidecarsRoundTrip(t *testing.T) {
 
 	read := func(name, want string) {
 		t.Helper()
+
 		got, err := lib.ReadSidecar(id, name)
 		if err != nil {
 			t.Fatalf("ReadSidecar(%q): %v", name, err)
 		}
+
 		if string(got) != want {
 			t.Errorf("ReadSidecar(%q) = %q, want %q", name, got, want)
 		}
@@ -26,6 +28,7 @@ func TestSidecarsRoundTrip(t *testing.T) {
 		if err := lib.WriteSidecar(id, "notes.txt", []byte(data)); err != nil {
 			t.Fatalf("WriteSidecar: %v", err)
 		}
+
 		read("notes.txt", data)
 	}
 
@@ -34,6 +37,7 @@ func TestSidecarsRoundTrip(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("WithSidecars: %v", err)
 	}
+
 	read("custom.txt", "custom content")
 
 	if _, err := lib.ReadSidecar(id, "nonexistent.txt"); err == nil {
@@ -47,6 +51,7 @@ func TestSidecarAccessDoesNotRecreateARemovedBookDirectory(t *testing.T) {
 	lib := openLib(t, cfg)
 	ingested := ingestTestEpub(t, lib, buildTestEpub(t, "Test Book", "Author"))
 	dir := filepath.Join(cfg.Root, ingested.Dir())
+
 	if err := os.RemoveAll(dir); err != nil {
 		t.Fatal(err)
 	}
@@ -54,6 +59,7 @@ func TestSidecarAccessDoesNotRecreateARemovedBookDirectory(t *testing.T) {
 	if _, err := lib.ReadSidecar(ingested.ID(), "notes.txt"); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("ReadSidecar err = %v, want os.ErrNotExist", err)
 	}
+
 	if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("book directory exists again after sidecar access (stat err = %v)", err)
 	}

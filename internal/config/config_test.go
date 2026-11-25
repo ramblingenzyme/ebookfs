@@ -13,15 +13,19 @@ func TestDefaults(t *testing.T) {
 	if cfg.Library.Root != "/var/lib/ebookfs/library" {
 		t.Errorf("Library.Root = %q, want %q", cfg.Library.Root, "/var/lib/ebookfs/library")
 	}
+
 	if cfg.Server.Listen != "0.0.0.0:5640" {
 		t.Errorf("Server.Listen = %q, want %q", cfg.Server.Listen, "0.0.0.0:5640")
 	}
+
 	if cfg.Server.Auth != "none" {
 		t.Errorf("Server.Auth = %q, want %q", cfg.Server.Auth, "none")
 	}
+
 	if cfg.Log.Level != "info" {
 		t.Errorf("Log.Level = %q, want %q", cfg.Log.Level, "info")
 	}
+
 	if cfg.Log.Format != "text" {
 		t.Errorf("Log.Format = %q, want %q", cfg.Log.Format, "text")
 	}
@@ -30,10 +34,12 @@ func TestDefaults(t *testing.T) {
 func TestLoad(t *testing.T) {
 	t.Run("minimal valid", func(t *testing.T) {
 		path := writeConfig(t, reqLibSection)
+
 		cfg, err := Load(path)
 		if err != nil {
 			t.Fatalf("Load: %v", err)
 		}
+
 		if cfg.Library.Root != "/l" {
 			t.Errorf("Library.Root = %q, want %q", cfg.Library.Root, "/l")
 		}
@@ -58,16 +64,20 @@ auth = "none"
 level = "debug"
 format = "json"
 `)
+
 		cfg, err := Load(path)
 		if err != nil {
 			t.Fatalf("Load: %v", err)
 		}
+
 		if cfg.Library.Root != "/custom/root" {
 			t.Errorf("Library.Root = %q, want %q", cfg.Library.Root, "/custom/root")
 		}
+
 		if cfg.Log.Level != "debug" {
 			t.Errorf("Log.Level = %q, want %q", cfg.Log.Level, "debug")
 		}
+
 		if cfg.Log.Format != "json" {
 			t.Errorf("Log.Format = %q, want %q", cfg.Log.Format, "json")
 		}
@@ -78,6 +88,7 @@ format = "json"
 [server]
 auth = "shared-secret"
 `)
+
 		_, err := Load(path)
 		if err == nil {
 			t.Fatal("expected error: shared-secret not implemented")
@@ -89,6 +100,7 @@ auth = "shared-secret"
 [server]
 auth = "kerberos"
 `)
+
 		_, err := Load(path)
 		if err == nil {
 			t.Fatal("expected error: invalid auth mode")
@@ -101,6 +113,7 @@ auth = "kerberos"
 [log]
 level = "`+level+`"
 `)
+
 			_, err := Load(path)
 			if err != nil {
 				t.Errorf("log.level %q should be valid: %v", level, err)
@@ -113,6 +126,7 @@ level = "`+level+`"
 [log]
 level = "verbose"
 `)
+
 		_, err := Load(path)
 		if err == nil {
 			t.Fatal("expected error for invalid log level")
@@ -125,6 +139,7 @@ level = "verbose"
 [log]
 format = "`+format+`"
 `)
+
 			_, err := Load(path)
 			if err != nil {
 				t.Errorf("log.format %q should be valid: %v", format, err)
@@ -137,6 +152,7 @@ format = "`+format+`"
 [log]
 format = "xml"
 `)
+
 		_, err := Load(path)
 		if err == nil {
 			t.Fatal("expected error for invalid log format")
@@ -150,6 +166,7 @@ root = ""
 inbox_temp = "/t"
 index_path = "/i"
 `)
+
 		_, err := Load(path)
 		if err == nil {
 			t.Fatal("expected error: root required")
@@ -163,13 +180,16 @@ index_path = "/i"
 root = "/srv/books"
 inbox_temp = ""
 `)
+
 		cfg, err := Load(path)
 		if err != nil {
 			t.Fatalf("Load: %v", err)
 		}
+
 		if cfg.Library.InboxTemp != "/srv/books/.inbox-tmp" {
 			t.Errorf("Library.InboxTemp = %q, want %q", cfg.Library.InboxTemp, "/srv/books/.inbox-tmp")
 		}
+
 		if cfg.Library.IndexPath != "/srv/books/.index.db" {
 			t.Errorf("Library.IndexPath = %q, want %q", cfg.Library.IndexPath, "/srv/books/.index.db")
 		}
@@ -178,10 +198,12 @@ inbox_temp = ""
 
 func TestLoadListsUnknownKeys(t *testing.T) {
 	path := writeConfig(t, reqLibSection+"[reader]\nconvert = true\ncache_dir = \"/c\"\n\n[opds]\nenabeld = true\n")
+
 	cfg, err := Load(path)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
+
 	if want := []string{"reader", "reader.convert", "reader.cache_dir", "opds.enabeld"}; !slices.Equal(cfg.UnknownKeys, want) {
 		t.Errorf("UnknownKeys = %v, want %v", cfg.UnknownKeys, want)
 	}
@@ -204,6 +226,7 @@ func TestHTTPBaseURLMustBeAbsolute(t *testing.T) {
 	for _, tt := range tests {
 		path := writeConfig(t, reqLibSection+"[http]\nbase_url = \""+tt.base+"\"\n")
 		_, err := Load(path)
+
 		if (err != nil) != tt.wantErr {
 			t.Errorf("base_url = %q: err = %v, wantErr %v", tt.base, err, tt.wantErr)
 		}
@@ -231,8 +254,10 @@ func TestKOSyncValidation(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Load: %v", err)
 				}
+
 				return
 			}
+
 			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 				t.Errorf("Load err = %v, want it to mention %q", err, tc.wantErr)
 			}
@@ -244,9 +269,11 @@ func writeConfig(t *testing.T, content string) string {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")
+
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
+
 	return path
 }
 

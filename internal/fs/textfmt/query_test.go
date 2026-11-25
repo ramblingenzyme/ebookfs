@@ -47,11 +47,14 @@ func TestParseQuery(t *testing.T) {
 				if err == nil {
 					t.Fatalf("ParseQuery(%q) = %+v, want an error", tc.query, got)
 				}
+
 				return
 			}
+
 			if err != nil {
 				t.Fatalf("ParseQuery(%q): %v", tc.query, err)
 			}
+
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("ParseQuery(%q) = %+v, want %+v", tc.query, got, tc.want)
 			}

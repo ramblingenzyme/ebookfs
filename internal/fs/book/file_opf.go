@@ -26,5 +26,6 @@ func (o *opfFile) Stat() proto.Stat {
 	if b := o.book(); b != nil {
 		s.Length = uint64(b.OpfSize())
 	}
+
 	return s
 }

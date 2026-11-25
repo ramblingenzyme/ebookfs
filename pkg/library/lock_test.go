@@ -8,8 +8,10 @@ import (
 
 func stubFlock(t *testing.T, err error) {
 	t.Helper()
+
 	prev := flock
 	flock = func(int, int) error { return err }
+
 	t.Cleanup(func() { flock = prev })
 }
 
@@ -22,6 +24,7 @@ func TestOpenSurvivesUnsupportedFlock(t *testing.T) {
 
 func TestAcquireLockFailsOnOtherFlockError(t *testing.T) {
 	stubFlock(t, syscall.EIO)
+
 	if _, err := acquireLock(t.TempDir()); !errors.Is(err, syscall.EIO) {
 		t.Fatalf("acquireLock err = %v, want EIO", err)
 	}

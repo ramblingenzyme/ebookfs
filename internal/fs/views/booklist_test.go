@@ -44,6 +44,7 @@ func TestBooksDirSlashInTitleIsOneEntry(t *testing.T) {
 	if len(children) != 1 {
 		t.Fatalf("expected 1 book, got %v", children)
 	}
+
 	if strings.Contains(children[0], "/") {
 		t.Errorf("entry name = %q, want no path separator", children[0])
 	}

@@ -43,18 +43,22 @@ func TestApplyMeta(t *testing.T) {
 			if tc.edits.Tags != nil {
 				editTags = slices.Clone(*tc.edits.Tags)
 			}
+
 			before := time.Now()
 			updated := applyMeta(start, tc.edits)
 
 			if updated.Status != tc.status {
 				t.Errorf("Status = %q, want %q", updated.Status, tc.status)
 			}
+
 			if updated.Rating != tc.rating {
 				t.Errorf("Rating = %g, want %g", updated.Rating, tc.rating)
 			}
+
 			if !slices.Equal(updated.Tags, tc.tags) || (updated.Tags == nil) != (tc.tags == nil) {
 				t.Errorf("Tags = %#v, want %#v", updated.Tags, tc.tags)
 			}
+
 			if updated.ID != start.ID {
 				t.Errorf("ID = %d, want %d — applyMeta must not touch identity", updated.ID, start.ID)
 			}
@@ -67,9 +71,11 @@ func TestApplyMeta(t *testing.T) {
 			if len(updated.Tags) > 0 {
 				updated.Tags[0] = "changed"
 			}
+
 			if !slices.Equal(start.Tags, []string{"keep"}) {
 				t.Fatalf("start Tags = %v, want [keep] — the result shares the argument's backing array", start.Tags)
 			}
+
 			if tc.edits.Tags != nil && !slices.Equal(*tc.edits.Tags, editTags) {
 				t.Errorf("edit Tags = %v, want %v — the result shares the edit's backing array", *tc.edits.Tags, editTags)
 			}
@@ -96,12 +102,14 @@ func TestEveryEditFieldIsRouted(t *testing.T) {
 		name := v.Type().Field(i).Name
 		t.Run(name, func(t *testing.T) {
 			var e Edits
+
 			f := reflect.ValueOf(&e).Elem().Field(i)
 			f.Set(reflect.New(f.Type().Elem()))
 
 			if e.HasBibEdits() || e.HasCoverEdit() || meta[name] {
 				return
 			}
+
 			t.Errorf("Edits.%s reaches no destination: add it to HasBibEdits and "+
 				"internal/epub's apply, to HasCoverEdit, or to applyMeta and this "+
 				"test's meta list", name)

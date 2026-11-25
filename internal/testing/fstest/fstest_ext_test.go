@@ -18,13 +18,16 @@ import (
 
 func newFS(t *testing.T) *fs.FS {
 	t.Helper()
+
 	f, _ := fs.NewFS("glenda", "glenda", 0o555, fs.IgnorePermissions())
+
 	return f
 }
 
 func staticFile(t *testing.T) *fs.StaticFile {
 	t.Helper()
 	f := newFS(t)
+
 	return fs.NewStaticFile(f.NewStat("x", "glenda", "glenda", 0o644), []byte("hello"))
 }
 
@@ -32,11 +35,13 @@ func staticDir(t *testing.T, children ...string) *fs.StaticDir {
 	t.Helper()
 	f := newFS(t)
 	d := fs.NewStaticDir(f.NewStat("d", "glenda", "glenda", 0o555|proto.DMDIR))
+
 	for _, name := range children {
 		if err := d.AddChild(fs.NewStaticFile(f.NewStat(name, "glenda", "glenda", 0o644), nil)); err != nil {
 			t.Fatalf("AddChild %q: %v", name, err)
 		}
 	}
+
 	return d
 }
 
@@ -79,6 +84,7 @@ func (f *fidFile) Read(fid, _, _ uint64) ([]byte, error) {
 	if !f.open[fid] {
 		return nil, errors.New("not open")
 	}
+
 	return []byte("hello"), nil
 }
 
@@ -93,6 +99,7 @@ func TestCloseErrReturnsTheError(t *testing.T) {
 
 	fid := fstest.Fid(t, f, 1)
 	fid.Open(proto.Mode(0))
+
 	if got := fid.CloseErr(); !errors.Is(got, want) {
 		t.Errorf("CloseErr = %v, want %v", got, want)
 	}
@@ -103,9 +110,11 @@ func TestWantReadErrorAcceptsAClunkedFid(t *testing.T) {
 
 	fid := fstest.Fid(t, f, 1)
 	fid.Open(proto.Mode(0))
+
 	if got := fid.Read(0, 16); got != "hello" {
 		t.Fatalf("read before clunk = %q, want the content", got)
 	}
+
 	fid.Close()
 	fid.WantReadError()
 }
@@ -135,6 +144,7 @@ func TestChildAsAssertsTheType(t *testing.T) {
 	if got := fstest.ChildAs[*fs.StaticFile](t, d, "leaf"); got == nil {
 		t.Error("ChildAs returned nil for a child that is a StaticFile")
 	}
+
 	if got := fstest.ChildAs[fs.File](t, d, "leaf"); got == nil {
 		t.Error("ChildAs returned nil for an interface type argument")
 	}

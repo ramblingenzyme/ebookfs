@@ -37,9 +37,11 @@ func Parse(b []byte, entry string) (*Page, error) {
 	if err := doc.ReadFromBytes(b); err != nil {
 		return nil, err
 	}
+
 	if doc.Root() == nil {
 		return nil, errors.New("no root element")
 	}
+
 	return &Page{doc: doc, base: path.Dir(entry)}, nil
 }
 
@@ -63,6 +65,7 @@ func (d *Page) FitCover(coverPath string, width, height int) ([]byte, error) {
 		if !strings.HasSuffix(img.SelectAttrValue("width", ""), "%") {
 			slot(img, "width").set(strconv.Itoa(width))
 		}
+
 		if !strings.HasSuffix(img.SelectAttrValue("height", ""), "%") {
 			slot(img, "height").set(strconv.Itoa(height))
 		}
@@ -78,6 +81,7 @@ func (d *Page) FitCover(coverPath string, width, height int) ([]byte, error) {
 	if err != nil || bytes.Equal(before, after) {
 		return nil, err
 	}
+
 	return after, nil
 }
 
@@ -86,6 +90,7 @@ func (d *Page) FitCover(coverPath string, width, height int) ([]byte, error) {
 // both found; §6.2.3 allows either.
 func (d *Page) coverImages(coverPath string) []*etree.Element {
 	var out []*etree.Element
+
 	for _, tag := range []string{"image", "img"} {
 		for _, el := range d.doc.FindElements("//" + tag) {
 			ref := el.SelectAttrValue("href", el.SelectAttrValue("src", ""))
@@ -94,6 +99,7 @@ func (d *Page) coverImages(coverPath string) []*etree.Element {
 			}
 		}
 	}
+
 	return out
 }
 
@@ -103,6 +109,7 @@ func ancestor(el *etree.Element, tag string) *etree.Element {
 			return p
 		}
 	}
+
 	return nil
 }
 

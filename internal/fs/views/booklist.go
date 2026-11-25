@@ -56,8 +56,10 @@ func (d *bookListDir) Add(dir *book.BookDir) {
 			name:     disambiguatedName,
 		})
 		d.entries[b.ID()] = disambiguatedName(b)
+
 		return
 	}
+
 	vfile.AddChild(d, dir)
 	d.entries[b.ID()] = name
 }
@@ -80,5 +82,6 @@ func (d *bookListDir) clear() {
 func NewAllBooksDir(reg *registry.BookRegistry) *bookListDir {
 	d := newBookListDir(newDirStat(reg.FS(), "books"))
 	reg.AddView(d)
+
 	return d
 }

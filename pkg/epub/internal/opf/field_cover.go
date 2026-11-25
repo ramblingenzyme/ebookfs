@@ -44,11 +44,13 @@ func (o *Package) cover(base string) string {
 // book shows the wrong cover.
 func guessCover(manifest []pkgdoc.Item, base string) string {
 	found := ""
+
 	for _, item := range manifest {
 		if strings.HasPrefix(item.MediaType, "image") &&
 			strings.Contains(strings.ToLower(item.ID), "cover") {
 			found = xml.ResolveHref(base, item.Href)
 		}
 	}
+
 	return found
 }

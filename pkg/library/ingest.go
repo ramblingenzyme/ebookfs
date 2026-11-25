@@ -44,6 +44,7 @@ func (h *ingestHandle) Ingest() (*Book, error) {
 	if err := h.file.Close(); err != nil {
 		return nil, fmt.Errorf("closing uploaded epub: %w", err)
 	}
+
 	return h.ingestFn(path)
 }
 
@@ -52,6 +53,7 @@ func (l *Library) CreateIngest() (IngestHandle, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &ingestHandle{file: f, ingestFn: l.ingestPath}, nil
 }
 
@@ -98,10 +100,12 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 	if err := l.rejectDuplicate(bib); err != nil {
 		return nil, err
 	}
+
 	id, err := l.allocateID()
 	if err != nil {
 		return nil, err
 	}
+
 	now := time.Now()
 	meta := book.Meta{
 		ID:           id,
@@ -109,6 +113,7 @@ func (l *Library) ingestPath(epubPath string) (*Book, error) {
 		DateModified: now,
 	}
 	loc := l.store.Layout(bib.Authors, bib.Title, id)
+
 	b, err := l.place(processedPath, bib, loc, meta)
 	if err != nil {
 		return nil, err
@@ -130,6 +135,7 @@ func (l *Library) rejectDuplicate(bib *book.Bib) error {
 	if err != nil {
 		return err
 	}
+
 	if dupe {
 		return fmt.Errorf("%q: %w", bib.Title, ErrDuplicate)
 	}
@@ -137,6 +143,7 @@ func (l *Library) rejectDuplicate(bib *book.Bib) error {
 	if l.store.PathTaken(bib.Authors, bib.Title) {
 		return fmt.Errorf("%q: %w", bib.Title, ErrDuplicateOnDisk)
 	}
+
 	return nil
 }
 
@@ -145,9 +152,11 @@ func (l *Library) allocateID() (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	if err := l.store.RecordID(id); err != nil {
 		return 0, fmt.Errorf("recording book id %d: %w", id, err)
 	}
+
 	return id, nil
 }
 
@@ -158,6 +167,7 @@ func (l *Library) place(processedPath string, bib *book.Bib, loc book.Location, 
 	if err != nil {
 		return nil, err
 	}
+
 	b, err := func() (*Book, error) {
 		meta, mt, err := l.store.Ingest(processedPath, loc, meta)
 		if err != nil {
@@ -181,6 +191,7 @@ func (l *Library) place(processedPath string, bib *book.Bib, loc book.Location, 
 
 		return nil, err
 	}
+
 	return b, nil
 }
 
@@ -190,6 +201,7 @@ func syncFile(path string) error {
 		return err
 	}
 	defer f.Close()
+
 	return f.Sync()
 }
 
@@ -201,6 +213,8 @@ func authorNames(authors []book.Author) []string {
 	for i, a := range authors {
 		names[i] = a.Name
 	}
+
 	slices.Sort(names)
+
 	return slices.Compact(names)
 }

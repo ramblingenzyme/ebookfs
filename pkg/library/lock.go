@@ -20,6 +20,7 @@ var flock = syscall.Flock
 // If the filesystem has no flock, logs an error and returns the file unlocked.
 func acquireLock(root string) (*os.File, error) {
 	path := filepath.Join(root, lockFileName)
+
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
 		return nil, fmt.Errorf("open lock file: %w", err)
@@ -29,11 +30,14 @@ func acquireLock(root string) (*os.File, error) {
 		if warnLockUnsupported(path, err) {
 			return f, nil
 		}
+
 		f.Close()
+
 		if errors.Is(err, syscall.EWOULDBLOCK) {
 			holder := readLockHolder(path)
 			return nil, fmt.Errorf("%w: %s", ErrLibraryLocked, holder)
 		}
+
 		return nil, fmt.Errorf("flock lock file: %w", err)
 	}
 
@@ -61,8 +65,10 @@ func selfTestFlock(path string) error {
 	switch {
 	case err == nil:
 		_ = flock(int(fd2.Fd()), syscall.LOCK_UN)
+
 		slog.Error("flock is not enforced on this filesystem; a second instance could corrupt the library",
 			"path", path)
+
 		return nil
 	case errors.Is(err, syscall.EWOULDBLOCK):
 		return nil
@@ -81,6 +87,7 @@ func warnLockUnsupported(path string, err error) bool {
 		slog.Error("flock is not supported on this filesystem; a second instance could corrupt the library",
 			"path", path, "error", err)
 	}
+
 	return unsupported
 }
 
@@ -90,6 +97,7 @@ func readLockHolder(path string) string {
 	if err != nil || len(data) == 0 {
 		return "unknown (lock file empty or unreadable)"
 	}
+
 	return string(data)
 }
 
@@ -99,8 +107,10 @@ func readLockHolder(path string) string {
 func writeLockHolder(f *os.File) {
 	host, _ := os.Hostname()
 	content := fmt.Sprintf("%s:%d", host, os.Getpid())
+
 	if err := f.Truncate(0); err != nil {
 		return
 	}
+
 	_, _ = f.WriteAt([]byte(content), 0)
 }

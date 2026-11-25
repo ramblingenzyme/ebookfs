@@ -29,6 +29,7 @@ func (c ContentReader) Content(id int64) (library.EpubReader, error) {
 	if c.ContentFn != nil {
 		return c.ContentFn(id)
 	}
+
 	return nil, errors.New("mock: no ContentFn")
 }
 
@@ -41,6 +42,7 @@ func (e Editor) Edit(id int64, edits library.Edits) (*library.Book, error) {
 	if e.EditFn != nil {
 		return e.EditFn(id, edits)
 	}
+
 	return nil, errors.New("mock: no EditFn")
 }
 
@@ -53,6 +55,7 @@ func (l SearchDeleter) Search(q library.Query) ([]*library.Book, error) {
 	if l.SearchFn != nil {
 		return l.SearchFn(q)
 	}
+
 	return nil, nil
 }
 
@@ -60,6 +63,7 @@ func (l SearchDeleter) Delete(id int64) error {
 	if l.DeleteFn != nil {
 		return l.DeleteFn(id)
 	}
+
 	return nil
 }
 
@@ -71,6 +75,7 @@ func (s StatsReader) Stats() (*library.Stats, error) {
 	if s.StatsFn != nil {
 		return s.StatsFn()
 	}
+
 	return &library.Stats{}, nil
 }
 
@@ -84,6 +89,7 @@ func (h IngestHandle) Ingest() (*library.Book, error) {
 	if h.IngestFn == nil {
 		return nil, nil
 	}
+
 	return h.IngestFn("")
 }
 
@@ -96,6 +102,7 @@ func (i Ingester) CreateIngest() (library.IngestHandle, error) {
 	if i.CreateIngestFn != nil {
 		return i.CreateIngestFn()
 	}
+
 	return IngestHandle{IngestFn: i.IngestFn}, nil
 }
 
@@ -115,6 +122,7 @@ func (r *EpubReader) OPF() ([]byte, error) {
 	if r.OPFFn != nil {
 		return r.OPFFn()
 	}
+
 	return nil, nil
 }
 
@@ -122,6 +130,7 @@ func (r *EpubReader) Cover() ([]byte, error) {
 	if r.CoverFn != nil {
 		return r.CoverFn()
 	}
+
 	return nil, nil
 }
 
@@ -138,6 +147,7 @@ func (l Library) Update(id int64, fn func(*library.Book) *library.Edits) (*libra
 	if l.UpdateFn != nil {
 		return l.UpdateFn(id, fn)
 	}
+
 	return nil, false, errors.New("mock: no UpdateFn")
 }
 
@@ -145,6 +155,7 @@ func (l Library) AddHook(h library.Hook) error {
 	if l.AddHookFn != nil {
 		return l.AddHookFn(h)
 	}
+
 	return nil
 }
 
@@ -160,6 +171,7 @@ func (g Getter) Get(id int64) (*library.Book, error) {
 	if g.GetFn != nil {
 		return g.GetFn(id)
 	}
+
 	return nil, errors.New("mock: no GetFn")
 }
 
@@ -177,6 +189,7 @@ func facets(fn func() ([]library.Facet, error)) ([]library.Facet, error) {
 	if fn != nil {
 		return fn()
 	}
+
 	return nil, nil
 }
 

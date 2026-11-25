@@ -61,6 +61,7 @@ func (r *BookRegistry) FS() *fs.FS { return r.f }
 func (r *BookRegistry) OnIngested(book *library.Book, sidecars *os.Root, openEpub func() (library.EpubReader, error)) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	r.addLocked(book)
 }
 
@@ -68,10 +69,12 @@ func (r *BookRegistry) OnIngested(book *library.Book, sidecars *os.Root, openEpu
 func (r *BookRegistry) OnEdited(book *library.Book, sidecars *os.Root, openEpub func() (library.EpubReader, error)) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	dir, ok := r.books[book.ID()]
 	if !ok {
 		return
 	}
+
 	r.commit(dir, book)
 }
 
@@ -82,6 +85,7 @@ func (r *BookRegistry) OnDeleted(bookID int64) { r.remove(bookID) }
 func (r *BookRegistry) AddView(v BookView) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	r.views = append(r.views, v)
 	for _, dir := range r.books {
 		v.Add(dir)
@@ -91,6 +95,7 @@ func (r *BookRegistry) AddView(v BookView) {
 func (r *BookRegistry) RemoveView(v BookView) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	if i := slices.Index(r.views, v); i >= 0 {
 		r.views = slices.Delete(r.views, i, i+1)
 	}
@@ -103,7 +108,9 @@ func (r *BookRegistry) RemoveView(v BookView) {
 func (r *BookRegistry) ResyncView(v BookView, reset func()) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	reset()
+
 	for _, dir := range r.books {
 		v.Add(dir)
 	}
@@ -113,6 +120,7 @@ func (r *BookRegistry) ResyncView(v BookView, reset func()) {
 func (r *BookRegistry) Load(books ...*library.Book) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	for _, bk := range books {
 		r.addLocked(bk)
 	}
@@ -122,8 +130,10 @@ func (r *BookRegistry) dirLocked(bk *library.Book) *book.BookDir {
 	if d, ok := r.books[bk.ID()]; ok {
 		return d
 	}
+
 	d := book.NewBookDir(r.f, r.content, r.edit, bk)
 	r.books[bk.ID()] = d
+
 	return d
 }
 
@@ -137,13 +147,16 @@ func (r *BookRegistry) addLocked(bk *library.Book) {
 func (r *BookRegistry) remove(bookID int64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	dir, ok := r.books[bookID]
 	if !ok {
 		return
 	}
+
 	for _, v := range r.views {
 		v.Remove(dir)
 	}
+
 	delete(r.books, bookID)
 }
 
@@ -154,7 +167,9 @@ func (r *BookRegistry) commit(dir *book.BookDir, updated *library.Book) {
 	for _, v := range r.views {
 		v.Remove(dir)
 	}
+
 	dir.SetSnapshot(updated)
+
 	for _, v := range r.views {
 		v.Add(dir)
 	}

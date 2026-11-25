@@ -21,6 +21,7 @@ func TestEpubFileStat(t *testing.T) {
 		book := util.MakeMutableBook(1, "Test", "Author")
 		book.EpubPath = "/nonexistent/book.epub"
 		book.EpubSize = size
+
 		return util.Fixed(util.WrapBook(book))
 	}
 	for _, tc := range []struct {

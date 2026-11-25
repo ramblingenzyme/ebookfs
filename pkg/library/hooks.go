@@ -105,6 +105,7 @@ func (s *hookSet) add(h Hook) {
 func (s *hookSet) snapshot() []Hook {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return slices.Clone(s.hooks)
 }
 
@@ -117,10 +118,13 @@ func (l *Library) AddHook(h Hook) (err error) {
 			err = fmt.Errorf("hook %T setup panicked: %v", h, r)
 		}
 	}()
+
 	if err := h.Setup(l.store.Root(), l.stateDir); err != nil {
 		return fmt.Errorf("hook %T setup: %w", h, err)
 	}
+
 	l.hooks.add(h)
+
 	return nil
 }
 
@@ -133,10 +137,12 @@ func (s *hookSet) preParse(epubPath string, tempDir string) (string, error) {
 		if err != nil {
 			return "", err
 		}
+
 		if newPath != "" {
 			currentPath = newPath
 		}
 	}
+
 	return currentPath, nil
 }
 
@@ -151,14 +157,17 @@ func (s *hookSet) preCommit(epubPath string, parsed *Bib) (*Bib, error) {
 			return nil, err
 		}
 	}
+
 	e, err := bibEdits(*parsed, amended)
 	if err != nil {
 		return nil, err
 	}
+
 	bib, err := epub.Rewrite(epubPath, &book.Book{Bib: *parsed}, e)
 	if err != nil {
 		return nil, err
 	}
+
 	return &bib, nil
 }
 
@@ -169,10 +178,12 @@ func cloneBib(b book.Bib) book.Bib {
 	b.Subjects = slices.Clone(b.Subjects)
 	b.Contributors = slices.Clone(b.Contributors)
 	b.Identifiers = maps.Clone(b.Identifiers)
+
 	if b.Series != nil {
 		s := *b.Series
 		b.Series = &s
 	}
+
 	return b
 }
 
@@ -199,6 +210,7 @@ func bibEdits(from, to book.Bib) (book.Edits, error) {
 		if from == to {
 			return nil
 		}
+
 		return &to
 	}
 	e := book.Edits{
@@ -209,22 +221,28 @@ func bibEdits(from, to book.Bib) (book.Edits, error) {
 		Publisher:   changed(from.Publisher, to.Publisher),
 		Rights:      changed(from.Rights, to.Rights),
 	}
+
 	if !slices.Equal(from.Authors, to.Authors) {
 		e.Authors = &to.Authors
 	}
+
 	if !slices.Equal(from.Subjects, to.Subjects) {
 		e.Subjects = &to.Subjects
 	}
+
 	if !slices.Equal(from.Contributors, to.Contributors) {
 		e.Contributors = &to.Contributors
 	}
+
 	if seriesKey(from.Series) != seriesKey(to.Series) {
 		removed := ""
 		e.Series = &removed
+
 		if to.Series != nil {
 			e.Series, e.SeriesIndex = &to.Series.Name, &to.Series.Index
 		}
 	}
+
 	return e, nil
 }
 
@@ -233,6 +251,7 @@ func seriesKey(s *book.SeriesRef) [2]string {
 	if s == nil {
 		return [2]string{}
 	}
+
 	return [2]string{s.Name, s.Index}
 }
 
@@ -241,13 +260,16 @@ func (s *hookSet) dispatchEvent(l *Library, b *Book, loc book.Location, name str
 	if len(hooks) == 0 {
 		return
 	}
+
 	root, err := l.store.OpenSidecars(loc)
 	if err != nil {
 		slog.Error("hook failed to open sidecars", "hook", name, "book_id", b.ID(), "error", err)
 		return
 	}
 	defer root.Close()
+
 	openEpub := func() (EpubReader, error) { return l.Content(b.ID()) }
+
 	for _, h := range hooks {
 		invokeEvent(name, h, func() { call(h, root, openEpub) })
 	}
@@ -283,5 +305,6 @@ func invokeEvent(name string, h Hook, call func()) {
 			slog.Error("hook panicked", "event", name, "hook", h, "panic", r)
 		}
 	}()
+
 	call()
 }

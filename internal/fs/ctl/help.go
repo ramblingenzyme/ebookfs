@@ -61,14 +61,19 @@ Notes:
 func helpText() string {
 	var b strings.Builder
 	b.WriteString(helpHeader)
+
 	for _, c := range commands {
 		fmt.Fprintf(&b, "  %s %s\n", c.name, c.params)
+
 		for line := range strings.SplitSeq(c.desc, "\n") {
 			fmt.Fprintf(&b, "    %s\n", line)
 		}
+
 		b.WriteString("\n")
 	}
+
 	b.WriteString(helpFooter)
+
 	return b.String()
 }
 

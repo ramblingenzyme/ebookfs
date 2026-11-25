@@ -24,6 +24,7 @@ func lookupBook(lib Library, id string) (*library.Book, error) {
 	if err != nil {
 		return nil, fmt.Errorf("book %q: %w", id, library.ErrBookNotFound)
 	}
+
 	return lib.Get(n)
 }
 

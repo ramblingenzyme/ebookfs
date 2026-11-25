@@ -33,6 +33,7 @@ var fields = map[string]field{
 			if err != nil {
 				return library.Edits{}, fmt.Errorf("invalid rating %q", s)
 			}
+
 			return library.Edits{Rating: &n}, nil
 		},
 	},
@@ -88,13 +89,16 @@ var fields = map[string]field{
 		},
 		edits: func(s string) (library.Edits, error) {
 			var contributors []library.Contributor
+
 			for line := range strings.SplitSeq(s, "\n") {
 				name, role := textfmt.ParsePair(line)
 				if name == "" {
 					continue
 				}
+
 				contributors = append(contributors, library.Contributor{Name: name, Role: role})
 			}
+
 			return library.Edits{Contributors: &contributors}, nil
 		},
 	},
@@ -106,16 +110,20 @@ var fields = map[string]field{
 		},
 		edits: func(s string) (library.Edits, error) {
 			var authors []library.Author
+
 			for line := range strings.SplitSeq(s, "\n") {
 				a := textfmt.ParseAuthor(line)
 				if a.Name == "" {
 					continue
 				}
+
 				authors = append(authors, a)
 			}
+
 			if len(authors) == 0 {
 				return library.Edits{}, fmt.Errorf("at least one author is required")
 			}
+
 			return library.Edits{Authors: &authors}, nil
 		},
 	},
@@ -130,6 +138,7 @@ var fields = map[string]field{
 			if !b.HasSeries() {
 				return ""
 			}
+
 			return b.SeriesIndex()
 		},
 		// Passed through as written: the position is a string all the way from
@@ -146,6 +155,7 @@ func joinLines[T any](xs []T, format func(T) string) string {
 	for i, x := range xs {
 		lines[i] = format(x)
 	}
+
 	return strings.Join(lines, "\n")
 }
 

@@ -39,9 +39,11 @@ func (d *InboxDir) Create(f *fs.FS, name string, perm uint32, mode uint8) (fs.Fi
 	slog.Debug("inbox: create", "name", name, "perm", perm, "mode", mode)
 	file := NewInboxFile(f, d.lib, name, perm)
 	d.DeleteChild(name)
+
 	if err := d.AddChild(file); err != nil {
 		slog.Error("inbox: AddChild failed", "name", name, "error", err)
 		return nil, err
 	}
+
 	return file, nil
 }

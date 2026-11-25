@@ -25,6 +25,7 @@ func Parse(bpath string) (*book.Bib, error) {
 		return nil, err
 	}
 	defer b.Close()
+
 	return bib(b)
 }
 
@@ -50,21 +51,26 @@ func bib(b *epubfile.Book) (*book.Bib, error) {
 	for _, a := range b.Authors {
 		bib.Authors = append(bib.Authors, book.Author{Name: a.Name, SortName: a.SortName})
 	}
+
 	bib.Authors = book.FirstOf(bib.Authors, func(a book.Author) string { return a.Name })
 	for _, c := range b.Contributors {
 		bib.Contributors = append(bib.Contributors, book.Contributor{Name: c.Name, Role: c.Role})
 	}
+
 	bib.Contributors = book.FirstOf(bib.Contributors, func(c book.Contributor) book.Contributor { return c })
 	if bib.CoverPath != "" {
 		bib.CoverSize = b.Size(bib.CoverPath)
 	}
+
 	if b.Series != nil {
 		index := b.Series.Index
 		if !book.ValidSeriesIndex(index) {
 			index = "1"
 		}
+
 		bib.Series = &book.SeriesRef{Name: b.Series.Name, Index: index}
 	}
+
 	return bib, nil
 }
 
@@ -72,8 +78,10 @@ func usable(b *epubfile.Book) error {
 	if b.Title == "" {
 		return errors.New("no title")
 	}
+
 	if len(b.Authors) == 0 {
 		return errors.New("no authors")
 	}
+
 	return nil
 }

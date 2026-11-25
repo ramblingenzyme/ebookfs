@@ -9,6 +9,7 @@ import (
 
 func mustWrite(t *testing.T, w *WriteBuffer, fid uint64, offset uint64, data string, seed func() []byte) {
 	t.Helper()
+
 	if _, err := w.Write(fid, offset, []byte(data), seed); err != nil {
 		t.Fatalf("Write fid %d at %d: %v", fid, offset, err)
 	}
@@ -22,6 +23,7 @@ func TestWriteBufferAccumulates(t *testing.T) {
 		offset uint64
 		data   string
 	}
+
 	tests := []struct {
 		name   string
 		writes []write
@@ -34,6 +36,7 @@ func TestWriteBufferAccumulates(t *testing.T) {
 		// client-chosen and need not be contiguous.
 		{"a gap is zero-filled", []write{{0, "ab"}, {4, "cd"}}, "ab\x00\x00cd"},
 	}
+
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			w := NewWriteBuffer(4096)
@@ -42,10 +45,12 @@ func TestWriteBufferAccumulates(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Write at %d: %v", wr.offset, err)
 				}
+
 				if int(n) != len(wr.data) {
 					t.Errorf("Write returned %d, want %d — 9P treats a short count as a partial write", n, len(wr.data))
 				}
 			}
+
 			if got := string(w.take(1)); got != tc.want {
 				t.Errorf("buffer = %q, want %q", got, tc.want)
 			}
@@ -61,6 +66,7 @@ func TestWriteBufferSeed(t *testing.T) {
 	t.Run("a mid-file write edits the seeded content", func(t *testing.T) {
 		w := NewWriteBuffer(4096)
 		mustWrite(t, &w, 1, 4, "XXXX", seed)
+
 		if got := string(w.take(1)); got != "origXXXX" {
 			t.Errorf("buffer = %q, want %q", got, "origXXXX")
 		}
@@ -72,6 +78,7 @@ func TestWriteBufferSeed(t *testing.T) {
 		// old value would survive: "new" over "original" would read "newginal".
 		w := NewWriteBuffer(4096)
 		mustWrite(t, &w, 1, 0, "new", seed)
+
 		if got := string(w.take(1)); got != "new" {
 			t.Errorf("buffer = %q, want %q — residual seed content leaked through", got, "new")
 		}
@@ -79,12 +86,14 @@ func TestWriteBufferSeed(t *testing.T) {
 
 	t.Run("the seed is only consulted on the first write", func(t *testing.T) {
 		var calls int
+
 		counting := func() []byte { calls++; return []byte("original") }
 
 		w := NewWriteBuffer(4096)
 		for _, off := range []uint64{0, 8, 16} {
 			mustWrite(t, &w, 1, off, "xxxxxxxx", counting)
 		}
+
 		if calls != 1 {
 			t.Errorf("seed called %d times, want 1 — later writes must build on the accumulated buffer", calls)
 		}
@@ -100,6 +109,7 @@ func TestWriteBufferEmptyWrite(t *testing.T) {
 	if err != nil || n != 0 {
 		t.Errorf("Write(nil) = (%d, %v), want (0, nil)", n, err)
 	}
+
 	if got := w.take(1); got != nil {
 		t.Errorf("take = %q, want nil — an empty write must not create a buffer", got)
 	}
@@ -110,6 +120,7 @@ func TestWriteBufferEmptyWrite(t *testing.T) {
 	seeded := NewWriteBuffer(4096)
 	mustWrite(t, &seeded, 1, 0, "", nil)
 	mustWrite(t, &seeded, 1, 4, "XXXX", func() []byte { return []byte("original") })
+
 	if got := string(seeded.take(1)); got != "origXXXX" {
 		t.Errorf("buffer = %q, want %q — the empty write consumed the seed", got, "origXXXX")
 	}
@@ -144,6 +155,7 @@ func TestWriteBufferEnforcesLimit(t *testing.T) {
 			if tc.wantErr && err == nil {
 				t.Errorf("Write(offset=%d, len=%d) succeeded, want it refused by the %d-byte cap", tc.offset, tc.size, maxSize)
 			}
+
 			if !tc.wantErr && err != nil {
 				t.Errorf("Write(offset=%d, len=%d): %v", tc.offset, tc.size, err)
 			}
@@ -169,7 +181,9 @@ func TestWriteBufferCommit(t *testing.T) {
 			if tc.write != "" {
 				mustWrite(t, &w, 1, 0, tc.write, nil)
 			}
+
 			var got []string
+
 			for range tc.commits {
 				if err := w.Commit(1, func(data []byte) error {
 					got = append(got, string(data))
@@ -178,6 +192,7 @@ func TestWriteBufferCommit(t *testing.T) {
 					t.Fatalf("Commit: %v", err)
 				}
 			}
+
 			if !slices.Equal(got, tc.want) {
 				t.Errorf("commit called with %q, want %q", got, tc.want)
 			}
@@ -187,6 +202,7 @@ func TestWriteBufferCommit(t *testing.T) {
 	t.Run("commit returns the callback's error", func(t *testing.T) {
 		w := NewWriteBuffer(4096)
 		mustWrite(t, &w, 1, 0, "data", nil)
+
 		wantErr := errors.New("commit failed")
 		if err := w.Commit(1, func([]byte) error { return wantErr }); !errors.Is(err, wantErr) {
 			t.Errorf("Commit returned %v, want %v", err, wantErr)
@@ -210,13 +226,16 @@ func TestWriteBufferCommitText(t *testing.T) {
 			if tc.write != "" {
 				mustWrite(t, &w, 1, 0, tc.write, nil)
 			}
+
 			var got []string
+
 			if err := w.CommitText(1, func(s string) error {
 				got = append(got, s)
 				return nil
 			}); err != nil {
 				t.Errorf("CommitText: %v", err)
 			}
+
 			if !slices.Equal(got, tc.want) {
 				t.Errorf("commit called with %q, want %q", got, tc.want)
 			}
@@ -236,6 +255,7 @@ func TestWriteBufferPerFidIsolation(t *testing.T) {
 	if got := string(w.take(1)); got != "first" {
 		t.Errorf("fid 1 buffer = %q, want %q", got, "first")
 	}
+
 	if got := string(w.take(2)); got != "second" {
 		t.Errorf("fid 2 buffer = %q, want %q — taking one fid disturbed the other", got, "second")
 	}

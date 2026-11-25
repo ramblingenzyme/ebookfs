@@ -87,11 +87,14 @@ func TestLayoutKeepsEachComponentInOneDirectory(t *testing.T) {
 				if got := filepath.Dir(loc.EpubPath); got != tc.wantDir {
 					t.Errorf("directory = %q, want %q", got, tc.wantDir)
 				}
+
 				return
 			}
+
 			if strings.HasPrefix(loc.EpubPath, ".") || strings.Contains(loc.EpubPath, ".."+string(filepath.Separator)) {
 				t.Errorf("EpubPath %q leaves the library root", loc.EpubPath)
 			}
+
 			if got := len(strings.Split(filepath.Dir(loc.EpubPath), string(filepath.Separator))); got != 2 {
 				t.Errorf("directory %q, want exactly two components", filepath.Dir(loc.EpubPath))
 			}

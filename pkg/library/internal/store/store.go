@@ -46,20 +46,25 @@ func (s *Store) Root() string { return s.root }
 // [], ? and *.
 func (s *Store) PathTaken(authors []book.Author, title string) bool {
 	authorDir := filepath.Join(s.root, authorDirName(authors))
+
 	entries, err := os.ReadDir(authorDir)
 	if err != nil {
 		return false
 	}
+
 	targetEpub := epubFilename(authors, title)
+
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
+
 		epubPath := filepath.Join(authorDir, entry.Name(), targetEpub)
 		if _, err := os.Stat(epubPath); err == nil {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -71,10 +76,12 @@ func (s *Store) Stat(loc book.Location) (drift.PathInfo, error) {
 	if err != nil {
 		return drift.PathInfo{}, err
 	}
+
 	metaFI, err := os.Stat(s.metaPath(loc))
 	if err != nil {
 		return drift.PathInfo{}, err
 	}
+
 	return drift.PathInfo{
 		Size:      epubFI.Size(),
 		EpubMtime: epubFI.ModTime(),
@@ -101,6 +108,7 @@ func (s *Store) Move(from, to book.Location) error {
 
 	fromName := filepath.Join(toDir, from.Filename())
 	toName := filepath.Join(toDir, to.Filename())
+
 	if toName != fromName {
 		if err := atomicfs.Rename(fromName, toName); err != nil {
 			rollbackFn(err)
@@ -138,6 +146,7 @@ func (s *Store) renameDir(fromDir, toDir string) (func(error), error) {
 			slog.Error("rollback failed after epub rename error; directory left in inconsistent state, will be repaired by reindex on next startup",
 				"old_path", fromDir, "new_path", toDir, "rollback_error", rollbackErr, "original_error", err)
 		}
+
 		_ = removeIfEmpty(filepath.Dir(toDir))
 	}, nil
 }
@@ -149,6 +158,7 @@ func removeIfEmpty(dir string) error {
 	if err := os.Remove(dir); err != nil && !errors.Is(err, syscall.ENOTEMPTY) && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
+
 	return nil
 }
 
@@ -162,6 +172,7 @@ func (s *Store) Delete(loc book.Location) error {
 	if err := atomicfs.RemoveAll(path, filepath.Join(s.root, trashDirName)); err != nil {
 		return err
 	}
+
 	return removeIfEmpty(filepath.Dir(path))
 }
 
@@ -177,9 +188,11 @@ func (s *Store) LastID() (int64, error) {
 	if errors.Is(err, os.ErrNotExist) {
 		return 0, nil
 	}
+
 	if err != nil {
 		return 0, err
 	}
+
 	return strconv.ParseInt(strings.TrimSpace(string(data)), 10, 64)
 }
 
@@ -197,13 +210,17 @@ func (s *Store) EmptyTrash() error {
 
 func (s *Store) Update(oldLoc, newLoc book.Location, meta book.Meta) (book.Meta, drift.PathInfo, error) {
 	canonicalizeMeta(&meta)
+
 	if err := s.Move(oldLoc, newLoc); err != nil {
 		return meta, drift.PathInfo{}, err
 	}
+
 	if err := s.writeMeta(newLoc, &meta); err != nil {
 		return meta, drift.PathInfo{}, err
 	}
+
 	mt, err := s.Stat(newLoc)
+
 	return meta, mt, err
 }
 
@@ -218,5 +235,6 @@ func (s *Store) OpenSidecars(loc book.Location) (*os.Root, error) {
 	if err := atomicfs.Mkdir(dir, 0o755); err != nil && !errors.Is(err, os.ErrExist) {
 		return nil, err
 	}
+
 	return os.OpenRoot(dir)
 }

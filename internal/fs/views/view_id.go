@@ -26,6 +26,7 @@ func NewByIDDir(reg *registry.BookRegistry) *byIDDir {
 		groupingDir: newGroupingDir(reg.FS(), "by-id"),
 	}
 	reg.AddView(d)
+
 	return d
 }
 
@@ -35,6 +36,7 @@ func (d *byIDDir) Add(dir *book.BookDir) {
 		d.maxID.Store(id)
 		d.pad.set(id)
 	}
+
 	vfile.AddChild(d.StaticDir, newNamedBookDir(d.f, dir, func(b *library.Book) string {
 		return idEntryName(b, &d.pad)
 	}))

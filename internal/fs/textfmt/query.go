@@ -17,12 +17,15 @@ import (
 // Index.Search does.
 func ParseQuery(query string) (library.Query, error) { //nolint:cyclop // one case per query prefix
 	parts := strings.Split(query, "+")
+
 	var q library.Query
+
 	for _, part := range parts {
 		prefix, val, ok := strings.Cut(part, ":")
 		if !ok {
 			return q, fmt.Errorf("invalid term %q: want prefix:value", part)
 		}
+
 		switch prefix {
 		case "author":
 			q.Authors = append(q.Authors, val)
@@ -43,6 +46,7 @@ func ParseQuery(query string) (library.Query, error) { //nolint:cyclop // one ca
 			if err != nil {
 				return q, fmt.Errorf("invalid id %q in term %q", val, part)
 			}
+
 			q.IDs = append(q.IDs, id)
 		case "title":
 			q.Titles = append(q.Titles, val)
@@ -50,5 +54,6 @@ func ParseQuery(query string) (library.Query, error) { //nolint:cyclop // one ca
 			return q, fmt.Errorf("unknown prefix %q in term %q", prefix, part)
 		}
 	}
+
 	return q, nil
 }

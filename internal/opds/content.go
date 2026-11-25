@@ -22,6 +22,7 @@ func (c *content) byID(serve func(*library.Book, http.ResponseWriter, *http.Requ
 		if err == nil {
 			err = serve(b, w, r)
 		}
+
 		if err != nil {
 			httpError(w, r, err)
 		}
@@ -39,6 +40,7 @@ func (c *content) serveEpub(b *library.Book, w http.ResponseWriter, r *http.Requ
 
 	name := b.Filename()
 	size := b.EpubSize()
+
 	w.Header().Set("Content-Type", mediaTypeEpub)
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
 
@@ -48,9 +50,11 @@ func (c *content) serveEpub(b *library.Book, w http.ResponseWriter, r *http.Requ
 	}
 
 	slog.Warn("opds: book size unknown, serving without ranges", "book_id", b.ID())
+
 	if _, err := io.Copy(w, io.NewSectionReader(rd, 0, math.MaxInt64)); err != nil {
 		slog.Warn("opds: download failed", "book_id", b.ID(), "error", err)
 	}
+
 	return nil
 }
 
@@ -69,6 +73,7 @@ func (c *content) serveCover(b *library.Book, w http.ResponseWriter, r *http.Req
 	// toPublication does. The two agree for the jpeg and png real epubs carry.
 	w.Header().Set("Content-Type", http.DetectContentType(img))
 	http.ServeContent(w, r, "", b.DateModified(), bytes.NewReader(img))
+
 	return nil
 }
 
@@ -78,6 +83,7 @@ func httpError(w http.ResponseWriter, r *http.Request, err error) {
 		http.NotFound(w, r)
 		return
 	}
+
 	slog.Error("opds: request failed", "path", r.URL.Path, "error", err)
 	http.Error(w, "internal error", http.StatusInternalServerError)
 }

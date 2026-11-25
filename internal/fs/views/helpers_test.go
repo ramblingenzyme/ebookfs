@@ -24,18 +24,21 @@ var (
 func makeBookWithTags(id int64, title, author string, tags ...string) *library.Book {
 	b := makeBook(id, title, author)
 	b.Meta.Tags = tags
+
 	return wrapBook(b)
 }
 
 func makeBookWithSubjects(id int64, title, author string, subjects ...string) *library.Book {
 	b := makeBook(id, title, author)
 	b.Subjects = subjects
+
 	return wrapBook(b)
 }
 
 func makeBookWithSeries(id int64, title, seriesName, seriesIndex string) *library.Book {
 	b := makeBook(id, title, "Author")
 	b.Series = &library.Series{Name: seriesName, Index: seriesIndex}
+
 	return wrapBook(b)
 }
 
@@ -44,6 +47,7 @@ func makeBookWithSeries(id int64, title, seriesName, seriesIndex string) *librar
 func padAt(n int) *padWidth {
 	var p padWidth
 	p.n.Store(int32(n))
+
 	return &p
 }
 
@@ -54,6 +58,7 @@ func newTestRegistry(t *testing.T) *registry.BookRegistry {
 
 func removeBookFromView(t *testing.T, reg *registry.BookRegistry, view go9pfs.Dir, id int64) *book.BookDir {
 	t.Helper()
+
 	bookView, ok := view.(registry.BookView)
 	if !ok {
 		t.Fatalf("view %T does not implement registry.BookView", view)
@@ -61,19 +66,23 @@ func removeBookFromView(t *testing.T, reg *registry.BookRegistry, view go9pfs.Di
 	// Built only to find the BookDir, so it must not go on receiving events.
 	allBooks := NewAllBooksDir(reg)
 	defer reg.RemoveView(allBooks)
+
 	for _, child := range allBooks.Children() {
 		var dir *book.BookDir
+
 		switch child := child.(type) {
 		case *book.BookDir:
 			dir = child
 		case *namedBookDir:
 			dir = child.BookDir
 		}
+
 		if dir != nil && dir.Book().ID() == id {
 			bookView.Remove(dir)
 			return dir
 		}
 	}
+
 	return nil
 }
 
@@ -84,12 +93,14 @@ func newTestSearchDir(t *testing.T, ttl time.Duration, maxHandles int) (*registr
 	reg := registry.NewBookRegistry(f, mock.Editor{})
 	sd := NewSearchDir(f, reg, ttl, maxHandles)
 	t.Cleanup(sd.Close)
+
 	return reg, sd
 }
 
 func newTestSearchHandle(t *testing.T) (*registry.BookRegistry, *searchHandleDir) {
 	t.Helper()
 	reg, sd := newTestSearchDir(t, 0, 0)
+
 	return reg, sd.allocateHandle()
 }
 

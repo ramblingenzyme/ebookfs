@@ -61,6 +61,7 @@ func (l *Library) Close() error {
 	if l.lockFile != nil {
 		l.lockFile.Close()
 	}
+
 	return err
 }
 
@@ -69,10 +70,12 @@ func (l *Library) Search(q Query) ([]*Book, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	result := make([]*Book, len(books))
 	for i, b := range books {
 		result[i] = book.NewImmutableBook(b)
 	}
+
 	return result, nil
 }
 
@@ -95,6 +98,7 @@ func (l *Library) Get(id int64) (*Book, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return book.NewImmutableBook(b), nil
 }
 
@@ -105,9 +109,11 @@ func (l *Library) get(id int64) (*book.Book, error) {
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("book %d: %w", id, ErrBookNotFound)
 	}
+
 	if err != nil {
 		return nil, fmt.Errorf("book %d: %w", id, err)
 	}
+
 	return b, nil
 }
 
@@ -116,6 +122,7 @@ func (l *Library) Content(id int64) (EpubReader, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return epub.OpenReader(l.store.AbsPath(b.EpubPath), b.CoverPath)
 }
 
@@ -144,8 +151,10 @@ func (l *Library) Update(id int64, fn func(*Book) *Edits) (b *Book, changed bool
 	if err != nil {
 		return nil, false, err
 	}
+
 	snapshot := book.NewImmutableBook(current)
 	ep := fn(snapshot)
+
 	if ep == nil {
 		return snapshot, false, nil
 	}
@@ -163,14 +172,17 @@ func (l *Library) Update(id int64, fn func(*Book) *Edits) (b *Book, changed bool
 	}
 
 	meta := applyMeta(current.Meta, e)
+
 	bib, err := epub.Rewrite(l.store.AbsPath(current.EpubPath), current, e)
 	if err != nil {
 		op.Cancel()
 		slog.Error("edit: rewrite failed", "book_id", current.Meta.ID, "title", current.Title, "error", err)
+
 		return nil, false, err
 	}
 
 	location := l.store.Layout(bib.Authors, bib.Title, meta.ID)
+
 	meta, mt, err := l.store.Update(current.Location, location, meta)
 	if err != nil {
 		slog.Error("edit: update failed", "book_id", current.Meta.ID, "title", current.Title, "error", err)
@@ -209,10 +221,12 @@ func (l *Library) Delete(id int64) error {
 		slog.Error("delete: store delete failed", "book_id", id, "title", b.Title, "error", err)
 		return err
 	}
+
 	if err := op.Delete(id); err != nil {
 		slog.Error("delete: index delete failed", "book_id", id, "title", b.Title, "error", err)
 		return err
 	}
+
 	slog.Info("delete: book removed", "book_id", id, "title", b.Title)
 
 	l.hooks.onDeleted(id)
@@ -226,6 +240,7 @@ func (l *Library) lockBook(id int64) (unlock func()) {
 	l.mutateMu.RLock()
 	mu := l.bookMu.For(id)
 	mu.Lock()
+
 	return func() {
 		mu.Unlock()
 		l.mutateMu.RUnlock()
@@ -239,20 +254,25 @@ func applyMeta(m book.Meta, e Edits) book.Meta {
 	if e.Status != nil {
 		m.Status = *e.Status
 	}
+
 	if e.Rating != nil {
 		m.Rating = *e.Rating
 	}
+
 	if e.Tags != nil {
 		m.Tags = *e.Tags
 	}
+
 	m.Tags = slices.Clone(m.Tags)
 	m.DateModified = time.Now()
+
 	return m
 }
 
 func bookFromBib(bib book.Bib, meta book.Meta, loc book.Location, obs drift.PathInfo) *book.Book {
 	b := book.NewBook(bib, meta, loc)
 	b.EpubSize = obs.Size
+
 	return b
 }
 
@@ -271,22 +291,28 @@ func (l *Library) WithSidecars(id int64, fn func(*os.Root) error) error {
 	if err != nil {
 		return err
 	}
+
 	root, err := l.store.OpenSidecars(b.Location)
 	if err != nil {
 		return err
 	}
 	defer root.Close()
+
 	return fn(root)
 }
 
 // ReadSidecar reads a sidecar file. The per-book lock is held for the read.
 func (l *Library) ReadSidecar(id int64, name string) ([]byte, error) {
 	var data []byte
+
 	err := l.WithSidecars(id, func(root *os.Root) error {
 		var err error
+
 		data, err = root.ReadFile(name)
+
 		return err
 	})
+
 	return data, err
 }
 

@@ -31,5 +31,6 @@ func (e *epubFile) Stat() proto.Stat {
 		s.Name = b.Filename()
 		s.Length = uint64(b.EpubSize())
 	}
+
 	return s
 }

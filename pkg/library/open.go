@@ -71,9 +71,11 @@ func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
 	if cfg.StateDir == "" {
 		cfg.StateDir = cfg.Root
 	}
+
 	if err := os.MkdirAll(cfg.StateDir, 0o755); err != nil {
 		return nil, fmt.Errorf("creating state dir: %w", err)
 	}
+
 	if err := os.MkdirAll(filepath.Dir(cfg.IndexPath), 0o755); err != nil {
 		return nil, fmt.Errorf("creating index dir: %w", err)
 	}
@@ -82,6 +84,7 @@ func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	lib := &Library{
 		store:     store.New(cfg.Root),
 		index:     idx,
@@ -92,6 +95,7 @@ func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
 	if err := lib.store.RemoveStaleTemps(); err != nil {
 		slog.Warn("cleaning stale temp files failed", "error", err)
 	}
+
 	if err := lib.store.EmptyTrash(); err != nil {
 		slog.Warn("emptying trash failed", "error", err)
 	}
@@ -102,7 +106,9 @@ func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
 		idx.Close()
 		return nil, fmt.Errorf("reindexing library: %w", err)
 	}
+
 	recordLastID(lib.store, idx)
+
 	return lib, nil
 }
 
@@ -120,10 +126,12 @@ func recordLastID(s *store.Store, idx *index.Index) {
 		slog.Warn("could not read the last issued book id from the index", "error", err)
 		return
 	}
+
 	last, err := s.LastID()
 	if err != nil {
 		slog.Warn("replacing an unreadable record of the last issued book id", "error", err)
 	}
+
 	if issued > last {
 		if err := s.RecordID(issued); err != nil {
 			slog.Warn("could not record the last issued book id; a deleted book's id may be reissued", "error", err)
@@ -135,12 +143,15 @@ func prepareInboxTemp(dir, root string) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("creating inbox temp dir: %w", err)
 	}
+
 	if err := cleanInboxTemp(dir); err != nil {
 		return fmt.Errorf("cleaning inbox temp: %w", err)
 	}
+
 	if err := checkSameFilesystem(root, dir); err != nil {
 		return fmt.Errorf("inbox_temp must be on the same filesystem as library.root: %w", err)
 	}
+
 	return nil
 }
 
@@ -149,12 +160,15 @@ func cleanInboxTemp(dir string) error {
 	if err != nil {
 		return err
 	}
+
 	for _, e := range entries {
 		upload := e.Type().IsRegular() && strings.HasSuffix(e.Name(), ".epub")
 		scratch := e.IsDir() && strings.HasPrefix(e.Name(), "hooks-")
+
 		if !upload && !scratch {
 			continue
 		}
+
 		path := filepath.Join(dir, e.Name())
 		if err := os.RemoveAll(path); err != nil {
 			slog.Warn("removing stale inbox temp failed", "path", path, "error", err)
@@ -162,6 +176,7 @@ func cleanInboxTemp(dir string) error {
 			slog.Info("removed stale inbox temp", "path", path)
 		}
 	}
+
 	return nil
 }
 
@@ -171,7 +186,9 @@ func checkSameFilesystem(a, b string) error {
 	if err != nil {
 		return err
 	}
+
 	tmp.Close()
+
 	defer os.Remove(tmp.Name())
 
 	dst := filepath.Join(b, filepath.Base(tmp.Name()))
@@ -179,8 +196,10 @@ func checkSameFilesystem(a, b string) error {
 		os.Remove(dst)
 		return err
 	}
+
 	if err := os.Remove(dst); err != nil {
 		slog.Warn("checkSameFilesystem cleanup failed", "path", dst, "error", err)
 	}
+
 	return nil
 }

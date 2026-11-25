@@ -68,6 +68,7 @@ func NewHandler(lib *library.Library, registry *docRegistry, cfg Config) http.Ha
 	mux := http.NewServeMux()
 	h := newHandler(lib, registry, cfg)
 	h.registerRoutes(mux)
+
 	return logRequest(checkAcceptHeader(mux))
 }
 
@@ -186,6 +187,7 @@ func (h *handler) registerRoutes(mux *http.ServeMux) {
 func (h *handler) authenticate(r *http.Request) bool {
 	user := subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Auth-User")), []byte(h.cfg.Username))
 	key := subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Auth-Key")), []byte(h.cfg.PasswordHash))
+
 	return user&key == 1
 }
 
@@ -194,6 +196,7 @@ func (h *handler) validateDocumentID(w http.ResponseWriter, docID string) bool {
 		writeError(w, http.StatusForbidden, codeDocumentMissing, "Field 'document' not provided.")
 		return false
 	}
+
 	return true
 }
 
@@ -206,6 +209,7 @@ func (h *handler) auth(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, codeUnauthorized, "Unauthorized")
 		return
 	}
+
 	writeJSON(w, http.StatusOK, map[string]string{"authorized": "OK"})
 }
 
@@ -229,6 +233,7 @@ func (h *handler) getProgress(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, "kosync: failed to read sidecar progress", bookID, err)
 		return
 	}
+
 	if !found {
 		writeJSON(w, http.StatusOK, map[string]any{})
 		return
@@ -283,12 +288,14 @@ func (h *handler) putProgress(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, "kosync: failed to update sidecar progress", bookID, err)
 		return
 	}
+
 	if !found {
 		// Unknown document: accept but don't store
 		writeJSON(w, http.StatusOK, map[string]any{
 			"document":  docID,
 			"timestamp": time.Now().Unix(),
 		})
+
 		return
 	}
 
@@ -309,6 +316,7 @@ func (h *handler) putProgress(w http.ResponseWriter, r *http.Request) {
 // downgraded.
 func (h *handler) updateBookStatus(bookID int64, percentage float64) error {
 	var targetStatus string
+
 	switch {
 	case percentage >= h.cfg.ReadThreshold:
 		targetStatus = book.StatusRead
@@ -335,13 +343,16 @@ func (h *handler) updateBookStatus(bookID int64, percentage float64) error {
 		if current == book.StatusRead {
 			return nil
 		}
+
 		return &library.Edits{Status: &targetStatus}
 	})
 	if err != nil {
 		return fmt.Errorf("editing book: %w", err)
 	}
+
 	if changed {
 		slog.Info("kosync: updated book status", "book_id", bookID, "status", targetStatus, "percentage", percentage)
 	}
+
 	return nil
 }

@@ -31,6 +31,7 @@ func TestRenameSkipsABookThatChangedSinceTheSearch(t *testing.T) {
 					if e := fn(book); e != nil {
 						t.Fatalf("the book no longer matches, so it should not be edited: %+v", e)
 					}
+
 					return book, false, nil
 				},
 			})
@@ -98,6 +99,7 @@ func TestCommandRejections(t *testing.T) {
 			if got := cf.execute(tc.cmd); got != tc.want {
 				t.Errorf("execute(%q) = %q, want %q", tc.cmd, got, tc.want)
 			}
+
 			entries := cf.cmdLog.Entries()
 			if len(entries) != 1 || entries[0].Command != tc.cmd || entries[0].Result != tc.want {
 				t.Errorf("log = %+v, want the one refusal recorded", entries)

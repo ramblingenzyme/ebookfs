@@ -15,9 +15,11 @@ func writeBib(epubPath string, e bookmodel.Edits) (bookmodel.Bib, error) {
 // series, so the Bib is read from the file.
 func book(t *testing.T, path string) *bookmodel.Book {
 	t.Helper()
+
 	bib, err := epub.Parse(path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	return &bookmodel.Book{Location: bookmodel.Location{EpubPath: path}, Bib: *bib}
 }

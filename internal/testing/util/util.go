@@ -20,6 +20,7 @@ func MakeMutableBook(id int64, title string, authors ...string) *book.Book {
 	for i, name := range authors {
 		auths[i] = book.Author{Name: name}
 	}
+
 	return book.NewBook(
 		book.Bib{Title: title, Authors: auths},
 		book.Meta{ID: id},
@@ -37,7 +38,9 @@ func Fixed(b *book.ImmutableBook) func() *book.ImmutableBook {
 
 func NewTestFS(t *testing.T) *fs.FS {
 	t.Helper()
+
 	f, _ := fs.NewFS("glenda", "glenda", 0o555, fs.IgnorePermissions())
+
 	return f
 }
 

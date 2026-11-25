@@ -68,6 +68,7 @@ func Load(path string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parsing config %s: %w", path, err)
 	}
+
 	for _, k := range md.Undecoded() {
 		cfg.UnknownKeys = append(cfg.UnknownKeys, k.String())
 	}
@@ -76,9 +77,11 @@ func Load(path string) (*Config, error) {
 	if cfg.Library.InboxTemp == "" {
 		cfg.Library.InboxTemp = cfg.Library.Root + "/.inbox-tmp"
 	}
+
 	if cfg.Library.StateDir == "" {
 		cfg.Library.StateDir = cfg.Library.Root
 	}
+
 	if cfg.Library.IndexPath == "" {
 		cfg.Library.IndexPath = cfg.Library.StateDir + "/.index.db"
 	}
@@ -123,6 +126,7 @@ func (c *Config) validateAuth() error {
 	default:
 		return fmt.Errorf(`server.auth must be "none" or "shared-secret", got %q`, c.Server.Auth)
 	}
+
 	return nil
 }
 
@@ -130,13 +134,16 @@ func (c *Config) validateHTTP() error {
 	if c.HTTP.BaseURL == "" {
 		return nil
 	}
+
 	u, err := url.Parse(c.HTTP.BaseURL)
 	if err != nil {
 		return fmt.Errorf("http.base_url is not a URL: %w", err)
 	}
+
 	if u.Scheme == "" || u.Host == "" {
 		return fmt.Errorf("http.base_url must be absolute (scheme://host), got %q", c.HTTP.BaseURL)
 	}
+
 	return nil
 }
 
@@ -156,9 +163,11 @@ func (c *Config) validateKOSync() error {
 	if !c.KOSync.Enable {
 		return nil
 	}
+
 	if c.KOSync.Username == "" {
 		return fmt.Errorf("kosync.username is required when kosync.enable is true")
 	}
+
 	if c.KOSync.Password == "" {
 		return fmt.Errorf("kosync.password is required when kosync.enable is true")
 	}
@@ -166,9 +175,11 @@ func (c *Config) validateKOSync() error {
 	if c.KOSync.ReadingThreshold < 0 || c.KOSync.ReadingThreshold > 1 {
 		return fmt.Errorf("kosync.reading_threshold must be between 0 and 1, got %f", c.KOSync.ReadingThreshold)
 	}
+
 	if c.KOSync.ReadThreshold < 0 || c.KOSync.ReadThreshold > 1 {
 		return fmt.Errorf("kosync.read_threshold must be between 0 and 1, got %f", c.KOSync.ReadThreshold)
 	}
+
 	if c.KOSync.ReadingThreshold >= c.KOSync.ReadThreshold {
 		return fmt.Errorf("kosync.reading_threshold (%f) must be less than read_threshold (%f)",
 			c.KOSync.ReadingThreshold, c.KOSync.ReadThreshold)

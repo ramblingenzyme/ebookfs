@@ -12,6 +12,7 @@ func entryNames(entries []os.DirEntry) []string {
 	for i, e := range entries {
 		names[i] = e.Name()
 	}
+
 	return names
 }
 
@@ -24,13 +25,16 @@ func TestCleanInboxTemp(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+
 	if err := os.Mkdir(filepath.Join(dir, "nested.epub"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+
 	scratch := filepath.Join(dir, "hooks-123")
 	if err := os.Mkdir(scratch, 0o755); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := os.WriteFile(filepath.Join(scratch, "converted.epub"), []byte("data"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -38,10 +42,12 @@ func TestCleanInboxTemp(t *testing.T) {
 	if err := cleanInboxTemp(dir); err != nil {
 		t.Fatalf("cleanInboxTemp: %v", err)
 	}
+
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if got, want := entryNames(entries), []string{"nested.epub", "readme.txt"}; !slices.Equal(got, want) {
 		t.Errorf("left %v, want %v", got, want)
 	}
@@ -49,6 +55,7 @@ func TestCleanInboxTemp(t *testing.T) {
 	if err := cleanInboxTemp(t.TempDir()); err != nil {
 		t.Errorf("cleanInboxTemp on an empty directory: %v", err)
 	}
+
 	if err := cleanInboxTemp(filepath.Join(dir, "missing")); err == nil {
 		t.Error("cleanInboxTemp on a missing directory: want an error")
 	}
@@ -75,6 +82,7 @@ func TestOpenCreatesStateAndIndexDirs(t *testing.T) {
 	if fi, err := os.Stat(cfg.StateDir); err != nil || !fi.IsDir() {
 		t.Errorf("state dir: %v, %v", fi, err)
 	}
+
 	if _, err := os.Stat(cfg.IndexPath); err != nil {
 		t.Errorf("index: %v", err)
 	}
@@ -83,9 +91,11 @@ func TestOpenCreatesStateAndIndexDirs(t *testing.T) {
 func TestOpenEmptiesTrash(t *testing.T) {
 	cfg := testConfig(t)
 	left := filepath.Join(cfg.Root, ".trash", "x", "Deleted (5)")
+
 	if err := os.MkdirAll(left, 0o755); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := os.WriteFile(filepath.Join(left, "meta.toml"), []byte("id = 5\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}

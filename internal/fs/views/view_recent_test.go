@@ -39,15 +39,18 @@ func TestRecentDirOutOfOrderArrival(t *testing.T) {
 		b.Meta.DateAdded = base.Add(time.Duration(id) * time.Minute)
 		reg.Load(wrapBook(b))
 	}
+
 	wantRecent(t, d, 4, 5, 6, 7, 8)
 }
 
 func wantRecent(t *testing.T, d *recentDir, ids ...int64) {
 	t.Helper()
+
 	var want []string
 	for _, id := range ids {
 		want = append(want, fmt.Sprintf("Title %d", id))
 	}
+
 	if got := fstest.ChildNames(d); !slices.Equal(got, want) {
 		t.Errorf("recent/ lists %v, want %v", got, want)
 	}
@@ -62,10 +65,12 @@ func overfilledRecentDir(t *testing.T) (*registry.BookRegistry, *recentDir) {
 	d := NewRecentDir(reg)
 
 	base := time.Now()
+
 	for i := int64(1); i <= int64(recentLimit)+1; i++ {
 		b := makeBook(i, fmt.Sprintf("Title %d", i), "Author")
 		b.Meta.DateAdded = base.Add(time.Duration(i) * time.Minute)
 		reg.Load(wrapBook(b))
 	}
+
 	return reg, d
 }

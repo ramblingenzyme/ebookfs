@@ -23,6 +23,7 @@ func TestWriteSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile failed: %v", err)
 	}
+
 	if string(data) != "hello world" {
 		t.Errorf("got %q, want %q", string(data), "hello world")
 	}
@@ -32,6 +33,7 @@ func TestWriteSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadDir failed: %v", err)
 	}
+
 	for _, e := range entries {
 		if filepath.Ext(e.Name()) == ".tmp" {
 			t.Errorf("temp file %q remains after Write", e.Name())
@@ -61,6 +63,7 @@ func TestWriteError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadDir failed: %v", err)
 	}
+
 	for _, e := range entries {
 		if filepath.Ext(e.Name()) == ".tmp" {
 			t.Errorf("temp file %q remains after failed Write", e.Name())
@@ -93,6 +96,7 @@ func TestRenameSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile failed: %v", err)
 	}
+
 	if string(data) != "test" {
 		t.Errorf("got %q, want %q", string(data), "test")
 	}
@@ -119,23 +123,28 @@ func TestRenameLogsDirSyncFailure(t *testing.T) {
 			base := t.TempDir()
 			src := filepath.Join(base, "from", "f")
 			dst := filepath.Join(base, "to", "f")
+
 			for _, dir := range []string{"from", "to"} {
 				if err := os.Mkdir(filepath.Join(base, dir), 0o755); err != nil {
 					t.Fatal(err)
 				}
 			}
+
 			if err := os.WriteFile(src, []byte("x"), 0o644); err != nil {
 				t.Fatal(err)
 			}
+
 			failing := filepath.Join(base, unopenable)
 			makeUnopenable(t, failing)
 
 			if err := Rename(src, dst); err != nil {
 				t.Fatalf("Rename: %v", err)
 			}
+
 			if _, err := os.Stat(dst); err != nil {
 				t.Errorf("dst after Rename: %v", err)
 			}
+
 			if !strings.Contains(logs.String(), failing) {
 				t.Errorf("no warning naming %s, logs: %q", failing, logs)
 			}
@@ -147,26 +156,32 @@ func TestRenameLogsDirSyncFailure(t *testing.T) {
 func TestMkdirAllSyncsParentsOfNewDirs(t *testing.T) {
 	logs := captureLogs(t)
 	base := filepath.Join(t.TempDir(), "base")
+
 	if err := os.Mkdir(base, 0o755); err != nil {
 		t.Fatal(err)
 	}
+
 	makeUnopenable(t, base)
 	path := filepath.Join(base, "a", "b")
 
 	if err := MkdirAll(path, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
+
 	if fi, err := os.Stat(path); err != nil || !fi.IsDir() {
 		t.Fatalf("Stat(%s) = %v, %v", path, fi, err)
 	}
+
 	if !strings.Contains(logs.String(), base) {
 		t.Errorf("no warning naming %s, logs: %q", base, logs)
 	}
 
 	logs.Reset()
+
 	if err := MkdirAll(path, 0o755); err != nil {
 		t.Fatalf("MkdirAll on existing path: %v", err)
 	}
+
 	if logs.Len() != 0 {
 		t.Errorf("existing path logged %q", logs)
 	}
@@ -177,6 +192,7 @@ func TestMkdirAllUnderFile(t *testing.T) {
 	if err := os.WriteFile(file, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := MkdirAll(filepath.Join(file, "a", "b"), 0o755); err == nil {
 		t.Fatal("MkdirAll under a file should fail")
 	}
@@ -185,6 +201,7 @@ func TestMkdirAllUnderFile(t *testing.T) {
 func TestWriteRootReplaces(t *testing.T) {
 	logs := captureLogs(t)
 	dir := t.TempDir()
+
 	root, err := os.OpenRoot(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -195,10 +212,12 @@ func TestWriteRootReplaces(t *testing.T) {
 		if err := WriteRoot(root, "f.json", []byte(want)); err != nil {
 			t.Fatalf("WriteRoot(%q): %v", want, err)
 		}
+
 		got, err := root.ReadFile("f.json")
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		if string(got) != want {
 			t.Errorf("got %q, want %q", got, want)
 		}
@@ -208,9 +227,11 @@ func TestWriteRootReplaces(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if len(entries) != 1 {
 		t.Errorf("entries = %v, want only f.json", entries)
 	}
+
 	if logs.Len() != 0 {
 		t.Errorf("logged %q", logs)
 	}
@@ -219,10 +240,14 @@ func TestWriteRootReplaces(t *testing.T) {
 // slog is process-global, so tests using this can't run in parallel.
 func captureLogs(t *testing.T) *bytes.Buffer {
 	t.Helper()
+
 	var buf bytes.Buffer
+
 	prev := slog.Default()
+
 	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
 	t.Cleanup(func() { slog.SetDefault(prev) })
+
 	return &buf
 }
 
@@ -230,29 +255,36 @@ func captureLogs(t *testing.T) *bytes.Buffer {
 // but opening it for fsync fails. Root ignores the mode.
 func makeUnopenable(t *testing.T, dir string) {
 	t.Helper()
+
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores directory permissions")
 	}
+
 	if err := os.Chmod(dir, 0o300); err != nil {
 		t.Fatal(err)
 	}
+
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 }
 
 func TestRemoveAll(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "book")
+
 	if err := os.MkdirAll(filepath.Join(path, ".sidecar"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+
 	trash := filepath.Join(dir, ".trash")
 
 	if err := RemoveAll(path, trash); err != nil {
 		t.Fatalf("RemoveAll: %v", err)
 	}
+
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Errorf("path after RemoveAll: err = %v, want it gone", err)
 	}
+
 	if entries, _ := os.ReadDir(trash); len(entries) != 0 {
 		t.Errorf("trash holds %d entries, want none", len(entries))
 	}
@@ -271,24 +303,31 @@ func TestRemoveAllSucceedsWhenTrashRemovalFails(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores directory permissions")
 	}
+
 	dir := t.TempDir()
 	path := filepath.Join(dir, "book")
 	stuck := filepath.Join(path, "stuck")
+
 	if err := os.MkdirAll(stuck, 0o755); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := os.WriteFile(filepath.Join(stuck, "f"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := os.Chmod(stuck, 0o555); err != nil {
 		t.Skip("cannot chmod:", err)
 	}
+
 	trash := filepath.Join(dir, ".trash")
+
 	t.Cleanup(func() {
 		_ = filepath.WalkDir(trash, func(p string, d os.DirEntry, err error) error {
 			if err == nil && d.IsDir() {
 				_ = os.Chmod(p, 0o755)
 			}
+
 			return nil
 		})
 	})
@@ -296,9 +335,11 @@ func TestRemoveAllSucceedsWhenTrashRemovalFails(t *testing.T) {
 	if err := RemoveAll(path, trash); err != nil {
 		t.Fatalf("RemoveAll: %v", err)
 	}
+
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Errorf("path after RemoveAll: err = %v, want it gone", err)
 	}
+
 	if entries, _ := os.ReadDir(trash); len(entries) != 1 {
 		t.Errorf("trash holds %d entries, want the one copy it could not remove", len(entries))
 	}

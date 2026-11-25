@@ -44,6 +44,7 @@ func TestClosedIndexSurfacesErrors(t *testing.T) {
 		{"Delete", func(t *testing.T, idx *Index) func() error {
 			storeInIndex(t, idx, newBook(1, "T"))
 			op := mustMarkPending(t, idx)
+
 			return func() error { return op.Delete(1) }
 		}},
 		{"Rebuild", func(t *testing.T, idx *Index) func() error {
@@ -98,6 +99,7 @@ func TestRolledBackTxSurfacesErrors(t *testing.T) {
 		{"setSeries", func(idx *Index, q *dbsqlc.Queries) error {
 			b := newBook(1, "Test")
 			b.Series = &book.SeriesRef{Name: "S", Index: "1"}
+
 			return idx.setSeries(q, b)
 		}},
 		{"putBook", func(idx *Index, q *dbsqlc.Queries) error {
@@ -129,12 +131,15 @@ func TestRolledBackTxSurfacesErrors(t *testing.T) {
 // operation on it returns sql.ErrTxDone.
 func rolledBackTX(t *testing.T, idx *Index) *sql.Tx {
 	t.Helper()
+
 	tx, err := idx.db.Begin()
 	if err != nil {
 		t.Fatalf("Begin: %v", err)
 	}
+
 	if err := tx.Rollback(); err != nil {
 		t.Fatalf("Rollback: %v", err)
 	}
+
 	return tx
 }

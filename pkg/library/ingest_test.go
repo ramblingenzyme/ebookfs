@@ -20,6 +20,7 @@ func TestIngestRejectsUnindexedBookOnDisk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MarkPending: %v", err)
 	}
+
 	if err := op.Delete(b.ID()); err != nil {
 		t.Fatalf("index delete: %v", err)
 	}
@@ -33,11 +34,13 @@ func TestCreateIngestReadOnlyDir(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores directory permissions")
 	}
+
 	lib := openTestLibrary(t)
 
 	if err := os.Chmod(lib.inboxTemp, 0o444); err != nil {
 		t.Skip("cannot chmod inbox temp:", err)
 	}
+
 	t.Cleanup(func() { _ = os.Chmod(lib.inboxTemp, 0o755) })
 
 	_, err := lib.CreateIngest()
@@ -50,10 +53,12 @@ func TestCreateIngestReadOnlyDir(t *testing.T) {
 // filed and the temp file goes. Closing the file first forces the failure.
 func TestIngestRefusesFailedSync(t *testing.T) {
 	lib := openTestLibrary(t)
+
 	h, err := lib.CreateIngest()
 	if err != nil {
 		t.Fatalf("CreateIngest: %v", err)
 	}
+
 	handle := h.(*ingestHandle)
 	handle.ingestFn = func(string) (*Book, error) {
 		t.Error("ingestFn ran after a failed fsync")
@@ -65,6 +70,7 @@ func TestIngestRefusesFailedSync(t *testing.T) {
 	if _, err := h.Ingest(); !errors.Is(err, os.ErrClosed) {
 		t.Errorf("Ingest err = %v, want os.ErrClosed", err)
 	}
+
 	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("temp file still present: %v", err)
 	}
@@ -78,6 +84,7 @@ func TestFailedIngestCleansUp(t *testing.T) {
 	lib := openTestLibrary(t)
 	loc := lib.store.Layout([]Author{{Name: "Alice"}}, "Doomed", 1)
 	dir := lib.store.AbsPath(loc.Dir())
+
 	if err := os.MkdirAll(filepath.Join(dir, "meta.toml"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -89,13 +96,16 @@ func TestFailedIngestCleansUp(t *testing.T) {
 	if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("book directory left behind (stat err = %v)", err)
 	}
+
 	needs, err := lib.index.NeedsReindex()
 	if err != nil {
 		t.Fatalf("NeedsReindex: %v", err)
 	}
+
 	if needs {
 		t.Error("the failed ingest left its pending row, so the next start rebuilds")
 	}
+
 	if got, err := lib.Search(Query{}); err != nil || len(got) != 0 {
 		t.Errorf("Search = %v (err %v), want no books", got, err)
 	}

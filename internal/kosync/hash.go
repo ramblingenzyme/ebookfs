@@ -14,6 +14,7 @@ import (
 // LuaJIT masks the shift to 32 bits and lshift(1024, -2) wraps to 0.
 func PartialMD5(r io.ReaderAt, size int64) (string, error) {
 	const sampleSize = 1024
+
 	h := md5.New()
 
 	var offsets [12]int64
@@ -25,6 +26,7 @@ func PartialMD5(r io.ReaderAt, size int64) (string, error) {
 		if offset >= size {
 			break
 		}
+
 		n := min(sampleSize, size-offset)
 		if _, err := io.CopyN(h, io.NewSectionReader(r, offset, n), n); err != nil {
 			return "", err

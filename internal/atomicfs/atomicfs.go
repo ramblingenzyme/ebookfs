@@ -18,16 +18,20 @@ func Write(path, pattern string, data []byte) error {
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)
 	}
+
 	tmpPath := tmp.Name()
+
 	defer os.Remove(tmpPath)
 
 	_, err = tmp.Write(data)
 	if err == nil {
 		err = tmp.Sync()
 	}
+
 	if closeErr := tmp.Close(); err == nil {
 		err = closeErr
 	}
+
 	if err != nil {
 		return fmt.Errorf("writing temp file: %w", err)
 	}
@@ -35,6 +39,7 @@ func Write(path, pattern string, data []byte) error {
 	if err := Rename(tmpPath, path); err != nil {
 		return fmt.Errorf("renaming: %w", err)
 	}
+
 	return nil
 }
 
@@ -48,13 +53,16 @@ func WriteRoot(root *os.Root, name string, data []byte) error {
 	if err != nil {
 		return err
 	}
+
 	_, err = tmp.Write(data)
 	if err == nil {
 		err = tmp.Sync()
 	}
+
 	if closeErr := tmp.Close(); err == nil {
 		err = closeErr
 	}
+
 	if err != nil {
 		return err
 	}
@@ -62,7 +70,9 @@ func WriteRoot(root *os.Root, name string, data []byte) error {
 	if err := root.Rename(tmpName, name); err != nil {
 		return err
 	}
+
 	syncDir(root.Open("."))
+
 	return nil
 }
 
@@ -76,9 +86,11 @@ func Rename(src, dst string) error {
 
 	srcDir, dstDir := filepath.Dir(src), filepath.Dir(dst)
 	syncDir(os.Open(dstDir))
+
 	if srcDir != dstDir {
 		syncDir(os.Open(srcDir))
 	}
+
 	return nil
 }
 
@@ -107,11 +119,14 @@ func RemoveAll(path, trash string) error {
 		if _, statErr := os.Lstat(path); errors.Is(statErr, os.ErrNotExist) {
 			return nil
 		}
+
 		return err
 	}
+
 	if err := os.RemoveAll(container); err != nil {
 		slog.Warn("atomicfs: removed path left in trash", "path", container, "error", err)
 	}
+
 	return nil
 }
 
@@ -120,7 +135,9 @@ func Mkdir(path string, perm os.FileMode) error {
 	if err := os.Mkdir(path, perm); err != nil {
 		return err
 	}
+
 	syncDir(os.Open(filepath.Dir(path)))
+
 	return nil
 }
 
@@ -129,19 +146,23 @@ func Mkdir(path string, perm os.FileMode) error {
 // directory from its own parent.
 func MkdirAll(path string, perm os.FileMode) error {
 	var parents []string
+
 	for dir := path; ; dir = filepath.Dir(dir) {
 		if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
 			break
 		}
+
 		parents = append(parents, filepath.Dir(dir))
 	}
 
 	if err := os.MkdirAll(path, perm); err != nil {
 		return err
 	}
+
 	for _, parent := range parents {
 		syncDir(os.Open(parent))
 	}
+
 	return nil
 }
 
@@ -151,8 +172,10 @@ func MkdirAll(path string, perm os.FileMode) error {
 func syncDir(d *os.File, err error) {
 	if err == nil {
 		defer d.Close()
+
 		err = d.Sync()
 	}
+
 	if err != nil {
 		slog.Warn("atomicfs: directory fsync failed, a crash could lose its recent changes", "error", err)
 	}

@@ -16,9 +16,11 @@ func TestStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stats: %v", err)
 	}
+
 	if s.Books != 0 || s.Authors != 0 || s.Series != 0 || s.Tags != 0 || s.TotalSize != 0 {
 		t.Errorf("Stats on empty index = %+v, want all zero", s)
 	}
+
 	if !s.LastAdded.IsZero() || !s.LastModified.IsZero() {
 		t.Errorf("Stats on empty index = %+v, want zero timestamps", s)
 	}
@@ -41,6 +43,7 @@ func TestStats(t *testing.T) {
 		book.Meta{ID: 2, Tags: []string{"sci-fi"}},
 		book.Location{EpubPath: "A/Second (2)/book.epub"},
 	)
+
 	storeInIndexSized(t, idx, b1, 100)
 	storeInIndexSized(t, idx, b2, 250)
 
@@ -48,31 +51,39 @@ func TestStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stats: %v", err)
 	}
+
 	if s.Books != 2 {
 		t.Errorf("Books = %d, want 2", s.Books)
 	}
+
 	if s.Authors != 2 {
 		t.Errorf("Authors = %d, want 2 (Alice, Bob)", s.Authors)
 	}
+
 	if s.Series != 1 {
 		t.Errorf("Series = %d, want 1 (EPIC)", s.Series)
 	}
+
 	if s.Tags != 2 {
 		t.Errorf("Tags = %d, want 2 (sci-fi, space)", s.Tags)
 	}
+
 	if s.TotalSize != 350 {
 		t.Errorf("TotalSize = %d, want 350", s.TotalSize)
 	}
+
 	if s.LastAdded.IsZero() || s.LastModified.IsZero() {
 		t.Errorf("Stats = %+v, want non-zero timestamps", s)
 	}
 
 	b1.Meta.Tags = []string{"sci-fi"}
 	storeInIndexSized(t, idx, b1, 100)
+
 	s, err = idx.Stats()
 	if err != nil {
 		t.Fatalf("Stats: %v", err)
 	}
+
 	if s.Tags != 1 {
 		t.Errorf("Tags = %d, want 1 (space should be swept)", s.Tags)
 	}
@@ -98,6 +109,7 @@ func TestFacetListings(t *testing.T) {
 
 	storeInIndex(t, idx, b1)
 	storeInIndex(t, idx, b2)
+
 	for _, stmt := range []string{
 		"INSERT INTO authors (name, sort_name) VALUES ('Nobody', 'Nobody')",
 		"INSERT INTO series (name) VALUES ('Lost')",
@@ -122,6 +134,7 @@ func TestFacetListings(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", tt.name, err)
 		}
+
 		if !slices.Equal(got, tt.want) {
 			t.Errorf("%s = %v, want %v", tt.name, got, tt.want)
 		}

@@ -24,6 +24,7 @@ func (idx *Index) MarkPending() (*Op, error) {
 	if err := idx.wq.InsertPendingOp(idx.ctx, id); err != nil {
 		return nil, err
 	}
+
 	return &Op{idx: idx, opID: id}, nil
 }
 
@@ -31,10 +32,12 @@ func (o *Op) finish(fn func(*dbsqlc.Queries) error) error {
 	if o.opID == "" {
 		return errors.New("op was cancelled")
 	}
+
 	return o.idx.withTx(func(q *dbsqlc.Queries, _ *sql.Tx) error {
 		if err := fn(q); err != nil {
 			return err
 		}
+
 		return q.DeletePendingOp(o.idx.ctx, o.opID)
 	})
 }

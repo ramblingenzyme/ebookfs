@@ -16,15 +16,19 @@ import (
 
 func serveTree(t *testing.T, root *fs.StaticDir) *ninep.Conn {
 	t.Helper()
+
 	fsys, _ := fs.NewFS("root", "root", 0o755, fs.IgnorePermissions())
 	fsys.Root = root
 
 	server, client := net.Pipe()
 	done := make(chan struct{})
+
 	go func() {
 		_ = go9p.ServeReadWriter(server, server, fsys.Server())
+
 		close(done)
 	}()
+
 	t.Cleanup(func() {
 		client.Close()
 		<-done
@@ -34,6 +38,7 @@ func serveTree(t *testing.T, root *fs.StaticDir) *ninep.Conn {
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
+
 	return conn
 }
 
@@ -47,6 +52,7 @@ func TestReaddirRootListsStaticFile(t *testing.T) {
 		Length: 13,
 		Mode:   0o644,
 	}, []byte("hello, world!"))
+
 	if err := root.AddChild(file); err != nil {
 		t.Fatal(err)
 	}
@@ -57,9 +63,11 @@ func TestReaddirRootListsStaticFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Readdir: %v", err)
 	}
+
 	if len(stats) != 1 {
 		t.Fatalf("Readdir returned %d entries, want 1", len(stats))
 	}
+
 	if stats[0].Name != "test.txt" {
 		t.Errorf("entry name = %q, want %q", stats[0].Name, "test.txt")
 	}
@@ -74,6 +82,7 @@ func TestReaddirRootListsStaticFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadAll: %v", err)
 	}
+
 	if string(data) != "hello, world!" {
 		t.Errorf("ReadAll = %q, want %q", string(data), "hello, world!")
 	}
@@ -93,6 +102,7 @@ func TestReaddirLargeDirectory(t *testing.T) {
 			Length: 4,
 			Mode:   0o644,
 		}, []byte("test"))
+
 		if err := root.AddChild(file); err != nil {
 			t.Fatal(err)
 		}
@@ -104,6 +114,7 @@ func TestReaddirLargeDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Readdir: %v", err)
 	}
+
 	if len(stats) != count {
 		t.Errorf("Readdir returned %d entries, want %d", len(stats), count)
 	}
@@ -118,6 +129,7 @@ func TestWalkMissing(t *testing.T) {
 		Name: "dir",
 		Mode: proto.DMDIR | 0o755,
 	})
+
 	if err := root.AddChild(dir); err != nil {
 		t.Fatal(err)
 	}
@@ -145,10 +157,12 @@ func TestCreateRefused(t *testing.T) {
 	conn := serveTree(t, root)
 
 	done := make(chan error, 1)
+
 	go func() {
 		_, err := conn.Create("/new.txt", 0o644, proto.Owrite)
 		done <- err
 	}()
+
 	select {
 	case err := <-done:
 		if err == nil {
@@ -183,16 +197,20 @@ func TestOpenRefused(t *testing.T) {
 		Name: "fails.txt",
 		Mode: 0o644,
 	})
+
 	if err := root.AddChild(file); err != nil {
 		t.Fatal(err)
 	}
+
 	conn := serveTree(t, root)
 
 	done := make(chan error, 1)
+
 	go func() {
 		_, err := conn.Open("/fails.txt", proto.Oread)
 		done <- err
 	}()
+
 	select {
 	case err := <-done:
 		if err == nil || err.Error() != "open failed" {
@@ -226,6 +244,7 @@ func TestClunkReturnsCloseError(t *testing.T) {
 		Length: 0,
 		Mode:   0o644,
 	})
+
 	if err := root.AddChild(file); err != nil {
 		t.Fatal(err)
 	}
@@ -241,6 +260,7 @@ func TestClunkReturnsCloseError(t *testing.T) {
 	if err == nil {
 		t.Error("Clunk succeeded, want error")
 	}
+
 	if err != nil && err.Error() != "close failed" {
 		t.Errorf("Clunk error = %v, want %q", err, "close failed")
 	}
@@ -255,9 +275,11 @@ func (f *wstatFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error
 	if offset >= f.length {
 		return nil, nil
 	}
+
 	if offset+count > f.length {
 		count = f.length - offset
 	}
+
 	return make([]byte, count), nil
 }
 
@@ -265,12 +287,14 @@ func (f *wstatFile) WriteStat(s *proto.Stat) error {
 	if s.Length != ^uint64(0) {
 		f.length = s.Length
 	}
+
 	return nil
 }
 
 func (f *wstatFile) Stat() proto.Stat {
 	s := f.BaseFile.Stat()
 	s.Length = f.length
+
 	return s
 }
 
@@ -285,6 +309,7 @@ func TestWstatLengthZero(t *testing.T) {
 		Length: 100,
 		Mode:   0o644,
 	})
+
 	if err := root.AddChild(file); err != nil {
 		t.Fatal(err)
 	}
@@ -301,18 +326,22 @@ func TestWstatLengthZero(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stat: %v", err)
 	}
+
 	if stat.Length != 100 {
 		t.Fatalf("initial Length = %d, want 100", stat.Length)
 	}
+
 	if stat.Name != "resizable.txt" {
 		t.Fatalf("initial Name = %q, want %q", stat.Name, "resizable.txt")
 	}
+
 	if stat.Mode != 0o644 {
 		t.Fatalf("initial Mode = %o, want %o", stat.Mode, 0o644)
 	}
 
 	wstat := ninep.DontTouch()
 	wstat.Length = 0
+
 	err = fid.WStat(wstat)
 	if err != nil {
 		t.Fatalf("WStat: %v", err)
@@ -322,12 +351,15 @@ func TestWstatLengthZero(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stat after WStat: %v", err)
 	}
+
 	if stat.Length != 0 {
 		t.Errorf("Length after WStat = %d, want 0", stat.Length)
 	}
+
 	if stat.Name != "resizable.txt" {
 		t.Errorf("Name after WStat = %q, want %q", stat.Name, "resizable.txt")
 	}
+
 	if stat.Mode != 0o644 {
 		t.Errorf("Mode after WStat = %o, want %o", stat.Mode, 0o644)
 	}
@@ -344,12 +376,16 @@ func TestDialRejectsHandshake(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			server, client := net.Pipe()
+
 			t.Cleanup(func() { client.Close() })
+
 			go func() {
 				defer server.Close()
+
 				if _, err := proto.ParseCall(server); err != nil {
 					return
 				}
+
 				rver := &proto.TRVersion{
 					Header:  proto.Header{Type: proto.Rversion},
 					Msize:   tc.msize,
@@ -358,9 +394,11 @@ func TestDialRejectsHandshake(t *testing.T) {
 				if _, err := server.Write(rver.Compose()); err != nil {
 					return
 				}
+
 				if _, err := proto.ParseCall(server); err != nil {
 					return
 				}
+
 				rattach := &proto.RAttach{Header: proto.Header{Type: proto.Rattach, Tag: 1}}
 				if _, err := server.Write(rattach.Compose()); err != nil {
 					return

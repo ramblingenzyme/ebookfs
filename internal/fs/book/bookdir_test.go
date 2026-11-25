@@ -24,6 +24,7 @@ func TestBookDirListing(t *testing.T) {
 		"opf", "pubdate", "publisher", "rating", "rights", "series", "series_index", "status",
 		"subjects", "tags", "title",
 	}
+
 	for _, tc := range []struct {
 		name  string
 		cover string
@@ -40,6 +41,7 @@ func TestBookDirListing(t *testing.T) {
 			want := append([]string{"Title - Author.epub"}, fields...)
 			want = append(want, tc.extra...)
 			slices.Sort(want)
+
 			if got := fstest.ChildNames(newTestBookDir(t, util.WrapBook(b))); !slices.Equal(got, want) {
 				t.Errorf("children = %q, want %q", got, want)
 			}

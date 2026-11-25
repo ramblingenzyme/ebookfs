@@ -19,6 +19,7 @@ func Put(s Slot, value string) {
 		s.Clear()
 		return
 	}
+
 	s.Set(value)
 }
 
@@ -50,6 +51,7 @@ func (e *Element) ensure() *etree.Element {
 		e.el = e.newEl()
 		e.parent().AddChild(e.el)
 	}
+
 	return e.el
 }
 
@@ -66,6 +68,7 @@ func (e *Element) Remove() {
 	if e.el == nil {
 		return
 	}
+
 	e.d.removeRefinements([]string{e.ID()})
 	detach(e.el)
 	e.el = nil
@@ -79,6 +82,7 @@ func (e *Element) ID() string {
 	if e.el == nil {
 		return ""
 	}
+
 	return attr(e.el, "id")
 }
 
@@ -106,6 +110,7 @@ func (r *Refine) Unschemed() *Refine {
 	narrowed := *r
 	narrowed.unschemedOnly = true
 	narrowed.schemedAs = ""
+
 	return &narrowed
 }
 
@@ -114,6 +119,7 @@ func (r *Refine) Schemed(scheme string) *Refine {
 	narrowed := *r
 	narrowed.unschemedOnly = false
 	narrowed.schemedAs = scheme
+
 	return &narrowed
 }
 
@@ -122,17 +128,22 @@ func (r *Refine) elements() []*etree.Element {
 	if !r.unschemedOnly && r.schemedAs == "" {
 		return ms
 	}
+
 	var out []*etree.Element
+
 	for _, m := range ms {
 		scheme := attr(m, "scheme")
 		if r.unschemedOnly && scheme != "" {
 			continue
 		}
+
 		if r.schemedAs != "" && !r.d.vocab.Same(scheme, r.schemedAs) {
 			continue
 		}
+
 		out = append(out, m)
 	}
+
 	return out
 }
 
@@ -140,6 +151,7 @@ func (r *Refine) Get() string {
 	if ms := r.elements(); len(ms) > 0 {
 		return text(ms[0])
 	}
+
 	return ""
 }
 
@@ -152,6 +164,7 @@ func (r *Refine) Set(value string) {
 		ms[0].SetText(value)
 		return
 	}
+
 	r.Add(value, "")
 }
 
@@ -165,8 +178,10 @@ func (r *Refine) SetValues(values []string, scheme string) {
 			ms[i].SetText(v)
 			continue
 		}
+
 		r.Add(v, scheme)
 	}
+
 	for _, m := range ms[min(len(values), len(ms)):] {
 		detach(m)
 	}
@@ -182,11 +197,13 @@ func (r *Refine) Clear() {
 
 func (r *Refine) Values() []string {
 	var out []string
+
 	for _, m := range r.elements() {
 		if v := text(m); v != "" {
 			out = append(out, v)
 		}
 	}
+
 	return out
 }
 
@@ -206,6 +223,7 @@ func (a *OPFAttr) Get() string {
 	if a.owner.el == nil {
 		return ""
 	}
+
 	return attr(a.owner.el, a.name)
 }
 
@@ -218,6 +236,7 @@ func (a *OPFAttr) Set(value string) {
 		existing.Value = value
 		return
 	}
+
 	el.CreateAttr(xml.Qualify(a.d.ns.opf(), a.name), value)
 }
 
@@ -225,6 +244,7 @@ func (a *OPFAttr) Clear() {
 	if a.owner.el == nil {
 		return
 	}
+
 	if existing := a.owner.el.SelectAttr(a.name); existing != nil {
 		a.owner.el.RemoveAttr(existing.FullKey())
 	}
@@ -239,6 +259,7 @@ func (n *Named) Get() string {
 	if ms := n.d.md.named(n.name); len(ms) > 0 {
 		return attr(ms[0], "content")
 	}
+
 	return ""
 }
 
@@ -250,6 +271,7 @@ func (n *Named) Set(value string) {
 		ms[0].CreateAttr("content", value)
 		return
 	}
+
 	m := n.d.md.metaParent().CreateElement("meta")
 	m.CreateAttr("name", n.name)
 	m.CreateAttr("content", value)

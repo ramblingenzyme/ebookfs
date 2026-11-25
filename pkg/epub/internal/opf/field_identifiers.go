@@ -13,15 +13,18 @@ import (
 // ISBN-13 do, the first in document order wins.
 func (o *Package) identifiers() map[string]string {
 	out := map[string]string{}
+
 	for _, el := range o.d.DCAll("identifier") {
 		value := el.Get()
 		if value == "" {
 			continue
 		}
+
 		scheme := o.identifierScheme(el)
 		if scheme == "" {
 			scheme = unusedUnknownScheme(out)
 		}
+
 		if _, taken := out[scheme]; taken {
 			continue
 		}
@@ -30,8 +33,10 @@ func (o *Package) identifiers() map[string]string {
 		if nid, rest, ok := urnNID(value); ok && nid == scheme {
 			value = rest
 		}
+
 		out[scheme] = value
 	}
+
 	return out
 }
 
@@ -60,6 +65,7 @@ func (o *Package) identifierScheme(el *pkgdoc.Element) string {
 			return name
 		}
 	}
+
 	if s := kind.Unschemed().Get(); s != "" {
 		return normalizeScheme(s)
 	}
@@ -112,10 +118,12 @@ func urnNID(value string) (nid, rest string, ok bool) {
 	if len(value) < len(prefix) || !strings.EqualFold(value[:len(prefix)], prefix) {
 		return "", "", false
 	}
+
 	nid, rest, ok = strings.Cut(value[len(prefix):], ":")
 	if !ok || nid == "" || rest == "" {
 		return "", "", false
 	}
+
 	return strings.ToLower(nid), rest, true
 }
 
@@ -127,6 +135,7 @@ func unusedUnknownScheme(out map[string]string) string {
 	if _, taken := out[unknownScheme]; !taken {
 		return unknownScheme
 	}
+
 	for n := 2; ; n++ {
 		scheme := unknownScheme + "-" + strconv.Itoa(n)
 		if _, taken := out[scheme]; !taken {

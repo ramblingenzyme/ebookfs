@@ -19,15 +19,20 @@ import (
 func TestConcurrentLibraryEditsKeepBookDirSnapshotWhole(t *testing.T) {
 	lib, _ := openLibrary(t)
 	reg := registry.NewBookRegistry(util.NewTestFS(t), lib)
+
 	if err := lib.AddHook(reg); err != nil {
 		t.Fatal(err)
 	}
+
 	allBooks := views.NewAllBooksDir(reg)
+
 	ingest("Race A", "Alice")(t, lib)
+
 	book, err := lib.Search(library.Query{Titles: []string{"Race A"}})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
+
 	if len(book) == 0 {
 		t.Fatalf("no book found")
 	}
@@ -37,9 +42,12 @@ func TestConcurrentLibraryEditsKeepBookDirSnapshotWhole(t *testing.T) {
 	titles := [2]string{"Race A", "Race B"}
 
 	var wg sync.WaitGroup
+
 	done := make(chan struct{})
+
 	wg.Go(func() {
 		defer close(done)
+
 		for i := range 100 {
 			title := titles[i%len(titles)]
 			if _, err := lib.Edit(book[0].ID(), library.Edits{Title: &title}); err != nil {
@@ -57,14 +65,17 @@ func TestConcurrentLibraryEditsKeepBookDirSnapshotWhole(t *testing.T) {
 					return
 				default:
 				}
+
 				name := stableDir.Stat().Name
 				if name != "Race A" && name != "Race B" {
 					t.Errorf("BookDir exposed torn title %q", name)
 					return
 				}
+
 				_ = titleFile.Stat()
 			}
 		})
 	}
+
 	wg.Wait()
 }

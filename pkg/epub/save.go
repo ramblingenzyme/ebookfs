@@ -35,21 +35,27 @@ func (b *Book) SetCover(img []byte) error {
 	if b.coverPath == "" {
 		return ErrNoCover
 	}
+
 	want := coverFormat(b.coverPath)
 	if want == "" {
 		return fmt.Errorf("cover format not replaceable in place: %s", b.coverPath)
 	}
+
 	_, got, err := image.DecodeConfig(bytes.NewReader(img))
 	if err != nil {
 		return fmt.Errorf("cover data is not a valid PNG or JPEG image: %w", err)
 	}
+
 	if got != want {
 		return fmt.Errorf("cover image is %s but the epub's cover entry %q is %s; a matching format is required (no transcoding)", got, b.coverPath, want)
 	}
+
 	if !b.has(b.coverPath) {
 		return fmt.Errorf("cover not found in epub: %s", b.coverPath)
 	}
+
 	b.cover = img
+
 	return nil
 }
 
@@ -71,13 +77,16 @@ func (b *Book) Save() error {
 	if b.File == nil || b.pkg == nil {
 		return errors.New("epub: Save on a Book that was not opened")
 	}
+
 	replace, err := b.stage()
 	if err != nil {
 		return err
 	}
+
 	if len(replace) == 0 {
 		return nil
 	}
+
 	return b.rewrite(replace)
 }
 
@@ -100,11 +109,13 @@ func (b *Book) stage() (map[string][]byte, error) {
 			return nil, err
 		}
 	}
+
 	if m := b.moved(); m.changed() {
 		if err := b.stageMetadata(enc, m, replace); err != nil {
 			return nil, err
 		}
 	}
+
 	return replace, nil
 }
 
@@ -113,11 +124,14 @@ func (b *Book) stageCover(enc *ocf.EncryptionInfo, replace map[string][]byte) er
 	if enc.IsEncrypted(b.coverPath) {
 		return fmt.Errorf("refusing to replace encrypted cover: %s", b.coverPath)
 	}
+
 	replace[b.coverPath] = b.cover
+
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(b.cover))
 	if err != nil {
 		return err
 	}
+
 	return b.refitCoverPage(enc, cfg.Width, cfg.Height, replace)
 }
 
@@ -127,16 +141,20 @@ func (b *Book) stageMetadata(enc *ocf.EncryptionInfo, m moved, replace map[strin
 	if err := b.representable(m); err != nil {
 		return err
 	}
+
 	if enc.IsEncrypted(b.PackagePath()) {
 		return fmt.Errorf("refusing to edit: package document %q is encrypted", b.PackagePath())
 	}
+
 	out, err := b.pkg.Apply(func(d *opf.Package) { b.write(d, m) })
 	if err != nil {
 		return err
 	}
+
 	if out != nil {
 		replace[b.PackagePath()] = out
 	}
+
 	return b.syncNCX(enc, m, replace)
 }
 
@@ -163,12 +181,14 @@ func (b *Book) representable(m moved) error {
 		if !f.changed {
 			continue
 		}
+
 		for _, v := range f.values {
 			if !xml.Representable(v) {
 				return fmt.Errorf("refusing to edit: %s %q holds a character XML 1.0 cannot represent", f.field, v)
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -177,6 +197,7 @@ func authorValues(as []Author) []string {
 	for _, a := range as {
 		out = append(out, a.Name, a.SortName)
 	}
+
 	return out
 }
 
@@ -184,6 +205,7 @@ func seriesValues(s *Series) []string {
 	if s == nil {
 		return nil
 	}
+
 	return []string{s.Name, s.Index}
 }
 
@@ -192,6 +214,7 @@ func contributorValues(cs []Contributor) []string {
 	for _, c := range cs {
 		out = append(out, c.Name, c.Role)
 	}
+
 	return out
 }
 
@@ -204,6 +227,7 @@ type moved struct {
 
 func (b *Book) moved() moved {
 	o := b.orig
+
 	return moved{
 		title:        b.Title != o.Title,
 		sortTitle:    b.SortTitle != o.SortTitle,
@@ -226,6 +250,7 @@ func sameSeries(a, c *Series) bool {
 	if a == nil || c == nil {
 		return a == c
 	}
+
 	return *a == *c
 }
 
@@ -260,6 +285,7 @@ func (b *Book) changedTitle(m moved) *string {
 	if m.title {
 		return &b.Title
 	}
+
 	return nil
 }
 
@@ -270,6 +296,7 @@ func opfAuthors(as []Author) []opf.Author {
 	for i, a := range as {
 		out[i] = opf.Author(a)
 	}
+
 	return out
 }
 
@@ -278,6 +305,7 @@ func opfContributors(cs []Contributor) []opf.Contributor {
 	for i, c := range cs {
 		out[i] = opf.Contributor(c)
 	}
+
 	return out
 }
 
@@ -289,23 +317,28 @@ func (b *Book) refitCoverPage(enc *ocf.EncryptionInfo, width, height int, replac
 		if !b.has(entry) || enc.IsEncrypted(entry) {
 			continue
 		}
+
 		data, err := b.ReadEntry(entry)
 		if err != nil {
 			return err
 		}
+
 		page, err := content.Parse(data, entry)
 		if err != nil {
 			continue
 		}
+
 		out, err := page.FitCover(b.coverPath, width, height)
 		if err != nil {
 			return err
 		}
+
 		if out != nil {
 			replace[entry] = out
 			return nil
 		}
 	}
+
 	return nil
 }
 
@@ -318,6 +351,7 @@ func (b *Book) syncNCX(enc *ocf.EncryptionInfo, m moved, replace map[string][]by
 	if !m.title && !m.authors {
 		return nil
 	}
+
 	entry := b.pkg.NCXPath(path.Dir(b.PackagePath()))
 	if entry == "" || !b.has(entry) || enc.IsEncrypted(entry) {
 		return nil
@@ -333,17 +367,21 @@ func (b *Book) syncNCX(enc *ocf.EncryptionInfo, m moved, replace map[string][]by
 	if err != nil {
 		slog.Warn("epub: skipping unreadable NCX; its title and authors will not match the package document",
 			"entry", entry, "error", err)
+
 		return nil
 	}
 
 	title, names := b.ncxChanges(m)
+
 	out, err := doc.Apply(title, names)
 	if err != nil {
 		return err
 	}
+
 	if out != nil {
 		replace[entry] = out
 	}
+
 	return nil
 }
 
@@ -357,6 +395,7 @@ func (b *Book) ncxChanges(m moved) (title *string, names []string) {
 			names[i] = a.Name
 		}
 	}
+
 	return title, names
 }
 
@@ -366,6 +405,7 @@ func (b *Book) ncxChanges(m moved) (title *string, names []string) {
 //     dropping the edit.
 func (b *Book) rewrite(replace map[string][]byte) error {
 	dir := filepath.Dir(b.path)
+
 	tmp, err := os.CreateTemp(dir, SaveTempPattern)
 	if err != nil {
 		return err
@@ -381,12 +421,15 @@ func (b *Book) rewrite(replace map[string][]byte) error {
 	if err := b.a.writeTo(zw, replace); err != nil {
 		return err
 	}
+
 	if err := zw.Close(); err != nil {
 		return err
 	}
+
 	if err := tmp.Sync(); err != nil {
 		return err
 	}
+
 	if err := tmp.Close(); err != nil {
 		return err
 	}
@@ -410,6 +453,7 @@ func (b *Book) rewrite(replace map[string][]byte) error {
 	next.path = b.path
 	b.File.Close()
 	*b = *next
+
 	return nil
 }
 

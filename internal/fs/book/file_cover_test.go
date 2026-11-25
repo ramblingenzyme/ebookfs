@@ -19,6 +19,7 @@ func TestCoverFileWrite(t *testing.T) {
 	if err := jpeg.Encode(&jpg, image.NewGray(image.Rect(0, 0, 1, 1)), nil); err != nil {
 		t.Fatal(err)
 	}
+
 	for _, tc := range []struct {
 		name    string
 		write   string
@@ -39,8 +40,10 @@ func TestCoverFileWrite(t *testing.T) {
 				if err := fid.WantCloseError(); err == nil {
 					t.Error("Close succeeded, want the library's refusal")
 				}
+
 				return
 			}
+
 			fid.Close()
 
 			r, err := lib.Content(b.ID())
@@ -48,6 +51,7 @@ func TestCoverFileWrite(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer r.Close()
+
 			if got, err := r.Cover(); err != nil || string(got) != tc.write {
 				t.Errorf("cover = %d bytes (err %v), want the %d written", len(got), err, len(tc.write))
 			}

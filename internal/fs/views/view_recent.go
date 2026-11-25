@@ -40,6 +40,7 @@ func NewRecentDir(reg *registry.BookRegistry) *recentDir {
 		visible:     make(map[int64]*book.BookDir),
 	}
 	reg.AddView(d)
+
 	return d
 }
 
@@ -72,14 +73,17 @@ func (d *recentDir) refresh() {
 	for _, dir := range top {
 		id := dir.Book().ID()
 		now[id] = dir
+
 		if _, ok := d.visible[id]; !ok {
 			d.bookListDir.Add(dir)
 		}
 	}
+
 	for id, dir := range d.visible {
 		if _, ok := now[id]; !ok {
 			d.bookListDir.Remove(dir)
 		}
 	}
+
 	d.visible = now
 }

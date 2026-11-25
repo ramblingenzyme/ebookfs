@@ -34,8 +34,10 @@ func fatComponent(s string) string {
 		case r < 0x20:
 			return -1
 		}
+
 		return r
 	}, s)
+
 	return strings.Trim(s, trimmed)
 }
 
@@ -51,6 +53,7 @@ func ForFAT(s string) string {
 	if out := fatComponent(s); out != "" {
 		return out
 	}
+
 	return "_"
 }
 
@@ -62,6 +65,7 @@ func PathSafe(s string) string {
 	if out := pathComponent(s); out != "" {
 		return out
 	}
+
 	return "_"
 }
 

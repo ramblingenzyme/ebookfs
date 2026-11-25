@@ -13,6 +13,7 @@ func (s *Server) Setup(root, stateDir string) error {
 	if err := s.registry.Restore(s.lib); err != nil {
 		return fmt.Errorf("restoring kosync index: %w", err)
 	}
+
 	return nil
 }
 

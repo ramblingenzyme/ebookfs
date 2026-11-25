@@ -68,6 +68,7 @@ func lookupKind(id string) (kind, bool) {
 			return k, true
 		}
 	}
+
 	return kind{}, false
 }
 
@@ -75,6 +76,7 @@ func (k kind) mediaType() string {
 	if k.list == nil {
 		return opds.MediaTypeAcquisition
 	}
+
 	return opds.MediaTypeNavigation
 }
 
@@ -83,8 +85,10 @@ func (k kind) mediaType() string {
 func statusFacets(Library) ([]library.Facet, error) {
 	statuses := library.Statuses()
 	out := make([]library.Facet, len(statuses))
+
 	for i, s := range statuses {
 		out[i] = library.Facet{Name: s}
 	}
+
 	return out, nil
 }

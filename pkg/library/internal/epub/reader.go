@@ -38,6 +38,7 @@ func OpenReader(epubPath, coverPath string) (EpubReader, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &reader{File: f, coverPath: coverPath}, nil
 }
 
@@ -49,6 +50,7 @@ func OpenReaderFromFile(f *os.File, path, coverPath string) (EpubReader, error) 
 	if err != nil {
 		return nil, err
 	}
+
 	return &reader{File: ef, coverPath: coverPath}, nil
 }
 
@@ -59,8 +61,10 @@ func (r *reader) Cover() ([]byte, error) {
 	if r.Closed() {
 		return nil, epubfile.ErrClosed
 	}
+
 	if r.coverPath == "" {
 		return nil, epubfile.ErrNoCover
 	}
+
 	return r.ReadEntry(r.coverPath)
 }

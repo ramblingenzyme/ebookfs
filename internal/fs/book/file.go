@@ -16,10 +16,12 @@ func snapshot(present bool, missing string, book func() *library.Book) (*library
 	if !present {
 		return nil, errors.New(missing)
 	}
+
 	b := book()
 	if b == nil {
 		return nil, errors.New("book snapshot not available")
 	}
+
 	return b, nil
 }
 
@@ -28,6 +30,7 @@ func content(lib ContentReader, book func() *library.Book) (library.EpubReader, 
 	if err != nil {
 		return nil, err
 	}
+
 	return lib.Content(b.ID())
 }
 
@@ -39,6 +42,7 @@ func contentBytes(lib ContentReader, book func() *library.Book, pick func(librar
 			return nil, err
 		}
 		defer r.Close()
+
 		return pick(r)
 	}
 }

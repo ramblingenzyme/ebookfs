@@ -54,6 +54,7 @@ func Parse(b []byte) (*Package, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &Package{d}, nil
 }
 
@@ -79,7 +80,9 @@ func (o *Package) Apply(edit func(*Package)) ([]byte, error) {
 	if err != nil || bytes.Equal(before, after) {
 		return nil, err
 	}
+
 	o.modified().set(time.Now())
+
 	return o.Bytes()
 }
 

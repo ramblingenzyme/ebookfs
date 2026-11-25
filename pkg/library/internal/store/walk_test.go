@@ -34,6 +34,7 @@ func TestWalk(t *testing.T) {
 	for _, loc := range results {
 		found[loc.Dir()] = true
 	}
+
 	for _, want := range []string{"Author, A/Book One (1)", "Author, A/Book Two (2)", "Author, B/Book Three (3)"} {
 		if !found[want] {
 			t.Errorf("Walk did not return %q", want)
@@ -50,7 +51,9 @@ func TestWalkFailsOnUnsearchableBookDir(t *testing.T) {
 	if err := os.Chmod(dir, 0o644); err != nil {
 		t.Skip("cannot chmod book dir:", err)
 	}
+
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+
 	if _, err := os.Stat(filepath.Join(dir, metaFilename)); err == nil {
 		t.Skip("permissions not enforced, as for root")
 	}

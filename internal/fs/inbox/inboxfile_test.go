@@ -59,15 +59,20 @@ func TestInboxFileOpen(t *testing.T) {
 		if os.Geteuid() == 0 {
 			t.Skip("root ignores directory permissions")
 		}
+
 		cfg := util.TestConfig(t)
+
 		lib, err := library.Open(library.Config(cfg))
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		t.Cleanup(func() { lib.Close() })
+
 		if err := os.Chmod(cfg.InboxTemp, 0o555); err != nil {
 			t.Fatal(err)
 		}
+
 		t.Cleanup(func() { _ = os.Chmod(cfg.InboxTemp, 0o755) })
 
 		inf := NewInboxFile(util.NewTestFS(t), lib, "test.epub", 0o644)
@@ -156,6 +161,7 @@ func TestInboxCloseLeavesASameNamedUploadListed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	firstFid := fstest.Fid(t, first, 1)
 	firstFid.Open(proto.Mode(0))
 	firstFid.Write(0, "first")
@@ -164,9 +170,11 @@ func TestInboxCloseLeavesASameNamedUploadListed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	fstest.Fid(t, second, 2).Open(proto.Mode(0))
 
 	firstFid.Close()
+
 	if got := dir.Children()["same.epub"]; got != second {
 		t.Errorf("after the first upload closed, same.epub is %v, want the second upload", got)
 	}

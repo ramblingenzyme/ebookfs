@@ -26,9 +26,11 @@ func TestParseCommand(t *testing.T) {
 			t.Errorf("parseCommand(%q) error = %v, wantErr = %v", tt.input, err, tt.wantErr)
 			continue
 		}
+
 		if name != tt.name {
 			t.Errorf("parseCommand(%q).name = %q, want %q", tt.input, name, tt.name)
 		}
+
 		if !slices.Equal(args, tt.args) {
 			t.Errorf("parseCommand(%q).args = %q, want %q", tt.input, args, tt.args)
 		}

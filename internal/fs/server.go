@@ -39,6 +39,7 @@ func (s *Server) Serve() error {
 func (s *Server) Shutdown(ctx context.Context) error {
 	err := s.go9pSrv.Shutdown(ctx)
 	s.shutdown()
+
 	return err
 }
 
@@ -73,9 +74,11 @@ type Config struct {
 func New(lib Library, cfg Config) (*Server, error) {
 	ebookfs, root := fs.NewFS("glenda", "glenda", 0o555, fs.IgnorePermissions())
 	reg := registry.NewBookRegistry(ebookfs, lib)
+
 	if err := lib.AddHook(reg); err != nil {
 		return nil, fmt.Errorf("registering book registry: %w", err)
 	}
+
 	ebookfs.CreateFile = vfile.DispatchCreate
 
 	// Each view self-registers with the registry on construction.
@@ -93,10 +96,12 @@ func New(lib Library, cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("loading books: %w", err)
 	}
+
 	reg.Load(books...)
 
 	cmdLog := ctl.NewCommandLog(100)
 	search := views.NewSearchDir(ebookfs, reg, cfg.SearchTTL, cfg.SearchMaxHandles)
+
 	for _, n := range []fs.FSNode{
 		inbox.NewInboxDir(ebookfs, lib),
 		allBooks, byAuthor, byID, bySeries, bySubjects, byTag, byStatus, recent, stats,

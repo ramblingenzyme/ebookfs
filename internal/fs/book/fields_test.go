@@ -61,17 +61,21 @@ func TestFieldEdits(t *testing.T) {
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("edits error = %v, wantErr = %v", err, tc.wantErr)
 			}
+
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("edits = %+v, want %+v", got, tc.want)
 			}
+
 			if tc.reads == "" {
 				return
 			}
+
 			b := util.MakeMutableBook(1, "T", "Author")
 			b.Meta.Tags = deref(got.Tags)
 			b.Subjects = deref(got.Subjects)
 			b.Contributors = deref(got.Contributors)
 			b.Authors = deref(got.Authors)
+
 			if text := fields[tc.field].get(util.WrapBook(b)); text != tc.reads {
 				t.Errorf("get after the edit = %q, want %q", text, tc.reads)
 			}
@@ -83,5 +87,6 @@ func deref[T any](p *[]T) []T {
 	if p == nil {
 		return nil
 	}
+
 	return *p
 }

@@ -35,6 +35,7 @@ func newNamedBookDir(f *fs.FS, dir *book.BookDir, fn func(*library.Book) string)
 func (n *namedBookDir) Stat() proto.Stat {
 	s := n.baseStat
 	s.Name = n.name(n.BookDir.Book())
+
 	return s
 }
 
@@ -60,6 +61,7 @@ func (g *groupingDir) pruneEmpty(name string) {
 	if !ok {
 		return
 	}
+
 	if dir, ok := child.(fs.Dir); ok && len(dir.Children()) == 0 {
 		g.StaticDir.DeleteChild(name)
 	}
@@ -71,8 +73,10 @@ func (g *groupingDir) childDir(name string, factory func(*proto.Stat) fs.FSNode)
 	if child, ok := g.Children()[name]; ok {
 		return child
 	}
+
 	ad := factory(newDirStat(g.f, name))
 	vfile.AddChild(g.StaticDir, ad)
+
 	return ad
 }
 
@@ -105,6 +109,7 @@ func newKeyedDir(reg *registry.BookRegistry, name string, keys func(*library.Boo
 		factory:     factory,
 	}
 	reg.AddView(d)
+
 	return d
 }
 
@@ -113,9 +118,11 @@ func newKeyedDir(reg *registry.BookRegistry, name string, keys func(*library.Boo
 func (d *keyedDir) entryNames(b *library.Book) []string {
 	keys := d.keys(b)
 	names := make([]string, len(keys))
+
 	for i, key := range keys {
 		names[i] = naming.PathSafe(key)
 	}
+
 	return names
 }
 
@@ -130,6 +137,7 @@ func nameableKeys(values []string) []string {
 			keys = append(keys, v)
 		}
 	}
+
 	return keys
 }
 

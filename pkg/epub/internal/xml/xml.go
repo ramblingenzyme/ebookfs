@@ -19,6 +19,7 @@ func Qualify(prefix, tag string) string {
 	if prefix == "" {
 		return tag
 	}
+
 	return prefix + ":" + tag
 }
 
@@ -33,11 +34,14 @@ func ResolveHref(baseDir, href string) string {
 	if err != nil {
 		return path.Join(baseDir, href) // malformed reference: best-effort literal join
 	}
+
 	root := path.Clean("/" + baseDir)
 	if root != "/" {
 		root += "/"
 	}
+
 	resolved := (&url.URL{Path: root}).ResolveReference(ref)
+
 	return strings.TrimPrefix(resolved.Path, "/")
 }
 
@@ -47,11 +51,13 @@ func Representable(s string) bool {
 	if !utf8.ValidString(s) {
 		return false
 	}
+
 	for _, r := range s {
 		if !isChar(r) {
 			return false
 		}
 	}
+
 	return true
 }
 
