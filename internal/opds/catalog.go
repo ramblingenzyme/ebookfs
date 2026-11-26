@@ -65,7 +65,7 @@ func (c *catalog) Publication(_ context.Context, id string) (*opds.Publication, 
 
 // Search maps an OpenSearch request onto a library query. Terms match the
 // title as a substring, which is the library's own default for a bare search
-// (see index.Query.Titles).
+// (see index.TitleFilter).
 //
 // ponytail: terms never reach the author field, since Query ANDs across fields
 // and cannot express "title OR author" in one call. Lift it with an
@@ -75,7 +75,7 @@ func (c *catalog) Search(_ context.Context, req opds.SearchRequest) (*opds.Feed,
 
 	for _, t := range []string{req.Terms, req.Title} {
 		if t = strings.TrimSpace(t); t != "" {
-			q.Titles = append(q.Titles, t)
+			q.Titles.Terms = append(q.Titles.Terms, t)
 		}
 	}
 
@@ -83,7 +83,7 @@ func (c *catalog) Search(_ context.Context, req opds.SearchRequest) (*opds.Feed,
 		q.Authors = append(q.Authors, a)
 	}
 
-	if len(q.Titles) == 0 && len(q.Authors) == 0 {
+	if len(q.Titles.Terms) == 0 && len(q.Authors) == 0 {
 		return nil, opds.ErrNotFound
 	}
 
@@ -92,7 +92,7 @@ func (c *catalog) Search(_ context.Context, req opds.SearchRequest) (*opds.Feed,
 		return nil, err
 	}
 
-	f := opds.NewFeed(urn("search"), "Search: "+strings.Join(slices.Concat(q.Titles, q.Authors), " "))
+	f := opds.NewFeed(urn("search"), "Search: "+strings.Join(slices.Concat(q.Titles.Terms, q.Authors), " "))
 
 	return c.page(f, opdshttp.SearchPath(Prefix), req.Page, books), nil
 }

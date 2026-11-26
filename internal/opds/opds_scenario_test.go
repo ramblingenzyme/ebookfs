@@ -383,11 +383,11 @@ func TestSearchQueriesTitles(t *testing.T) {
 		t.Fatalf("results = %v", got)
 	}
 
-	if len(f.queries) != 1 || !slices.Equal(f.queries[0].Titles, []string{"Dun"}) {
+	if len(f.queries) != 1 || !slices.Equal(f.queries[0].Titles.Terms, []string{"Dun"}) {
 		t.Fatalf("query = %+v, want Titles [Dun]", f.queries)
 	}
 
-	if f.queries[0].ExactTitles {
+	if f.queries[0].Titles.Exact {
 		t.Error("search asked for exact titles; browsing wants the substring")
 	}
 
@@ -411,7 +411,7 @@ func filter(books []*library.Book, q library.Query) []*library.Book {
 			continue
 		}
 
-		if len(q.Titles) > 0 && !strings.Contains(b.Title(), q.Titles[0]) {
+		if len(q.Titles.Terms) > 0 && !strings.Contains(b.Title(), q.Titles.Terms[0]) {
 			continue
 		}
 

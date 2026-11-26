@@ -21,6 +21,18 @@ type (
 )
 
 type (
+	AuthorFilter    = index.AuthorFilter
+	TagFilter       = index.TagFilter
+	SeriesFilter    = index.SeriesFilter
+	StatusFilter    = index.StatusFilter
+	SubjectFilter   = index.SubjectFilter
+	PublisherFilter = index.PublisherFilter
+	LanguageFilter  = index.LanguageFilter
+	IDFilter        = index.IDFilter
+	TitleFilter     = index.TitleFilter
+)
+
+type (
 	Bib         = book.Bib
 	Stats       = index.Stats
 	Facet       = index.Facet

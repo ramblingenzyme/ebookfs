@@ -246,11 +246,11 @@ func renameSeries(f *CtlFile, args []string) string {
 
 // idsOnly reports whether q came from a bare id-spec rather than a query that
 // happens to name ids. It compares against the zero Query, so a filter field
-// added to Query counts without a change here. Order, Limit and ExactTitles
+// added to Query counts without a change here. Order, Limit and Titles.Exact
 // select nothing on their own, so they are cleared first.
 func idsOnly(q library.Query) bool {
 	filters := q
-	filters.IDs, filters.Order, filters.Limit, filters.ExactTitles = nil, 0, 0, false
+	filters.IDs, filters.Order, filters.Limit, filters.Titles.Exact = nil, 0, 0, false
 
 	return len(q.IDs) > 0 && reflect.DeepEqual(filters, library.Query{})
 }

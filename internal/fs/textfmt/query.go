@@ -49,7 +49,7 @@ func ParseQuery(query string) (library.Query, error) { //nolint:cyclop // one ca
 
 			q.IDs = append(q.IDs, id)
 		case "title":
-			q.Titles = append(q.Titles, val)
+			q.Titles.Terms = append(q.Titles.Terms, val)
 		default:
 			return q, fmt.Errorf("unknown prefix %q in term %q", prefix, part)
 		}

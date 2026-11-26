@@ -1,41 +1,15 @@
 package index
 
 import (
-	"strings"
-
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index/dbsqlc"
 )
 
-// ponytail: SQLite's LIKE folds ASCII only, so title "émile" misses "Émile
-// Zola" here, though the 9P search/ handler folds in Go and finds it. Store a
-// title folded with strings.ToLower, match the folded term against it, and
-// unskip the non-ASCII parity cases once such a search matters.
 func (idx *Index) Search(q Query) ([]*book.Book, error) {
 	bq := &bookQuery{order: orderClause(q.Order), limit: q.Limit}
 
-	// Either column, so a sort-name search finds the book filed under its display name.
-	addIn(bq, "b.id IN (SELECT ba.book_id FROM book_authors ba JOIN authors a ON a.id = ba.author_id WHERE a.name IN (%s) OR a.sort_name IN (%s))", q.Authors)
-	addIn(bq, "b.id IN (SELECT bt.book_id FROM book_tags bt JOIN tags t ON t.id = bt.tag_id WHERE t.name IN (%s))", q.Tags)
-	addIn(bq, "b.series_id IN (SELECT id FROM series WHERE name IN (%s))", q.Series)
-	addIn(bq, "b.status IN (%s)", q.Status)
-	addIn(bq, "b.id IN (SELECT bs.book_id FROM book_subjects bs JOIN subjects s ON s.id = bs.subject_id WHERE s.name IN (%s))", q.Subjects)
-	addIn(bq, "b.publisher IN (%s)", q.Publisher)
-	addIn(bq, "b.language IN (%s)", q.Language)
-	addIn(bq, "b.id IN (%s)", q.IDs)
-
-	if q.ExactTitles {
-		addIn(bq, "b.title IN (%s)", q.Titles)
-	} else if len(q.Titles) > 0 {
-		clauses := make([]string, len(q.Titles))
-		args := make([]any, len(q.Titles))
-
-		for i, t := range q.Titles {
-			clauses[i] = "b.title LIKE ? ESCAPE '\\'"
-			args[i] = "%" + likeEscaper.Replace(t) + "%"
-		}
-
-		bq.addCondition("("+strings.Join(clauses, " OR ")+")", args...)
+	for _, f := range q.filters() {
+		f.where(bq)
 	}
 
 	return idx.queryBooks(bq)
@@ -67,10 +41,6 @@ func orderClause(o Order) string {
 		return byTitle
 	}
 }
-
-// likeEscaper escapes LIKE's wildcards for the ESCAPE '\' clause Search
-// writes.
-var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 // Exists is the ingest duplicate rule: the same title and the same set of
 // author display names. BookExists in queries.sql does the set comparison,

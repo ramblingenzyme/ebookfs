@@ -148,7 +148,7 @@ func TestSearchTitleTermIsLiteral(t *testing.T) {
 	}
 
 	for term, want := range map[string]int64{"0%": 1, "a_b": 3, `:\x`: 5} {
-		got, err := idx.Search(Query{Titles: []string{term}})
+		got, err := idx.Search(Query{Titles: TitleFilter{Terms: []string{term}}})
 		if err != nil {
 			t.Fatalf("Search(%q): %v", term, err)
 		}

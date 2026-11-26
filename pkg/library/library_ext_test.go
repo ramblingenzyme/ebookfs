@@ -36,7 +36,7 @@ func TestSearchReturnsARootRelativePath(t *testing.T) {
 	want := ingestTestEpub(t, lib, buildTestEpub(t, "Findable", "Alice"))
 	ingestTestEpub(t, lib, buildTestEpub(t, "Unrelated", "Bob"))
 
-	got, err := lib.Search(library.Query{Titles: []string{"Findable"}})
+	got, err := lib.Search(library.Query{Titles: library.TitleFilter{Terms: []string{"Findable"}}})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}

@@ -24,13 +24,13 @@ func TestParseQuery(t *testing.T) {
 		{"publisher", "publisher:Tor", library.Query{Publisher: []string{"Tor"}}, false},
 		{"language", "language:en", library.Query{Language: []string{"en"}}, false},
 		{"id", "id:42", library.Query{IDs: []int64{42}}, false},
-		{"title", "title:Dune", library.Query{Titles: []string{"Dune"}}, false},
+		{"title", "title:Dune", library.Query{Titles: library.TitleFilter{Terms: []string{"Dune"}}}, false},
 		// A repeated prefix accumulates into one field, which the matcher ORs.
 		{"repeated prefix", "tag:sci-fi+tag:fantasy", library.Query{Tags: []string{"sci-fi", "fantasy"}}, false},
 		// Distinct prefixes populate distinct fields, which it ANDs.
 		{"distinct prefixes", "tag:sci-fi+status:unread", library.Query{Tags: []string{"sci-fi"}, Status: []string{"unread"}}, false},
 		// The term splits on its first colon only, so a value may contain more.
-		{"colon in value", "title:Dune: Part Two", library.Query{Titles: []string{"Dune: Part Two"}}, false},
+		{"colon in value", "title:Dune: Part Two", library.Query{Titles: library.TitleFilter{Terms: []string{"Dune: Part Two"}}}, false},
 		// An empty value is a term rather than a parse error, and matches nothing.
 		{"empty value", "tag:", library.Query{Tags: []string{""}}, false},
 		{"no colon", "sci-fi", library.Query{}, true},
