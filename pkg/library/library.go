@@ -16,6 +16,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/formats"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/reconcile"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/store"
 )
 
@@ -62,6 +63,7 @@ func (l *Library) Close() error {
 	if l.lockFile != nil {
 		l.lockFile.Close()
 	}
+
 	return err
 }
 
@@ -70,10 +72,12 @@ func (l *Library) Search(q Query) ([]*Book, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	result := make([]*Book, len(books))
 	for i, b := range books {
 		result[i] = book.NewImmutableBook(b)
 	}
+
 	return result, nil
 }
 
@@ -96,6 +100,7 @@ func (l *Library) Get(id int64) (*Book, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return book.NewImmutableBook(b), nil
 }
 
@@ -106,9 +111,11 @@ func (l *Library) get(id int64) (*book.Book, error) {
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("book %d: %w", id, ErrBookNotFound)
 	}
+
 	if err != nil {
 		return nil, fmt.Errorf("book %d: %w", id, err)
 	}
+
 	return b, nil
 }
 
@@ -117,10 +124,12 @@ func (l *Library) Content(id int64) (Reader, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	f, err := l.formats.ByFormat(b.Format)
 	if err != nil {
 		return nil, err
 	}
+
 	return f.OpenReader(l.store.AbsPath(b.Path), b.CoverPath)
 }
 
@@ -149,8 +158,10 @@ func (l *Library) Update(id int64, fn func(*Book) *Edits) (b *Book, changed bool
 	if err != nil {
 		return nil, false, err
 	}
+
 	snapshot := book.NewImmutableBook(current)
 	ep := fn(snapshot)
+
 	if ep == nil {
 		return snapshot, false, nil
 	}
@@ -173,14 +184,17 @@ func (l *Library) Update(id int64, fn func(*Book) *Edits) (b *Book, changed bool
 	}
 
 	meta := applyMeta(current.Meta, e)
+
 	bib, err := impl.Rewrite(l.store.AbsPath(current.Path), current, e)
 	if err != nil {
 		op.Cancel()
 		slog.Error("edit: rewrite failed", "book_id", current.Meta.ID, "title", current.Title, "error", err)
+
 		return nil, false, err
 	}
 
 	location := l.store.Layout(bib.Authors, bib.Title, meta.ID, current.Format)
+
 	meta, mt, err := l.store.Update(current.File, location, meta)
 	if err != nil {
 		slog.Error("edit: update failed", "book_id", current.Meta.ID, "title", current.Title, "error", err)
@@ -192,7 +206,6 @@ func (l *Library) Update(id int64, fn func(*Book) *Edits) (b *Book, changed bool
 		return nil, false, err
 	}
 
-	// Fire OnEdited hook while still holding the per-book lock
 	immutable := book.NewImmutableBook(updated)
 	l.hooks.onEdited(l, immutable, location)
 
@@ -221,16 +234,26 @@ func (l *Library) Delete(id int64) error {
 		slog.Error("delete: store delete failed", "book_id", id, "title", b.Title, "error", err)
 		return err
 	}
+
 	if err := op.Delete(id); err != nil {
 		slog.Error("delete: index delete failed", "book_id", id, "title", b.Title, "error", err)
 		return err
 	}
+
 	slog.Info("delete: book removed", "book_id", id, "title", b.Title)
 
-	// Fire OnDeleted hook while still holding the per-book lock
 	l.hooks.onDeleted(id)
 
 	return nil
+}
+
+// Reindex rebuilds the index from the store. A book that cannot be read is
+// logged and skipped rather than failing the rebuild.
+func (l *Library) Reindex() error {
+	l.mutateMu.Lock()
+	defer l.mutateMu.Unlock()
+
+	return reconcile.Run(l.store, l.index, l.formats, true)
 }
 
 // lockBook takes mutateMu for reading as well as the book's lock, so a caller
@@ -239,6 +262,7 @@ func (l *Library) lockBook(id int64) (unlock func()) {
 	l.mutateMu.RLock()
 	mu := l.bookMu.For(id)
 	mu.Lock()
+
 	return func() {
 		mu.Unlock()
 		l.mutateMu.RUnlock()
@@ -252,26 +276,31 @@ func applyMeta(m book.Meta, e Edits) book.Meta {
 	if e.Status != nil {
 		m.Status = *e.Status
 	}
+
 	if e.Rating != nil {
 		m.Rating = *e.Rating
 	}
+
 	if e.Tags != nil {
 		m.Tags = *e.Tags
 	}
+
 	m.Tags = slices.Clone(m.Tags)
 	m.DateModified = time.Now()
+
 	return m
 }
 
 func bookFromBib(bib book.Bib, meta book.Meta, f book.File, obs drift.PathInfo) *book.Book {
 	b := book.NewBook(bib, meta, f)
 	b.Size = obs.Size
+
 	return b
 }
 
 // WithSidecars calls fn with an os.Root scoped to the book's .sidecar/
-// directory. The per-book lock is held for the duration — Edit and Delete
-// block until fn returns. The Root is closed after fn returns.
+// directory. The per-book lock is held while fn runs, so Edit and Delete block
+// until it returns. The Root is closed after fn returns.
 //
 // The caller should not escape file handles from the callback: on Linux the
 // Root tracks the directory via fd, so escaped handles remain valid after a
@@ -284,22 +313,28 @@ func (l *Library) WithSidecars(id int64, fn func(*os.Root) error) error {
 	if err != nil {
 		return err
 	}
+
 	root, err := l.store.OpenSidecars(b.File)
 	if err != nil {
 		return err
 	}
 	defer root.Close()
+
 	return fn(root)
 }
 
 // ReadSidecar reads a sidecar file. The per-book lock is held for the read.
 func (l *Library) ReadSidecar(id int64, name string) ([]byte, error) {
 	var data []byte
+
 	err := l.WithSidecars(id, func(root *os.Root) error {
 		var err error
+
 		data, err = root.ReadFile(name)
+
 		return err
 	})
+
 	return data, err
 }
 

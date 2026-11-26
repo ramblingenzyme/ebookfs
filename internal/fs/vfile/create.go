@@ -18,5 +18,6 @@ func DispatchCreate(f *fs.FS, parent fs.Dir, _, name string, perm uint32, mode u
 	if !ok {
 		return nil, errors.New("cannot create files here")
 	}
+
 	return c.Create(f, name, perm, mode)
 }

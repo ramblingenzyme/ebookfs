@@ -25,6 +25,7 @@ func TestMmapOffOnNetworkFilesystems(t *testing.T) {
 		if !slices.Contains(writerPragmas(fsType), want) {
 			t.Errorf("%v writer pragmas lack %s", fsType, want)
 		}
+
 		if !slices.Contains(readerPragmas(fsType), want) {
 			t.Errorf("%v reader pragmas lack %s", fsType, want)
 		}
@@ -34,8 +35,8 @@ func TestMmapOffOnNetworkFilesystems(t *testing.T) {
 // crashHelperEnv selects the work TestCrashHelper does in a child process.
 const crashHelperEnv = "INDEX_CRASH_HELPER"
 
-// TestCrashHelper is not a test of its own. It dies by SIGKILL mid-work, so the
-// files it leaves are the ones a real crash leaves.
+// Not a test of its own. It dies by SIGKILL mid-work, so the files it leaves
+// are the ones a real crash leaves.
 func TestCrashHelper(t *testing.T) {
 	path := os.Getenv("INDEX_CRASH_PATH")
 	switch os.Getenv(crashHelperEnv) {
@@ -49,20 +50,26 @@ func TestCrashHelper(t *testing.T) {
 		// the state only the journal can undo.
 		mustExec(t, db, "PRAGMA cache_size=10")
 		mustExec(t, db, "BEGIN")
+
 		for range 100 {
 			mustExec(t, db, "INSERT INTO t VALUES (zeroblob(10000))")
 		}
 	default:
 		t.Skip("runs only as a child of the crash tests")
 	}
-	syscall.Kill(os.Getpid(), syscall.SIGKILL)
+
+	_ = syscall.Kill(os.Getpid(), syscall.SIGKILL)
 }
 
 func crashChild(t *testing.T, work, path string) {
 	t.Helper()
+
 	cmd := exec.Command(os.Args[0], "-test.run=^TestCrashHelper$")
+
 	cmd.Env = append(os.Environ(), crashHelperEnv+"="+work, "INDEX_CRASH_PATH="+path)
+
 	var exitErr *exec.ExitError
+
 	if err := cmd.Run(); !errors.As(err, &exitErr) || exitErr.ExitCode() != -1 {
 		t.Fatalf("crash helper err = %v, want death by signal", err)
 	}
@@ -70,16 +77,20 @@ func crashChild(t *testing.T, work, path string) {
 
 func openPragmas(t *testing.T, path string, pragmas ...string) *sql.DB {
 	t.Helper()
+
 	db, err := sql.Open("sqlite", dsn(path, pragmas...))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	db.SetMaxOpenConns(1)
+
 	return db
 }
 
 func mustExec(t *testing.T, db *sql.DB, query string) {
 	t.Helper()
+
 	if _, err := db.Exec(query); err != nil {
 		t.Fatalf("%s: %v", query, err)
 	}
@@ -87,10 +98,12 @@ func mustExec(t *testing.T, db *sql.DB, query string) {
 
 func countRows(t *testing.T, db *sql.DB) int {
 	t.Helper()
+
 	var n int
 	if err := db.QueryRow("SELECT count(*) FROM t").Scan(&n); err != nil {
 		t.Fatalf("count: %v", err)
 	}
+
 	return n
 }
 
@@ -100,27 +113,34 @@ func countRows(t *testing.T, db *sql.DB) int {
 func TestSMBPragmasConvertCrashedWALIndex(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "x.db")
 	crashChild(t, "wal", path)
+
 	if fi, err := os.Stat(path + "-wal"); err != nil || fi.Size() == 0 {
 		t.Fatalf("crash left no -wal to convert: %v, %v", fi, err)
 	}
 
 	for range 2 {
 		db := openPragmas(t, path, writerPragmas(fsutil.FSTypeCIFS)...)
+
 		var mode string
+
 		if err := db.QueryRow("PRAGMA journal_mode").Scan(&mode); err != nil {
 			t.Fatal(err)
 		}
+
 		if mode != "delete" {
 			t.Errorf("journal_mode = %q, want delete", mode)
 		}
+
 		if n := countRows(t, db); n != 1 {
 			t.Errorf("rows = %d, want 1", n)
 		}
+
 		for _, suffix := range []string{"-shm", "-wal"} {
 			if _, err := os.Stat(path + suffix); !errors.Is(err, os.ErrNotExist) {
 				t.Errorf("%s present while open: %v", suffix, err)
 			}
 		}
+
 		db.Close()
 	}
 }
@@ -134,15 +154,18 @@ func TestSMBPragmasRecoverCrashMidWrite(t *testing.T) {
 	db.Close()
 
 	crashChild(t, "mid-write", path)
+
 	if fi, err := os.Stat(path + "-journal"); err != nil || fi.Size() == 0 {
 		t.Fatalf("crash left no hot journal: %v, %v", fi, err)
 	}
 
 	db = openPragmas(t, path, writerPragmas(fsutil.FSTypeCIFS)...)
 	defer db.Close()
+
 	if n := countRows(t, db); n != 1 {
 		t.Errorf("rows = %d, want the 1 committed before the crash", n)
 	}
+
 	var check string
 	if err := db.QueryRow("PRAGMA integrity_check").Scan(&check); err != nil || check != "ok" {
 		t.Errorf("integrity_check = %q, %v", check, err)

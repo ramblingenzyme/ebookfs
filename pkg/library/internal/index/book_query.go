@@ -26,11 +26,14 @@ func (q *bookQuery) sql() (string, []any) {
 	if len(q.where) > 0 {
 		qry += " WHERE " + strings.Join(q.where, " AND ")
 	}
+
 	qry += " ORDER BY " + q.order
 	if q.limit > 0 {
 		qry += " LIMIT ?"
+
 		q.args = append(q.args, q.limit)
 	}
+
 	return qry, q.args
 }
 
@@ -50,11 +53,14 @@ func addIn[T any](bq *bookQuery, expr string, vals []T) {
 	if len(vals) == 0 {
 		return
 	}
+
 	n := strings.Count(expr, "%s")
 	lists := slices.Repeat([]any{placeholders(len(vals))}, n)
 	args := make([]any, 0, len(vals)*n)
+
 	for _, v := range slices.Repeat(vals, n) {
 		args = append(args, v)
 	}
+
 	bq.addCondition(fmt.Sprintf(expr, lists...), args...)
 }

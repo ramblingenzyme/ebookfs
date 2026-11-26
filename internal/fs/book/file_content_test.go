@@ -10,7 +10,7 @@ import (
 
 func newTestEpubFile(t *testing.T, name string, lib ContentReader, get func() *library.Book) *contentFile {
 	t.Helper()
-	return newContentFile(newStat(util.NewTestFS(t), name, 0444), lib, get)
+	return newContentFile(newStat(util.NewTestFS(t), name, 0o444), lib, get)
 }
 
 // Stat reports the book's current filename and the size the index recorded,
@@ -21,6 +21,7 @@ func TestEpubFileStat(t *testing.T) {
 		book := util.MakeMutableBook(1, "Test", "Author")
 		book.Path = "/nonexistent/book.epub"
 		book.Size = size
+
 		return util.Fixed(util.WrapBook(book))
 	}
 	for _, tc := range []struct {

@@ -20,7 +20,8 @@ var flock = syscall.Flock
 // If the filesystem has no flock, logs an error and returns the file unlocked.
 func acquireLock(root string) (*os.File, error) {
 	path := filepath.Join(root, lockFileName)
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
+
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
 		return nil, fmt.Errorf("open lock file: %w", err)
 	}
@@ -29,11 +30,14 @@ func acquireLock(root string) (*os.File, error) {
 		if warnLockUnsupported(path, err) {
 			return f, nil
 		}
+
 		f.Close()
+
 		if errors.Is(err, syscall.EWOULDBLOCK) {
 			holder := readLockHolder(path)
 			return nil, fmt.Errorf("%w: %s", ErrLibraryLocked, holder)
 		}
+
 		return nil, fmt.Errorf("flock lock file: %w", err)
 	}
 
@@ -49,9 +53,9 @@ func acquireLock(root string) (*os.File, error) {
 
 // selfTestFlock opens a second fd and tries to lock it. If the second lock
 // succeeds, or if flock returns ENOLCK/ENOTSUP/EOPNOTSUPP, the filesystem
-// doesn't enforce locks — warn and continue. Other errors fail Open.
+// doesn't enforce locks, so it warns and continues. Other errors fail Open.
 func selfTestFlock(path string) error {
-	fd2, err := os.OpenFile(path, os.O_RDWR, 0644)
+	fd2, err := os.OpenFile(path, os.O_RDWR, 0o644)
 	if err != nil {
 		return fmt.Errorf("self-test: open second fd: %w", err)
 	}
@@ -60,9 +64,11 @@ func selfTestFlock(path string) error {
 	err = flock(int(fd2.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 	switch {
 	case err == nil:
-		flock(int(fd2.Fd()), syscall.LOCK_UN)
+		_ = flock(int(fd2.Fd()), syscall.LOCK_UN)
+
 		slog.Error("flock is not enforced on this filesystem; a second instance could corrupt the library",
 			"path", path)
+
 		return nil
 	case errors.Is(err, syscall.EWOULDBLOCK):
 		return nil
@@ -81,6 +87,7 @@ func warnLockUnsupported(path string, err error) bool {
 		slog.Error("flock is not supported on this filesystem; a second instance could corrupt the library",
 			"path", path, "error", err)
 	}
+
 	return unsupported
 }
 
@@ -90,6 +97,7 @@ func readLockHolder(path string) string {
 	if err != nil || len(data) == 0 {
 		return "unknown (lock file empty or unreadable)"
 	}
+
 	return string(data)
 }
 
@@ -99,9 +107,10 @@ func readLockHolder(path string) string {
 func writeLockHolder(f *os.File) {
 	host, _ := os.Hostname()
 	content := fmt.Sprintf("%s:%d", host, os.Getpid())
+
 	if err := f.Truncate(0); err != nil {
 		return
 	}
-	f.Seek(0, 0)
-	f.Write([]byte(content))
+
+	_, _ = f.WriteAt([]byte(content), 0)
 }

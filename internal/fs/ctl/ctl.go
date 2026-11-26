@@ -1,8 +1,9 @@
 package ctl
 
 import (
-	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/go9p/fs"
+
+	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 )
 
 // ctlReadHint is all a read returns. A command's result goes to the log file,
@@ -22,7 +23,7 @@ type CtlFile struct {
 
 func NewCtlFile(f *fs.FS, lib Library, cmdLog *CommandLog) *CtlFile {
 	return &CtlFile{
-		BaseFile: *fs.NewBaseFile(newStat(f, "ctl", 0644)),
+		BaseFile: *fs.NewBaseFile(newStat(f, "ctl", 0o644)),
 		writes:   vfile.NewWriteBuffer(4096),
 		lib:      lib,
 		cmdLog:   cmdLog,

@@ -46,20 +46,25 @@ func (s *Store) Root() string { return s.root }
 // [], ? and *.
 func (s *Store) PathTaken(authors []book.Author, title string, format book.Format) bool {
 	authorDir := filepath.Join(s.root, authorDirName(authors))
+
 	entries, err := os.ReadDir(authorDir)
 	if err != nil {
 		return false
 	}
+
 	target := bookFilename(authors, title, format)
+
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
+
 		path := filepath.Join(authorDir, entry.Name(), target)
 		if _, err := os.Stat(path); err == nil {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -71,10 +76,12 @@ func (s *Store) Stat(loc book.File) (drift.PathInfo, error) {
 	if err != nil {
 		return drift.PathInfo{}, err
 	}
+
 	metaFI, err := os.Stat(s.metaPath(loc))
 	if err != nil {
 		return drift.PathInfo{}, err
 	}
+
 	return drift.PathInfo{
 		Size:      bookFI.Size(),
 		Mtime:     bookFI.ModTime(),
@@ -101,6 +108,7 @@ func (s *Store) Move(from, to book.File) error {
 
 	fromName := filepath.Join(toDir, from.Filename())
 	toName := filepath.Join(toDir, to.Filename())
+
 	if toName != fromName {
 		if err := atomicfs.Rename(fromName, toName); err != nil {
 			rollbackFn(err)
@@ -122,13 +130,13 @@ func (s *Store) renameDir(fromDir, toDir string) (func(error), error) {
 		return nil, err
 	}
 
-	if err := atomicfs.MkdirAll(filepath.Dir(toDir), 0755); err != nil {
+	if err := atomicfs.MkdirAll(filepath.Dir(toDir), 0o755); err != nil {
 		return nil, err
 	}
 
 	// MkdirAll may have created the author directory for this book alone.
 	if err := atomicfs.Rename(fromDir, toDir); err != nil {
-		removeIfEmpty(filepath.Dir(toDir))
+		_ = removeIfEmpty(filepath.Dir(toDir))
 		return nil, err
 	}
 
@@ -138,7 +146,8 @@ func (s *Store) renameDir(fromDir, toDir string) (func(error), error) {
 			slog.Error("rollback failed after file rename error; directory left in inconsistent state, will be repaired by reindex on next startup",
 				"old_path", fromDir, "new_path", toDir, "rollback_error", rollbackErr, "original_error", err)
 		}
-		removeIfEmpty(filepath.Dir(toDir))
+
+		_ = removeIfEmpty(filepath.Dir(toDir))
 	}, nil
 }
 
@@ -149,6 +158,7 @@ func removeIfEmpty(dir string) error {
 	if err := os.Remove(dir); err != nil && !errors.Is(err, syscall.ENOTEMPTY) && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
+
 	return nil
 }
 
@@ -162,6 +172,7 @@ func (s *Store) Delete(loc book.File) error {
 	if err := atomicfs.RemoveAll(path, filepath.Join(s.root, trashDirName)); err != nil {
 		return err
 	}
+
 	return removeIfEmpty(filepath.Dir(path))
 }
 
@@ -177,9 +188,11 @@ func (s *Store) LastID() (int64, error) {
 	if errors.Is(err, os.ErrNotExist) {
 		return 0, nil
 	}
+
 	if err != nil {
 		return 0, err
 	}
+
 	return strconv.ParseInt(strings.TrimSpace(string(data)), 10, 64)
 }
 
@@ -187,10 +200,7 @@ func (s *Store) LastID() (int64, error) {
 // anything on disk carries it, so a crash between the two cannot leave an id
 // the floor misses.
 func (s *Store) RecordID(id int64) error {
-	return atomicfs.Write(s.root, tempPattern(lastIDName), func(f *os.File) error {
-		_, err := fmt.Fprintf(f, "%d\n", id)
-		return err
-	}, filepath.Join(s.root, lastIDName))
+	return atomicfs.Write(filepath.Join(s.root, lastIDName), tempPattern(lastIDName), fmt.Appendf(nil, "%d\n", id))
 }
 
 // EmptyTrash removes what a Delete moved to the trash but could not remove.
@@ -198,15 +208,41 @@ func (s *Store) EmptyTrash() error {
 	return os.RemoveAll(filepath.Join(s.root, trashDirName))
 }
 
+func (s *Store) Ingest(srcPath string, loc book.File, meta book.Meta) (book.Meta, drift.PathInfo, error) {
+	dir := s.AbsPath(loc.Dir())
+
+	canonicalizeMeta(&meta)
+
+	if err := atomicfs.MkdirAll(dir, 0o755); err != nil {
+		return meta, drift.PathInfo{}, err
+	}
+
+	if err := atomicfs.Rename(srcPath, filepath.Join(dir, loc.Filename())); err != nil {
+		return meta, drift.PathInfo{}, err
+	}
+
+	if err := s.writeMeta(loc, &meta); err != nil {
+		return meta, drift.PathInfo{}, err
+	}
+
+	mt, err := s.Stat(loc)
+
+	return meta, mt, err
+}
+
 func (s *Store) Update(oldLoc, newLoc book.File, meta book.Meta) (book.Meta, drift.PathInfo, error) {
 	canonicalizeMeta(&meta)
+
 	if err := s.Move(oldLoc, newLoc); err != nil {
 		return meta, drift.PathInfo{}, err
 	}
+
 	if err := s.writeMeta(newLoc, &meta); err != nil {
 		return meta, drift.PathInfo{}, err
 	}
+
 	mt, err := s.Stat(newLoc)
+
 	return meta, mt, err
 }
 
@@ -218,8 +254,9 @@ func (s *Store) Update(oldLoc, newLoc book.File, meta book.Meta) (book.Meta, dri
 // with os.ErrNotExist rather than coming back empty.
 func (s *Store) OpenSidecars(loc book.File) (*os.Root, error) {
 	dir := filepath.Join(s.AbsPath(loc.Dir()), ".sidecar")
-	if err := atomicfs.Mkdir(dir, 0755); err != nil && !errors.Is(err, os.ErrExist) {
+	if err := atomicfs.Mkdir(dir, 0o755); err != nil && !errors.Is(err, os.ErrExist) {
 		return nil, err
 	}
+
 	return os.OpenRoot(dir)
 }

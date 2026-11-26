@@ -13,16 +13,21 @@ func parseCommand(s string) (string, []string, error) {
 	if unterminated {
 		return "", nil, fmt.Errorf("unterminated double-quoted string")
 	}
+
 	if len(words) == 0 {
 		return "", nil, fmt.Errorf("empty command")
 	}
+
 	return words[0], words[1:], nil
 }
 
 // splitWords reports whether a quote was opened and never closed.
 func splitWords(s string) ([]string, bool) {
-	var words []string
-	var cur strings.Builder
+	var (
+		words []string
+		cur   strings.Builder
+	)
+
 	inQuote := false
 
 	for _, r := range s {
@@ -38,8 +43,10 @@ func splitWords(s string) ([]string, bool) {
 			cur.WriteRune(r)
 		}
 	}
+
 	if cur.Len() > 0 {
 		words = append(words, cur.String())
 	}
+
 	return words, inQuote
 }

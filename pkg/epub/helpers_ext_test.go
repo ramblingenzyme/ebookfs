@@ -14,43 +14,54 @@ import (
 
 func open(t *testing.T, path string) *epub.Book {
 	t.Helper()
+
 	b, err := epub.Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	t.Cleanup(func() { b.Close() })
+
 	return b
 }
 
 func parse(t *testing.T, path string) (*epub.Book, error) {
 	t.Helper()
+
 	b, err := epub.Open(path)
 	if b != nil {
 		t.Cleanup(func() { b.Close() })
 	}
+
 	return b, err
 }
 
 func save(t *testing.T, path string, edit func(*epub.Book)) (*epub.Book, error) {
 	t.Helper()
+
 	b, err := parse(t, path)
 	if err != nil {
 		return nil, err
 	}
+
 	edit(b)
+
 	return b, b.Save()
 }
 
-func setCover(t *testing.T, path string, img []byte) (*epub.Book, error) {
+func setCover(t *testing.T, path string, img []byte) error {
 	t.Helper()
+
 	b, err := parse(t, path)
 	if err != nil {
-		return nil, err
+		return err
 	}
+
 	if err := b.SetCover(img); err != nil {
-		return nil, err
+		return err
 	}
-	return b, b.Save()
+
+	return b.Save()
 }
 
 // rename and reposition change one half of a series and keep the other, as
@@ -60,10 +71,12 @@ func rename(b *epub.Book, name string) {
 		b.Series = nil
 		return
 	}
+
 	index := ""
 	if b.Series != nil {
 		index = b.Series.Index
 	}
+
 	b.Series = &epub.Series{Name: name, Index: index}
 }
 
@@ -71,6 +84,7 @@ func reposition(b *epub.Book, index string) {
 	if b.Series == nil {
 		return
 	}
+
 	b.Series = &epub.Series{Name: b.Series.Name, Index: index}
 }
 
@@ -86,10 +100,12 @@ type item struct {
 
 func tinyJPEG(t *testing.T) []byte {
 	t.Helper()
+
 	var buf bytes.Buffer
 	if err := jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 1, 1)), nil); err != nil {
 		t.Fatal(err)
 	}
+
 	return buf.Bytes()
 }
 
@@ -109,13 +125,13 @@ func authorNames(b *epub.Book) []string {
 	for _, a := range b.Authors {
 		out = append(out, a.Name)
 	}
+
 	return out
 }
 
 // §5.5.2: values MUST be non-empty "after leading and trailing ASCII whitespace
 // is stripped", and internal runs are "collapsed to a single space during
 // processing". A conforming reader does both.
-
 var opfSpecStyleWhitespace = epubtest.EPUB3(`    <dc:identifier id="pub-id">
       urn:uuid:A1B0D67E
     </dc:identifier>
@@ -141,6 +157,7 @@ var opfSpecStyleWhitespace = epubtest.EPUB3(`    <dc:identifier id="pub-id">
 // directly.
 func wantDirEntries(t *testing.T, path string, want ...string) {
 	t.Helper()
+
 	zrc, err := zip.OpenReader(path)
 	if err != nil {
 		t.Fatal(err)
@@ -148,11 +165,13 @@ func wantDirEntries(t *testing.T, path string, want ...string) {
 	defer zrc.Close()
 
 	dirs := make(map[string]bool)
+
 	for _, f := range zrc.File {
 		if strings.HasSuffix(f.Name, "/") {
 			dirs[f.Name] = true
 		}
 	}
+
 	for _, dir := range want {
 		if !dirs[dir] {
 			t.Errorf("directory entry %q missing from rewritten epub", dir)
@@ -160,26 +179,28 @@ func wantDirEntries(t *testing.T, path string, want ...string) {
 	}
 }
 
-func swapCover(t *testing.T, path string) []byte {
+func swapCover(t *testing.T, path string) {
 	t.Helper()
 	newCover := tinyJPEG(t)
-	if _, err := setCover(t, path, newCover); err != nil {
+	if err := setCover(t, path, newCover); err != nil {
 		t.Fatal(err)
 	}
+
 	got, err := open(t, path).Cover()
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if !bytes.Equal(got, newCover) {
 		t.Errorf("cover = %q, want the supplied JPEG bytes", got)
 	}
-	return newCover
 }
 
 func saveSortName(t *testing.T, opf epubtest.PackageDoc) string {
 	t.Helper()
 	path := epubtest.Build(t, opf)
 	authors := []epub.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
+
 	if _, err := save(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
 		t.Fatal(err)
 	}
@@ -188,15 +209,18 @@ func saveSortName(t *testing.T, opf epubtest.PackageDoc) string {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if len(bib.Authors) != 1 || bib.Authors[0].SortName != "Rand, Ann" {
 		t.Errorf("authors = %+v, want the sort name the edit asked for", bib.Authors)
 	}
+
 	return path
 }
 
 // Badly repacked epubs carry two entries with one name like this.
 func duplicateOPFEpub(t *testing.T) string {
 	t.Helper()
+
 	first := strings.Replace(string(epubtest.OPF3), "Original Title", "First Copy", 1)
 	second := strings.Replace(string(epubtest.OPF3), "Original Title", "Second Copy", 1)
 

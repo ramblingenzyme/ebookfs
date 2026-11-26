@@ -6,8 +6,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/go9p/fs"
+
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
 
 func MakeBook(id int64, title string, authors ...string) *book.ImmutableBook {
@@ -19,6 +20,7 @@ func MakeMutableBook(id int64, title string, authors ...string) *book.Book {
 	for i, name := range authors {
 		auths[i] = book.Author{Name: name}
 	}
+
 	return book.NewBook(
 		book.Bib{Title: title, Authors: auths},
 		book.Meta{ID: id},
@@ -36,7 +38,9 @@ func Fixed(b *book.ImmutableBook) func() *book.ImmutableBook {
 
 func NewTestFS(t *testing.T) *fs.FS {
 	t.Helper()
-	f, _ := fs.NewFS("glenda", "glenda", 0555, fs.IgnorePermissions())
+
+	f, _ := fs.NewFS("glenda", "glenda", 0o555, fs.IgnorePermissions())
+
 	return f
 }
 

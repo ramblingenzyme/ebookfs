@@ -2,6 +2,7 @@ package index
 
 import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index/dbsqlc"
 )
 
 // ponytail: each load binds one SQLite variable per id, so hydrating more than
@@ -18,45 +19,39 @@ func (idx *Index) hydrateBooks(books []*book.Book) error {
 	if err != nil {
 		return err
 	}
+
 	tags, err := idx.loadTags(ids)
 	if err != nil {
 		return err
 	}
+
 	identifiers, err := idx.loadIdentifiers(ids)
 	if err != nil {
 		return err
 	}
+
 	subjects, err := idx.loadSubjects(ids)
 	if err != nil {
 		return err
 	}
+
 	contributors, err := idx.loadContributors(ids)
 	if err != nil {
 		return err
 	}
 
 	for _, b := range books {
-		b.Authors = authors[b.Meta.ID]
-		if b.Authors == nil {
-			b.Authors = []book.Author{}
-		}
-		b.Meta.Tags = tags[b.Meta.ID]
-		if b.Meta.Tags == nil {
-			b.Meta.Tags = []string{}
-		}
+		b.Authors = orEmpty(authors[b.Meta.ID])
+		b.Meta.Tags = orEmpty(tags[b.Meta.ID])
+
 		if m := identifiers[b.Meta.ID]; m != nil {
 			b.Identifiers = m
 		} else {
 			b.Identifiers = make(map[string]string)
 		}
-		b.Subjects = subjects[b.Meta.ID]
-		if b.Subjects == nil {
-			b.Subjects = []string{}
-		}
-		b.Contributors = contributors[b.Meta.ID]
-		if b.Contributors == nil {
-			b.Contributors = []book.Contributor{}
-		}
+
+		b.Subjects = orEmpty(subjects[b.Meta.ID])
+		b.Contributors = orEmpty(contributors[b.Meta.ID])
 	}
 
 	return nil
@@ -64,30 +59,16 @@ func (idx *Index) hydrateBooks(books []*book.Book) error {
 
 func (idx *Index) loadAuthors(ids []int64) (map[int64][]book.Author, error) {
 	rows, err := idx.queries.GetAuthorsByBookIDs(idx.ctx, ids)
-	if err != nil {
-		return nil, err
-	}
-	out := make(map[int64][]book.Author, len(ids))
-	for _, row := range rows {
-		out[row.BookID] = append(out[row.BookID], book.Author{
-			ID:       row.ID,
-			Name:     row.Name,
-			SortName: row.SortName,
-		})
-	}
-	return out, nil
+
+	return byBook(rows, err, func(r dbsqlc.GetAuthorsByBookIDsRow) (int64, book.Author) {
+		return r.BookID, book.Author{ID: r.ID, Name: r.Name, SortName: r.SortName}
+	})
 }
 
 func (idx *Index) loadTags(ids []int64) (map[int64][]string, error) {
 	rows, err := idx.queries.GetTagsByBookIDs(idx.ctx, ids)
-	if err != nil {
-		return nil, err
-	}
-	out := make(map[int64][]string, len(ids))
-	for _, row := range rows {
-		out[row.BookID] = append(out[row.BookID], row.Name)
-	}
-	return out, nil
+
+	return byBook(rows, err, func(r dbsqlc.GetTagsByBookIDsRow) (int64, string) { return r.BookID, r.Name })
 }
 
 func (idx *Index) loadIdentifiers(ids []int64) (map[int64]map[string]string, error) {
@@ -95,6 +76,7 @@ func (idx *Index) loadIdentifiers(ids []int64) (map[int64]map[string]string, err
 	if err != nil {
 		return nil, err
 	}
+
 	out := make(map[int64]map[string]string, len(ids))
 	for _, row := range rows {
 		m := out[row.BookID]
@@ -102,34 +84,50 @@ func (idx *Index) loadIdentifiers(ids []int64) (map[int64]map[string]string, err
 			m = make(map[string]string)
 			out[row.BookID] = m
 		}
+
 		m[row.Scheme] = row.Value
 	}
+
 	return out, nil
 }
 
 func (idx *Index) loadSubjects(ids []int64) (map[int64][]string, error) {
 	rows, err := idx.queries.GetSubjectsByBookIDs(idx.ctx, ids)
-	if err != nil {
-		return nil, err
-	}
-	out := make(map[int64][]string, len(ids))
-	for _, row := range rows {
-		out[row.BookID] = append(out[row.BookID], row.Name)
-	}
-	return out, nil
+
+	return byBook(rows, err, func(r dbsqlc.GetSubjectsByBookIDsRow) (int64, string) { return r.BookID, r.Name })
 }
 
 func (idx *Index) loadContributors(ids []int64) (map[int64][]book.Contributor, error) {
 	rows, err := idx.queries.GetContributorsByBookIDs(idx.ctx, ids)
+
+	return byBook(rows, err, func(r dbsqlc.GetContributorsByBookIDsRow) (int64, book.Contributor) {
+		return r.BookID, book.Contributor{Name: r.Name, Role: r.Role}
+	})
+}
+
+// byBook groups rows by book id, keeping their SQL order within each book. The
+// loaders differ only in their generated row type, which the type parameter
+// erases, as in facets.
+func byBook[R, V any](rows []R, err error, split func(R) (int64, V)) (map[int64][]V, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make(map[int64][]book.Contributor, len(ids))
-	for _, row := range rows {
-		out[row.BookID] = append(out[row.BookID], book.Contributor{
-			Name: row.Name,
-			Role: row.Role,
-		})
+
+	out := make(map[int64][]V)
+
+	for _, r := range rows {
+		id, v := split(r)
+		out[id] = append(out[id], v)
 	}
+
 	return out, nil
+}
+
+// orEmpty returns s, or an empty slice for nil.
+func orEmpty[T any](s []T) []T {
+	if s == nil {
+		return []T{}
+	}
+
+	return s
 }

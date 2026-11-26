@@ -33,9 +33,11 @@ func TestValidateStatus(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			e := Edits{Status: new(tc.status)}
 			err := Validate(e, testBook("", nil))
+
 			if (err != nil) != tc.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
+
 			if err != nil {
 				assertSingleFieldError(t, err, "status")
 			}
@@ -62,9 +64,11 @@ func TestValidateRating(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			e := Edits{Rating: new(tc.rating)}
 			err := Validate(e, testBook("", nil))
+
 			if (err != nil) != tc.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
+
 			if err != nil {
 				assertSingleFieldError(t, err, "rating")
 			}
@@ -86,9 +90,11 @@ func TestValidateTitle(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			e := Edits{Title: new(tc.title)}
 			err := Validate(e, testBook("", nil))
+
 			if (err != nil) != tc.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
+
 			if err != nil {
 				assertSingleFieldError(t, err, "title")
 			}
@@ -117,9 +123,11 @@ func TestValidateAuthors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			e := Edits{Authors: tc.authors}
 			err := Validate(e, testBook("", nil))
+
 			if (err != nil) != tc.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
+
 			if err != nil && tc.errMsg != "" {
 				assertHasFieldError(t, err, "authors", tc.errMsg)
 			}
@@ -144,9 +152,11 @@ func TestValidateLanguage(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			e := Edits{Language: new(tc.lang)}
 			err := Validate(e, testBook("", nil))
+
 			if (err != nil) != (tc.errMsg != "") {
 				t.Fatalf("Validate() error = %v, want %q", err, tc.errMsg)
 			}
+
 			if err != nil {
 				assertSingleFieldError(t, err, "language")
 				assertHasFieldError(t, err, "language", tc.errMsg)
@@ -185,9 +195,11 @@ func TestValidateTags(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			e := Edits{Tags: tc.tags}
 			err := Validate(e, testBook("", nil))
+
 			if (err != nil) != tc.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
+
 			if err != nil {
 				assertHasFieldError(t, err, "tags", "")
 			}
@@ -226,6 +238,7 @@ func TestValidateSubjects(t *testing.T) {
 			if (err != nil) != (tc.errMsg != "") {
 				t.Fatalf("Validate() error = %v, want %q", err, tc.errMsg)
 			}
+
 			if err != nil {
 				assertHasFieldError(t, err, "subjects", tc.errMsg)
 			}
@@ -250,6 +263,7 @@ func TestValidateContributors(t *testing.T) {
 			if (err != nil) != (tc.errMsg != "") {
 				t.Fatalf("Validate() error = %v, want %q", err, tc.errMsg)
 			}
+
 			if err != nil {
 				assertHasFieldError(t, err, "contributors", tc.errMsg)
 			}
@@ -285,6 +299,7 @@ func TestValidateSeriesIndex(t *testing.T) {
 			if (err != nil) != tc.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
+
 			if err != nil {
 				assertHasFieldError(t, err, "series_index", "")
 			}
@@ -298,21 +313,26 @@ func TestValidateMultipleErrors(t *testing.T) {
 		Rating: new(-1.0),
 		Title:  new(string),
 	}
+
 	err := Validate(e, testBook("", nil))
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
+
 	var ve *ValidationError
 	if !errors.As(err, &ve) {
 		t.Fatalf("error is not *ValidationError: %T", err)
 	}
+
 	if len(*ve) != 3 {
 		t.Errorf("expected 3 errors, got %d: %v", len(*ve), *ve)
 	}
+
 	fields := make(map[string]bool)
 	for _, fe := range *ve {
 		fields[fe.Field] = true
 	}
+
 	for _, f := range []string{"status", "rating", "title"} {
 		if !fields[f] {
 			t.Errorf("expected error for field %q", f)
@@ -330,6 +350,7 @@ func TestValidateNoErrors(t *testing.T) {
 		Series:      new("New Series"),
 		SeriesIndex: new("2"),
 	}
+
 	err := Validate(e, testBook("", nil))
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
@@ -340,6 +361,7 @@ func TestFieldError(t *testing.T) {
 	fe := FieldError{Field: "title", Message: "too short"}
 	got := fe.Error()
 	want := "title: too short"
+
 	if got != want {
 		t.Errorf("FieldError.Error() = %q, want %q", got, want)
 	}
@@ -347,7 +369,9 @@ func TestFieldError(t *testing.T) {
 
 func TestValidationErrorEmpty(t *testing.T) {
 	var ve ValidationError
+
 	got := ve.Error()
+
 	if got != "" {
 		t.Errorf("ValidationError.Error() with 0 errors = %q, want empty", got)
 	}
@@ -357,6 +381,7 @@ func TestValidationErrorSingle(t *testing.T) {
 	ve := ValidationError{{Field: "title", Message: "too short"}}
 	got := ve.Error()
 	want := "title: too short"
+
 	if got != want {
 		t.Errorf("ValidationError.Error() with 1 error = %q, want %q", got, want)
 	}
@@ -368,11 +393,13 @@ func TestValidationErrorMultiple(t *testing.T) {
 		{Field: "rating", Message: "too high"},
 	}
 	got := ve.Error()
+
 	for _, fe := range ve {
 		if !strings.Contains(got, fe.Field+": "+fe.Message) {
 			t.Errorf("ValidationError.Error() should contain %q", fe.Field+": "+fe.Message)
 		}
 	}
+
 	if !strings.Contains(got, "; ") {
 		t.Errorf("ValidationError.Error() with multiple errors should join with '; '")
 	}
@@ -380,15 +407,18 @@ func TestValidationErrorMultiple(t *testing.T) {
 
 func TestValidateCoverNoCoverPath(t *testing.T) {
 	e := Edits{Cover: new([]byte("image-data"))}
+
 	err := Validate(e, testBook("", nil))
 	if err == nil {
 		t.Fatal("expected error: book has no cover to replace")
 	}
+
 	assertSingleFieldError(t, err, "cover")
 }
 
 func TestValidateCoverEmptyBytes(t *testing.T) {
 	e := Edits{Cover: new([]byte{})}
+
 	err := Validate(e, testBook("cover.jpg", nil))
 	if err == nil {
 		t.Fatal("expected error: empty cover bytes")
@@ -401,12 +431,16 @@ func TestHasBibEdits(t *testing.T) {
 	if (Edits{}).HasBibEdits() {
 		t.Error("HasBibEdits is true for an empty Edits")
 	}
+
 	notBib := map[string]bool{"Cover": true, "Status": true, "Rating": true, "Tags": true}
 	typ := reflect.TypeFor[Edits]()
+
 	for i := range typ.NumField() {
 		f := typ.Field(i)
+
 		var e Edits
 		reflect.ValueOf(&e).Elem().Field(i).Set(reflect.New(f.Type.Elem()))
+
 		if got, want := e.HasBibEdits(), !notBib[f.Name]; got != want {
 			t.Errorf("HasBibEdits with only %s set = %v, want %v", f.Name, got, want)
 		}
@@ -418,6 +452,7 @@ func TestHasCoverEdit(t *testing.T) {
 	if empty.HasCoverEdit() {
 		t.Error("HasCoverEdit should be false for empty Edits")
 	}
+
 	cover := []byte{}
 	if !(&Edits{Cover: &cover}).HasCoverEdit() {
 		t.Error("HasCoverEdit should be true when Cover is set")
@@ -453,6 +488,7 @@ func TestEditsNormalized(t *testing.T) {
 			got := tc.edits.Normalized()
 
 			assertRounded(t, "Rating", got.Rating, tc.wantRating)
+
 			if (got.SeriesIndex == nil) != (tc.wantIndex == nil) ||
 				(tc.wantIndex != nil && *got.SeriesIndex != *tc.wantIndex) {
 				t.Errorf("SeriesIndex = %v, want %v", got.SeriesIndex, tc.wantIndex)
@@ -503,10 +539,12 @@ func TestEditsNormalizedDoesNotMutateItsReceiver(t *testing.T) {
 
 func assertSingleFieldError(t *testing.T, err error, field string) {
 	t.Helper()
+
 	var ve *ValidationError
 	if !errors.As(err, &ve) {
 		t.Fatalf("error is not *ValidationError: %T", err)
 	}
+
 	if len(*ve) != 1 || (*ve)[0].Field != field {
 		t.Errorf("expected a single %q field error, got %v", field, *ve)
 	}
@@ -514,20 +552,24 @@ func assertSingleFieldError(t *testing.T, err error, field string) {
 
 func assertHasFieldError(t *testing.T, err error, field, msgSubstr string) {
 	t.Helper()
+
 	var ve *ValidationError
 	if !errors.As(err, &ve) {
 		t.Fatalf("error is not *ValidationError: %T", err)
 	}
+
 	for _, fe := range *ve {
 		if fe.Field == field && strings.Contains(fe.Message, msgSubstr) {
 			return
 		}
 	}
+
 	t.Errorf("expected an error on field %q containing %q, got %v", field, msgSubstr, *ve)
 }
 
 func assertRounded(t *testing.T, field string, got, want *float64) {
 	t.Helper()
+
 	switch {
 	case want == nil && got != nil:
 		t.Errorf("%s = %v, want nil — an absent edit must stay absent", field, *got)

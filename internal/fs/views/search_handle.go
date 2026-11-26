@@ -5,20 +5,19 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ramblingenzyme/go9p/fs"
+	"github.com/ramblingenzyme/go9p/proto"
+
 	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/textfmt"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
-	"github.com/ramblingenzyme/go9p/fs"
-	"github.com/ramblingenzyme/go9p/proto"
 )
 
-// One search handle: the subtree a client gets back from clone, and what
-// writing a query to it does. view_search.go is the other half, where handles
-// are allocated and reclaimed; a handle reaches back there once, to remove
-// itself on close.
-
+// searchHandleDir is the subtree a client gets back from clone. Writing a query
+// to it fills its results. view_search.go allocates and reclaims handles, and a
+// handle reaches back there once, to remove itself on close.
 type searchHandleDir struct {
 	*fs.StaticDir
 	id      int64
@@ -46,10 +45,10 @@ func newSearchHandleDir(f *fs.FS, id int64, reg *registry.BookRegistry, search *
 
 	resultsStat := newDirStat(f, "results")
 	d.results = newSearchResultsDir(resultsStat)
-	d.StaticDir.AddChild(d.results)
+	vfile.AddChild(d.StaticDir, d.results)
 
-	ctlStat := newStat(f, "ctl", 0644)
-	d.StaticDir.AddChild(newSearchCtlFile(ctlStat, d))
+	ctlStat := newStat(f, "ctl", 0o644)
+	vfile.AddChild(d.StaticDir, newSearchCtlFile(ctlStat, d))
 
 	return d
 }
@@ -61,6 +60,7 @@ func (h *searchHandleDir) close() {
 func (h *searchHandleDir) currentQueryText() string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
 	return h.queryText
 }
 
@@ -69,6 +69,7 @@ func (h *searchHandleDir) currentQueryText() string {
 func (h *searchHandleDir) lastQuery() time.Time {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
 	return h.lastQueryTime
 }
 
@@ -83,6 +84,7 @@ func (h *searchHandleDir) executeSearch(q library.Query, queryText string) {
 	h.mu.Unlock()
 
 	fn := makeMatchesFn(q)
+
 	h.reg.ResyncView(h.results, func() {
 		h.results.mu.Lock()
 		h.results.matchesFn = fn
@@ -114,16 +116,20 @@ func (f *searchCtlFile) Write(fid uint64, offset uint64, data []byte) (uint32, e
 
 func (f *searchCtlFile) Close(fid uint64) error {
 	_ = f.SnapshotFile.Close(fid)
+
 	return f.writes.CommitText(fid, func(s string) error {
 		if s == "close" {
 			f.handle.close()
 			return nil
 		}
+
 		q, err := textfmt.ParseQuery(s)
 		if err != nil {
 			return err
 		}
+
 		f.handle.executeSearch(q, s)
+
 		return nil
 	})
 }
@@ -146,6 +152,7 @@ func (d *searchResultsDir) Add(dir *book.BookDir) {
 	d.mu.RLock()
 	fn := d.matchesFn
 	d.mu.RUnlock()
+
 	if fn != nil && fn(dir.Book()) {
 		d.bookListDir.Add(dir)
 	}

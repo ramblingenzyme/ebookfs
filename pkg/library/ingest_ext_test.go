@@ -64,6 +64,7 @@ func TestIngestKeepsTheFirstOfRepeatedEntries(t *testing.T) {
     <meta refines="#c1" property="role" scheme="marc:relators">edt</meta>
     <dc:contributor id="c2">Ed Editor</dc:contributor>
     <meta refines="#c2" property="role" scheme="marc:relators">edt</meta>`))
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -73,9 +74,11 @@ func TestIngestKeepsTheFirstOfRepeatedEntries(t *testing.T) {
 	if a := got.Authors(); len(a) != 1 || a[0].Name != "Ann Author" {
 		t.Errorf("authors = %v, want Ann Author once", a)
 	}
+
 	if want := []string{"Fiction"}; !slices.Equal(got.Subjects(), want) {
 		t.Errorf("subjects = %v, want %v", got.Subjects(), want)
 	}
+
 	if want := []library.Contributor{{Name: "Ed Editor", Role: "edt"}}; !slices.Equal(got.Contributors(), want) {
 		t.Errorf("contributors = %v, want %v", got.Contributors(), want)
 	}
@@ -85,6 +88,7 @@ func TestIngestKeepsTheFirstOfRepeatedEntries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Edit: %v", err)
 	}
+
 	for _, p := range []string{got.Path(), edited.Path()} {
 		if dir, _, _ := strings.Cut(filepath.ToSlash(p), "/"); dir != "Ann Author" {
 			t.Errorf("epub path %q, want it under Ann Author/", p)
@@ -117,10 +121,12 @@ func TestIngestTellsABrokenEpubFromAnotherZip(t *testing.T) {
 			entries := slices.DeleteFunc(epubtest.BaseEntries(epubtest.OPF3), func(e epubtest.Entry) bool {
 				return slices.Contains(tc.drop, e.Name)
 			})
+
 			data, err := os.ReadFile(epubtest.WriteEpub(t, entries))
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			if _, err := tryIngest(t, openTestLibrary(t), data); !errors.Is(err, tc.want) {
 				t.Fatalf("ingest err = %v, want %v", err, tc.want)
 			}
@@ -128,9 +134,7 @@ func TestIngestTellsABrokenEpubFromAnotherZip(t *testing.T) {
 	}
 }
 
-// TestIngestPreservesAllMetadataFields verifies that all metadata fields
-// survive the parse → index → query flow. This catches bugs where a field
-// is forgotten during translation between layers.
+// Catches a field forgotten in translation between parse, index and query.
 func TestIngestPreservesAllMetadataFields(t *testing.T) {
 	lib := openTestLibrary(t)
 
@@ -148,18 +152,23 @@ func TestIngestPreservesAllMetadataFields(t *testing.T) {
 	if retrieved.Title() != "Complete Metadata Test" {
 		t.Errorf("Title = %q, want %q", retrieved.Title(), "Complete Metadata Test")
 	}
+
 	if retrieved.SortTitle() != "Metadata Test, Complete" {
 		t.Errorf("SortTitle = %q, want %q", retrieved.SortTitle(), "Metadata Test, Complete")
 	}
+
 	if retrieved.Pubdate() != "2024-03-01" {
 		t.Errorf("Pubdate = %q, want %q", retrieved.Pubdate(), "2024-03-01")
 	}
+
 	if s := retrieved.Series(); s == nil || s.Name != "Test Series" || s.Index != "2" {
 		t.Errorf("Series = %+v, want Test Series at 2", s)
 	}
+
 	if retrieved.Language() != "en" {
 		t.Errorf("Language = %q, want %q", retrieved.Language(), "en")
 	}
+
 	if retrieved.Description() != "A test book with all metadata fields" {
 		t.Errorf("Description = %q, want %q", retrieved.Description(), "A test book with all metadata fields")
 	}
@@ -169,9 +178,11 @@ func TestIngestPreservesAllMetadataFields(t *testing.T) {
 	if len(authors) != 2 {
 		t.Fatalf("len(Authors) = %d, want 2", len(authors))
 	}
+
 	if authors[0].Name != "First Author" || authors[0].SortName != "Author, First" {
 		t.Errorf("Authors[0] = %+v, want First Author sorting as Author, First", authors[0])
 	}
+
 	if authors[1].Name != "Second Author" {
 		t.Errorf("Authors[1].Name = %q, want %q", authors[1].Name, "Second Author")
 	}
@@ -189,6 +200,7 @@ func TestIngestPreservesAllMetadataFields(t *testing.T) {
 	// Subjects
 	subjects := retrieved.Subjects()
 	wantSubjects := []string{"Fiction", "Testing"}
+
 	if !slices.Equal(subjects, wantSubjects) {
 		t.Errorf("Subjects = %v, want %v", subjects, wantSubjects)
 	}
@@ -198,9 +210,11 @@ func TestIngestPreservesAllMetadataFields(t *testing.T) {
 	if len(contributors) != 2 {
 		t.Fatalf("len(Contributors) = %d, want 2", len(contributors))
 	}
+
 	if contributors[0].Name != "Test Editor" || contributors[0].Role != "edt" {
 		t.Errorf("Contributors[0] = %+v, want {Name: Test Editor, Role: edt}", contributors[0])
 	}
+
 	if contributors[1].Name != "Test Translator" || contributors[1].Role != "trl" {
 		t.Errorf("Contributors[1] = %+v, want {Name: Test Translator, Role: trl}", contributors[1])
 	}
@@ -210,6 +224,7 @@ func TestIngestPreservesAllMetadataFields(t *testing.T) {
 	if ids["isbn"] != "978-3-16-148410-0" {
 		t.Errorf("Identifiers[isbn] = %q, want %q", ids["isbn"], "978-3-16-148410-0")
 	}
+
 	if ids["id"] != "test-uuid-12345" {
 		t.Errorf("Identifiers[id] = %q, want %q", ids["id"], "test-uuid-12345")
 	}
@@ -220,6 +235,7 @@ func buildFullMetadataEpub(t *testing.T) []byte {
 	t.Helper()
 
 	var buf bytes.Buffer
+
 	zw := zip.NewWriter(&buf)
 
 	// mimetype must be first and uncompressed
@@ -227,7 +243,10 @@ func buildFullMetadataEpub(t *testing.T) []byte {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mt.Write([]byte("application/epub+zip"))
+
+	if _, err := mt.Write([]byte("application/epub+zip")); err != nil {
+		t.Fatal(err)
+	}
 
 	files := map[string]string{
 		"META-INF/container.xml": `<?xml version="1.0"?>
@@ -273,11 +292,15 @@ func buildFullMetadataEpub(t *testing.T) []byte {
 		if err != nil {
 			t.Fatal(err)
 		}
-		w.Write([]byte(content))
+
+		if _, err := w.Write([]byte(content)); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	if err := zw.Close(); err != nil {
 		t.Fatal(err)
 	}
+
 	return buf.Bytes()
 }

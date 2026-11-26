@@ -56,6 +56,7 @@ func (e Edits) Normalized() Edits {
 		r := math.Round(*e.Rating*100) / 100
 		e.Rating = &r
 	}
+
 	return e
 }
 
@@ -93,15 +94,19 @@ func (ve ValidationError) Error() string {
 	case 1:
 		return ve[0].Error()
 	}
+
 	var s strings.Builder
+
 	for i, fe := range ve {
 		if i > 0 {
 			s.WriteString("; ")
 		}
+
 		s.WriteString(fe.Field)
 		s.WriteString(": ")
 		s.WriteString(fe.Message)
 	}
+
 	return s.String()
 }
 
@@ -126,6 +131,7 @@ func Validate(e Edits, b *Book) *ValidationError {
 	}
 
 	var ve ValidationError
+
 	for _, v := range validators {
 		if msg := v.validate(); msg != "" {
 			ve = append(ve, FieldError{Field: v.field, Message: msg})
@@ -135,6 +141,7 @@ func Validate(e Edits, b *Book) *ValidationError {
 	if len(ve) == 0 {
 		return nil
 	}
+
 	return &ve
 }
 
@@ -142,6 +149,7 @@ func (e Edits) validateStatus() string {
 	if e.Status != nil && !IsValidStatus(*e.Status) {
 		return fmt.Sprintf("invalid status %q: must be %s", *e.Status, StatusList())
 	}
+
 	return ""
 }
 
@@ -155,6 +163,7 @@ func (e Edits) validateRating() string {
 	if math.IsNaN(*e.Rating) || *e.Rating < 0 || *e.Rating > 5 {
 		return fmt.Sprintf("invalid rating %g: must be 0-5", *e.Rating)
 	}
+
 	return ""
 }
 
@@ -162,6 +171,7 @@ func (e Edits) validateTitle() string {
 	if e.Title != nil && strings.TrimSpace(*e.Title) == "" {
 		return "title must not be empty"
 	}
+
 	return ""
 }
 
@@ -169,18 +179,22 @@ func (e Edits) validateAuthors() string {
 	if e.Authors == nil {
 		return ""
 	}
+
 	if len(*e.Authors) == 0 {
 		return "at least one author is required"
 	}
+
 	for i, a := range *e.Authors {
 		if strings.TrimSpace(a.Name) == "" {
 			return fmt.Sprintf("author %d has an empty name", i+1)
 		}
 	}
+
 	name := func(a Author) string { return strings.TrimSpace(a.Name) }
 	if i := firstRepeat(*e.Authors, name); i >= 0 {
 		return fmt.Sprintf("author %d duplicates %q", i+1, name((*e.Authors)[i]))
 	}
+
 	return ""
 }
 
@@ -191,20 +205,25 @@ func (e Edits) validateTags() string {
 	if e.Tags == nil {
 		return ""
 	}
+
 	for i, t := range *e.Tags {
 		if strings.TrimSpace(t) == "" {
 			return fmt.Sprintf("tag %d is empty", i+1)
 		}
+
 		if naming.NamesNothing(t) {
 			return fmt.Sprintf("tag %d is %q, which is only dots and whitespace", i+1, t)
 		}
+
 		if !naming.CanName(t) {
 			return fmt.Sprintf("tag %d is %q, which contains a control character", i+1, t)
 		}
 	}
+
 	if i := firstRepeat(*e.Tags, strings.TrimSpace); i >= 0 {
 		return fmt.Sprintf("tag %d duplicates %q", i+1, strings.TrimSpace((*e.Tags)[i]))
 	}
+
 	return ""
 }
 
@@ -212,9 +231,11 @@ func (e Edits) validateSubjects() string {
 	if e.Subjects == nil {
 		return ""
 	}
+
 	if i := firstRepeat(*e.Subjects, strings.TrimSpace); i >= 0 {
 		return fmt.Sprintf("subject %d duplicates %q", i+1, strings.TrimSpace((*e.Subjects)[i]))
 	}
+
 	return ""
 }
 
@@ -224,8 +245,10 @@ func (e Edits) validateContributors() string {
 	if e.Contributors == nil {
 		return ""
 	}
+
 	cs := *e.Contributors
 	i := firstRepeat(cs, func(c Contributor) Contributor { return c })
+
 	switch {
 	case i < 0:
 		return ""
@@ -245,8 +268,10 @@ func firstRepeat[T any, K comparable](xs []T, key func(T) K) int {
 		if seen[k] {
 			return i
 		}
+
 		seen[k] = true
 	}
+
 	return -1
 }
 
@@ -256,13 +281,16 @@ func (e Edits) validateLanguage() string {
 	if e.Language == nil {
 		return ""
 	}
+
 	v := strings.TrimSpace(*e.Language)
 	if v == "" {
 		return "language must not be empty"
 	}
+
 	if _, err := language.Parse(v); err != nil {
 		return fmt.Sprintf("language %q is not a recognised BCP 47 / ISO 639 code", *e.Language)
 	}
+
 	return ""
 }
 
@@ -270,12 +298,15 @@ func (e Edits) validateCover(b *Book) string {
 	if e.Cover == nil {
 		return ""
 	}
+
 	if len(*e.Cover) == 0 {
 		return "cover image must not be empty"
 	}
+
 	if b.CoverPath == "" {
 		return "book has no cover to replace"
 	}
+
 	return ""
 }
 
@@ -292,14 +323,17 @@ func (e Edits) validateSeriesIndex(b *Book) string {
 	if e.SeriesIndex == nil {
 		return ""
 	}
+
 	if !ValidSeriesIndex(*e.SeriesIndex) {
 		return fmt.Sprintf("invalid series index %q: must be a number, or decimal-separated numbers such as 2.2.1", *e.SeriesIndex)
 	}
+
 	switch {
 	case e.Series != nil && *e.Series == "":
 		return "series index set while clearing the series"
 	case e.Series == nil && b.Series == nil:
 		return "book has no series to set an index on"
 	}
+
 	return ""
 }

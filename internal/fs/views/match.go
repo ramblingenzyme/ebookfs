@@ -56,10 +56,13 @@ func matchesTitles(q library.Query, b *library.Book) bool {
 	if len(q.Titles) == 0 {
 		return true
 	}
+
 	if q.ExactTitles {
 		return slices.Contains(q.Titles, b.Title())
 	}
+
 	lower := strings.ToLower(b.Title())
+
 	return slices.ContainsFunc(q.Titles, func(title string) bool {
 		return strings.Contains(lower, strings.ToLower(title))
 	})

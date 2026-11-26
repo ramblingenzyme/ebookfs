@@ -4,13 +4,13 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/ramblingenzyme/go9p/fs"
+	"github.com/ramblingenzyme/go9p/proto"
+
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
-
-	"github.com/ramblingenzyme/go9p/fs"
-	"github.com/ramblingenzyme/go9p/proto"
 )
 
 func newTestBookDir(t *testing.T, b *library.Book) *BookDir {
@@ -19,9 +19,12 @@ func newTestBookDir(t *testing.T, b *library.Book) *BookDir {
 }
 
 func TestBookDirListing(t *testing.T) {
-	fields := []string{"authors", "contributors", "description", "id", "identifiers", "language",
+	fields := []string{
+		"authors", "contributors", "description", "id", "identifiers", "language",
 		"pubdate", "publisher", "rating", "rights", "series", "series_index", "status",
-		"subjects", "tags", "title"}
+		"subjects", "tags", "title",
+	}
+
 	for _, tc := range []struct {
 		name  string
 		cover string
@@ -38,6 +41,7 @@ func TestBookDirListing(t *testing.T) {
 			want := append([]string{"Title - Author.epub"}, fields...)
 			want = append(want, tc.extra...)
 			slices.Sort(want)
+
 			if got := fstest.ChildNames(newTestBookDir(t, util.WrapBook(b))); !slices.Equal(got, want) {
 				t.Errorf("children = %q, want %q", got, want)
 			}

@@ -6,22 +6,18 @@ import (
 	"io"
 )
 
-// PartialMD5 computes the kosync document ID using KOReader's partial MD5
-// algorithm. It takes up to 12 samples of 1024 bytes at exponentially spaced
-// offsets, concatenates them, and returns the MD5 hash as lowercase hex.
+// PartialMD5 ports KOReader's partial_md5_checksum, the kosync document ID
+// (docs/kosync.md). It hashes up to 12 samples of 1024 bytes at exponentially
+// spaced offsets and returns the MD5 as lowercase hex.
 //
-// The offsets are computed as: for i = -1..10: lshift(1024, 2*i)
-// The first offset is 0 due to LuaJIT's bit masking behavior (lshift(1024, -2)
-// wraps to 0 in 32-bit arithmetic).
-//
-// See specs/kosync-1.0.md §8.2-8.4 for the full algorithm specification.
+// The offsets are lshift(1024, 2*i) for i = -1..10. The first is 0, since
+// LuaJIT masks the shift to 32 bits and lshift(1024, -2) wraps to 0.
 func PartialMD5(r io.ReaderAt, size int64) (string, error) {
 	const sampleSize = 1024
+
 	h := md5.New()
 
-	// Compute offsets: i=-1 produces 0 (LuaJIT masking), then 1024<<(2*i) for i=0..10
 	var offsets [12]int64
-	offsets[0] = 0 // lshift(1024, -2) wraps to 0 in LuaJIT's 32-bit masking
 	for i := 0; i <= 10; i++ {
 		offsets[i+1] = 1024 << (2 * i)
 	}
@@ -31,23 +27,8 @@ func PartialMD5(r io.ReaderAt, size int64) (string, error) {
 			break
 		}
 
-		// Calculate how many bytes to read (up to sampleSize, but not past EOF)
-		remaining := size - offset
-		toRead := int64(sampleSize)
-		if remaining < toRead {
-			toRead = remaining
-		}
-
-		buf := make([]byte, toRead)
-		n, err := r.ReadAt(buf, offset)
-		if err != nil && err != io.EOF {
-			return "", err
-		}
-		if n != int(toRead) {
-			return "", io.ErrUnexpectedEOF
-		}
-
-		if _, err := h.Write(buf); err != nil {
+		n := min(sampleSize, size-offset)
+		if _, err := io.CopyN(h, io.NewSectionReader(r, offset, n), n); err != nil {
 			return "", err
 		}
 	}

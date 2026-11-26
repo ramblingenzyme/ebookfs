@@ -26,11 +26,15 @@ type parityBook struct {
 
 func TestSearchMatcherAgreesWithSQL(t *testing.T) {
 	books := []parityBook{
-		{"Findable", []string{"Alice"}, library.Edits{Tags: &[]string{"sf"}, Status: new("reading"), Series: new("Saga"), SeriesIndex: new("1"),
-			Subjects: &[]string{"space"}, Publisher: new("Tor"), Language: new("fr")}},
+		{"Findable", []string{"Alice"}, library.Edits{
+			Tags: &[]string{"sf"}, Status: new("reading"), Series: new("Saga"), SeriesIndex: new("1"),
+			Subjects: &[]string{"space"}, Publisher: new("Tor"), Language: new("fr"),
+		}},
 		{"Plain Book", []string{"Alice"}, library.Edits{}},
-		{"Ünderland", []string{"Bob"}, library.Edits{Tags: &[]string{"fantasy"}, Status: new("read"), Series: new("Saga"), SeriesIndex: new("2"), Authors: &[]library.Author{{Name: "Bob", SortName: "Bobson, Bob"}},
-			Subjects: &[]string{"space", "myth"}, Publisher: new("Gollancz")}},
+		{"Ünderland", []string{"Bob"}, library.Edits{
+			Tags: &[]string{"fantasy"}, Status: new("read"), Series: new("Saga"), SeriesIndex: new("2"), Authors: &[]library.Author{{Name: "Bob", SortName: "Bobson, Bob"}},
+			Subjects: &[]string{"space", "myth"}, Publisher: new("Gollancz"),
+		}},
 		{"STRAÜSS", []string{"Carol"}, library.Edits{}},
 		{"Good Omens", []string{"Neil Gaiman", "Terry Pratchett"}, library.Edits{}},
 		{"100% Wool", []string{"Dave"}, library.Edits{}},
@@ -107,22 +111,29 @@ func TestSearchMatcherAgreesWithSQL(t *testing.T) {
 			if tc.skip != "" {
 				t.Skip("known divergence: " + tc.skip)
 			}
+
 			fromSQL, err := lib.Search(tc.q)
 			if err != nil {
 				t.Fatalf("Search: %v", err)
 			}
+
 			var fromGo []*library.Book
+
 			matches := makeMatchesFn(tc.q)
+
 			for _, b := range all {
 				if matches(b) {
 					fromGo = append(fromGo, b)
 				}
 			}
+
 			sqlTitles := titlesOf(fromSQL)
 			goTitles := titlesOf(fromGo)
+
 			if !slices.Equal(sqlTitles, tc.want) {
 				t.Errorf("SQL: got %v, want %v", sqlTitles, tc.want)
 			}
+
 			if !slices.Equal(goTitles, tc.want) {
 				t.Errorf("Go: got %v, want %v", goTitles, tc.want)
 			}
@@ -134,10 +145,12 @@ func TestSearchMatcherAgreesWithSQL(t *testing.T) {
 // every book in it, which is the set the Go matcher filters.
 func parityBooks(t *testing.T, books []parityBook) (*library.Library, []*library.Book) {
 	t.Helper()
+
 	lib, err := library.Open(library.Config(util.TestConfig(t)))
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
+
 	t.Cleanup(func() { lib.Close() })
 
 	for i, b := range books {
@@ -145,13 +158,16 @@ func parityBooks(t *testing.T, books []parityBook) (*library.Library, []*library
 		if err != nil {
 			t.Fatalf("CreateIngest: %v", err)
 		}
+
 		if _, err := h.WriteAt(util.BuildTestEpub(t, b.title, b.authors...), 0); err != nil {
 			t.Fatalf("WriteAt: %v", err)
 		}
+
 		book, err := h.Ingest()
 		if err != nil {
 			t.Fatalf("Ingest %q: %v", b.title, err)
 		}
+
 		if b.edits != (library.Edits{}) {
 			if _, err := lib.Edit(book.ID(), b.edits); err != nil {
 				t.Fatalf("Edit %d: %v", i+1, err)
@@ -163,6 +179,7 @@ func parityBooks(t *testing.T, books []parityBook) (*library.Library, []*library
 	if err != nil {
 		t.Fatalf("Search(all): %v", err)
 	}
+
 	return lib, all
 }
 
@@ -171,6 +188,8 @@ func titlesOf(books []*library.Book) []string {
 	for _, b := range books {
 		out = append(out, b.Title())
 	}
+
 	slices.Sort(out)
+
 	return out
 }

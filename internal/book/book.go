@@ -41,6 +41,7 @@ func FormatFromExtension(ext string) (Format, bool) {
 			return f, true
 		}
 	}
+
 	return "", false
 }
 
@@ -104,9 +105,11 @@ func JoinAuthors(authors []Author, sep string) string {
 			names = append(names, a.Name)
 		}
 	}
+
 	if len(names) == 0 {
 		return UnknownAuthor
 	}
+
 	return strings.Join(names, sep)
 }
 
@@ -170,33 +173,41 @@ func NewBook(bib Bib, meta Meta, f File) *Book {
 	} else {
 		bib.Authors = slices.Clone(bib.Authors)
 	}
+
 	if bib.Identifiers == nil {
 		bib.Identifiers = map[string]string{}
 	} else {
 		bib.Identifiers = maps.Clone(bib.Identifiers)
 	}
+
 	if meta.DateAdded.IsZero() {
 		meta.DateAdded = time.Now().UTC().Truncate(time.Second)
 	}
+
 	if meta.DateModified.IsZero() {
 		meta.DateModified = time.Now().UTC().Truncate(time.Second)
 	}
+
 	if meta.Status == "" {
 		meta.Status = DefaultStatus
 	}
+
 	if meta.Tags == nil {
 		meta.Tags = []string{}
 	}
+
 	return &Book{File: f, Bib: bib, Meta: meta}
 }
 
 // FirstOf returns a copy of xs that keeps only the first element for each key.
 func FirstOf[T any, K comparable](xs []T, key func(T) K) []T {
 	seen := make(map[K]bool, len(xs))
+
 	return slices.DeleteFunc(slices.Clone(xs), func(x T) bool {
 		k := key(x)
 		repeat := seen[k]
 		seen[k] = true
+
 		return repeat
 	})
 }
@@ -209,5 +220,6 @@ func (b *Book) SeriesName() string {
 	if !b.HasSeries() {
 		return ""
 	}
+
 	return b.Series.Name
 }

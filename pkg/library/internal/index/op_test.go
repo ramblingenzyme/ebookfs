@@ -21,6 +21,7 @@ func TestOpPendingRows(t *testing.T) {
 			if err := op.Put(newBook(1, "Clean"), drift.PathInfo{}); err != nil {
 				t.Fatalf("put: %v", err)
 			}
+
 			if _, err := idx.Get(1); err != nil {
 				t.Fatalf("get: %v", err)
 			}
@@ -31,6 +32,7 @@ func TestOpPendingRows(t *testing.T) {
 			if err := op.Delete(1); err != nil {
 				t.Fatalf("delete: %v", err)
 			}
+
 			if _, err := idx.Get(1); !errors.Is(err, sql.ErrNoRows) {
 				t.Fatalf("expected book gone (sql.ErrNoRows), got err=%v", err)
 			}
@@ -40,6 +42,7 @@ func TestOpPendingRows(t *testing.T) {
 		{"put after cancel is refused", func(t *testing.T, idx *Index) {
 			op := mustMarkPending(t, idx)
 			op.Cancel()
+
 			if err := op.Put(newBook(1, "Oops"), drift.PathInfo{}); err == nil {
 				t.Fatal("expected error when Put follows Cancel")
 			}
@@ -47,6 +50,7 @@ func TestOpPendingRows(t *testing.T) {
 		{"delete after cancel is refused", func(t *testing.T, idx *Index) {
 			op := mustMarkPending(t, idx)
 			op.Cancel()
+
 			if err := op.Delete(1); err == nil {
 				t.Fatal("expected error when Delete follows Cancel")
 			}
@@ -56,6 +60,7 @@ func TestOpPendingRows(t *testing.T) {
 		{"a success clears only its own row", func(t *testing.T, idx *Index) {
 			mustMarkPending(t, idx)
 			storeInIndex(t, idx, newBook(2, "B"))
+
 			if _, err := idx.Get(2); err != nil {
 				t.Fatalf("op B book missing: %v", err)
 			}
@@ -67,9 +72,11 @@ func TestOpPendingRows(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			idx := openTestIndex(t)
 			tc.run(t, idx)
+
 			if n := pendingCount(t, idx); n != tc.wantPending {
 				t.Fatalf("pending_ops = %d, want %d", n, tc.wantPending)
 			}
+
 			mustNeedReindex(t, idx, tc.wantPending > 0)
 		})
 	}

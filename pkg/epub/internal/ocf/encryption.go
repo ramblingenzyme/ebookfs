@@ -56,6 +56,7 @@ func NewEncryptionInfo(r io.Reader) (*EncryptionInfo, error) {
 			}
 		}
 	}
+
 	return info, nil
 }
 
@@ -66,6 +67,8 @@ func (e *EncryptionInfo) IsEncrypted(name string) bool {
 	if e == nil {
 		return false
 	}
+
 	algo, ok := e.algorithms[name]
+
 	return ok && !obfuscationAlgorithms[algo]
 }

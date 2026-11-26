@@ -27,9 +27,10 @@ func TestStoreDrifted(t *testing.T) {
 		}},
 		{"epub changed with same size", func(t *testing.T, root string, loc book.File) {
 			path := filepath.Join(root, loc.Path)
-			if err := os.WriteFile(path, []byte("xxxx"), 0644); err != nil {
+			if err := os.WriteFile(path, []byte("xxxx"), 0o644); err != nil {
 				t.Fatal(err)
 			}
+
 			mt := time.Unix(1, 0)
 			if err := os.Chtimes(path, mt, mt); err != nil {
 				t.Fatal(err)
@@ -37,13 +38,16 @@ func TestStoreDrifted(t *testing.T) {
 		}},
 		{"epub resized with same mtime", func(t *testing.T, root string, loc book.File) {
 			path := filepath.Join(root, loc.Path)
+
 			info, err := os.Stat(path)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := os.WriteFile(path, []byte("larger epub"), 0644); err != nil {
+
+			if err := os.WriteFile(path, []byte("larger epub"), 0o644); err != nil {
 				t.Fatal(err)
 			}
+
 			if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
 				t.Fatal(err)
 			}
@@ -51,13 +55,14 @@ func TestStoreDrifted(t *testing.T) {
 		{"epub renamed", func(t *testing.T, root string, loc book.File) {
 			from := filepath.Join(root, loc.Path)
 			to := filepath.Join(filepath.Dir(from), "renamed.epub")
+
 			if err := os.Rename(from, to); err != nil {
 				t.Fatal(err)
 			}
 		}},
 		{"sidecar changed", func(t *testing.T, root string, loc book.File) {
 			path := filepath.Join(root, loc.Dir(), "meta.toml")
-			if err := os.WriteFile(path, []byte("id = 1\nstatus = \"read\"\n"), 0644); err != nil {
+			if err := os.WriteFile(path, []byte("id = 1\nstatus = \"read\"\n"), 0o644); err != nil {
 				t.Fatal(err)
 			}
 		}},
@@ -67,7 +72,9 @@ func TestStoreDrifted(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			root, files, idx, loc := cleanStoreIndex(t)
 			defer idx.Close()
+
 			tc.change(t, root, loc)
+
 			scan, changed := storeDrifted(files, idx)
 			if !changed || scan == nil {
 				t.Fatalf("storeDrifted = (%v, %v), want drift and a reusable scan", changed, scan)
@@ -81,9 +88,11 @@ func TestNeedsReindexWhenIndexCheckFails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if err := idx.Close(); err != nil {
 		t.Fatal(err)
 	}
+
 	if !needsReindex(idx) {
 		t.Fatal("needsReindex = false after index check failure, want rebuild")
 	}
@@ -103,34 +112,42 @@ func cleanStoreIndex(t *testing.T) (string, *store.Store, *index.Index, book.Fil
 	t.Helper()
 	root := t.TempDir()
 	files := store.New(root)
+
 	idx, err := index.Open(filepath.Join(t.TempDir(), "index.db"), false)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	loc := book.File{Path: filepath.Join("Author", "Title (1)", "book.epub")}
 	writeBookFiles(t, root, loc)
+
 	info, err := files.Stat(loc)
 	if err != nil {
 		idx.Close()
 		t.Fatal(err)
 	}
+
 	if err := idx.Rebuild(nil, map[string]drift.PathInfo{loc.Path: info}, 1); err != nil {
 		idx.Close()
 		t.Fatal(err)
 	}
+
 	return root, files, idx, loc
 }
 
 func writeBookFiles(t *testing.T, root string, loc book.File) {
 	t.Helper()
+
 	bookDir := filepath.Join(root, loc.Dir())
-	if err := os.MkdirAll(bookDir, 0755); err != nil {
+	if err := os.MkdirAll(bookDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(bookDir, "meta.toml"), []byte("id = 1\n"), 0644); err != nil {
+
+	if err := os.WriteFile(filepath.Join(bookDir, "meta.toml"), []byte("id = 1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(bookDir, loc.Filename()), []byte("epub"), 0644); err != nil {
+
+	if err := os.WriteFile(filepath.Join(bookDir, loc.Filename()), []byte("epub"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -32,6 +32,7 @@ func TestParseSelection(t *testing.T) {
 				t.Errorf("parseSelection(%q) error = %v, wantErr = %v", tt.spec, err, tt.wantErr)
 				return
 			}
+
 			if !tt.wantErr && !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("parseSelection(%q) = %+v, want %+v", tt.spec, got, tt.want)
 			}
@@ -42,6 +43,7 @@ func TestParseSelection(t *testing.T) {
 func TestParseIdListQuotesSpecAsTyped(t *testing.T) {
 	_, err := parseSelection("1 abc")
 	want := `invalid id "abc" in spec "1 abc"`
+
 	if err == nil || err.Error() != want {
 		t.Errorf("parseSelection error = %v, want %q", err, want)
 	}

@@ -24,9 +24,11 @@ func (f titleField) calibreSort() *pkgdoc.Named { return f.d.Named("calibre:titl
 func (f titleField) get() (title, sort string) {
 	el := f.element()
 	sort = el.Refine("file-as").Get()
+
 	if sort == "" {
 		sort = f.calibreSort().Get()
 	}
+
 	return el.Get(), sort
 }
 
@@ -50,6 +52,7 @@ func (f titleField) set(title, sort *string) {
 	if writeV3(f.d, refine.Exists()) {
 		pkgdoc.Put(refine, value)
 	}
+
 	if writeCalibre(f.d, f.calibreSort().Exists()) {
 		pkgdoc.Put(f.calibreSort(), value)
 	}
@@ -79,6 +82,7 @@ func (f modifiedField) set(t time.Time) {
 	if !f.d.EPUB3() {
 		return
 	}
+
 	f.d.UnrefinedMeta("dcterms:modified").Set(t.UTC().Format("2006-01-02T15:04:05Z"))
 }
 
@@ -100,6 +104,7 @@ func elementRoles(c *pkgdoc.Element) []string {
 	if r := c.OPFAttr("role").Get(); r != "" {
 		return []string{r}
 	}
+
 	return c.Refine("role").Values()
 }
 
@@ -113,22 +118,27 @@ func (o *Package) pubdate() string {
 		untagged string
 		count    int
 	)
+
 	for _, d := range o.d.DCAll("date") {
 		val := d.Get()
 		if val == "" {
 			continue
 		}
+
 		event := d.OPFAttr("event").Get()
 		if strings.ToLower(event) == "publication" {
 			return val
 		}
+
 		if event == "" {
 			count++
 			untagged = val
 		}
 	}
+
 	if count == 1 {
 		return untagged
 	}
+
 	return ""
 }

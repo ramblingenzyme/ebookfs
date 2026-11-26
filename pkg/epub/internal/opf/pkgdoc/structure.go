@@ -17,6 +17,7 @@ func (d *Doc) Manifest() []Item {
 	if m == nil {
 		return nil
 	}
+
 	var out []Item
 	for _, it := range m.SelectElements("item") {
 		out = append(out, Item{
@@ -27,6 +28,7 @@ func (d *Doc) Manifest() []Item {
 			Properties: attr(it, "properties"),
 		})
 	}
+
 	return out
 }
 
@@ -35,6 +37,7 @@ func (d *Doc) Guide() []Ref {
 	if g == nil {
 		return nil
 	}
+
 	var out []Ref
 	for _, r := range g.SelectElements("reference") {
 		out = append(out, Ref{
@@ -42,6 +45,7 @@ func (d *Doc) Guide() []Ref {
 			Href: strings.TrimSpace(r.SelectAttrValue("href", "")),
 		})
 	}
+
 	return out
 }
 
@@ -50,9 +54,11 @@ func (d *Doc) SpineFirst() string {
 	if spine == nil {
 		return ""
 	}
+
 	first := spine.SelectElement("itemref")
 	if first == nil {
 		return ""
 	}
+
 	return attr(first, "idref")
 }

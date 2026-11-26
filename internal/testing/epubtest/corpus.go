@@ -33,28 +33,35 @@ type Entry struct {
 func WriteEpub(t *testing.T, entries []Entry) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "book.epub")
+
 	f, err := os.Create(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer f.Close()
+
 	zw := zip.NewWriter(f)
+
 	for _, e := range entries {
 		method := zip.Deflate
 		if e.Store {
 			method = zip.Store
 		}
+
 		w, err := zw.CreateHeader(&zip.FileHeader{Name: e.Name, Method: method})
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		if _, err := w.Write(e.Data); err != nil {
 			t.Fatal(err)
 		}
 	}
+
 	if err := zw.Close(); err != nil {
 		t.Fatal(err)
 	}
+
 	return path
 }
 
@@ -66,10 +73,13 @@ type PackageDoc string
 // whole document.
 func (d PackageDoc) With(parts ...string) PackageDoc {
 	const closeTag = "  </metadata>"
+
 	before, after, ok := strings.Cut(string(d), closeTag)
+
 	if !ok {
 		panic("package document has no </metadata>")
 	}
+
 	return PackageDoc(before + strings.Join(parts, "\n") + "\n" + closeTag + after)
 }
 
@@ -103,18 +113,22 @@ func (p Pkg) build(version, opfNS, defaultManifest, spineAttr string) PackageDoc
 	if manifest == "" {
 		manifest = defaultManifest
 	}
+
 	attrs := ""
 	if p.Attrs != "" {
 		attrs = " " + p.Attrs
 	}
+
 	spine := ""
 	if p.Spine != "" {
 		spine = `<itemref idref="` + p.Spine + `"/>`
 	}
+
 	guide := ""
 	if p.Guide {
 		guide = "\n" + `  <guide><reference type="cover" href="cover.xhtml" title="Cover"/></guide>`
 	}
+
 	return PackageDoc(`<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf"` + opfNS + ` version="` + version + `" unique-identifier="pub-id"` + attrs + `>
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -140,6 +154,7 @@ func BaseEntries(opf PackageDoc, extra ...Entry) []Entry {
 		{Name: "OEBPS/cover.jpg", Data: CoverBytes},
 		{Name: "OEBPS/chapter1.xhtml", Data: ChapterBytes},
 	}
+
 	return append(es, extra...)
 }
 
@@ -156,6 +171,7 @@ const (
 
 func required(meta string) string {
 	var out []string
+
 	for _, f := range []struct{ tag, line string }{
 		{"<dc:identifier", fillIdentifier},
 		{"<dc:title", fillTitle},
@@ -166,9 +182,11 @@ func required(meta string) string {
 			out = append(out, f.line)
 		}
 	}
+
 	if len(out) == 0 {
 		return ""
 	}
+
 	return strings.Join(out, "\n") + "\n"
 }
 

@@ -5,8 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/go9p/fs"
+
+	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 )
 
 type LogEntry struct {
@@ -35,12 +36,14 @@ func NewCommandLog(max int) *CommandLog {
 func (l *CommandLog) Append(cmd, result string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+
 	l.entries[l.next] = LogEntry{
 		Timestamp: time.Now(),
 		Command:   cmd,
 		Result:    result,
 	}
 	l.next = (l.next + 1) % l.max
+
 	if l.next == 0 {
 		l.full = true
 	}
@@ -60,6 +63,7 @@ func (l *CommandLog) Entries() []LogEntry {
 		out = make([]LogEntry, l.next)
 		copy(out, l.entries[:l.next])
 	}
+
 	return out
 }
 
@@ -70,12 +74,13 @@ type LogFile struct {
 func NewLogFile(f *fs.FS, cmdLog *CommandLog) *LogFile {
 	return &LogFile{
 		SnapshotFile: vfile.NewSnapshotFile(
-			newStat(f, "log", 0444),
+			newStat(f, "log", 0o444),
 			func() ([]byte, error) {
 				entries := cmdLog.Entries()
 				if len(entries) == 0 {
 					return []byte("(no commands yet)\n"), nil
 				}
+
 				var buf []byte
 				for _, e := range entries {
 					buf = fmt.Appendf(buf, "%s  %-30s  %s\n",
@@ -84,6 +89,7 @@ func NewLogFile(f *fs.FS, cmdLog *CommandLog) *LogFile {
 						e.Result,
 					)
 				}
+
 				return buf, nil
 			},
 		),

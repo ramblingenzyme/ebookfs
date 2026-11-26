@@ -5,13 +5,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
-	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
-
-	"github.com/ramblingenzyme/ebookfs/internal/util/naming"
-	"github.com/ramblingenzyme/ebookfs/pkg/library"
 	"github.com/ramblingenzyme/go9p/fs"
 	"github.com/ramblingenzyme/go9p/proto"
+
+	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
+	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
+	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
+	"github.com/ramblingenzyme/ebookfs/internal/util/naming"
+	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
 // seriesEntryName builds a book's entry name within its series. The index is
@@ -24,10 +25,12 @@ func seriesEntryName(b *library.Book, pad *padWidth) string {
 	if pad.padded() {
 		head, rest, _ := strings.Cut(s, ".")
 		s = pad.format(int64(seriesLevel(head)))
+
 		if rest != "" {
 			s += "." + rest
 		}
 	}
+
 	return fmt.Sprintf("%s - %s", s, naming.PathSafe(b.Title()))
 }
 
@@ -38,6 +41,7 @@ func seriesEntryName(b *library.Book, pad *padWidth) string {
 func seriesLevel(s string) int {
 	head, _, _ := strings.Cut(s, ".")
 	n, _ := strconv.Atoi(head)
+
 	return n
 }
 
@@ -68,13 +72,14 @@ func (s *seriesBookListDir) Add(dir *book.BookDir) {
 		return seriesEntryName(b, &s.pad)
 	})
 	s.children[dir.Book().ID()] = n
-	s.StaticDir.AddChild(n)
+	vfile.AddChild(&s.StaticDir, n)
 	s.repad()
 }
 
 func (s *seriesBookListDir) Remove(dir *book.BookDir) {
 	id := dir.Book().ID()
 	n, ok := s.children[id]
+
 	if !ok {
 		return
 	}
@@ -88,15 +93,18 @@ func (s *seriesBookListDir) Remove(dir *book.BookDir) {
 // loses its highest-numbered volume narrows again.
 func (s *seriesBookListDir) repad() {
 	var maxIdx int
+
 	for _, n := range s.children {
 		b := n.Book()
 		if !b.HasSeries() {
 			continue
 		}
+
 		if level := seriesLevel(b.SeriesIndex()); level > maxIdx {
 			maxIdx = level
 		}
 	}
+
 	s.pad.set(int64(maxIdx))
 }
 
@@ -115,5 +123,6 @@ func seriesKeys(b *library.Book) []string {
 	if !b.HasSeries() {
 		return nil
 	}
+
 	return nameableKeys([]string{b.SeriesName()})
 }

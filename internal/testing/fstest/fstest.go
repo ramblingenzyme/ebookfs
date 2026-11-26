@@ -36,6 +36,7 @@ func Fid(t testing.TB, f fs.File, num uint64) *Handle {
 
 func (h *Handle) Open(mode proto.Mode) {
 	h.t.Helper()
+
 	if err := h.f.Open(h.num, mode); err != nil {
 		h.t.Fatalf("Open fid %d: %v", h.num, err)
 	}
@@ -43,6 +44,7 @@ func (h *Handle) Open(mode proto.Mode) {
 
 func (h *Handle) Write(off uint64, data string) {
 	h.t.Helper()
+
 	if _, err := h.f.Write(h.num, off, []byte(data)); err != nil {
 		h.t.Fatalf("Write fid %d at %d: %v", h.num, off, err)
 	}
@@ -51,6 +53,7 @@ func (h *Handle) Write(off uint64, data string) {
 // Close clunks the fid, which is the moment a buffered write commits.
 func (h *Handle) Close() {
 	h.t.Helper()
+
 	if err := h.f.Close(h.num); err != nil {
 		h.t.Fatalf("Close fid %d: %v", h.num, err)
 	}
@@ -58,10 +61,12 @@ func (h *Handle) Close() {
 
 func (h *Handle) Read(off, count uint64) string {
 	h.t.Helper()
+
 	data, err := h.f.Read(h.num, off, count)
 	if err != nil {
 		h.t.Fatalf("Read fid %d at %d: %v", h.num, off, err)
 	}
+
 	return string(data)
 }
 
@@ -77,12 +82,14 @@ func (h *Handle) Set(mode proto.Mode, data string) {
 func (h *Handle) Get(mode proto.Mode, count uint64) string {
 	h.t.Helper()
 	h.Open(mode)
+
 	return h.Read(0, count)
 }
 
 // A read fails on an unopened or clunked fid.
 func (h *Handle) WantReadError() {
 	h.t.Helper()
+
 	if data, err := h.f.Read(h.num, 0, 64); err == nil {
 		h.t.Errorf("Read fid %d succeeded, want an error; got %q", h.num, data)
 	}
@@ -96,10 +103,12 @@ func (h *Handle) CloseErr() error {
 
 func (h *Handle) WantCloseError() error {
 	h.t.Helper()
+
 	err := h.f.Close(h.num)
 	if err == nil {
 		h.t.Fatalf("Close fid %d succeeded, want the commit rejected", h.num)
 	}
+
 	return err
 }
 
@@ -109,12 +118,15 @@ func ChildNames(d fs.Dir) []string {
 	for name := range d.Children() {
 		names = append(names, name)
 	}
+
 	slices.Sort(names)
+
 	return names
 }
 
 func HasChild(t testing.TB, d fs.Dir, name string) {
 	t.Helper()
+
 	if _, ok := d.Children()[name]; !ok {
 		t.Errorf("no entry %q; listing is %v", name, ChildNames(d))
 	}
@@ -122,6 +134,7 @@ func HasChild(t testing.TB, d fs.Dir, name string) {
 
 func NoChild(t testing.TB, d fs.Dir, name string) {
 	t.Helper()
+
 	if _, ok := d.Children()[name]; ok {
 		t.Errorf("entry %q survived; listing is %v", name, ChildNames(d))
 	}
@@ -129,6 +142,7 @@ func NoChild(t testing.TB, d fs.Dir, name string) {
 
 func ChildCount(t testing.TB, d fs.Dir, want int) {
 	t.Helper()
+
 	if got := len(d.Children()); got != want {
 		t.Errorf("listing holds %d entries, want %d: %v", got, want, ChildNames(d))
 	}
@@ -138,22 +152,28 @@ func ChildCount(t testing.TB, d fs.Dir, want int) {
 // calling package, so this reaches types fstest cannot name.
 func ChildAs[T fs.FSNode](t testing.TB, d fs.Dir, name string) T {
 	t.Helper()
+
 	var zero T
+
 	child, ok := d.Children()[name]
+
 	if !ok {
 		t.Fatalf("no entry %q; listing is %v", name, ChildNames(d))
 		return zero
 	}
+
 	typed, ok := any(child).(T)
 	if !ok {
 		t.Fatalf("entry %q is %T, want %T", name, child, zero)
 		return zero
 	}
+
 	return typed
 }
 
 func StatLength(t testing.TB, f fs.FSNode, want uint64) {
 	t.Helper()
+
 	if got := f.Stat().Length; got != want {
 		t.Errorf("Stat().Length = %d, want %d", got, want)
 	}

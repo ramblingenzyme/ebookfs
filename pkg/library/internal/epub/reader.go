@@ -19,6 +19,7 @@ func OpenReader(path, coverPath string) (*reader, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &reader{File: f, coverPath: coverPath}, nil
 }
 
@@ -26,6 +27,7 @@ func (r *reader) ReadAt(p []byte, off int64) (int, error) {
 	if r.Closed() {
 		return 0, formats.ErrClosed
 	}
+
 	return r.File.ReadAt(p, off)
 }
 
@@ -33,7 +35,16 @@ func (r *reader) Close() error {
 	if r.Closed() {
 		return formats.ErrClosed
 	}
+
 	return r.File.Close()
+}
+
+func (r *reader) OPF() ([]byte, error) {
+	if r.Closed() {
+		return nil, formats.ErrClosed
+	}
+
+	return r.ReadEntry(r.PackagePath())
 }
 
 func (r *reader) Cover() ([]byte, error) {
@@ -41,8 +52,10 @@ func (r *reader) Cover() ([]byte, error) {
 	if r.Closed() {
 		return nil, formats.ErrClosed
 	}
+
 	if r.coverPath == "" {
 		return nil, formats.ErrNoCover
 	}
+
 	return r.ReadEntry(r.coverPath)
 }

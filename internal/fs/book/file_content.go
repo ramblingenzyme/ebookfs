@@ -1,9 +1,10 @@
 package book
 
 import (
+	"github.com/ramblingenzyme/go9p/proto"
+
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
-	"github.com/ramblingenzyme/go9p/proto"
 )
 
 // contentFile serves a book's file through the library, holding one reader per fid.
@@ -30,5 +31,6 @@ func (e *contentFile) Stat() proto.Stat {
 		s.Name = b.Filename()
 		s.Length = uint64(b.Size())
 	}
+
 	return s
 }

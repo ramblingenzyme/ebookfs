@@ -53,6 +53,7 @@ func (f atomFeed) href(rel string) string {
 			return l.Href
 		}
 	}
+
 	return ""
 }
 
@@ -61,6 +62,7 @@ func (f atomFeed) titles() []string {
 	for i, e := range f.Entries {
 		out[i] = e.Title
 	}
+
 	return out
 }
 
@@ -76,6 +78,7 @@ const epubBody = "PK\x03\x04 pretend this is an epub"
 // links to cannot disagree.
 func newFake(t *testing.T, books ...*library.Book) (*fake, http.Handler) {
 	t.Helper()
+
 	f := &fake{}
 	f.SearchFn = func(q library.Query) ([]*library.Book, error) {
 		f.queries = append(f.queries, q)
@@ -87,6 +90,7 @@ func newFake(t *testing.T, books ...*library.Book) (*fake, http.Handler) {
 				return b, nil
 			}
 		}
+
 		return nil, fmt.Errorf("book %d: %w", id, library.ErrBookNotFound)
 	}
 	f.ContentFn = func(int64) (library.Reader, error) {
@@ -104,8 +108,10 @@ func newFake(t *testing.T, books ...*library.Book) (*fake, http.Handler) {
 
 func get(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
 	t.Helper()
+
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+
 	return w
 }
 
@@ -115,10 +121,12 @@ func feed(t *testing.T, h http.Handler, path string) atomFeed {
 	if w.Code != http.StatusOK {
 		t.Fatalf("GET %s: status %d, want 200\n%s", path, w.Code, w.Body)
 	}
+
 	var f atomFeed
 	if err := xml.Unmarshal(w.Body.Bytes(), &f); err != nil {
 		t.Fatalf("GET %s: parsing feed: %v\n%s", path, err, w.Body)
 	}
+
 	return f
 }
 
@@ -137,15 +145,19 @@ func TestEveryKindResolvesThroughToBooks(t *testing.T) {
 	if got := root.titles(); !slices.Equal(got, want) {
 		t.Errorf("root sections = %v, want %v", got, want)
 	}
+
 	if len(root.Entries) != len(kinds) {
 		t.Fatalf("root has %d entries, want one per kind (%d)", len(root.Entries), len(kinds))
 	}
+
 	for i, k := range kinds {
 		e := root.Entries[i]
 		if e.Title != k.title {
 			t.Errorf("root entry %d = %q, want %q", i, e.Title, k.title)
 		}
+
 		sub := feed(t, h, e.Links[0].Href)
+
 		if k.list == nil {
 			continue
 		}
@@ -154,6 +166,7 @@ func TestEveryKindResolvesThroughToBooks(t *testing.T) {
 			t.Errorf("%s: listing is empty", k.id)
 			continue
 		}
+
 		if code := get(t, h, sub.Entries[0].Links[0].Href).Code; code != http.StatusOK {
 			t.Errorf("%s: %s -> status %d, want 200", k.id, sub.Entries[0].Links[0].Href, code)
 		}
@@ -170,15 +183,18 @@ func TestFacetHrefRoundTripsAwkwardNames(t *testing.T) {
 	if got := tags.titles(); !slices.Equal(got, []string{"philosophy/ethics"}) {
 		t.Fatalf("tag listing = %v", got)
 	}
+
 	if got := tags.Entries[0].Content; got != "1 book" {
 		t.Errorf("count = %q, want %q", got, "1 book")
 	}
 
 	f.queries = nil
 	books := feed(t, h, tags.Entries[0].Links[0].Href)
+
 	if got := books.titles(); !slices.Equal(got, []string{"Either/Or"}) {
 		t.Fatalf("books behind the tag = %v", got)
 	}
+
 	if len(f.queries) != 1 || !slices.Equal(f.queries[0].Tags, []string{"philosophy/ethics"}) {
 		t.Errorf("query = %+v, want Tags [philosophy/ethics]", f.queries)
 	}
@@ -195,18 +211,22 @@ func TestEntryCarriesAcquisitionAndMetadata(t *testing.T) {
 	if len(all.Entries) != 1 {
 		t.Fatalf("entries = %d, want 1", len(all.Entries))
 	}
+
 	e := all.Entries[0]
 	if e.ID != "urn:ebookfs:book:7" {
 		t.Errorf("atom:id = %q", e.ID)
 	}
+
 	if len(e.Authors) != 1 || e.Authors[0].Name != "Frank Herbert" {
 		t.Errorf("authors = %+v", e.Authors)
 	}
+
 	if len(e.Categories) != 1 || e.Categories[0].Term != "scifi" {
 		t.Errorf("categories = %+v", e.Categories)
 	}
 
 	var acquisition, cover string
+
 	for _, l := range e.Links {
 		switch l.Rel {
 		case "http://opds-spec.org/acquisition/open-access":
@@ -218,9 +238,11 @@ func TestEntryCarriesAcquisitionAndMetadata(t *testing.T) {
 			cover = l.Href
 		}
 	}
+
 	if acquisition != Prefix+"/content/7/Dune.epub" {
 		t.Errorf("acquisition href = %q", acquisition)
 	}
+
 	if cover != Prefix+"/cover/7" {
 		t.Errorf("cover href = %q", cover)
 	}
@@ -236,23 +258,29 @@ func TestDownloadSupportsRanges(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status %d, want 200", w.Code)
 	}
+
 	if got := w.Body.String(); got != epubBody {
 		t.Errorf("body = %q", got)
 	}
+
 	if got := w.Header().Get("Content-Type"); got != "application/epub+zip" {
 		t.Errorf("content type = %q", got)
 	}
+
 	if got := w.Header().Get("Content-Disposition"); !strings.Contains(got, "Dune.epub") {
 		t.Errorf("content disposition = %q", got)
 	}
 
 	req := httptest.NewRequest(http.MethodGet, Prefix+"/content/7/Dune.epub", nil)
 	req.Header.Set("Range", "bytes=2-5")
+
 	rw := httptest.NewRecorder()
 	h.ServeHTTP(rw, req)
+
 	if rw.Code != http.StatusPartialContent {
 		t.Fatalf("range status %d, want 206", rw.Code)
 	}
+
 	if got := rw.Body.String(); got != epubBody[2:6] {
 		t.Errorf("range body = %q, want %q", got, epubBody[2:6])
 	}
@@ -269,6 +297,7 @@ func TestCoverServedDirectly(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status %d, want 200", w.Code)
 	}
+
 	if got := w.Header().Get("Content-Type"); got != "image/png" {
 		t.Errorf("content type = %q, want image/png", got)
 	}
@@ -317,6 +346,7 @@ func TestPaginationLinksTheNextPage(t *testing.T) {
 		b.Meta.Tags = []string{"scifi"}
 		books[i] = util.WrapBook(b)
 	}
+
 	_, h := newFake(t, books...)
 
 	for _, path := range []string{Prefix + "/feed/all", Prefix + "/feed/tag?value=scifi"} {
@@ -324,17 +354,21 @@ func TestPaginationLinksTheNextPage(t *testing.T) {
 		if len(first.Entries) != pageSize {
 			t.Fatalf("%s: first page = %d entries, want %d", path, len(first.Entries), pageSize)
 		}
+
 		next := first.href("next")
 		if next == "" {
 			t.Fatalf("%s: no next link on a feed with more pages", path)
 		}
+
 		second := feed(t, h, next)
 		if len(second.Entries) != 3 {
 			t.Errorf("%s -> %s: second page = %d entries, want 3", path, next, len(second.Entries))
 		}
+
 		if second.href("next") != "" {
 			t.Errorf("%s: last page advertises a next page", path)
 		}
+
 		if got := second.href("self"); got != next {
 			t.Errorf("%s: self on page 2 = %q, want %q", path, got, next)
 		}
@@ -348,9 +382,11 @@ func TestSearchQueriesTitles(t *testing.T) {
 	if got := results.titles(); !slices.Equal(got, []string{"Dune"}) {
 		t.Fatalf("results = %v", got)
 	}
+
 	if len(f.queries) != 1 || !slices.Equal(f.queries[0].Titles, []string{"Dun"}) {
 		t.Fatalf("query = %+v, want Titles [Dun]", f.queries)
 	}
+
 	if f.queries[0].ExactTitles {
 		t.Error("search asked for exact titles; browsing wants the substring")
 	}
@@ -359,6 +395,7 @@ func TestSearchQueriesTitles(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("opensearch: status %d", w.Code)
 	}
+
 	if want := "https://books.example.com" + Prefix + "/search?q={searchTerms}"; !strings.Contains(w.Body.String(), want) {
 		t.Errorf("opensearch template is not %q:\n%s", want, w.Body)
 	}
@@ -367,19 +404,24 @@ func TestSearchQueriesTitles(t *testing.T) {
 // filter is the fake index, over only the fields the catalog's feeds set.
 func filter(books []*library.Book, q library.Query) []*library.Book {
 	var out []*library.Book
+
 	for _, b := range books {
 		if !matches(q.Authors, authorsOf(b)) || !matches(q.Tags, b.Tags()) ||
 			!matches(q.Series, seriesOf(b)) || !matches(q.Status, []string{b.Status()}) {
 			continue
 		}
+
 		if len(q.Titles) > 0 && !strings.Contains(b.Title(), q.Titles[0]) {
 			continue
 		}
+
 		out = append(out, b)
 	}
+
 	if q.Limit > 0 && len(out) > q.Limit {
 		out = out[:q.Limit]
 	}
+
 	return out
 }
 
@@ -389,11 +431,13 @@ func matches(want, have []string) bool {
 	if len(want) == 0 {
 		return true
 	}
+
 	for _, w := range want {
 		if slices.Contains(have, w) {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -402,6 +446,7 @@ func authorsOf(b *library.Book) []string {
 	for _, a := range b.Authors() {
 		out = append(out, a.Name)
 	}
+
 	return out
 }
 
@@ -409,21 +454,26 @@ func seriesOf(b *library.Book) []string {
 	if !b.HasSeries() {
 		return nil
 	}
+
 	return []string{b.SeriesName()}
 }
 
 func count(books []*library.Book, values func(*library.Book) []string) []library.Facet {
 	var out []library.Facet
+
 	seen := map[string]int{}
+
 	for _, b := range books {
 		for _, v := range values(b) {
 			if i, ok := seen[v]; ok {
 				out[i].Count++
 				continue
 			}
+
 			seen[v] = len(out)
 			out = append(out, library.Facet{Name: v, Count: 1})
 		}
 	}
+
 	return out
 }

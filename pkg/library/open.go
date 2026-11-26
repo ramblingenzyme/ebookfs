@@ -10,6 +10,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/formats"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/fsutil"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/reconcile"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/store"
@@ -42,7 +43,7 @@ func Open(cfg Config, opts ...Option) (*Library, error) {
 		opt(&o)
 	}
 
-	if err := os.MkdirAll(cfg.Root, 0755); err != nil {
+	if err := os.MkdirAll(cfg.Root, 0o755); err != nil {
 		return nil, fmt.Errorf("creating library root: %w", err)
 	}
 
@@ -67,23 +68,19 @@ func Open(cfg Config, opts ...Option) (*Library, error) {
 // openLocked does the work of opening the library while holding the lock.
 // If it fails, the caller is responsible for closing lockFile.
 func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
-	if err := os.MkdirAll(cfg.InboxTemp, 0700); err != nil {
-		return nil, fmt.Errorf("creating inbox temp dir: %w", err)
-	}
-	if err := cleanInboxTemp(cfg.InboxTemp); err != nil {
-		return nil, fmt.Errorf("cleaning inbox temp: %w", err)
-	}
-	if err := checkSameFilesystem(cfg.Root, cfg.InboxTemp); err != nil {
-		return nil, fmt.Errorf("inbox_temp must be on the same filesystem as library.root: %w", err)
+	if err := prepareInboxTemp(cfg.InboxTemp, cfg.Root); err != nil {
+		return nil, err
 	}
 
 	if cfg.StateDir == "" {
 		cfg.StateDir = cfg.Root
 	}
-	if err := os.MkdirAll(cfg.StateDir, 0755); err != nil {
+
+	if err := os.MkdirAll(cfg.StateDir, 0o755); err != nil {
 		return nil, fmt.Errorf("creating state dir: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(cfg.IndexPath), 0755); err != nil {
+
+	if err := os.MkdirAll(filepath.Dir(cfg.IndexPath), 0o755); err != nil {
 		return nil, fmt.Errorf("creating index dir: %w", err)
 	}
 
@@ -91,6 +88,7 @@ func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	lib := &Library{
 		store:     store.New(cfg.Root),
 		index:     idx,
@@ -102,6 +100,7 @@ func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
 	if err := lib.store.RemoveStaleTemps(lib.formats); err != nil {
 		slog.Warn("cleaning stale temp files failed", "error", err)
 	}
+
 	if err := lib.store.EmptyTrash(); err != nil {
 		slog.Warn("emptying trash failed", "error", err)
 	}
@@ -112,7 +111,9 @@ func openLocked(cfg Config, o options, lockFile *os.File) (*Library, error) {
 		idx.Close()
 		return nil, fmt.Errorf("reindexing library: %w", err)
 	}
+
 	recordLastID(lib.store, idx)
+
 	return lib, nil
 }
 
@@ -130,10 +131,12 @@ func recordLastID(s *store.Store, idx *index.Index) {
 		slog.Warn("could not read the last issued book id from the index", "error", err)
 		return
 	}
+
 	last, err := s.LastID()
 	if err != nil {
 		slog.Warn("replacing an unreadable record of the last issued book id", "error", err)
 	}
+
 	if issued > last {
 		if err := s.RecordID(issued); err != nil {
 			slog.Warn("could not record the last issued book id; a deleted book's id may be reissued", "error", err)
@@ -141,20 +144,39 @@ func recordLastID(s *store.Store, idx *index.Index) {
 	}
 }
 
+func prepareInboxTemp(dir, root string) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("creating inbox temp dir: %w", err)
+	}
+
+	if err := cleanInboxTemp(dir); err != nil {
+		return fmt.Errorf("cleaning inbox temp: %w", err)
+	}
+
+	if err := checkSameFilesystem(root, dir); err != nil {
+		return fmt.Errorf("inbox_temp must be on the same filesystem as library.root: %w", err)
+	}
+
+	return nil
+}
+
 func cleanInboxTemp(dir string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return err
 	}
+
 	for _, e := range entries {
 		// Releases before the upload-* prefix staged bare files named
 		// after the detected format's extension.
 		upload := e.Type().IsRegular() &&
 			(strings.HasPrefix(e.Name(), "upload-") || isKnownExtension(e.Name()))
 		scratch := e.IsDir() && strings.HasPrefix(e.Name(), "hooks-")
+
 		if !upload && !scratch {
 			continue
 		}
+
 		path := filepath.Join(dir, e.Name())
 		if err := os.RemoveAll(path); err != nil {
 			slog.Warn("removing stale inbox temp failed", "path", path, "error", err)
@@ -162,6 +184,7 @@ func cleanInboxTemp(dir string) error {
 			slog.Info("removed stale inbox temp", "path", path)
 		}
 	}
+
 	return nil
 }
 
@@ -171,7 +194,9 @@ func checkSameFilesystem(a, b string) error {
 	if err != nil {
 		return err
 	}
+
 	tmp.Close()
+
 	defer os.Remove(tmp.Name())
 
 	dst := filepath.Join(b, filepath.Base(tmp.Name()))
@@ -179,9 +204,29 @@ func checkSameFilesystem(a, b string) error {
 		os.Remove(dst)
 		return err
 	}
+
 	if err := os.Remove(dst); err != nil {
 		slog.Warn("checkSameFilesystem cleanup failed", "path", dst, "error", err)
 	}
+
+	return nil
+}
+
+// checkFilesystem detects the filesystem type and enforces policy
+func checkFilesystem(root string, allowSMB bool) error {
+	fsType, err := fsutil.Check(root, allowSMB, "library root")
+	if err != nil {
+		return err
+	}
+
+	// ponytail: selfTestFlock runs on one host, so a lock local to this host
+	// passes it. Parse /proc/self/mountinfo for nolock and local_lock to warn
+	// only on the mounts affected, if the warning on every NFS start gets noisy.
+	if fsType == fsutil.FSTypeNFS {
+		slog.Warn("the flock self-test can't see other hosts; if this mount uses nolock or local_lock, a second host could open the library and corrupt it",
+			"path", root)
+	}
+
 	return nil
 }
 

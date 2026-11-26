@@ -15,6 +15,7 @@ func bookPaths(books ...*book.Book) []BookPath {
 	for i, b := range books {
 		bts[i] = BookPath{Book: b}
 	}
+
 	return bts
 }
 
@@ -22,16 +23,19 @@ func bookPaths(books ...*book.Book) []BookPath {
 // version-stamped baseline so tests start from a known clean state.
 func openTestIndex(t *testing.T) *Index {
 	t.Helper()
+
 	idx, err := Open(filepath.Join(t.TempDir(), "index.db"), false)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
+
 	t.Cleanup(func() { idx.Close() })
 	// A fresh index is intentionally "dirty" (no version stamp), so rebuild an
 	// empty one to reach the clean baseline the mutation tests want.
 	if err := idx.Rebuild(nil, nil, 0); err != nil {
 		t.Fatalf("baseline rebuild: %v", err)
 	}
+
 	return idx
 }
 
@@ -59,30 +63,37 @@ func makeTestBook(id int64, title string, authors []string, tag string, status s
 	for i, name := range authors {
 		auths[i] = book.Author{Name: name}
 	}
+
 	b := makeAuthoredBook(id, title, auths...)
 	b.Meta.Status = status
+
 	if tag != "" {
 		b.Meta.Tags = []string{tag}
 	}
+
 	return b
 }
 
 // pendingCount reports how many rows are in pending_ops (white-box access).
 func pendingCount(t *testing.T, idx *Index) int {
 	t.Helper()
+
 	var n int
 	if err := idx.db.QueryRow("SELECT COUNT(*) FROM pending_ops").Scan(&n); err != nil {
 		t.Fatalf("count pending_ops: %v", err)
 	}
+
 	return n
 }
 
 func mustNeedReindex(t *testing.T, idx *Index, want bool) {
 	t.Helper()
+
 	got, err := idx.NeedsReindex()
 	if err != nil {
 		t.Fatalf("NeedsReindex: %v", err)
 	}
+
 	if got != want {
 		t.Fatalf("NeedsReindex = %v, want %v", got, want)
 	}
@@ -99,6 +110,7 @@ func storeInIndex(t *testing.T, idx *Index, b *book.Book) {
 // book: books has one epub_size column and it is the stat's.
 func storeInIndexSized(t *testing.T, idx *Index, b *book.Book, size int64) {
 	t.Helper()
+
 	if err := mustMarkPending(t, idx).Put(b, drift.PathInfo{Size: size}); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -106,9 +118,11 @@ func storeInIndexSized(t *testing.T, idx *Index, b *book.Book, size int64) {
 
 func mustMarkPending(t *testing.T, idx *Index) *Op {
 	t.Helper()
+
 	op, err := idx.MarkPending()
 	if err != nil {
 		t.Fatalf("MarkPending: %v", err)
 	}
+
 	return op
 }

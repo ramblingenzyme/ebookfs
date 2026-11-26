@@ -12,19 +12,23 @@ import (
 // needs a fresh one.
 type Book = book.ImmutableBook
 
-type Edits = book.Edits
-type ValidationError = book.ValidationError
-type FieldError = book.FieldError
-type Query = index.Query
-type Order = index.Order
+type (
+	Edits           = book.Edits
+	ValidationError = book.ValidationError
+	FieldError      = book.FieldError
+	Query           = index.Query
+	Order           = index.Order
+)
 
-type Bib = book.Bib
-type Stats = index.Stats
-type Facet = index.Facet
-type Author = book.Author
-type Contributor = book.Contributor
-type Series = book.SeriesRef
-type Format = book.Format
+type (
+	Bib         = book.Bib
+	Stats       = index.Stats
+	Facet       = index.Facet
+	Author      = book.Author
+	Contributor = book.Contributor
+	Series      = book.SeriesRef
+	Format      = book.Format
+)
 
 const FormatEPUB = book.FormatEPUB
 

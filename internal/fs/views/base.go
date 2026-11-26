@@ -1,13 +1,14 @@
 package views
 
 import (
+	"github.com/ramblingenzyme/go9p/fs"
+	"github.com/ramblingenzyme/go9p/proto"
+
 	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/internal/util/naming"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
-	"github.com/ramblingenzyme/go9p/fs"
-	"github.com/ramblingenzyme/go9p/proto"
 )
 
 var (
@@ -34,6 +35,7 @@ func newNamedBookDir(f *fs.FS, dir *book.BookDir, fn func(*library.Book) string)
 func (n *namedBookDir) Stat() proto.Stat {
 	s := n.baseStat
 	s.Name = n.name(n.BookDir.Book())
+
 	return s
 }
 
@@ -59,6 +61,7 @@ func (g *groupingDir) pruneEmpty(name string) {
 	if !ok {
 		return
 	}
+
 	if dir, ok := child.(fs.Dir); ok && len(dir.Children()) == 0 {
 		g.StaticDir.DeleteChild(name)
 	}
@@ -70,8 +73,10 @@ func (g *groupingDir) childDir(name string, factory func(*proto.Stat) fs.FSNode)
 	if child, ok := g.Children()[name]; ok {
 		return child
 	}
+
 	ad := factory(newDirStat(g.f, name))
-	g.StaticDir.AddChild(ad)
+	vfile.AddChild(g.StaticDir, ad)
+
 	return ad
 }
 
@@ -104,6 +109,7 @@ func newKeyedDir(reg *registry.BookRegistry, name string, keys func(*library.Boo
 		factory:     factory,
 	}
 	reg.AddView(d)
+
 	return d
 }
 
@@ -112,9 +118,11 @@ func newKeyedDir(reg *registry.BookRegistry, name string, keys func(*library.Boo
 func (d *keyedDir) entryNames(b *library.Book) []string {
 	keys := d.keys(b)
 	names := make([]string, len(keys))
+
 	for i, key := range keys {
 		names[i] = naming.PathSafe(key)
 	}
+
 	return names
 }
 
@@ -129,6 +137,7 @@ func nameableKeys(values []string) []string {
 			keys = append(keys, v)
 		}
 	}
+
 	return keys
 }
 
@@ -143,3 +152,38 @@ func (d *keyedDir) Remove(dir *book.BookDir) {
 		d.removeFromChild(name, dir)
 	}
 }
+
+func NewByAuthorDir(reg *registry.BookRegistry) *keyedDir {
+	return newKeyedDir(reg, "by-author", authorKeys, bookListFactory)
+}
+
+func authorKeys(b *library.Book) []string {
+	authors := b.Authors()
+	names := make([]string, len(authors))
+
+	for i, a := range authors {
+		names[i] = a.Name
+	}
+
+	return nameableKeys(names)
+}
+
+func NewByTagDir(reg *registry.BookRegistry) *keyedDir {
+	return newKeyedDir(reg, "by-tag", tagKeys, bookListFactory)
+}
+
+func tagKeys(b *library.Book) []string { return nameableKeys(b.Tags()) }
+
+func NewBySubjectsDir(reg *registry.BookRegistry) *keyedDir {
+	return newKeyedDir(reg, "by-subjects", subjectKeys, bookListFactory)
+}
+
+func subjectKeys(b *library.Book) []string { return nameableKeys(b.Subjects()) }
+
+func NewByStatusDir(reg *registry.BookRegistry) *keyedDir {
+	return newKeyedDir(reg, "by-status", statusKeys, bookListFactory)
+}
+
+// statusKeys is the one by-status entry b belongs under. Status is drawn from a
+// fixed vocabulary, so it needs no name mapping.
+func statusKeys(b *library.Book) []string { return []string{b.Status()} }

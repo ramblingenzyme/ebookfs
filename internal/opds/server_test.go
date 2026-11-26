@@ -16,9 +16,11 @@ func TestNewHandlerStripsTrailingSlashesFromBaseURL(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, Prefix+"/opensearch.xml", nil))
+
 	if w.Code != http.StatusOK {
 		t.Fatalf("opensearch: status %d", w.Code)
 	}
+
 	if want := "https://books.example.com" + Prefix + "/search?q={searchTerms}"; !strings.Contains(w.Body.String(), want) {
 		t.Errorf("opensearch template is not %q:\n%s", want, w.Body)
 	}

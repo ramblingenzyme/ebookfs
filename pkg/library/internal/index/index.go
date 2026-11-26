@@ -11,9 +11,10 @@ import (
 	"net/url"
 	"path/filepath"
 
+	_ "modernc.org/sqlite"
+
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/fsutil"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index/dbsqlc"
-	_ "modernc.org/sqlite"
 )
 
 //go:embed schema.sql
@@ -38,6 +39,7 @@ func dsn(path string, pragmas ...string) string {
 	for _, p := range pragmas {
 		q.Add("_pragma", p)
 	}
+
 	return path + "?" + q.Encode()
 }
 
@@ -48,6 +50,7 @@ func mmapPragma(fsType fsutil.FSType) string {
 	if isNetwork(fsType) {
 		return "mmap_size(0)"
 	}
+
 	return "mmap_size(134217728)"
 }
 
@@ -57,6 +60,7 @@ func busyPragma(fsType fsutil.FSType) string {
 	if fsType.IsSMB() {
 		return "busy_timeout(60000)"
 	}
+
 	return "busy_timeout(5000)"
 }
 
@@ -83,6 +87,7 @@ func writerPragmas(fsType fsutil.FSType) []string {
 	default: // local, FUSE, unknown
 		pragmas = append([]string{"journal_mode(WAL)", "synchronous(NORMAL)"}, pragmas...)
 	}
+
 	return pragmas
 }
 
@@ -100,6 +105,7 @@ func readerPragmas(fsType fsutil.FSType) []string {
 	default: // local, FUSE, CIFS, SMB2, unknown
 		pragmas = append([]string{"journal_mode(WAL)"}, pragmas...)
 	}
+
 	return pragmas
 }
 
@@ -108,14 +114,47 @@ func Open(path string, allowSMB bool) (*Index, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if fsType.IsSMB() {
 		slog.Warn("a lock left by a dead SMB client can delay opening the index", "path", path)
 	}
 
+	db, err := openWriter(path, fsType)
+	if err != nil {
+		return nil, err
+	}
+
+	// In EXCLUSIVE mode the writer connection holds the lock, so reads go
+	// through it too.
+	readDB := db
+	if !fsType.IsSMB() {
+		readDB, err = sql.Open("sqlite", dsn(path, readerPragmas(fsType)...))
+		if err != nil {
+			db.Close()
+			return nil, err
+		}
+
+		readDB.SetMaxOpenConns(4)
+		readDB.SetMaxIdleConns(4)
+	}
+
+	return &Index{
+		db:      db,
+		wq:      dbsqlc.New(db),
+		readDB:  readDB,
+		queries: dbsqlc.New(readDB),
+		ctx:     context.Background(),
+	}, nil
+}
+
+// openWriter opens the single writer connection, applying the schema to a
+// fresh database. It closes the connection on any failure.
+func openWriter(path string, fsType fsutil.FSType) (*sql.DB, error) {
 	db, err := sql.Open("sqlite", dsn(path, writerPragmas(fsType)...))
 	if err != nil {
 		return nil, err
 	}
+
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 
@@ -131,6 +170,7 @@ func Open(path string, allowSMB bool) (*Index, error) {
 		db.Close()
 		return nil, err
 	}
+
 	if isNetwork(fsType) && journalMode != "delete" {
 		slog.Warn("index stayed out of DELETE journal mode on a network filesystem", "path", path, "journal_mode", journalMode)
 	}
@@ -146,33 +186,7 @@ func Open(path string, allowSMB bool) (*Index, error) {
 		}
 	}
 
-	// In EXCLUSIVE mode, the writer connection holds the exclusive lock,
-	// so we can't have separate reader connections. Use the writer for reads.
-	if fsType.IsSMB() {
-		return &Index{
-			db:      db,
-			wq:      dbsqlc.New(db),
-			readDB:  db,
-			queries: dbsqlc.New(db),
-			ctx:     context.Background(),
-		}, nil
-	}
-
-	readDB, err := sql.Open("sqlite", dsn(path, readerPragmas(fsType)...))
-	if err != nil {
-		db.Close()
-		return nil, err
-	}
-	readDB.SetMaxOpenConns(4)
-	readDB.SetMaxIdleConns(4)
-
-	return &Index{
-		db:      db,
-		wq:      dbsqlc.New(db),
-		readDB:  readDB,
-		queries: dbsqlc.New(readDB),
-		ctx:     context.Background(),
-	}, nil
+	return db, nil
 }
 
 func (idx *Index) dropAllTables() error {
@@ -180,30 +194,37 @@ func (idx *Index) dropAllTables() error {
 	if err != nil {
 		return err
 	}
+	defer rows.Close()
+
 	var tables []string
+
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {
-			rows.Close()
 			return err
 		}
+
 		tables = append(tables, name)
 	}
-	rows.Close()
+
 	if err := rows.Err(); err != nil {
 		return err
 	}
+
 	if _, err := idx.db.ExecContext(idx.ctx, `PRAGMA foreign_keys=OFF`); err != nil {
 		return err
 	}
+
 	for _, t := range tables {
 		if _, err := idx.db.ExecContext(idx.ctx, `DROP TABLE IF EXISTS `+t); err != nil {
 			return err
 		}
 	}
+
 	if _, err := idx.db.ExecContext(idx.ctx, `PRAGMA foreign_keys=ON`); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -211,6 +232,7 @@ func (idx *Index) Close() error {
 	// Updates the planner statistics, which improves long-term query plans.
 	_, _ = idx.db.ExecContext(idx.ctx, "PRAGMA optimize")
 	idx.readDB.Close()
+
 	return idx.db.Close()
 }
 
@@ -227,7 +249,9 @@ func (idx *Index) LastIssuedID() (int64, error) {
 
 func newOpID() string {
 	var b [16]byte
+
 	_, _ = rand.Read(b[:])
+
 	return hex.EncodeToString(b[:])
 }
 
@@ -238,17 +262,21 @@ func (idx *Index) withTx(fn func(*dbsqlc.Queries, *sql.Tx) error) error {
 	if err != nil {
 		return err
 	}
+
 	q := dbsqlc.New(tx)
 	if err := fn(q, tx); err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return err
 	}
+
 	return tx.Commit()
 }
 
 func (idx *Index) getSchemaVersion() (int64, error) {
 	var v int64
+
 	err := idx.readDB.QueryRowContext(idx.ctx, "PRAGMA user_version").Scan(&v)
+
 	return v, err
 }
 

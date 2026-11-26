@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/beevik/etree"
+
 	"github.com/ramblingenzyme/ebookfs/internal/testing/epubtest"
 	"github.com/ramblingenzyme/ebookfs/pkg/epub"
 )
@@ -38,14 +39,17 @@ func TestSpecFirstTitleWins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Title != "The Complete Trilogy" {
 		t.Errorf("title = %q, want the first dc:title per §5.5.3.1.2", bib.Title)
 	}
 
 	want := "A New Title"
+
 	if _, err := save(t, path, func(b *epub.Book) { b.Title = want }); err != nil {
 		t.Fatal(err)
 	}
+
 	md := epubtest.Metadata(t, path)
 	if got := titleByID(md, "t1"); got != want {
 		t.Errorf("first title = %q, want %q — read and write must resolve the same element", got, want)
@@ -55,10 +59,12 @@ func TestSpecFirstTitleWins(t *testing.T) {
 	if els := md.SelectElements("title"); len(els) != 1 {
 		t.Errorf("dc:title count = %d, want the one the edit left", len(els))
 	}
+
 	for _, id := range []string{"t2", "t3"} {
 		if got := titleByID(md, id); got != "" {
 			t.Errorf("title %s = %q, want it dropped with the title it was a segment of", id, got)
 		}
+
 		for _, m := range md.SelectElements("meta") {
 			if m.SelectAttrValue("refines", "") == "#"+id {
 				t.Errorf("refinement of the dropped title %s survived: %s", id, m.Text())
@@ -79,10 +85,12 @@ var opfDisplaySeq = epubtest.EPUB3(`    <dc:creator id="c1">Ann Rand</dc:creator
 // document order)". §5.5.3.2.3 and OPF 2.0 §2.2.2 define that order for creators.
 func TestSpecCreatorOrderIsDocumentOrder(t *testing.T) {
 	path := epubtest.Build(t, opfDisplaySeq)
+
 	bib, err := parse(t, path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if got := authorNames(bib); !slices.Equal(got, []string{"Ann Rand", "Bo Li"}) {
 		t.Errorf("authors = %v, want document order [Ann Rand, Bo Li] per §5.5.3.2.3", got)
 	}
@@ -91,22 +99,26 @@ func TestSpecCreatorOrderIsDocumentOrder(t *testing.T) {
 // §5.5.5 requires exactly one dcterms:modified, in UTC and the extended format.
 // Updating it on a change is only a lowercase "should" (§1.5), so that half is ours.
 func TestSpecModifiedIsUpdated(t *testing.T) {
-
 	path := epubtest.Build(t, epubtest.RichOPF3) // carries dcterms:modified 2020-01-02T00:00:00Z
 	want := "A New Title"
+
 	if _, err := save(t, path, func(b *epub.Book) { b.Title = want }); err != nil {
 		t.Fatal(err)
 	}
+
 	got := epubtest.Metadata(t, path).FindElement("//meta[@property='dcterms:modified']")
 	if got == nil {
 		t.Fatal("dcterms:modified was removed")
 	}
+
 	if got.Text() == "2020-01-02T00:00:00Z" {
 		t.Errorf("dcterms:modified = %q, want the time of this rewrite", got.Text())
 	}
+
 	if n := len(epubtest.Metadata(t, path).FindElements("//meta[@property='dcterms:modified']")); n != 1 {
 		t.Errorf("dcterms:modified count = %d, want exactly one per §5.5.5", n)
 	}
+
 	if _, err := time.Parse("2006-01-02T15:04:05Z", got.Text()); err != nil {
 		t.Errorf("dcterms:modified = %q, want the extended UTC format YYYY-MM-DDThh:mm:ssZ", got.Text())
 	}
@@ -128,14 +140,17 @@ func TestSpecOnlySeriesCollectionIsTheSeries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Series == nil || bib.Series.Name != "The Trilogy" || bib.Series.Index != "2" {
 		t.Fatalf("series = %+v, want The Trilogy at 2", bib.Series)
 	}
 
 	want := "The Quartet"
+
 	if _, err := save(t, path, func(b *epub.Book) { rename(b, want) }); err != nil {
 		t.Fatal(err)
 	}
+
 	md := epubtest.Metadata(t, path)
 
 	for _, c := range []struct{ id, text string }{
@@ -146,13 +161,16 @@ func TestSpecOnlySeriesCollectionIsTheSeries(t *testing.T) {
 			t.Errorf("collection %s = %q, want %q untouched", c.id, got, c.text)
 		}
 	}
+
 	series := md.FindElement("//meta[@id='s1']")
 	if series == nil {
 		t.Fatal("the series collection was replaced rather than rewritten")
 	}
+
 	if series.Text() != want {
 		t.Errorf("series = %q, want %q", series.Text(), want)
 	}
+
 	if got := series.SelectAttrValue("refines", ""); got != "#set1" {
 		t.Errorf("series nesting = %q, want it still inside #set1", got)
 	}
@@ -162,25 +180,29 @@ func TestSpecOnlySeriesCollectionIsTheSeries(t *testing.T) {
 // party "responsible for the creation of the content" (EPUB 3.3 §5.5.3.2.3) and
 // "A primary creator or author of the publication" (OPF 2.0 §2.2.2).
 func TestSpecOnlyAuthorRoleCreatorsAreAuthors(t *testing.T) {
-	var opf = epubtest.EPUB3(`    <dc:creator id="c1">Ann Rand</dc:creator>
+	opf := epubtest.EPUB3(`    <dc:creator id="c1">Ann Rand</dc:creator>
     <meta refines="#c1" property="role" scheme="marc:relators">aut</meta>
     <dc:creator id="c2">Acme Editorial Board</dc:creator>
     <meta refines="#c2" property="role" scheme="marc:relators">edt</meta>
     <dc:creator id="c3">Bo Li</dc:creator>`)
 
 	path := epubtest.Build(t, opf)
+
 	bib, err := parse(t, path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if got := authorNames(bib); !slices.Equal(got, []string{"Ann Rand", "Bo Li"}) {
 		t.Errorf("authors = %v, want [Ann Rand, Bo Li]", got)
 	}
 
 	authors := []epub.Author{{Name: "Ann Rand"}}
+
 	if _, err := save(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
 		t.Fatal(err)
 	}
+
 	if got := epubtest.TextOf(t, epubtest.Metadata(t, path), "//creator[@id='c2']"); got != "Acme Editorial Board" {
 		t.Error("the editor was removed by an authors edit")
 	}
@@ -189,14 +211,16 @@ func TestSpecOnlyAuthorRoleCreatorsAreAuthors(t *testing.T) {
 // §5.5.3.1.3: the first dc:language is primary. OPF 2.0 §2.2.12 allows several
 // and names no rule, so first-wins for EPUB 2 is ours.
 func TestSpecFirstLanguageWins(t *testing.T) {
-	var opf = epubtest.EPUB3(`    <dc:language>en</dc:language>
+	opf := epubtest.EPUB3(`    <dc:language>en</dc:language>
     <dc:language>fr</dc:language>`)
 
 	path := epubtest.Build(t, opf)
+
 	bib, err := parse(t, path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Language != "en" {
 		t.Errorf("language = %q, want the first of en, fr", bib.Language)
 	}
@@ -204,10 +228,12 @@ func TestSpecFirstLanguageWins(t *testing.T) {
 	if _, err := save(t, path, func(b *epub.Book) { b.Language = "de" }); err != nil {
 		t.Fatal(err)
 	}
+
 	langs := epubtest.Metadata(t, path).SelectElements("language")
 	if len(langs) != 2 {
 		t.Fatalf("dc:language count = %d, want 2", len(langs))
 	}
+
 	if langs[0].Text() != "de" || langs[1].Text() != "fr" {
 		t.Errorf("languages = %q, %q, want de, fr", langs[0].Text(), langs[1].Text())
 	}
@@ -252,6 +278,7 @@ func TestSpecMintedIDsDoNotCollide(t *testing.T) {
 			if _, err := save(t, path, tc.edit); err != nil {
 				t.Fatal(err)
 			}
+
 			assertUniqueIDs(t, path)
 		})
 	}
@@ -264,18 +291,22 @@ func TestSpecRepeatedEditsDoNotCollideIDs(t *testing.T) {
 	for _, add := range []string{"Bo Carr", "Cy Dunn", "Di Ekko"} {
 		names = append(names, add)
 		authors := make([]epub.Author, len(names))
+
 		for i, n := range names {
 			authors[i] = epub.Author{Name: n}
 		}
+
 		if _, err := save(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
 			t.Fatalf("adding %s: %v", add, err)
 		}
+
 		assertUniqueIDs(t, path)
 
 		bib, err := parse(t, path)
 		if err != nil {
 			t.Fatalf("after adding %s: %v", add, err)
 		}
+
 		if got := authorNames(bib); !slices.Equal(got, names) {
 			t.Fatalf("authors = %v, want %v", got, names)
 		}
@@ -289,18 +320,22 @@ func TestSpecReorderingAuthorsKeepsIDsUnique(t *testing.T) {
     <meta refines="#ebookfs-creator" property="file-as">Alice, A</meta>`))
 
 	authors := []epub.Author{{Name: "Bob", SortName: "Bob, B"}, {Name: "Alice", SortName: "Alice, A"}}
+
 	if _, err := save(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
 		t.Fatal(err)
 	}
+
 	assertUniqueIDs(t, path)
 
 	bib, err := parse(t, path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if got := authorNames(bib); !slices.Equal(got, []string{"Bob", "Alice"}) {
 		t.Fatalf("authors = %v, want [Bob Alice] in the order given", got)
 	}
+
 	for i, want := range []string{"Bob, B", "Alice, A"} {
 		if got := bib.Authors[i].SortName; got != want {
 			t.Errorf("%s sort name = %q, want %q", bib.Authors[i].Name, got, want)
@@ -310,16 +345,20 @@ func TestSpecReorderingAuthorsKeepsIDsUnique(t *testing.T) {
 
 func assertUniqueIDs(t *testing.T, path string) {
 	t.Helper()
+
 	doc := etree.NewDocument()
 	if err := doc.ReadFromBytes(epubtest.ReadEntry(t, path, epubtest.OPFPath)); err != nil {
 		t.Fatalf("result is not parseable XML: %v", err)
 	}
+
 	seen := map[string]bool{}
+
 	for _, el := range doc.FindElements("//*[@id]") {
 		id := el.SelectAttrValue("id", "")
 		if seen[id] {
 			t.Errorf("id %q appears on more than one element; XML 1.0 §3.3.1 requires ID values to be unique", id)
 		}
+
 		seen[id] = true
 	}
 }
@@ -330,25 +369,29 @@ func titleByID(md *etree.Element, id string) string {
 			return el.Text()
 		}
 	}
+
 	return ""
 }
 
 // §5.5.2, on a fixture formatted the way the spec prints its own examples.
 func TestSpecWhitespaceIsCollapsed(t *testing.T) {
-
 	bib, err := parse(t, epubtest.Build(t, opfSpecStyleWhitespace))
 	if err != nil {
 		t.Fatalf("a document formatted the way the spec prints its own examples must parse: %v", err)
 	}
+
 	if got := authorNames(bib); !slices.Equal(got, []string{"Haruki Murakami"}) {
 		t.Errorf("authors = %v, want [Haruki Murakami]", got)
 	}
+
 	if bib.SortTitle != "Norwegian Wood" {
 		t.Errorf("sort title = %q, want it collapsed and trimmed", bib.SortTitle)
 	}
+
 	if bib.Series == nil || bib.Series.Name != "The New French Cuisine Masters" || bib.Series.Index != "2" {
 		t.Errorf("series = %+v, want The New French Cuisine Masters at 2", bib.Series)
 	}
+
 	if got := bib.Identifiers()["uuid"]; got != "A1B0D67E" {
 		t.Errorf("identifier = %q, want it collapsed and trimmed", got)
 	}
@@ -357,7 +400,6 @@ func TestSpecWhitespaceIsCollapsed(t *testing.T) {
 // XML 1.0 §3.3.3 turns a newline inside an attribute value into a space without
 // trimming it, so a wrapped opf:role arrives padded.
 func TestSpecWhitespaceInEPUB2RoleAttribute(t *testing.T) {
-
 	opf := epubtest.EPUB2(`    <dc:title>Alice in Wonderland</dc:title>
     <dc:creator opf:role=" aut " opf:file-as="Carroll, Lewis">Lewis Carroll</dc:creator>`)
 
@@ -365,6 +407,7 @@ func TestSpecWhitespaceInEPUB2RoleAttribute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("a padded opf:role must still be an author role: %v", err)
 	}
+
 	if got := authorNames(bib); !slices.Equal(got, []string{"Lewis Carroll"}) {
 		t.Errorf("authors = %v, want [Lewis Carroll]", got)
 	}
@@ -377,18 +420,22 @@ func TestSpecWhitespaceInTheVersionAttribute(t *testing.T) {
 
 	path := epubtest.Build(t, opf)
 	sort := "Title, The"
+
 	if _, err := save(t, path, func(b *epub.Book) { b.SortTitle = sort }); err != nil {
 		t.Fatal(err)
 	}
 
 	md := epubtest.Metadata(t, path)
 	got := md.FindElement("//meta[@property='dcterms:modified']")
+
 	if got == nil {
 		t.Fatal("dcterms:modified was removed")
 	}
+
 	if got.Text() == "2020-01-02T00:00:00Z" {
 		t.Errorf("dcterms:modified = %q, want the time of this rewrite — the padded version read as EPUB 2", got.Text())
 	}
+
 	for _, m := range md.SelectElements("meta") {
 		if name := m.SelectAttrValue("name", ""); strings.HasPrefix(name, "calibre:") {
 			t.Errorf("%s was injected into an EPUB 3 package", name)
@@ -403,20 +450,24 @@ func TestSpecDeclaredPrefixResolvesToTheSameProperty(t *testing.T) {
 
 	path := epubtest.Build(t, opf)
 	want := "A New Title"
+
 	if _, err := save(t, path, func(b *epub.Book) { b.Title = want }); err != nil {
 		t.Fatal(err)
 	}
 
 	// §5.5.5: exactly one, whichever prefix spells it, and freshly written.
 	var modified []*etree.Element
+
 	for _, m := range epubtest.Metadata(t, path).SelectElements("meta") {
 		if p := m.SelectAttrValue("property", ""); p == "dct:modified" || p == "dcterms:modified" {
 			modified = append(modified, m)
 		}
 	}
+
 	if len(modified) != 1 {
 		t.Fatalf("last-modified properties = %d, want exactly one per §5.5.5", len(modified))
 	}
+
 	if modified[0].Text() == "2020-01-02T00:00:00Z" {
 		t.Errorf("last-modified = %q, want the time of this rewrite", modified[0].Text())
 	}
@@ -430,6 +481,7 @@ func TestSpecRedefinedReservedPrefixIsNotOurProperty(t *testing.T) {
 
 	path := epubtest.Build(t, opf)
 	want := "A New Title"
+
 	if _, err := save(t, path, func(b *epub.Book) { b.Title = want }); err != nil {
 		t.Fatal(err)
 	}
@@ -438,37 +490,47 @@ func TestSpecRedefinedReservedPrefixIsNotOurProperty(t *testing.T) {
 	pkg := md.Parent()
 
 	var theirs *etree.Element
+
 	for _, m := range md.SelectElements("meta") {
 		if m.SelectAttrValue("property", "") == "dcterms:modified" {
 			theirs = m
 		}
 	}
+
 	if theirs == nil {
 		t.Fatal("the document's own dcterms:modified was removed")
 	}
+
 	if theirs.Text() != "not-a-date" {
 		t.Errorf("their dcterms:modified = %q, want it untouched — it is not the DCMI property", theirs.Text())
 	}
 
 	bindings := map[string]string{}
 	fields := strings.Fields(pkg.SelectAttrValue("prefix", ""))
+
 	for i := 0; i+1 < len(fields); i += 2 {
 		bindings[strings.TrimSuffix(fields[i], ":")] = fields[i+1]
 	}
+
 	var found bool
+
 	for _, m := range md.SelectElements("meta") {
 		p := m.SelectAttrValue("property", "")
 		prefix, local, ok := strings.Cut(p, ":")
+
 		if !ok || local != "modified" {
 			continue
 		}
+
 		if bindings[prefix] == "http://purl.org/dc/terms/" {
 			found = true
+
 			if _, err := time.Parse("2006-01-02T15:04:05Z", m.Text()); err != nil {
 				t.Errorf("%s = %q, want the extended UTC format", p, m.Text())
 			}
 		}
 	}
+
 	if !found {
 		t.Errorf("no last-modified property resolves to the DCMI vocabulary; prefix=%q",
 			pkg.SelectAttrValue("prefix", ""))
@@ -482,6 +544,7 @@ func TestSpecNewRefineSpellsItsSchemeAndProperty(t *testing.T) {
 
 	path := epubtest.Build(t, opf)
 	authors := []epub.Author{{Name: "Ann Rand"}, {Name: "Bo Li"}}
+
 	if _, err := save(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
 		t.Fatal(err)
 	}
@@ -489,6 +552,7 @@ func TestSpecNewRefineSpellsItsSchemeAndProperty(t *testing.T) {
 	md := epubtest.Metadata(t, path)
 	bindings := map[string]string{}
 	fields := strings.Fields(md.Parent().SelectAttrValue("prefix", ""))
+
 	for i := 0; i+1 < len(fields); i += 2 {
 		bindings[strings.TrimSuffix(fields[i], ":")] = fields[i+1]
 	}
@@ -497,15 +561,19 @@ func TestSpecNewRefineSpellsItsSchemeAndProperty(t *testing.T) {
 		if m.SelectAttrValue("property", "") != "role" {
 			continue
 		}
+
 		scheme := m.SelectAttrValue("scheme", "")
 		if scheme == "" {
 			continue
 		}
+
 		prefix, _, _ := strings.Cut(scheme, ":")
 		url, declared := bindings[prefix]
+
 		if !declared {
 			url = "http://id.loc.gov/vocabulary/" // reserved, needs no declaration
 		}
+
 		if url != "http://id.loc.gov/vocabulary/" {
 			t.Errorf("role scheme = %q, which resolves to %q, not the MARC relator vocabulary", scheme, url)
 		}
@@ -521,9 +589,11 @@ func TestSpecSlashInAValueIsNotRewritten(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Title != "Either/Or" {
 		t.Errorf("title = %q, want it read as written", bib.Title)
 	}
+
 	if got := authorNames(bib); !slices.Equal(got, []string{"AC/DC"}) {
 		t.Errorf("authors = %v, want [AC/DC] as written", got)
 	}
@@ -533,16 +603,20 @@ func TestSpecSlashInAValueIsNotRewritten(t *testing.T) {
 	// written only when it changes, so it gets a new one.
 	authors := append(slices.Clone(bib.Authors), epub.Author{Name: "Bon Scott"})
 	title := "Either/Or, Part Two"
+
 	if _, err := save(t, path, func(b *epub.Book) { b.Authors = authors; b.Title = title }); err != nil {
 		t.Fatal(err)
 	}
+
 	if got := authorNames(open(t, path)); !slices.Equal(got, []string{"AC/DC", "Bon Scott"}) {
 		t.Fatalf("authors after the edit = %v, want [AC/DC Bon Scott]", got)
 	}
+
 	raw := string(epubtest.ReadEntry(t, path, epubtest.OPFPath))
 	if !strings.Contains(raw, "AC/DC") {
 		t.Errorf("the creator no longer says AC/DC:\n%s", raw)
 	}
+
 	if !strings.Contains(raw, title) {
 		t.Errorf("the title does not say %s:\n%s", title, raw)
 	}
@@ -559,12 +633,15 @@ func TestSpecLegacyMetadataWrappers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading systems MUST allow dc-metadata/x-metadata: %v", err)
 	}
+
 	if bib.Title != "Alice in Wonderland" {
 		t.Errorf("title = %q", bib.Title)
 	}
+
 	if got := authorNames(bib); !slices.Equal(got, []string{"Lewis Carroll"}) {
 		t.Errorf("authors = %v", got)
 	}
+
 	if bib.Series == nil || bib.Series.Name != "Alice" {
 		t.Errorf("series = %+v, want Alice from x-metadata", bib.Series)
 	}
@@ -573,7 +650,6 @@ func TestSpecLegacyMetadataWrappers(t *testing.T) {
 // D.3.10 gives role cardinality "zero or more", so aut in either position makes
 // an author. Ours: a role we do not model survives an edit.
 func TestSpecMultipleRoleRefines(t *testing.T) {
-
 	opf := func(first, second string) epubtest.PackageDoc {
 		return epubtest.EPUB3(`    <dc:title>Where the Wild Things Are</dc:title>
     <dc:creator id="creator01">Maurice Sendak</dc:creator>
@@ -585,28 +661,36 @@ func TestSpecMultipleRoleRefines(t *testing.T) {
 	for _, order := range [][2]string{{"ill", "aut"}, {"aut", "ill"}} {
 		t.Run(order[0]+"-then-"+order[1], func(t *testing.T) {
 			path := epubtest.Build(t, opf(order[0], order[1]))
+
 			bib, err := parse(t, path)
 			if err != nil {
 				t.Fatalf("a creator with several roles including aut is an author: %v", err)
 			}
+
 			if got := authorNames(bib); !slices.Equal(got, []string{"Maurice Sendak"}) {
 				t.Fatalf("authors = %v, want [Maurice Sendak]", got)
 			}
 
 			authors := []epub.Author{{Name: "Maurice Sendak", SortName: "Sendak, Maurice"}}
+
 			if _, err := save(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
 				t.Fatal(err)
 			}
+
 			if got := open(t, path).Authors; !slices.Equal(got, authors) {
 				t.Fatalf("authors after the edit = %v, want %v", got, authors)
 			}
+
 			md := epubtest.Metadata(t, path)
+
 			var roles []string
+
 			for _, m := range md.SelectElements("meta") {
 				if m.SelectAttrValue("property", "") == "role" {
 					roles = append(roles, m.Text())
 				}
 			}
+
 			if !slices.Equal(roles, order[:]) {
 				t.Errorf("roles after a sort-name edit = %v, want %v unchanged", roles, order)
 			}
@@ -621,8 +705,7 @@ func TestSpecMultipleRoleRefines(t *testing.T) {
 //
 // so refines="content.opf#creator01" is conformant.
 func TestSpecPathQualifiedRefines(t *testing.T) {
-
-	var opf = epubtest.EPUB3(`    <dc:title id="t1">The Title</dc:title>
+	opf := epubtest.EPUB3(`    <dc:title id="t1">The Title</dc:title>
     <meta refines="content.opf#t1" property="file-as">Title, The</meta>
     <dc:creator id="creator01">Lewis Carroll</dc:creator>
     <meta refines="content.opf#creator01" property="role" scheme="marc:relators">aut</meta>
@@ -634,10 +717,12 @@ func TestSpecPathQualifiedRefines(t *testing.T) {
     <meta refines="content.opf#c01" property="group-position">2</meta>`)
 
 	path := epubtest.Build(t, opf)
+
 	bib, err := parse(t, path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.SortTitle != "Title, The" {
 		t.Errorf("sort title = %q, want it resolved through a path-qualified refines", bib.SortTitle)
 	}
@@ -645,25 +730,31 @@ func TestSpecPathQualifiedRefines(t *testing.T) {
 	if got := authorNames(bib); !slices.Equal(got, []string{"Lewis Carroll"}) {
 		t.Errorf("authors = %v, want [Lewis Carroll] only", got)
 	}
+
 	if len(bib.Authors) > 0 && bib.Authors[0].SortName != "Carroll, Lewis" {
 		t.Errorf("author sort name = %q", bib.Authors[0].SortName)
 	}
+
 	if bib.Series == nil || bib.Series.Name != "Alice" || bib.Series.Index != "2" {
 		t.Errorf("series = %+v, want Alice at 2", bib.Series)
 	}
 
 	// D.3.6 file-as: "Cardinality: zero or one".
 	sort := "New, The"
+
 	if _, err := save(t, path, func(b *epub.Book) { b.SortTitle = sort }); err != nil {
 		t.Fatal(err)
 	}
+
 	var fileAs int
+
 	for _, m := range epubtest.Metadata(t, path).SelectElements("meta") {
 		if m.SelectAttrValue("property", "") == "file-as" &&
 			strings.Contains(m.SelectAttrValue("refines", ""), "t1") {
 			fileAs++
 		}
 	}
+
 	if fileAs != 1 {
 		t.Errorf("file-as refines on the title = %d, want exactly one per D.3.6", fileAs)
 	}
@@ -685,9 +776,11 @@ func TestSpecGroupPositionMultiLevel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Series == nil {
 		t.Fatal("series missing")
 	}
+
 	if bib.Series.Index != "2.2.1" {
 		t.Errorf("index = %q, want the multi-level position kept exactly as written", bib.Series.Index)
 	}
@@ -700,6 +793,7 @@ func TestSpecGroupPositionLevelsAreNotDecimals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Series == nil || bib.Series.Index != "1.10" {
 		t.Errorf("index = %+v, want 1.10 — issue 10 of volume 1, not 1.1", bib.Series)
 	}
@@ -708,6 +802,7 @@ func TestSpecGroupPositionLevelsAreNotDecimals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Series == nil || bib.Series.Index != "1.1" {
 		t.Errorf("index = %+v, want 1.1", bib.Series)
 	}
@@ -716,16 +811,20 @@ func TestSpecGroupPositionLevelsAreNotDecimals(t *testing.T) {
 func TestSpecGroupPositionMultiLevelRoundTrips(t *testing.T) {
 	path := epubtest.Build(t, articleAt("1"))
 	want := "2.2.1" // no float holds this, which is the point
+
 	if _, err := save(t, path, func(b *epub.Book) { reposition(b, want) }); err != nil {
 		t.Fatal(err)
 	}
+
 	bib, err := parse(t, path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Series == nil || bib.Series.Index != want {
 		t.Errorf("series = %+v, want the position written back as %q", bib.Series, want)
 	}
+
 	if got := epubtest.Property(t, epubtest.Metadata(t, path), "//meta[@property='group-position']"); got != want {
 		t.Errorf("group-position element = %q, want %q verbatim", got, want)
 	}
@@ -740,14 +839,14 @@ func TestSpecGroupPositionMultiLevelRoundTrips(t *testing.T) {
 //
 // So "series" under someone else's scheme is not the EPUB series type.
 func TestSpecSchemedCollectionTypeIsNotOurSeries(t *testing.T) {
-
-	var opf = epubtest.EPUB3(`    <meta property="belongs-to-collection" id="c01">Acme Bundle</meta>
+	opf := epubtest.EPUB3(`    <meta property="belongs-to-collection" id="c01">Acme Bundle</meta>
     <meta refines="#c01" property="collection-type" scheme="onix:codelist148">series</meta>`)
 
 	bib, err := parse(t, epubtest.Build(t, opf))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Series != nil {
 		t.Errorf("series = %+v, want nil — the collection-type is drawn from another scheme", bib.Series)
 	}
@@ -774,6 +873,7 @@ func TestSpecCoverImagePropertyIsAToken(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			if bib.CoverPath() != tc.want {
 				t.Errorf("properties=%q gave cover %q, want %q", tc.properties, bib.CoverPath(), tc.want)
 			}
@@ -792,6 +892,7 @@ func TestSpecCoverImagePropertyBeatsLegacyMeta(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.CoverPath() != "OEBPS/cover.jpg" {
 		t.Errorf("cover = %q, want the cover-image manifest item to win per §5.9.2", bib.CoverPath())
 	}
@@ -800,7 +901,7 @@ func TestSpecCoverImagePropertyBeatsLegacyMeta(t *testing.T) {
 // OPF 2.0 §2.2.7: "the set of values for event are not defined by this
 // specification". Ours: only "publication" is recognised.
 func TestSpecUnrecognisedDateEventsLeaveNoPubdate(t *testing.T) {
-	var opf = epubtest.EPUB2(`    <dc:date opf:event="creation">1999-01-01</dc:date>
+	opf := epubtest.EPUB2(`    <dc:date opf:event="creation">1999-01-01</dc:date>
     <dc:date opf:event="original-publication">2000-01-01</dc:date>
     <dc:date opf:event="modification">2001-01-01</dc:date>`)
 
@@ -808,6 +909,7 @@ func TestSpecUnrecognisedDateEventsLeaveNoPubdate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Pubdate() != "" {
 		t.Errorf("pubdate = %q; the closed-world reading changed — decide it deliberately", bib.Pubdate())
 	}
@@ -820,6 +922,7 @@ func TestSpecUnrecognisedDateEventsLeaveNoPubdate(t *testing.T) {
 func TestSpecEditsLandInTheLegacyWrappers(t *testing.T) {
 	path := epubtest.Build(t, epubtest.OPFWrappers)
 	desc, series, index := "A new description.", "Wonderland", "3"
+
 	if _, err := save(t, path, func(b *epub.Book) { b.Description = desc; b.Series = &epub.Series{Name: series, Index: index} }); err != nil {
 		t.Fatal(err)
 	}
@@ -828,12 +931,15 @@ func TestSpecEditsLandInTheLegacyWrappers(t *testing.T) {
 	if got := epubtest.TextOf(t, md, "dc-metadata/description"); got != desc {
 		t.Errorf("dc:description = %q, want %q inside dc-metadata per §2.2", got, desc)
 	}
+
 	if got := epubtest.LegacyMeta(t, md, "x-metadata/meta[@name='calibre:series']"); got != series {
 		t.Errorf("calibre:series = %q, want %q still inside x-metadata", got, series)
 	}
+
 	if got := epubtest.LegacyMeta(t, md, "x-metadata/meta[@name='calibre:series_index']"); got != index {
 		t.Errorf("calibre:series_index = %q, want %q inside x-metadata", got, index)
 	}
+
 	for _, p := range []string{"description", "meta[@name='calibre:series']", "meta[@name='calibre:series_index']"} {
 		if md.FindElement(p) != nil {
 			t.Errorf("%s was written loose under <metadata>, outside the wrappers", p)
@@ -844,9 +950,11 @@ func TestSpecEditsLandInTheLegacyWrappers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Description != desc {
 		t.Errorf("description = %q, want %q read back through dc-metadata", bib.Description, desc)
 	}
+
 	if bib.Series == nil || bib.Series.Name != series || bib.Series.Index != index {
 		t.Errorf("series = %+v, want %q at %s read back through x-metadata", bib.Series, series, index)
 	}
@@ -857,6 +965,7 @@ func TestSpecEditsLandInTheLegacyWrappers(t *testing.T) {
 func TestSpecEditsCreateTheMissingXMetadataWrapper(t *testing.T) {
 	path := epubtest.Build(t, epubtest.DCMetadataOnly)
 	series := "Wonderland"
+
 	if _, err := save(t, path, func(b *epub.Book) { rename(b, series) }); err != nil {
 		t.Fatal(err)
 	}
@@ -865,9 +974,11 @@ func TestSpecEditsCreateTheMissingXMetadataWrapper(t *testing.T) {
 	if md.FindElement("x-metadata") == nil {
 		t.Error("no x-metadata wrapper was created for the new meta")
 	}
+
 	if got := epubtest.LegacyMeta(t, md, "x-metadata/meta[@name='calibre:series']"); got != series {
 		t.Errorf("calibre:series = %q, want %q inside x-metadata per §2.2", got, series)
 	}
+
 	if md.FindElement("meta[@name='calibre:series']") != nil {
 		t.Error("calibre:series was written loose under <metadata>, outside the wrappers")
 	}
@@ -880,6 +991,7 @@ func TestSpecEPUB2AttributesGetADeclaredPrefix(t *testing.T) {
 
 	path := epubtest.Build(t, opf)
 	authors := []epub.Author{{Name: "Ann Rand", SortName: "Rand, Ann"}}
+
 	if _, err := save(t, path, func(b *epub.Book) { b.Authors = authors }); err != nil {
 		t.Fatal(err)
 	}
@@ -888,13 +1000,16 @@ func TestSpecEPUB2AttributesGetADeclaredPrefix(t *testing.T) {
 	if !strings.Contains(raw, `xmlns:opf="http://www.idpf.org/2007/opf"`) {
 		t.Error("no xmlns:opf declaration was added for the prefixed attributes")
 	}
+
 	c := epubtest.Metadata(t, path).FindElement("creator")
 	if c == nil {
 		t.Fatal("creator was removed")
 	}
+
 	if got := c.SelectAttrValue("opf:role", ""); got != "aut" {
 		t.Errorf("opf:role = %q, want aut", got)
 	}
+
 	if got := c.SelectAttrValue("opf:file-as", ""); got != "Rand, Ann" {
 		t.Errorf("opf:file-as = %q, want the sort name", got)
 	}
@@ -903,6 +1018,7 @@ func TestSpecEPUB2AttributesGetADeclaredPrefix(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if len(bib.Authors) != 1 || bib.Authors[0].SortName != "Rand, Ann" {
 		t.Errorf("authors = %+v, want one author sorting as Rand, Ann", bib.Authors)
 	}
@@ -924,9 +1040,11 @@ func TestSpecSeriesReportedIsSeriesWritable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if b.Series == nil {
 		t.Fatal("a position edit deleted the series the read reported")
 	}
+
 	if b.Series.Name != "The Trilogy" || b.Series.Index != "5" {
 		t.Errorf("series = %+v, want The Trilogy at 5", b.Series)
 	}
@@ -942,10 +1060,12 @@ func TestSpecSeriesReportedIsSeriesWritable(t *testing.T) {
 // text content.
 func TestPublisherReadEPUB3(t *testing.T) {
 	opf := epubtest.EPUB3(`    <dc:publisher>Test Publisher</dc:publisher>`)
+
 	bib, err := parse(t, epubtest.Build(t, opf))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Publisher != "Test Publisher" {
 		t.Errorf("publisher = %q, want %q", bib.Publisher, "Test Publisher")
 	}
@@ -955,10 +1075,12 @@ func TestPublisherReadEPUB3(t *testing.T) {
 // element "whose content is the field's value".
 func TestPublisherReadEPUB2(t *testing.T) {
 	opf := epubtest.EPUB2(`    <dc:publisher>Legacy Publisher</dc:publisher>`)
+
 	bib, err := parse(t, epubtest.Build(t, opf))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Publisher != "Legacy Publisher" {
 		t.Errorf("publisher = %q, want %q", bib.Publisher, "Legacy Publisher")
 	}
@@ -969,10 +1091,12 @@ func TestPublisherReadEPUB2(t *testing.T) {
 func TestPublisherFirstWins(t *testing.T) {
 	opf := epubtest.EPUB3(`    <dc:publisher>First Publisher</dc:publisher>
     <dc:publisher>Second Publisher</dc:publisher>`)
+
 	bib, err := parse(t, epubtest.Build(t, opf))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Publisher != "First Publisher" {
 		t.Errorf("publisher = %q, want first publisher per repeatable-but-single-valued pattern", bib.Publisher)
 	}
@@ -984,10 +1108,12 @@ func TestPublisherWrite(t *testing.T) {
 	if _, err := save(t, path, func(b *epub.Book) { b.Publisher = "New Publisher" }); err != nil {
 		t.Fatal(err)
 	}
+
 	bib, err := parse(t, path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Publisher != "New Publisher" {
 		t.Errorf("publisher = %q, want %q", bib.Publisher, "New Publisher")
 	}
@@ -997,10 +1123,12 @@ func TestPublisherWrite(t *testing.T) {
 // Ours: it reads as "".
 func TestPublisherEmpty(t *testing.T) {
 	opf := epubtest.EPUB3(``)
+
 	bib, err := parse(t, epubtest.Build(t, opf))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Publisher != "" {
 		t.Errorf("publisher = %q, want empty string", bib.Publisher)
 	}
@@ -1012,10 +1140,12 @@ func TestPublisherEmpty(t *testing.T) {
 // content.
 func TestRightsReadEPUB3(t *testing.T) {
 	opf := epubtest.EPUB3(`    <dc:rights>Copyright 2024</dc:rights>`)
+
 	bib, err := parse(t, epubtest.Build(t, opf))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Rights != "Copyright 2024" {
 		t.Errorf("rights = %q, want %q", bib.Rights, "Copyright 2024")
 	}
@@ -1025,10 +1155,12 @@ func TestRightsReadEPUB3(t *testing.T) {
 // "whose content is the field's value".
 func TestRightsReadEPUB2(t *testing.T) {
 	opf := epubtest.EPUB2(`    <dc:rights>All rights reserved</dc:rights>`)
+
 	bib, err := parse(t, epubtest.Build(t, opf))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Rights != "All rights reserved" {
 		t.Errorf("rights = %q, want %q", bib.Rights, "All rights reserved")
 	}
@@ -1039,10 +1171,12 @@ func TestRightsReadEPUB2(t *testing.T) {
 func TestRightsFirstWins(t *testing.T) {
 	opf := epubtest.EPUB3(`    <dc:rights>First rights</dc:rights>
     <dc:rights>Second rights</dc:rights>`)
+
 	bib, err := parse(t, epubtest.Build(t, opf))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Rights != "First rights" {
 		t.Errorf("rights = %q, want first rights per repeatable-but-single-valued pattern", bib.Rights)
 	}
@@ -1054,10 +1188,12 @@ func TestRightsWrite(t *testing.T) {
 	if _, err := save(t, path, func(b *epub.Book) { b.Rights = "New Rights" }); err != nil {
 		t.Fatal(err)
 	}
+
 	bib, err := parse(t, path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Rights != "New Rights" {
 		t.Errorf("rights = %q, want %q", bib.Rights, "New Rights")
 	}
@@ -1067,10 +1203,12 @@ func TestRightsWrite(t *testing.T) {
 // Ours: it reads as "".
 func TestRightsEmpty(t *testing.T) {
 	opf := epubtest.EPUB3(``)
+
 	bib, err := parse(t, epubtest.Build(t, opf))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Rights != "" {
 		t.Errorf("rights = %q, want empty string", bib.Rights)
 	}
@@ -1083,10 +1221,12 @@ func TestRightsEmpty(t *testing.T) {
 func TestSubjectsReadEPUB3(t *testing.T) {
 	opf := epubtest.EPUB3(`    <dc:subject>Fiction</dc:subject>
     <dc:subject>Science Fiction</dc:subject>`)
+
 	bib, err := parse(t, epubtest.Build(t, opf))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	want := []string{"Fiction", "Science Fiction"}
 	if !slices.Equal(bib.Subjects, want) {
 		t.Errorf("subjects = %v, want %v", bib.Subjects, want)
@@ -1098,10 +1238,12 @@ func TestSubjectsReadEPUB3(t *testing.T) {
 func TestSubjectsReadEPUB2(t *testing.T) {
 	opf := epubtest.EPUB2(`    <dc:subject>Fantasy</dc:subject>
     <dc:subject>Adventure</dc:subject>`)
+
 	bib, err := parse(t, epubtest.Build(t, opf))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	want := []string{"Fantasy", "Adventure"}
 	if !slices.Equal(bib.Subjects, want) {
 		t.Errorf("subjects = %v, want %v", bib.Subjects, want)
@@ -1112,13 +1254,16 @@ func TestSubjectsReadEPUB2(t *testing.T) {
 // slice.
 func TestSubjectsEmpty(t *testing.T) {
 	opf := epubtest.EPUB3(``)
+
 	bib, err := parse(t, epubtest.Build(t, opf))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Subjects == nil {
 		t.Error("subjects is nil, want empty slice")
 	}
+
 	if len(bib.Subjects) != 0 {
 		t.Errorf("subjects = %v, want empty slice", bib.Subjects)
 	}
@@ -1139,6 +1284,7 @@ func TestSubjectsWrite(t *testing.T) {
 			if _, err := save(t, path, func(b *epub.Book) { b.Subjects = tc.subjects }); err != nil {
 				t.Fatal(err)
 			}
+
 			if got := open(t, path).Subjects; !slices.Equal(got, tc.subjects) {
 				t.Errorf("subjects = %v, want %v", got, tc.subjects)
 			}
@@ -1158,9 +1304,11 @@ func TestSubjectsReconcilePreservesRefinements(t *testing.T) {
 
 	// Writing back the list as read would change nothing, so Save would skip it.
 	want := []string{"Fiction", "Science Fiction", "Space Opera"}
+
 	if _, err := save(t, path, func(b *epub.Book) { b.Subjects = want }); err != nil {
 		t.Fatal(err)
 	}
+
 	if got := open(t, path).Subjects; !slices.Equal(got, want) {
 		t.Fatalf("subjects = %v, want %v", got, want)
 	}
@@ -1176,26 +1324,32 @@ func TestSubjectsReconcilePreservesRefinements(t *testing.T) {
 			// Check refinements by iterating over meta elements
 			foundAuth := false
 			foundTerm := false
+
 			for _, m := range md.SelectElements("meta") {
 				if m.SelectAttrValue("refines", "") == "#"+id {
 					prop := m.SelectAttrValue("property", "")
 					if prop == "authority" && m.Text() == "LCSH" {
 						foundAuth = true
 					}
+
 					if prop == "term" && m.Text() == "fs2009027477" {
 						foundTerm = true
 					}
 				}
 			}
+
 			if !foundAuth {
 				t.Errorf("authority refinement lost or changed")
 			}
+
 			if !foundTerm {
 				t.Errorf("term refinement lost or changed")
 			}
+
 			return
 		}
 	}
+
 	t.Error("Fiction subject not found after write")
 }
 
@@ -1208,10 +1362,12 @@ func TestContributorsReadEPUB3(t *testing.T) {
     <meta refines="#c1" property="role" scheme="marc:relators">edt</meta>
     <dc:contributor id="c2">Jane Translator</dc:contributor>
     <meta refines="#c2" property="role" scheme="marc:relators">trl</meta>`)
+
 	bib, err := parse(t, epubtest.Build(t, opf))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	want := []epub.Contributor{
 		{Name: "John Editor", Role: "edt"},
 		{Name: "Jane Translator", Role: "trl"},
@@ -1225,10 +1381,12 @@ func TestContributorsReadEPUB3(t *testing.T) {
 // relator codes.
 func TestContributorsReadEPUB2(t *testing.T) {
 	opf := epubtest.EPUB2(`    <dc:contributor opf:role="edt">Bob Editor</dc:contributor>`)
+
 	bib, err := parse(t, epubtest.Build(t, opf))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	want := []epub.Contributor{{Name: "Bob Editor", Role: "edt"}}
 	if !slices.Equal(bib.Contributors, want) {
 		t.Errorf("contributors = %v, want %v", bib.Contributors, want)
@@ -1239,13 +1397,16 @@ func TestContributorsReadEPUB2(t *testing.T) {
 // non-nil slice.
 func TestContributorsEmpty(t *testing.T) {
 	opf := epubtest.EPUB3(``)
+
 	bib, err := parse(t, epubtest.Build(t, opf))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Contributors == nil {
 		t.Error("contributors is nil, want empty slice")
 	}
+
 	if len(bib.Contributors) != 0 {
 		t.Errorf("contributors = %v, want empty slice", bib.Contributors)
 	}
@@ -1259,13 +1420,16 @@ func TestContributorsWrite(t *testing.T) {
 		{Name: "Alice Editor", Role: "edt"},
 		{Name: "Bob Illustrator", Role: "ill"},
 	}
+
 	if _, err := save(t, path, func(b *epub.Book) { b.Contributors = newContribs }); err != nil {
 		t.Fatal(err)
 	}
+
 	bib, err := parse(t, path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if !slices.Equal(bib.Contributors, newContribs) {
 		t.Errorf("contributors = %v, want %v", bib.Contributors, newContribs)
 	}
@@ -1282,33 +1446,42 @@ func TestContributorsReconcilePreservesRefinements(t *testing.T) {
 
 	// Writing back the list as read would change nothing, so Save would skip it.
 	want := []epub.Contributor{{Name: "John Editor", Role: "edt"}, {Name: "Jane Translator", Role: "trl"}}
+
 	if _, err := save(t, path, func(b *epub.Book) { b.Contributors = want }); err != nil {
 		t.Fatal(err)
 	}
+
 	if got := open(t, path).Contributors; !slices.Equal(got, want) {
 		t.Fatalf("contributors = %v, want %v", got, want)
 	}
 
 	md := epubtest.Metadata(t, path)
+
 	var id string
+
 	for _, c := range md.FindElements("//contributor") {
 		if c.Text() == "John Editor" {
 			id = c.SelectAttrValue("id", "")
 		}
 	}
+
 	if id == "" {
 		t.Fatal("the reused contributor lost its id")
 	}
+
 	refines := map[string][]string{}
+
 	for _, m := range md.SelectElements("meta") {
 		if m.SelectAttrValue("refines", "") == "#"+id {
 			prop := m.SelectAttrValue("property", "")
 			refines[prop] = append(refines[prop], m.Text())
 		}
 	}
+
 	if got := refines["role"]; !slices.Equal(got, []string{"edt"}) {
 		t.Errorf("role refinements = %v, want [edt] once", got)
 	}
+
 	if got := refines["file-as"]; !slices.Equal(got, []string{"Editor, John"}) {
 		t.Errorf("file-as refinements = %v, want [Editor, John] once", got)
 	}
@@ -1318,10 +1491,12 @@ func TestContributorsReconcilePreservesRefinements(t *testing.T) {
 // is valid. Ours: it reads as Role "".
 func TestContributorNoRole(t *testing.T) {
 	opf := epubtest.EPUB3(`    <dc:contributor>Someone</dc:contributor>`)
+
 	bib, err := parse(t, epubtest.Build(t, opf))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	want := []epub.Contributor{{Name: "Someone", Role: ""}}
 	if !slices.Equal(bib.Contributors, want) {
 		t.Errorf("contributors = %v, want %v", bib.Contributors, want)
@@ -1335,10 +1510,12 @@ func TestSpecContributorRolesReadInOrder(t *testing.T) {
 	opf := epubtest.EPUB3(`    <dc:contributor id="c1">Jane Doe</dc:contributor>
     <meta refines="#c1" property="role" scheme="marc:relators">trl</meta>
     <meta refines="#c1" property="role" scheme="marc:relators">edt</meta>`)
+
 	bib, err := parse(t, epubtest.Build(t, opf))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	want := []epub.Contributor{{Name: "Jane Doe", Role: "trl"}, {Name: "Jane Doe", Role: "edt"}}
 	if !slices.Equal(bib.Contributors, want) {
 		t.Errorf("contributors = %v, want %v", bib.Contributors, want)
@@ -1361,12 +1538,15 @@ func TestPublisherSecondElementSurvivesWrite(t *testing.T) {
 
 	md := epubtest.Metadata(t, path)
 	publishers := md.FindElements("//publisher")
+
 	if len(publishers) != 2 {
 		t.Fatalf("publisher count = %d, want 2", len(publishers))
 	}
+
 	if publishers[0].Text() != "New Publisher" {
 		t.Errorf("first publisher = %q, want %q", publishers[0].Text(), "New Publisher")
 	}
+
 	if publishers[1].Text() != "Second Publisher" {
 		t.Errorf("second publisher = %q, want %q (should survive write)", publishers[1].Text(), "Second Publisher")
 	}
@@ -1386,12 +1566,15 @@ func TestRightsSecondElementSurvivesWrite(t *testing.T) {
 
 	md := epubtest.Metadata(t, path)
 	rights := md.FindElements("//rights")
+
 	if len(rights) != 2 {
 		t.Fatalf("rights count = %d, want 2", len(rights))
 	}
+
 	if rights[0].Text() != "New Rights" {
 		t.Errorf("first rights = %q, want %q", rights[0].Text(), "New Rights")
 	}
+
 	if rights[1].Text() != "Second Rights" {
 		t.Errorf("second rights = %q, want %q (should survive write)", rights[1].Text(), "Second Rights")
 	}
@@ -1411,12 +1594,15 @@ func TestDescriptionSecondElementSurvivesWrite(t *testing.T) {
 
 	md := epubtest.Metadata(t, path)
 	descriptions := md.FindElements("//description")
+
 	if len(descriptions) != 2 {
 		t.Fatalf("description count = %d, want 2", len(descriptions))
 	}
+
 	if descriptions[0].Text() != "New Description" {
 		t.Errorf("first description = %q, want %q", descriptions[0].Text(), "New Description")
 	}
+
 	if descriptions[1].Text() != "Second Description" {
 		t.Errorf("second description = %q, want %q (should survive write)", descriptions[1].Text(), "Second Description")
 	}

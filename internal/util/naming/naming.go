@@ -27,18 +27,18 @@ const (
 )
 
 func fatComponent(s string) string {
-	var b strings.Builder
-	for _, r := range s {
+	s = strings.Map(func(r rune) rune {
 		switch {
 		case strings.ContainsRune(fatForbidden, r):
-			b.WriteRune('-')
+			return '-'
 		case r < 0x20:
-			// control characters, NUL among them
-		default:
-			b.WriteRune(r)
+			return -1
 		}
-	}
-	return strings.Trim(b.String(), trimmed)
+
+		return r
+	}, s)
+
+	return strings.Trim(s, trimmed)
 }
 
 func pathComponent(s string) string {
@@ -53,6 +53,7 @@ func ForFAT(s string) string {
 	if out := fatComponent(s); out != "" {
 		return out
 	}
+
 	return "_"
 }
 
@@ -64,6 +65,7 @@ func PathSafe(s string) string {
 	if out := pathComponent(s); out != "" {
 		return out
 	}
+
 	return "_"
 }
 

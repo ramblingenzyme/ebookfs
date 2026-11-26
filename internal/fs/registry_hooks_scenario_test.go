@@ -7,24 +7,32 @@ import (
 	"sync"
 	"testing"
 
+	go9pfs "github.com/ramblingenzyme/go9p/fs"
+
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/views"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
-	go9pfs "github.com/ramblingenzyme/go9p/fs"
 )
 
 func TestConcurrentLibraryEditsKeepBookDirSnapshotWhole(t *testing.T) {
 	lib, _ := openLibrary(t)
 	reg := registry.NewBookRegistry(util.NewTestFS(t), lib)
-	lib.AddHook(reg)
+
+	if err := lib.AddHook(reg); err != nil {
+		t.Fatal(err)
+	}
+
 	allBooks := views.NewAllBooksDir(reg)
+
 	ingest("Race A", "Alice")(t, lib)
+
 	book, err := lib.Search(library.Query{Titles: []string{"Race A"}})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
+
 	if len(book) == 0 {
 		t.Fatalf("no book found")
 	}
@@ -34,11 +42,12 @@ func TestConcurrentLibraryEditsKeepBookDirSnapshotWhole(t *testing.T) {
 	titles := [2]string{"Race A", "Race B"}
 
 	var wg sync.WaitGroup
+
 	done := make(chan struct{})
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+
+	wg.Go(func() {
 		defer close(done)
+
 		for i := range 100 {
 			title := titles[i%len(titles)]
 			if _, err := lib.Edit(book[0].ID(), library.Edits{Title: &title}); err != nil {
@@ -46,26 +55,27 @@ func TestConcurrentLibraryEditsKeepBookDirSnapshotWhole(t *testing.T) {
 				return
 			}
 		}
-	}()
+	})
 
 	for range 3 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for {
 				select {
 				case <-done:
 					return
 				default:
 				}
+
 				name := stableDir.Stat().Name
 				if name != "Race A" && name != "Race B" {
 					t.Errorf("BookDir exposed torn title %q", name)
 					return
 				}
+
 				_ = titleFile.Stat()
 			}
-		}()
+		})
 	}
+
 	wg.Wait()
 }

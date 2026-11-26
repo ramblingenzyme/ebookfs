@@ -34,14 +34,17 @@ func Parse(b []byte) (*Doc, error) {
 	if err := doc.ReadFromBytes(b); err != nil {
 		return nil, err
 	}
+
 	pkg := doc.SelectElement("package")
 	if pkg == nil {
 		return nil, errors.New("opf: no <package> element")
 	}
+
 	md := pkg.SelectElement("metadata")
 	if md == nil {
 		return nil, errors.New("opf: no <metadata> element")
 	}
+
 	return &Doc{doc: doc, pkg: pkg, md: metadata{md}, ns: ns{pkg}, vocab: vocab{pkg}}, nil
 }
 

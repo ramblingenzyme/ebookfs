@@ -93,6 +93,7 @@ func (r *Registry) ByFormat(bf book.Format) (Format, error) {
 			return f, nil
 		}
 	}
+
 	return nil, fmt.Errorf("%w: %s", ErrUnknownFormat, bf)
 }
 
@@ -102,11 +103,13 @@ func (r *Registry) All() []Format { return r.formats }
 // AllTempPatterns returns the non-empty temp patterns from all registered formats.
 func (r *Registry) AllTempPatterns() []string {
 	var out []string
+
 	for _, f := range r.formats {
 		if p := f.TempPattern(); p != "" {
 			out = append(out, p)
 		}
 	}
+
 	return out
 }
 
@@ -117,9 +120,11 @@ func (r *Registry) Detect(path string) (Format, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		if ok {
 			return f, nil
 		}
 	}
+
 	return nil, ErrUnknownFormat
 }

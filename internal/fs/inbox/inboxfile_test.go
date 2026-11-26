@@ -5,11 +5,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ramblingenzyme/go9p/proto"
+
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
-	"github.com/ramblingenzyme/go9p/proto"
 )
 
 // Close deadlocked when an InboxFile had a real parent: it held the file's
@@ -25,7 +26,7 @@ func TestInboxFileCloseWithParentDeadlockRegression(t *testing.T) {
 
 	dir := NewInboxDir(f, lib)
 
-	file, err := dir.Create(f, "test.epub", 0644, 0)
+	file, err := dir.Create(f, "test.epub", 0o644, 0)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -49,7 +50,6 @@ func TestInboxFileCloseWithParentDeadlockRegression(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("Close deadlocked")
 	}
-
 }
 
 func TestInboxFileOpen(t *testing.T) {
@@ -59,25 +59,30 @@ func TestInboxFileOpen(t *testing.T) {
 		if os.Geteuid() == 0 {
 			t.Skip("root ignores directory permissions")
 		}
+
 		cfg := util.TestConfig(t)
+
 		lib, err := library.Open(library.Config(cfg))
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		t.Cleanup(func() { lib.Close() })
-		if err := os.Chmod(cfg.InboxTemp, 0555); err != nil {
+
+		if err := os.Chmod(cfg.InboxTemp, 0o555); err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { os.Chmod(cfg.InboxTemp, 0755) })
 
-		inf := NewInboxFile(util.NewTestFS(t), lib, "test.epub", 0644)
+		t.Cleanup(func() { _ = os.Chmod(cfg.InboxTemp, 0o755) })
+
+		inf := NewInboxFile(util.NewTestFS(t), lib, "test.epub", 0o644)
 		if err := inf.Open(1, proto.Mode(0)); err == nil {
 			t.Fatal("Open succeeded with an unwritable inbox temp directory")
 		}
 	})
 
 	t.Run("double open rejected", func(t *testing.T) {
-		inf := NewInboxFile(util.NewTestFS(t), mock.Ingester{}, "test.epub", 0644)
+		inf := NewInboxFile(util.NewTestFS(t), mock.Ingester{}, "test.epub", 0o644)
 
 		fstest.Fid(t, inf, 1).Open(proto.Mode(0))
 
@@ -88,7 +93,7 @@ func TestInboxFileOpen(t *testing.T) {
 	})
 
 	t.Run("open with fid zero", func(t *testing.T) {
-		inf := NewInboxFile(util.NewTestFS(t), mock.Ingester{}, "test.epub", 0644)
+		inf := NewInboxFile(util.NewTestFS(t), mock.Ingester{}, "test.epub", 0o644)
 
 		// Open with fid 0, a legal fid that used to be rejected as "already open"
 		// because the check was i.fid != 0 instead of i.handle != nil.
@@ -102,7 +107,7 @@ func TestInboxFileOpen(t *testing.T) {
 	})
 
 	t.Run("write without open", func(t *testing.T) {
-		inf := NewInboxFile(util.NewTestFS(t), mock.Ingester{}, "test.epub", 0644)
+		inf := NewInboxFile(util.NewTestFS(t), mock.Ingester{}, "test.epub", 0o644)
 
 		_, err := inf.Write(1, 0, []byte("data"))
 		if err == nil {
@@ -111,7 +116,7 @@ func TestInboxFileOpen(t *testing.T) {
 	})
 
 	t.Run("close without open", func(t *testing.T) {
-		inf := NewInboxFile(util.NewTestFS(t), mock.Ingester{}, "test.epub", 0644)
+		inf := NewInboxFile(util.NewTestFS(t), mock.Ingester{}, "test.epub", 0o644)
 
 		fstest.Fid(t, inf, 1).Close()
 	})
@@ -126,7 +131,7 @@ func TestInboxFileOpen(t *testing.T) {
 			},
 		}
 
-		inf := NewInboxFile(f, lib, "test.epub", 0644)
+		inf := NewInboxFile(f, lib, "test.epub", 0o644)
 
 		fstest.Fid(t, inf, 1).Set(proto.Mode(0), "first")
 
@@ -152,21 +157,24 @@ func TestInboxCloseLeavesASameNamedUploadListed(t *testing.T) {
 		IngestFn: func(string) (*library.Book, error) { return util.MakeBook(1, "Test", "Author"), nil },
 	})
 
-	first, err := dir.Create(f, "same.epub", 0644, 0)
+	first, err := dir.Create(f, "same.epub", 0o644, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	firstFid := fstest.Fid(t, first, 1)
 	firstFid.Open(proto.Mode(0))
 	firstFid.Write(0, "first")
 
-	second, err := dir.Create(f, "same.epub", 0644, 0)
+	second, err := dir.Create(f, "same.epub", 0o644, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	fstest.Fid(t, second, 2).Open(proto.Mode(0))
 
 	firstFid.Close()
+
 	if got := dir.Children()["same.epub"]; got != second {
 		t.Errorf("after the first upload closed, same.epub is %v, want the second upload", got)
 	}

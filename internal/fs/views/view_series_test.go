@@ -16,34 +16,34 @@ func TestSeriesEntryName(t *testing.T) {
 	}{
 		{
 			name: "simple integer index",
-			book: makeBookWithSeries(1, "Test", "Author", "", "1"),
+			book: makeBookWithSeries(1, "Test", "", "1"),
 			want: "1 - Test",
 		},
 		{
 			name: "decimal index",
-			book: makeBookWithSeries(1, "Longer", "Author", "", "2.5"),
+			book: makeBookWithSeries(1, "Longer", "", "2.5"),
 			want: "2.5 - Longer",
 		},
 		{
 			name: "two-digit index already fills the pad",
-			book: makeBookWithSeries(1, "Padded", "Author", "", "10"),
+			book: makeBookWithSeries(1, "Padded", "", "10"),
 			pad:  2,
 			want: "10 - Padded",
 		},
 		{
 			name: "two-digit index with a decimal fills the pad",
-			book: makeBookWithSeries(1, "DPadded", "Author", "", "10.5"),
+			book: makeBookWithSeries(1, "DPadded", "", "10.5"),
 			pad:  2,
 			want: "10.5 - DPadded",
 		},
 		{
 			name: "index 0",
-			book: makeBookWithSeries(1, "Zero", "Author", "", "0"),
+			book: makeBookWithSeries(1, "Zero", "", "0"),
 			want: "0 - Zero",
 		},
 		{
 			name: "single digit is zero-padded",
-			book: makeBookWithSeries(1, "Nine", "Author", "", "9"),
+			book: makeBookWithSeries(1, "Nine", "", "9"),
 			pad:  2,
 			want: "09 - Nine",
 		},
@@ -52,21 +52,21 @@ func TestSeriesEntryName(t *testing.T) {
 			// it used to be rounded to one decimal place by the float
 			// formatting this went through.
 			name: "long fractional index passes through",
-			book: makeBookWithSeries(1, "Frac", "Author", "", "3.14159"),
+			book: makeBookWithSeries(1, "Frac", "", "3.14159"),
 			want: "3.14159 - Frac",
 		},
 		{
 			// EPUB 3.3 D.3.7 multi-level position: only the first level is
 			// padded, the rest is carried through untouched.
 			name: "multi-level position",
-			book: makeBookWithSeries(1, "Multi", "Author", "", "2.2.1"),
+			book: makeBookWithSeries(1, "Multi", "", "2.2.1"),
 			pad:  2,
 			want: "02.2.1 - Multi",
 		},
 		{
 			// A pad fixed at two digits left "100" sorting ahead of "99".
 			name: "three-digit index",
-			book: makeBookWithSeries(1, "Hundred", "Author", "", "100"),
+			book: makeBookWithSeries(1, "Hundred", "", "100"),
 			pad:  3,
 			want: "100 - Hundred",
 		},

@@ -28,14 +28,17 @@ func TestEqualComparesEveryField(t *testing.T) {
 	if base := observed(); !base.Equal(observed()) {
 		t.Fatal("Equal = false for two identical observations")
 	}
+
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			changed := observed()
 			tc.mutate(&changed)
+
 			if observed().Equal(changed) {
 				t.Errorf("Equal = true despite %s; that change would never be detected as drift", tc.name)
 			}
-			if !changed.Equal(changed) {
+
+			if !changed.Equal(changed) { //nolint:gocritic // reflexivity is the property under test
 				t.Error("Equal is not reflexive")
 			}
 		})
@@ -51,6 +54,7 @@ func TestEqualComparesInstantsNotRepresentations(t *testing.T) {
 	elsewhere := observed()
 	elsewhere.Mtime = elsewhere.Mtime.In(time.FixedZone("UTC+10", 10*60*60))
 	elsewhere.MetaMtime = elsewhere.MetaMtime.In(time.FixedZone("UTC-5", -5*60*60))
+
 	if !utc.Equal(elsewhere) {
 		t.Error("Equal = false for the same instants in a different location")
 	}
@@ -59,6 +63,7 @@ func TestEqualComparesInstantsNotRepresentations(t *testing.T) {
 	now := time.Now()
 	mono := PathInfo{Mtime: now, MetaMtime: now}
 	wall := PathInfo{Mtime: now.Round(0), MetaMtime: now.Round(0)}
+
 	if !mono.Equal(wall) {
 		t.Error("Equal = false for the same instant with and without a monotonic reading")
 	}

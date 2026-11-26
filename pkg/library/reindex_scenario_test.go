@@ -1,3 +1,7 @@
+// Startup reconciliation, driven through Open. Pins how a library reopened
+// over a changed tree settles: drift detection, edits surviving a restart,
+// unreadable or duplicate books, and the ids they reserve.
+
 package library
 
 import (
@@ -42,8 +46,8 @@ var offLayouts = []struct {
 
 // stageLegacyLayout ingests a book, then moves its directory to
 // legacyAuthorDir with the library closed, which may be where it already is. A
-// non-empty legacyEpub also renames the epub inside it. It returns the book and the canonical location a reindex
-// must restore.
+// non-empty legacyEpub also renames the epub inside it. It returns the book and
+// the canonical location a reindex must restore.
 func stageLegacyLayout(t *testing.T, cfg Config, title string, authors []string, legacyAuthorDir, legacyEpub string) (*Book, book.File) {
 	t.Helper()
 
@@ -52,18 +56,21 @@ func stageLegacyLayout(t *testing.T, cfg Config, title string, authors []string,
 
 	legacyDir := filepath.Join(cfg.Root, legacyAuthorDir, fmt.Sprintf("%s (%d)", title, b.ID()))
 	if canonicalDir := filepath.Join(cfg.Root, canonical.Dir()); canonicalDir != legacyDir {
-		if err := os.MkdirAll(filepath.Dir(legacyDir), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(legacyDir), 0o755); err != nil {
 			t.Fatalf("mkdir legacy parent: %v", err)
 		}
+
 		if err := os.Rename(canonicalDir, legacyDir); err != nil {
 			t.Fatalf("move book dir to %q: %v", legacyAuthorDir, err)
 		}
 	}
+
 	if legacyEpub != "" {
 		if err := os.Rename(filepath.Join(legacyDir, canonical.Filename()), filepath.Join(legacyDir, legacyEpub)); err != nil {
 			t.Fatalf("rename epub to %q: %v", legacyEpub, err)
 		}
 	}
+
 	return b, canonical
 }
 
@@ -80,20 +87,24 @@ func TestEditSurvivesRestart(t *testing.T) {
 			cfg := testConfig(t)
 			lib := openLib(t, cfg)
 			b := ingestTestEpub(t, lib, buildTestEpub(t, "Before"))
+
 			if _, err := lib.Edit(b.ID(), tc.edits); err != nil {
 				t.Fatalf("Edit: %v", err)
 			}
 			// Open reindexes on drift and hides it, so this runs before the restart.
 			assertIndexMatchesStore(t, lib)
+
 			if err := lib.Close(); err != nil {
 				t.Fatalf("Close: %v", err)
 			}
 
 			lib = openLib(t, cfg)
+
 			got, err := lib.Get(b.ID())
 			if err != nil {
 				t.Fatalf("Get after restart: %v", err)
 			}
+
 			if !tc.check(got) {
 				t.Errorf("book after restart = %+v", got)
 			}
@@ -106,6 +117,7 @@ func TestOpenReindexesOnDrift(t *testing.T) {
 	cfg := testConfig(t)
 
 	book := ingestStopped(t, cfg, "Before")
+
 	const want = "A Completely Different And Much Longer Title"
 	writeFile(t, filepath.Join(cfg.Root, book.Path()), buildTestEpub(t, want))
 
@@ -113,6 +125,7 @@ func TestOpenReindexesOnDrift(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
+
 	if got.Title() != want {
 		t.Errorf("Title = %q, want %q (drift not picked up on restart)", got.Title(), want)
 	}
@@ -125,19 +138,24 @@ func TestForceReindexSeesUndetectedDrift(t *testing.T) {
 
 	book := ingestStopped(t, cfg, "Test")
 	path := metaPathOf(book, cfg.Root)
+
 	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatalf("stat: %v", err)
 	}
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read meta: %v", err)
 	}
+
 	edited := bytes.Replace(data, []byte("rating = 0.0"), []byte("rating = 4.0"), 1)
 	if bytes.Equal(edited, data) {
 		t.Fatalf("meta.toml has no %q line:\n%s", "rating = 0.0", data)
 	}
+
 	writeFile(t, path, edited)
+
 	if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
 		t.Fatalf("chtimes: %v", err)
 	}
@@ -145,15 +163,18 @@ func TestForceReindexSeesUndetectedDrift(t *testing.T) {
 	rating := func(opts ...Option) float64 {
 		lib := openLib(t, cfg, opts...)
 		defer lib.Close()
+
 		got, err := lib.Get(book.ID())
 		if err != nil {
 			t.Fatalf("Get: %v", err)
 		}
+
 		return got.Rating()
 	}
 	if got := rating(); got != 0 {
 		t.Fatalf("plain restart saw the edit (Rating = %v), so this test no longer reaches the forced path", got)
 	}
+
 	if got := rating(WithForceReindex()); got != 4 {
 		t.Errorf("Rating after a forced reindex = %v, want 4", got)
 	}
@@ -172,16 +193,20 @@ func TestRestartReconcilesTheDisk(t *testing.T) {
 			if _, err := lib.Content(book.ID()); err != nil {
 				t.Errorf("Content after restart: %v (index still points at a stale path)", err)
 			}
+
 			got, err := lib.Get(book.ID())
 			if err != nil {
 				t.Fatalf("Get: %v", err)
 			}
+
 			if got.Path() != canonical.Path {
 				t.Errorf("Path = %q, want %q", got.Path(), canonical.Path)
 			}
+
 			if _, err := os.Stat(filepath.Join(cfg.Root, canonical.Path)); err != nil {
 				t.Errorf("canonical epub missing after restart: %v", err)
 			}
+
 			assertIndexMatchesStore(t, lib)
 		})
 	}
@@ -207,19 +232,23 @@ func TestUnstattableBookReservesID(t *testing.T) {
 func TestUnreadableMetaReservesIDFromPath(t *testing.T) {
 	cfg := testConfig(t)
 	book := ingestStopped(t, cfg, "Ghost")
+
 	meta, err := os.ReadFile(metaPathOf(book, cfg.Root))
 	if err != nil {
 		t.Fatalf("read meta.toml: %v", err)
 	}
+
 	writeFile(t, metaPathOf(book, cfg.Root), []byte("id = \"not an integer\"\n"))
 	dropIndex(t, cfg)
 
 	lib2 := openLib(t, cfg)
 	next := ingestTestEpub(t, lib2, buildTestEpub(t, "Newcomer"))
+
 	if next.ID() <= book.ID() {
 		t.Fatalf("new book got id %d, reusing id %d held by the book with the unreadable sidecar",
 			next.ID(), book.ID())
 	}
+
 	if err := lib2.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
@@ -232,6 +261,7 @@ func TestUnreadableMetaReservesIDFromPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
+
 	if len(got) != 2 {
 		t.Errorf("got %d books, want both the repaired book and the newcomer indexed", len(got))
 	}
@@ -249,8 +279,38 @@ func TestRepeatedTagInMetaDoesNotFailOpen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
+
 	if want := []string{"a", "b"}; !slices.Equal(got.Tags(), want) {
 		t.Errorf("tags = %v, want %v", got.Tags(), want)
+	}
+}
+
+// A nan rating failed every startup on the rebuild's NOT NULL constraint, and
+// the other values loaded unchecked. Each sidecar here skips its own book and
+// leaves the rest of the library opening.
+func TestInvalidMetaSkipsOnlyItsBook(t *testing.T) {
+	for _, tc := range []struct{ name, meta string }{
+		{"nan rating", "id = %d\nrating = nan\n"},
+		{"rating above 5", "id = %d\nrating = 9.0\n"},
+		{"unknown status", "id = %d\nstatus = \"bogus\"\n"},
+		{"zero id", "id = 0\n# %d\n"},
+		{"missing id", "rating = 1.0\n# %d\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := testConfig(t)
+			bad := ingestStopped(t, cfg, "Broken")
+			good := ingestStopped(t, cfg, "Fine")
+			writeFile(t, metaPathOf(bad, cfg.Root), fmt.Appendf(nil, tc.meta, bad.ID()))
+
+			got, err := openLib(t, cfg).Search(Query{})
+			if err != nil {
+				t.Fatalf("Search: %v", err)
+			}
+
+			if len(got) != 1 || got[0].ID() != good.ID() {
+				t.Errorf("indexed %v, want only book %d", got, good.ID())
+			}
+		})
 	}
 }
 
@@ -262,14 +322,17 @@ func TestDuplicateBookIDFailsOpenNamingBothPaths(t *testing.T) {
 
 	src := filepath.Join(cfg.Root, filepath.Dir(book.Path()))
 	dst := filepath.Join(cfg.Root, "Copies", filepath.Base(src))
-	if err := os.MkdirAll(dst, 0755); err != nil {
+
+	if err := os.MkdirAll(dst, 0o755); err != nil {
 		t.Fatalf("mkdir copy: %v", err)
 	}
+
 	for _, name := range []string{"meta.toml", book.Filename()} {
 		data, err := os.ReadFile(filepath.Join(src, name))
 		if err != nil {
 			t.Fatalf("read %s: %v", name, err)
 		}
+
 		writeFile(t, filepath.Join(dst, name), data)
 	}
 
@@ -278,6 +341,7 @@ func TestDuplicateBookIDFailsOpenNamingBothPaths(t *testing.T) {
 		lib2.Close()
 		t.Fatal("Open succeeded with two directories claiming one book id, want a fatal error")
 	}
+
 	for _, want := range []string{book.Dir(), filepath.Join("Copies", filepath.Base(src))} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("Open error %q does not name the conflicting directory %q", err, want)
@@ -314,6 +378,7 @@ func TestBrokenBooksSettle(t *testing.T) {
 
 			tc.breaks(t, cfg, b)
 			assertSettlesClean(t, cfg)
+
 			if !tc.repair {
 				return
 			}
@@ -322,11 +387,14 @@ func TestBrokenBooksSettle(t *testing.T) {
 			if err := os.Remove(epub); err != nil {
 				t.Fatalf("remove broken epub: %v", err)
 			}
+
 			writeFile(t, epub, buildTestEpub(t, "Repaired"))
+
 			got, err := openLib(t, cfg).Search(Query{})
 			if err != nil {
 				t.Fatalf("Query: %v", err)
 			}
+
 			if len(got) != 1 || got[0].Title() != "Repaired" {
 				t.Errorf("after repair got %d books (%v), want the repaired book indexed", len(got), got)
 			}

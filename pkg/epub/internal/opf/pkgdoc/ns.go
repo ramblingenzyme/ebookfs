@@ -21,7 +21,9 @@ func (n ns) prefix(uri, preferred string) string {
 			return a.Key
 		}
 	}
+
 	n.pkg.CreateAttr("xmlns:"+preferred, uri)
+
 	return preferred
 }
 

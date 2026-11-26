@@ -7,10 +7,12 @@ import (
 
 func pkgWithPrefix(t *testing.T, prefix string) *Doc {
 	t.Helper()
+
 	attr := ""
 	if prefix != "" {
 		attr = ` prefix="` + prefix + `"`
 	}
+
 	doc, err := Parse([]byte(`<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id"` + attr + `>
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -20,6 +22,7 @@ func pkgWithPrefix(t *testing.T, prefix string) *Doc {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	return doc
 }
 
@@ -65,17 +68,21 @@ func TestBindingsParsesThePrefixAttribute(t *testing.T) {
 				if _, declared := tc.want[name]; declared {
 					continue
 				}
+
 				if got[name] != url {
 					t.Errorf("reserved %q = %q, want %q", name, got[name], url)
 				}
 			}
+
 			for name, url := range tc.want {
 				if url == "" {
 					if _, bound := got[name]; bound {
 						t.Errorf("%q was bound, want it ignored", name)
 					}
+
 					continue
 				}
+
 				if got[name] != url {
 					t.Errorf("%q = %q, want %q", name, got[name], url)
 				}
@@ -137,11 +144,14 @@ func TestSpell(t *testing.T) {
 				if declared != tc.prefix {
 					t.Errorf("prefix attribute = %q, want it untouched at %q", declared, tc.prefix)
 				}
+
 				return
 			}
+
 			if !strings.Contains(declared, tc.declares) {
 				t.Errorf("prefix attribute = %q, want it to declare %q", declared, tc.declares)
 			}
+
 			if tc.prefix != "" && !strings.HasPrefix(declared, tc.prefix) {
 				t.Errorf("prefix attribute = %q, want the document's own declarations kept in front", declared)
 			}

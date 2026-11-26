@@ -9,11 +9,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ramblingenzyme/go9p"
+	"github.com/ramblingenzyme/go9p/proto"
+
 	"github.com/ramblingenzyme/ebookfs/internal/testing/ninep"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
-	"github.com/ramblingenzyme/go9p"
-	"github.com/ramblingenzyme/go9p/proto"
 )
 
 // openLibrary returns a library in a temporary directory, and that library's
@@ -21,11 +22,14 @@ import (
 func openLibrary(t *testing.T) (*library.Library, string) {
 	t.Helper()
 	cfg := library.Config(util.TestConfig(t))
+
 	lib, err := library.Open(cfg)
 	if err != nil {
 		t.Fatalf("Open library: %v", err)
 	}
+
 	t.Cleanup(func() { lib.Close() })
+
 	return lib, cfg.Root
 }
 
@@ -42,27 +46,37 @@ func newHarness(t *testing.T, seeds ...func(*testing.T, *library.Library)) *harn
 	for _, s := range seeds {
 		s(t, lib)
 	}
+
 	srv, err := New(lib, Config{})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+
 	server, conn := net.Pipe()
 	served := make(chan struct{})
+
 	go func() {
-		go9p.ServeReadWriter(server, server, srv.ebookfs.Server())
+		_ = go9p.ServeReadWriter(server, server, srv.ebookfs.Server())
+
 		close(served)
 	}()
+
 	c, err := ninep.Dial(conn, "glenda")
 	if err != nil {
 		conn.Close()
 		<-served
 		t.Fatalf("Dial: %v", err)
 	}
+
 	t.Cleanup(func() {
 		conn.Close()
 		<-served
-		srv.Shutdown(context.Background())
+
+		if err := srv.Shutdown(context.Background()); err != nil {
+			t.Errorf("Shutdown: %v", err)
+		}
 	})
+
 	return &harness{t: t, lib: lib, root: root, c: c}
 }
 
@@ -70,13 +84,16 @@ func ingest(title string, authors ...string) func(*testing.T, *library.Library) 
 	return func(t *testing.T, lib *library.Library) {
 		t.Helper()
 		data := util.BuildTestEpub(t, title, authors...)
+
 		h, err := lib.CreateIngest()
 		if err != nil {
 			t.Fatalf("CreateIngest: %v", err)
 		}
+
 		if _, err := h.WriteAt(data, 0); err != nil {
 			t.Fatalf("WriteAt: %v", err)
 		}
+
 		if _, err := h.Ingest(); err != nil {
 			t.Fatalf("Ingest: %v", err)
 		}
@@ -86,6 +103,7 @@ func ingest(title string, authors ...string) func(*testing.T, *library.Library) 
 func edited(id int64, e library.Edits) func(*testing.T, *library.Library) {
 	return func(t *testing.T, lib *library.Library) {
 		t.Helper()
+
 		if _, err := lib.Edit(id, e); err != nil {
 			t.Fatalf("Edit(%d): %v", id, err)
 		}
@@ -93,14 +111,16 @@ func edited(id int64, e library.Edits) func(*testing.T, *library.Library) {
 }
 
 func (h *harness) upload(name string, epub []byte) error {
-	f, err := h.c.Create("/inbox/"+name, 0644, proto.Owrite)
+	f, err := h.c.Create("/inbox/"+name, 0o644, proto.Owrite)
 	if err != nil {
 		return err
 	}
+
 	if err := f.WriteAt(0, epub); err != nil {
 		f.Clunk()
 		return err
 	}
+
 	return f.Clunk()
 }
 
@@ -116,15 +136,18 @@ func (h *harness) write(path, s string) error {
 	if err != nil {
 		return err
 	}
+
 	if err := f.WriteAt(0, []byte(s)); err != nil {
 		f.Clunk()
 		return err
 	}
+
 	return f.Clunk()
 }
 
 func (h *harness) mustWrite(path, s string) {
 	h.t.Helper()
+
 	if err := h.write(path, s); err != nil {
 		h.t.Fatalf("write %s: %v", path, err)
 	}
@@ -135,11 +158,14 @@ func (h *harness) ls(path string) []string {
 	if err != nil {
 		h.t.Fatalf("Readdir %s: %v", path, err)
 	}
+
 	var names []string
 	for _, s := range stats {
 		names = append(names, s.Name)
 	}
+
 	slices.Sort(names)
+
 	return names
 }
 
@@ -150,15 +176,20 @@ func (h *harness) tree(path string) []string {
 	if err != nil {
 		h.t.Fatalf("Readdir %s: %v", path, err)
 	}
+
 	var out []string
+
 	for _, s := range stats {
 		full := strings.TrimSuffix(path, "/") + "/" + s.Name
 		out = append(out, full)
+
 		if s.Mode&proto.DMDIR != 0 {
 			out = append(out, h.tree(full)...)
 		}
 	}
+
 	slices.Sort(out)
+
 	return out
 }
 
@@ -169,17 +200,21 @@ func (h *harness) ctl(cmd string) string {
 	if err := h.write("/ctl", cmd+"\n"); err != nil {
 		h.t.Fatalf("Write /ctl: %v", err)
 	}
+
 	log := h.read("/log")
 	entry := fmt.Sprintf("  %-30s  ", cmd)
 	i := strings.LastIndex(log, entry)
+
 	if i < 0 {
 		h.t.Fatalf("/log has no entry for %q:\n%s", cmd, log)
 	}
+
 	return strings.TrimSuffix(log[i+len(entry):], "\n")
 }
 
 func (h *harness) mustCtl(cmd string) {
 	h.t.Helper()
+
 	if result := h.ctl(cmd); !strings.HasPrefix(result, "ok:") {
 		h.t.Fatalf("ctl %q = %q, want ok:", cmd, result)
 	}
@@ -189,20 +224,24 @@ func (h *harness) mustCtl(cmd string) {
 // fresh every time.
 func (h *harness) entry(path string) (proto.Stat, bool) {
 	parent, name := pathpkg.Split(path)
+
 	stats, err := h.c.Readdir(parent)
 	if err != nil {
 		h.t.Fatalf("Readdir %s: %v", parent, err)
 	}
+
 	for _, s := range stats {
 		if s.Name == name {
 			return s, true
 		}
 	}
+
 	return proto.Stat{}, false
 }
 
 func (h *harness) mustExist(path string) {
 	h.t.Helper()
+
 	if _, ok := h.entry(path); !ok {
 		h.t.Errorf("%s does not exist", path)
 	}
@@ -210,6 +249,7 @@ func (h *harness) mustExist(path string) {
 
 func (h *harness) mustNotExist(path string) {
 	h.t.Helper()
+
 	if _, ok := h.entry(path); ok {
 		h.t.Errorf("%s exists but should not", path)
 	}
@@ -217,18 +257,22 @@ func (h *harness) mustNotExist(path string) {
 
 func (h *harness) readBytes(path string) []byte {
 	h.t.Helper()
+
 	f, err := h.c.Open(path, proto.Oread)
 	if err != nil {
 		h.t.Fatalf("Open %s: %v", path, err)
 	}
+
 	data, err := f.ReadAll()
 	if err != nil {
 		f.Clunk()
 		h.t.Fatalf("ReadAll %s: %v", path, err)
 	}
+
 	if err := f.Clunk(); err != nil {
 		h.t.Fatalf("Clunk %s: %v", path, err)
 	}
+
 	return data
 }
 
@@ -238,6 +282,7 @@ func (h *harness) stat(path string) proto.Stat {
 	if !ok {
 		h.t.Fatalf("%s does not exist", path)
 	}
+
 	return s
 }
 
@@ -249,25 +294,31 @@ func (h *harness) writeLikeLinux(path, s string) error {
 	if err != nil {
 		return err
 	}
+
 	trunc, err := h.c.Walk(path)
 	if err != nil {
 		f.Clunk()
 		return err
 	}
+
 	st := ninep.DontTouch()
 	st.Length = 0
 	err = trunc.WStat(st)
+
 	if cerr := trunc.Clunk(); err == nil {
 		err = cerr
 	}
+
 	if err != nil {
 		f.Clunk()
 		return err
 	}
+
 	if err := f.WriteAt(0, []byte(s)); err != nil {
 		f.Clunk()
 		return err
 	}
+
 	return f.Clunk()
 }
 
@@ -278,5 +329,6 @@ func (h *harness) search(query string) string {
 	if err := h.write(path+"/ctl", query); err != nil {
 		h.t.Fatalf("write %s/ctl: %v", path, err)
 	}
+
 	return path
 }

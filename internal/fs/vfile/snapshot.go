@@ -28,19 +28,23 @@ func (f *SnapshotFile) Open(fid uint64, _ proto.Mode) error {
 	if err != nil {
 		return err
 	}
+
 	f.Lock()
 	f.reads[fid] = data
 	f.Unlock()
+
 	return nil
 }
 
 func (f *SnapshotFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error) {
 	f.RLock()
 	defer f.RUnlock()
+
 	data := f.reads[fid]
 	if data == nil {
 		return nil, errors.New("not open")
 	}
+
 	return ClampRead(data, offset, count), nil
 }
 
@@ -50,9 +54,11 @@ func ClampRead(data []byte, offset, count uint64) []byte {
 	if offset >= uint64(len(data)) {
 		return []byte{}
 	}
+
 	if offset+count > uint64(len(data)) {
 		count = uint64(len(data)) - offset
 	}
+
 	return data[offset : offset+count]
 }
 
@@ -62,13 +68,17 @@ func ClampRead(data []byte, offset, count uint64) []byte {
 func (f *SnapshotFile) Snapshot(fid uint64) ([]byte, bool) {
 	f.RLock()
 	defer f.RUnlock()
+
 	data, ok := f.reads[fid]
+
 	return data, ok
 }
 
 func (f *SnapshotFile) Close(fid uint64) error {
 	f.Lock()
 	defer f.Unlock()
+
 	delete(f.reads, fid)
+
 	return nil
 }

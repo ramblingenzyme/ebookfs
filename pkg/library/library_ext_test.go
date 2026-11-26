@@ -22,6 +22,7 @@ func TestCloseMultiple(t *testing.T) {
 	if err := lib.Close(); err != nil {
 		t.Fatalf("first Close: %v", err)
 	}
+
 	if err := lib.Close(); err != nil {
 		t.Errorf("second Close: %v", err)
 	}
@@ -39,18 +40,23 @@ func TestSearchReturnsARootRelativePath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
+
 	if len(got) != 1 {
 		t.Fatalf("Search returned %d books, want just the matching one", len(got))
 	}
+
 	if got[0].ID() != want.ID() {
 		t.Errorf("id = %d, want %d", got[0].ID(), want.ID())
 	}
+
 	if got[0].Path() == "" {
 		t.Fatal("Path is empty — the result carries no path, so nothing can open it")
 	}
+
 	if filepath.IsAbs(got[0].Path()) {
 		t.Errorf("Path = %q, want a relative path", got[0].Path())
 	}
+
 	absPath := filepath.Join(cfg.Root, got[0].Path())
 	if _, err := os.Stat(absPath); err != nil {
 		t.Errorf("Path %q does not resolve: %v", got[0].Path(), err)
@@ -73,19 +79,23 @@ func TestEditSelfHealsLegacyUnsanitizedFilename(t *testing.T) {
 	dir := filepath.Join(root, filepath.Dir(book.Path()))
 	absEpub := filepath.Join(root, book.Path())
 	legacyName := "Some Title: With Colon - Alice.epub"
+
 	if err := os.Rename(absEpub, filepath.Join(dir, legacyName)); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := lib.Reindex(); err != nil {
 		t.Fatalf("Reindex: %v", err)
 	}
 
 	// An unrelated field, so Layout keeps the directory.
 	status := "reading"
+
 	updated, err := lib.Edit(id, library.Edits{Status: &status})
 	if err != nil {
 		t.Fatalf("Edit: %v (same-directory Move must not fail)", err)
 	}
+
 	if updated.Status() != status {
 		t.Errorf("status = %q, want %q", updated.Status(), status)
 	}
@@ -93,9 +103,11 @@ func TestEditSelfHealsLegacyUnsanitizedFilename(t *testing.T) {
 	if strings.Contains(filepath.Base(updated.Path()), ":") {
 		t.Errorf("filename not sanitized after edit: %q", filepath.Base(updated.Path()))
 	}
+
 	if _, err := os.Stat(filepath.Join(root, updated.Path())); err != nil {
 		t.Errorf("updated Path does not exist: %v", err)
 	}
+
 	if _, err := os.Stat(filepath.Join(dir, legacyName)); !os.IsNotExist(err) {
 		t.Errorf("legacy filename still present after self-heal")
 	}
@@ -113,6 +125,7 @@ func TestDeleteRemovesBook(t *testing.T) {
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "To Delete"))
 	id := book.ID()
 	dir := filepath.Join(cfg.Root, filepath.Dir(book.Path()))
+
 	if _, err := os.Stat(dir); err != nil {
 		t.Fatalf("book directory missing before delete: %v", err)
 	}
@@ -125,9 +138,11 @@ func TestDeleteRemovesBook(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Query after delete: %v", err)
 	}
+
 	if len(results) != 0 {
 		t.Errorf("Query returned %d results after delete, want 0", len(results))
 	}
+
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
 		t.Errorf("book directory should be removed after delete, stat err = %v", err)
 	}
@@ -138,6 +153,7 @@ func TestDeleteRemovesBook(t *testing.T) {
 func TestSearchSnapshotsAreImmutable(t *testing.T) {
 	lib := openTestLibrary(t)
 	b := ingestTestEpub(t, lib, buildTestEpub(t, "Before", "Alice"))
+
 	if _, err := lib.Edit(b.ID(), library.Edits{
 		Tags:        &[]string{"kept"},
 		Series:      new("Saga"),
@@ -150,6 +166,7 @@ func TestSearchSnapshotsAreImmutable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
+
 	held := got[0]
 
 	if _, err := lib.Edit(held.ID(), library.Edits{Title: new("After")}); err != nil {
@@ -163,11 +180,14 @@ func TestSearchSnapshotsAreImmutable(t *testing.T) {
 	// The getters copy too, so a caller cannot reach back through one.
 	authors := held.Authors()
 	authors[0].Name = "Mallory"
+
 	if held.Authors()[0].Name != "Alice" {
 		t.Error("Authors() handed out the book's own slice; mutating it changed the snapshot")
 	}
+
 	tags := held.Tags()
 	tags[0] = "injected"
+
 	if held.Tags()[0] != "kept" {
 		t.Error("Tags() handed out the book's own slice; mutating it changed the snapshot")
 	}
@@ -176,9 +196,11 @@ func TestSearchSnapshotsAreImmutable(t *testing.T) {
 	// because nothing else reaches it.
 	_ = held.SortTitle()
 	s := held.Series()
+
 	if s == nil {
 		t.Fatal("Series() = nil, want the series set before the search")
 	}
+
 	s.Name = "Injected"
 	if held.Series().Name != "Saga" {
 		t.Error("Series() handed out the book's own SeriesRef; mutating it changed the snapshot")
@@ -196,6 +218,7 @@ func TestEditsSurviveARebuild(t *testing.T) {
 	tags := []string{"classic", "sf"}
 	subjects := []string{"Deserts", "Fiction"}
 	contributors := []library.Contributor{{Name: "John Schoenherr", Role: "ill"}}
+
 	if _, err := lib.Edit(b.ID(), library.Edits{
 		Title:        new("After"),
 		Publisher:    new("Chilton"),
@@ -208,6 +231,7 @@ func TestEditsSurviveARebuild(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Edit: %v", err)
 	}
+
 	if err := lib.Reindex(); err != nil {
 		t.Fatalf("Reindex: %v", err)
 	}
@@ -216,13 +240,16 @@ func TestEditsSurviveARebuild(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
+
 	if got.Title() != "After" || got.Publisher() != "Chilton" || got.Rights() != "All rights reserved" {
 		t.Errorf("after rebuild: title %q, publisher %q, rights %q", got.Title(), got.Publisher(), got.Rights())
 	}
+
 	if !slices.Equal(got.Subjects(), subjects) || !slices.Equal(got.Contributors(), contributors) {
 		t.Errorf("after rebuild: subjects %v, contributors %+v; want %v, %+v",
 			got.Subjects(), got.Contributors(), subjects, contributors)
 	}
+
 	if got.Status() != "reading" || got.Rating() != 4 || !slices.Equal(got.Tags(), tags) {
 		t.Errorf("after rebuild: status %q, rating %v, tags %v; want reading, 4, %v",
 			got.Status(), got.Rating(), got.Tags(), tags)
@@ -231,6 +258,7 @@ func TestEditsSurviveARebuild(t *testing.T) {
 
 func TestMissingBookIsErrBookNotFound(t *testing.T) {
 	lib := openTestLibrary(t)
+
 	const id = 999
 
 	for _, tc := range []struct {
@@ -258,6 +286,7 @@ func TestContentOfMissingFileReturnsNilReader(t *testing.T) {
 	cfg := testConfig(t)
 	lib := openLib(t, cfg)
 	b := ingestTestEpub(t, lib, buildTestEpub(t, "Vanished"))
+
 	if err := os.Remove(filepath.Join(cfg.Root, b.Path())); err != nil {
 		t.Fatal(err)
 	}
@@ -266,6 +295,7 @@ func TestContentOfMissingFileReturnsNilReader(t *testing.T) {
 	if err == nil {
 		t.Fatal("Content succeeded on a missing file")
 	}
+
 	if r != nil {
 		t.Errorf("Content returned a non-nil Reader %#v with error %v", r, err)
 	}
@@ -285,6 +315,7 @@ func TestContentServesTheBook(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadAll: %v", err)
 	}
+
 	if !bytes.HasPrefix(data, []byte("PK")) {
 		t.Errorf("content starts %q, want a zip", data[:min(len(data), 4)])
 	}
@@ -293,8 +324,18 @@ func TestContentServesTheBook(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cover: %v", err)
 	}
+
 	if string(cover) != "placeholder-cover-bytes" {
 		t.Errorf("cover = %q, want %q", cover, "placeholder-cover-bytes")
+	}
+
+	opf, err := r.(interface{ OPF() ([]byte, error) }).OPF()
+	if err != nil {
+		t.Fatalf("OPF: %v", err)
+	}
+
+	if !strings.Contains(string(opf), "Open Read") {
+		t.Errorf("OPF does not contain the title: %s", opf)
 	}
 }
 
@@ -303,6 +344,7 @@ func TestContentServesTheBook(t *testing.T) {
 func TestUpdateBuildsOnTheCurrentState(t *testing.T) {
 	lib := openTestLibrary(t)
 	stale := ingestTestEpub(t, lib, buildTestEpub(t, "Title", "Alice"))
+
 	if _, err := lib.Edit(stale.ID(), library.Edits{Tags: &[]string{"concurrent"}}); err != nil {
 		t.Fatalf("Edit: %v", err)
 	}
@@ -314,8 +356,10 @@ func TestUpdateBuildsOnTheCurrentState(t *testing.T) {
 	if err != nil || !changed {
 		t.Fatalf("Update = changed %v, err %v, want a change", changed, err)
 	}
+
 	tags := got.Tags()
 	slices.Sort(tags)
+
 	if want := []string{"added", "concurrent"}; !slices.Equal(tags, want) {
 		t.Errorf("tags = %v, want %v", tags, want)
 	}
@@ -337,6 +381,7 @@ func TestUpdateNilWritesNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	hook := &editCounter{}
 	if err := lib.AddHook(hook); err != nil {
 		t.Fatal(err)
@@ -346,16 +391,20 @@ func TestUpdateNilWritesNothing(t *testing.T) {
 	if err != nil || changed {
 		t.Fatalf("Update = changed %v, err %v, want no change", changed, err)
 	}
+
 	if got.ID() != before.ID() {
 		t.Errorf("Update returned book %d, want the current book %d", got.ID(), before.ID())
 	}
+
 	after, err := lib.Get(before.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if !after.DateModified().Equal(before.DateModified()) {
 		t.Errorf("DateModified moved from %v to %v on a nil Update", before.DateModified(), after.DateModified())
 	}
+
 	if hook.edits != 0 {
 		t.Errorf("OnEdited fired %d times on a nil Update, want 0", hook.edits)
 	}
@@ -367,18 +416,22 @@ func TestUpdateNilWritesNothing(t *testing.T) {
 // readers already cached under it.
 func TestDeletedIDIsNotReusedAfterTheIndexIsLost(t *testing.T) {
 	cfg := testConfig(t)
+
 	lib, err := library.Open(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	ingestTestEpub(t, lib, buildTestEpub(t, "First", "Alice"))
 	newest := ingestTestEpub(t, lib, buildTestEpub(t, "Second", "Alice"))
 	if err := lib.Delete(newest.ID()); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := lib.Close(); err != nil {
 		t.Fatal(err)
 	}
+
 	for _, suffix := range []string{"", "-wal", "-shm"} {
 		if err := os.Remove(cfg.IndexPath + suffix); err != nil && !os.IsNotExist(err) {
 			t.Fatal(err)
@@ -396,15 +449,18 @@ func TestDeletedIDIsNotReusedAfterTheIndexIsLost(t *testing.T) {
 // later index loss cannot reuse a deleted book's id.
 func TestOpenRecordsTheLastIssuedID(t *testing.T) {
 	cfg := testConfig(t)
+
 	lib, err := library.Open(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	ingestTestEpub(t, lib, buildTestEpub(t, "First", "Alice"))
 	newest := ingestTestEpub(t, lib, buildTestEpub(t, "Second", "Alice"))
 	if err := lib.Close(); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := os.Remove(filepath.Join(cfg.Root, ".last-id")); err != nil {
 		t.Fatal(err)
 	}
@@ -413,9 +469,11 @@ func TestOpenRecordsTheLastIssuedID(t *testing.T) {
 	if err := lib.Delete(newest.ID()); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := lib.Close(); err != nil {
 		t.Fatal(err)
 	}
+
 	for _, suffix := range []string{"", "-wal", "-shm"} {
 		if err := os.Remove(cfg.IndexPath + suffix); err != nil && !os.IsNotExist(err) {
 			t.Fatal(err)
@@ -432,24 +490,29 @@ func TestOpenRecordsTheLastIssuedID(t *testing.T) {
 // every later read.
 func TestOpenReplacesAnUnreadableLastID(t *testing.T) {
 	cfg := testConfig(t)
+
 	lib, err := library.Open(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	b := ingestTestEpub(t, lib, buildTestEpub(t, "First", "Alice"))
 	if err := lib.Close(); err != nil {
 		t.Fatal(err)
 	}
+
 	path := filepath.Join(cfg.Root, ".last-id")
-	if err := os.WriteFile(path, []byte("garbage"), 0644); err != nil {
+	if err := os.WriteFile(path, []byte("garbage"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	openLib(t, cfg)
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if got, want := strings.TrimSpace(string(data)), strconv.FormatInt(b.ID(), 10); got != want {
 		t.Errorf(".last-id = %q after Open, want %q", got, want)
 	}
@@ -462,6 +525,7 @@ func TestTimestampPrecisionContract(t *testing.T) {
 	if got := b.DateAdded().Nanosecond(); got != 0 {
 		t.Errorf("Ingest returned DateAdded with nanoseconds %d, want 0", got)
 	}
+
 	if loc := b.DateAdded().Location(); loc != time.UTC {
 		t.Errorf("Ingest returned DateAdded in %v, want UTC", loc)
 	}
@@ -470,9 +534,11 @@ func TestTimestampPrecisionContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if !got.DateAdded().Equal(b.DateAdded()) {
 		t.Errorf("Get DateAdded %v != Ingest DateAdded %v", got.DateAdded(), b.DateAdded())
 	}
+
 	if !got.DateModified().Equal(b.DateModified()) {
 		t.Errorf("Get DateModified %v != Ingest DateModified %v", got.DateModified(), b.DateModified())
 	}
@@ -481,9 +547,11 @@ func TestTimestampPrecisionContract(t *testing.T) {
 	updated, changed, err := lib.Update(b.ID(), func(*library.Book) *library.Edits {
 		return &library.Edits{Status: &newStatus}
 	})
+
 	if err != nil || !changed {
 		t.Fatalf("Update: changed=%v err=%v", changed, err)
 	}
+
 	if got := updated.DateModified().Nanosecond(); got != 0 {
 		t.Errorf("Update returned DateModified with nanoseconds %d, want 0", got)
 	}
@@ -492,10 +560,12 @@ func TestTimestampPrecisionContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if !afterEdit.DateModified().Equal(updated.DateModified()) {
 		t.Errorf("Get after Update DateModified %v != Update returned %v",
 			afterEdit.DateModified(), updated.DateModified())
 	}
+
 	if !afterEdit.DateAdded().Equal(b.DateAdded()) {
 		t.Errorf("DateAdded changed after Update: was %v, now %v", b.DateAdded(), afterEdit.DateAdded())
 	}

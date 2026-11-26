@@ -27,13 +27,14 @@ func TestMoveCleansUpTheOldAuthorDir(t *testing.T) {
 			writeBook(t, root, "Wells, M/Some Title (1)", epubName, "epub-bytes", nil)
 			siblingDir := filepath.Join(root, "Wells, M", "Other Title (2)")
 			if tc.sibling {
-				if err := os.MkdirAll(siblingDir, 0755); err != nil {
+				if err := os.MkdirAll(siblingDir, 0o755); err != nil {
 					t.Fatal(err)
 				}
 			}
 
 			from := book.File{Path: filepath.Join("Wells, M/Some Title (1)", epubName)}
 			to := book.File{Path: filepath.Join("Wells, Martha/Some Title (1)", epubName)}
+
 			if err := s.Move(from, to); err != nil {
 				t.Fatalf("Move: %v", err)
 			}
@@ -41,10 +42,12 @@ func TestMoveCleansUpTheOldAuthorDir(t *testing.T) {
 			if _, err := os.Stat(filepath.Join(root, to.Dir(), epubName)); err != nil {
 				t.Errorf("book not found at new location: %v", err)
 			}
+
 			_, err := os.Stat(filepath.Join(root, "Wells, M"))
 			if gotOldAuthor := err == nil; gotOldAuthor != tc.wantOldAuthor {
 				t.Errorf("old author directory exists = %v, want %v (stat err = %v)", gotOldAuthor, tc.wantOldAuthor, err)
 			}
+
 			if tc.sibling {
 				if _, err := os.Stat(siblingDir); err != nil {
 					t.Errorf("sibling book directory should survive: %v", err)
@@ -67,6 +70,7 @@ func TestMoveDestinationAlreadyExistsError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error: destination already exists")
 	}
+
 	if !strings.Contains(err.Error(), "destination already exists") {
 		t.Errorf("error = %q, want 'destination already exists'", err)
 	}
@@ -82,6 +86,7 @@ func TestMoveRollsBackWhenEpubRenameFails(t *testing.T) {
 	// The directory holds an epub under a different name than `from` claims,
 	// so the directory move succeeds and the rename inside it cannot.
 	writeBook(t, root, "Alice/Title (1)", "actual.epub", "data", &book.Meta{ID: 1})
+
 	from := book.File{Path: filepath.Join("Alice/Title (1)", "claimed.epub")}
 	to := book.File{Path: filepath.Join("Bob/Title (1)", "renamed.epub")}
 
@@ -92,9 +97,11 @@ func TestMoveRollsBackWhenEpubRenameFails(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, from.Dir(), "actual.epub")); err != nil {
 		t.Errorf("book did not return to %q after the failed rename: %v", from.Dir(), err)
 	}
+
 	if _, err := os.Stat(filepath.Join(root, to.Dir())); !os.IsNotExist(err) {
 		t.Errorf("destination %q still exists after rollback", to.Dir())
 	}
+
 	if _, err := os.Stat(filepath.Join(root, "Bob")); !os.IsNotExist(err) {
 		t.Errorf("author directory Bob left behind by the rollback: %v", err)
 	}
@@ -110,6 +117,7 @@ func TestMoveLeavesNoAuthorDirWhenDirRenameFails(t *testing.T) {
 	if err := s.Move(from, to); err == nil {
 		t.Fatal("Move succeeded with a missing source directory")
 	}
+
 	if _, err := os.Stat(filepath.Join(root, "Bob")); !os.IsNotExist(err) {
 		t.Errorf("author directory Bob left behind by the failed rename: %v", err)
 	}
@@ -125,9 +133,11 @@ func TestDeleteRemovesBookDir(t *testing.T) {
 	if err := s.Delete(loc); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
+
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
 		t.Errorf("book directory should be removed after delete")
 	}
+
 	if _, err := os.Stat(filepath.Join(root, "Author, A")); !os.IsNotExist(err) {
 		t.Errorf("empty author directory should also be removed after last book is deleted")
 	}
@@ -137,26 +147,29 @@ func TestDeleteWithReadOnlyDirError(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores directory permissions")
 	}
+
 	s, root := newStore(t)
 
 	dir := filepath.Join(root, "Author, A", "Test (1)")
 	writeBook(t, root, "Author, A/Test (1)", "test.epub", "data", nil)
 
 	sidecar := filepath.Join(dir, ".sidecar", "kosync.json")
-	if err := os.MkdirAll(filepath.Dir(sidecar), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(sidecar, []byte("{}"), 0644); err != nil {
+	if err := os.MkdirAll(filepath.Dir(sidecar), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := os.Chmod(dir, 0555); err != nil {
+	if err := os.WriteFile(sidecar, []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Chmod(dir, 0o555); err != nil {
 		t.Skip("cannot chmod book dir:", err)
 	}
 	// Restore permissions so TempDir cleanup succeeds.
-	t.Cleanup(func() { os.Chmod(dir, 0755) })
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 
 	loc := book.File{Path: filepath.Join("Author, A/Test (1)", "test.epub")}
+
 	err := s.Delete(loc)
 	if err == nil {
 		t.Error("expected error deleting a read-only book directory")
@@ -169,6 +182,7 @@ func TestDeleteWithReadOnlyDirError(t *testing.T) {
 			t.Errorf("%s after a failed delete: %v", path, err)
 		}
 	}
+
 	if entries, _ := os.ReadDir(filepath.Join(root, trashDirName)); len(entries) != 0 {
 		t.Errorf("trash after a failed delete holds %d entries, want none", len(entries))
 	}
@@ -179,16 +193,66 @@ func TestLastID(t *testing.T) {
 	if id, err := s.LastID(); err != nil || id != 0 {
 		t.Errorf("LastID with no record = %d, %v; want 0, nil", id, err)
 	}
+
 	if err := s.RecordID(7); err != nil {
 		t.Fatal(err)
 	}
+
 	if id, err := s.LastID(); err != nil || id != 7 {
 		t.Errorf("LastID after RecordID(7) = %d, %v; want 7, nil", id, err)
 	}
-	if err := os.WriteFile(filepath.Join(root, lastIDName), []byte("garbage"), 0644); err != nil {
+
+	if err := os.WriteFile(filepath.Join(root, lastIDName), []byte("garbage"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+
 	if _, err := s.LastID(); err == nil {
 		t.Error("LastID read a corrupt record without an error")
+	}
+}
+
+// Ingest returns an error when the sidecar write fails, but does not clean up:
+// the caller is responsible for deciding whether to delete the partial
+// directory.
+func TestIngestSurfacesWriteMetaFailure(t *testing.T) {
+	s, root := newStore(t)
+
+	staged := filepath.Join(t.TempDir(), "staged.epub")
+	if err := os.WriteFile(staged, []byte("epub"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loc := book.File{Path: filepath.Join("Alice/Title (1)", "Title - Alice.epub")}
+	// Occupy meta.toml's name with a directory, so the sidecar write fails
+	// after the epub is already in place.
+	bookDir := filepath.Join(root, loc.Dir())
+	if err := os.MkdirAll(filepath.Join(bookDir, metaFilename), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, err := s.Ingest(staged, loc, book.Meta{ID: 1}); err == nil {
+		t.Fatal("Ingest succeeded with an unwritable meta.toml, want the failure surfaced")
+	}
+
+	if _, err := os.Stat(bookDir); os.IsNotExist(err) {
+		t.Error("Ingest cleaned up the book directory; caller is responsible for cleanup")
+	}
+}
+
+// The earlier failure: nothing to move into place. The book directory is
+// created before the rename is attempted, so the error is surfaced rather than
+// leaving a half-built book behind.
+func TestIngestMissingStagedEpub(t *testing.T) {
+	s, root := newStore(t)
+
+	loc := book.File{Path: filepath.Join("Alice/Title (1)", "Title - Alice.epub")}
+
+	_, _, err := s.Ingest(filepath.Join(t.TempDir(), "does-not-exist.epub"), loc, book.Meta{ID: 1})
+	if err == nil {
+		t.Fatal("Ingest succeeded with no staged epub, want the failure surfaced")
+	}
+
+	if _, err := os.Stat(filepath.Join(root, loc.Dir(), metaFilename)); !os.IsNotExist(err) {
+		t.Error("meta.toml was written despite the epub never arriving")
 	}
 }

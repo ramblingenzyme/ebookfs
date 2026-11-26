@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
@@ -21,10 +20,7 @@ type testLibrary struct {
 // openTestLibrary creates a test library with a temporary directory
 func openTestLibrary(t *testing.T) *testLibrary {
 	t.Helper()
-	tmpDir, err := os.MkdirTemp("", "kosync-test-*")
-	if err != nil {
-		t.Fatalf("creating temp dir: %v", err)
-	}
+	tmpDir := t.TempDir()
 
 	lib, err := library.Open(library.Config{
 		Root:      tmpDir,
@@ -33,7 +29,6 @@ func openTestLibrary(t *testing.T) *testLibrary {
 		StateDir:  tmpDir,
 	})
 	if err != nil {
-		os.RemoveAll(tmpDir)
 		t.Fatalf("opening library: %v", err)
 	}
 
@@ -42,10 +37,7 @@ func openTestLibrary(t *testing.T) *testLibrary {
 		tmpDir:  tmpDir,
 	}
 
-	t.Cleanup(func() {
-		lib.Close()
-		os.RemoveAll(tmpDir)
-	})
+	t.Cleanup(func() { lib.Close() })
 
 	return tl
 }
@@ -59,17 +51,21 @@ func buildTestEpub(t *testing.T, title string, authors ...string) []byte {
 // ingestTestEpub ingests an epub into the library
 func ingestTestEpub(t *testing.T, lib *library.Library, data []byte) *library.Book {
 	t.Helper()
+
 	h, err := lib.CreateIngest()
 	if err != nil {
 		t.Fatalf("CreateIngest: %v", err)
 	}
+
 	if _, err := h.WriteAt(data, 0); err != nil {
 		t.Fatalf("WriteAt: %v", err)
 	}
+
 	b, err := h.Ingest()
 	if err != nil {
 		t.Fatalf("Ingest: %v", err)
 	}
+
 	return b
 }
 
@@ -109,6 +105,7 @@ func setupEnv(t *testing.T, cfg Config) *testEnv {
 	if len(snap) != 1 {
 		t.Fatalf("index after ingest has %d entries, want 1", len(snap))
 	}
+
 	var docID string
 	for id := range snap {
 		docID = id
@@ -120,52 +117,69 @@ func setupEnv(t *testing.T, cfg Config) *testEnv {
 // putProgress sends a PUT /syncs/progress with the given body.
 func (e *testEnv) putProgress(t *testing.T, body map[string]any) (map[string]any, int) {
 	t.Helper()
+
 	bodyBytes, _ := json.Marshal(body)
 	req := httptest.NewRequest(http.MethodPut, "/syncs/progress", bytes.NewReader(bodyBytes))
 	req.Header.Set("Accept", "application/vnd.koreader.v1+json")
 	req.Header.Set("X-Auth-User", "testuser")
 	req.Header.Set("X-Auth-Key", "testhash")
 	req.Header.Set("Content-Type", "application/json")
+
 	w := httptest.NewRecorder()
 	e.handler.ServeHTTP(w, req)
+
 	var resp map[string]any
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decoding response %q: %v", w.Body, err)
+	}
+
 	return resp, w.Code
 }
 
 // getProgress sends a GET /syncs/progress/{docID}.
 func (e *testEnv) getProgress(t *testing.T, docID string) (map[string]any, int) {
 	t.Helper()
+
 	req := httptest.NewRequest(http.MethodGet, "/syncs/progress/"+docID, nil)
 	req.Header.Set("Accept", "application/vnd.koreader.v1+json")
 	req.Header.Set("X-Auth-User", "testuser")
 	req.Header.Set("X-Auth-Key", "testhash")
+
 	w := httptest.NewRecorder()
 	e.handler.ServeHTTP(w, req)
+
 	var resp map[string]any
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decoding response %q: %v", w.Body, err)
+	}
+
 	return resp, w.Code
 }
 
 // bookStatus returns the current status of the ingested book.
 func (e *testEnv) bookStatus(t *testing.T) string {
 	t.Helper()
+
 	b, err := e.lib.Get(e.book.ID())
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
+
 	return b.Status()
 }
 
 func (e *testEnv) documentIDs(t *testing.T) []string {
 	t.Helper()
+
 	data, err := e.lib.ReadSidecar(e.book.ID(), "kosync.json")
 	if err != nil {
 		t.Fatalf("ReadSidecar: %v", err)
 	}
+
 	var sidecar SidecarData
 	if err := json.Unmarshal(data, &sidecar); err != nil {
 		t.Fatalf("parse sidecar: %v", err)
 	}
+
 	return sidecar.DocumentIDs
 }

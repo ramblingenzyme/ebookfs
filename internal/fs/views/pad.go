@@ -19,6 +19,7 @@ func (p *padWidth) set(max int64) {
 	if max >= 10 {
 		w = int32(len(strconv.FormatInt(max, 10)))
 	}
+
 	p.n.Store(w)
 }
 
@@ -26,6 +27,7 @@ func (p *padWidth) format(n int64) string {
 	if w := p.n.Load(); w > 0 {
 		return fmt.Sprintf("%0*d", w, n)
 	}
+
 	return strconv.FormatInt(n, 10)
 }
 

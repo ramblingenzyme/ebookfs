@@ -7,11 +7,12 @@ import (
 	"path/filepath"
 	"sync/atomic"
 
+	"github.com/ramblingenzyme/go9p/fs"
+	"github.com/ramblingenzyme/go9p/proto"
+
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/internal/util/naming"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
-	"github.com/ramblingenzyme/go9p/fs"
-	"github.com/ramblingenzyme/go9p/proto"
 )
 
 type ContentReader interface {
@@ -58,6 +59,7 @@ func (d *BookDir) SetSnapshot(b *library.Book) {
 func (d *BookDir) Stat() proto.Stat {
 	s := d.StaticDir.Stat()
 	s.Name = naming.PathSafe(d.Book().Title())
+
 	return s
 }
 
@@ -67,15 +69,15 @@ func NewBookDir(f *fs.FS, lib ContentReader, edit func(int64, library.Edits) (*l
 	}
 	d.book.Store(book)
 
-	d.StaticDir.AddChild(fs.NewStaticFile(
-		newStat(f, "id", 0444),
+	vfile.AddChild(&d.StaticDir, fs.NewStaticFile(
+		newStat(f, "id", 0o444),
 		fmt.Appendf(nil, "%d\n", book.ID()),
 	))
 
 	// Child files read through d.Book so they always see the current snapshot,
 	// not the one captured at construction.
-	d.StaticDir.AddChild(newContentFile(
-		newStat(f, book.Filename(), 0444),
+	vfile.AddChild(&d.StaticDir, newContentFile(
+		newStat(f, book.Filename(), 0o444),
 		lib,
 		d.Book,
 	))
@@ -90,20 +92,22 @@ func NewBookDir(f *fs.FS, lib ContentReader, edit func(int64, library.Edits) (*l
 			if err != nil {
 				return err
 			}
+
 			_, err = edit(d.Book().ID(), edits)
+
 			return err
 		}
-		d.StaticDir.AddChild(newFieldFile(newStat(f, name, 0644), get, set))
+		vfile.AddChild(&d.StaticDir, newFieldFile(newStat(f, name, 0o644), get, set))
 	}
 
-	d.StaticDir.AddChild(newFieldFile(newStat(f, "pubdate", 0444), func() string { return d.Book().Pubdate() }, nil))
-	d.StaticDir.AddChild(newFieldFile(newStat(f, "identifiers", 0444), func() string {
+	vfile.AddChild(&d.StaticDir, newFieldFile(newStat(f, "pubdate", 0o444), func() string { return d.Book().Pubdate() }, nil))
+	vfile.AddChild(&d.StaticDir, newFieldFile(newStat(f, "identifiers", 0o444), func() string {
 		return formatIdentifiers(d.Book().Identifiers())
 	}, nil))
 
 	if book.CoverPath() != "" {
-		d.StaticDir.AddChild(newCoverFile(
-			newStat(f, "cover"+filepath.Ext(book.CoverPath()), 0644),
+		vfile.AddChild(&d.StaticDir, newCoverFile(
+			newStat(f, "cover"+filepath.Ext(book.CoverPath()), 0o644),
 			lib,
 			edit,
 			d.Book,

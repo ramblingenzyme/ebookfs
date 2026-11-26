@@ -1,6 +1,7 @@
 package epub_test
 
 import (
+	"bytes"
 	"errors"
 	"testing"
 
@@ -13,14 +14,25 @@ import (
 // closed check.
 func TestReaderClosedContract(t *testing.T) {
 	path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
+
 	r, err := epub.OpenReader(path, "OEBPS/cover.jpg")
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	opf, err := r.OPF()
+	if err != nil {
+		t.Fatalf("OPF before close: %v", err)
+	}
+
+	if !bytes.Contains(opf, []byte("<dc:title")) {
+		t.Errorf("OPF returned %d bytes without a title", len(opf))
+	}
+
 	if _, err := r.ReadAt(make([]byte, 4), 0); err != nil {
 		t.Fatalf("ReadAt before close: %v", err)
 	}
+
 	if _, err := r.Cover(); err != nil {
 		t.Fatalf("Cover before close: %v", err)
 	}
@@ -49,6 +61,7 @@ func TestReaderClosedContract(t *testing.T) {
 
 func TestReaderWithNoCover(t *testing.T) {
 	path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
+
 	r, err := epub.OpenReader(path, "")
 	if err != nil {
 		t.Fatal(err)

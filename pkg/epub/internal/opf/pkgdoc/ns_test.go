@@ -47,6 +47,7 @@ func TestDCPrefix(t *testing.T) {
 			if got != tc.want {
 				t.Errorf("dcPrefix() = %q, want %q", got, tc.want)
 			}
+
 			if bound := d.pkg.SelectAttrValue("xmlns:"+got, ""); tc.declares != "" && bound != tc.declares {
 				t.Errorf("xmlns:%s = %q, want %q declared", got, bound, tc.declares)
 			}

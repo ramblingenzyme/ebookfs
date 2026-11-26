@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/beevik/etree"
+
 	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/xml"
 )
 
@@ -11,6 +12,7 @@ func text(e *etree.Element) string {
 	if e == nil {
 		return ""
 	}
+
 	return xml.Collapse(e.Text())
 }
 
@@ -37,14 +39,18 @@ func (d *Doc) ensureID(el *etree.Element, stem string) string {
 	if id := attr(el, "id"); id != "" {
 		return id
 	}
+
 	taken := map[string]bool{}
 	for _, e := range d.pkg.FindElements("//*[@id]") {
 		taken[attr(e, "id")] = true
 	}
+
 	id := stem
 	for n := 2; taken[id]; n++ {
 		id = stem + "-" + strconv.Itoa(n)
 	}
+
 	el.CreateAttr("id", id)
+
 	return id
 }

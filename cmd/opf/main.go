@@ -17,6 +17,7 @@ func main() {
 		fmt.Fprintf(flag.CommandLine.Output(), "usage: %s <book.epub>\n", filepath.Base(os.Args[0]))
 		flag.PrintDefaults()
 	}
+
 	flag.Parse()
 
 	if flag.NArg() != 1 {
@@ -43,6 +44,8 @@ func run(path string) error {
 	if err != nil {
 		return err
 	}
+
 	_, err = os.Stdout.Write(data)
+
 	return err
 }
