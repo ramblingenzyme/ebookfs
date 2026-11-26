@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/textfmt"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
@@ -25,11 +26,13 @@ func (f *CtlFile) execute(cmd string) string {
 	if err != nil {
 		r := fmt.Sprintf("error: %v", err)
 		f.cmdLog.Append(cmd, r)
+
 		return r
 	}
 
 	r := f.dispatch(name, args)
 	f.cmdLog.Append(cmd, r)
+
 	return r
 }
 
@@ -82,11 +85,14 @@ func (f *CtlFile) dispatch(name string, args []string) string {
 		if c.name != name {
 			continue
 		}
+
 		if len(args) != c.arity() {
 			return c.usage()
 		}
+
 		return c.run(f, args)
 	}
+
 	return fmt.Sprintf("error: unknown command %q", name)
 }
 
@@ -95,11 +101,13 @@ func (f *CtlFile) dispatch(name string, args []string) string {
 func addTag(f *CtlFile, args []string) string {
 	tag := args[0]
 
-	return f.editSpec("edited", args[1], func(b *library.Book) *library.Edits {
+	return f.editSpec(args[1], func(b *library.Book) *library.Edits {
 		if slices.Contains(b.Tags(), tag) {
 			return nil // already has tag
 		}
+
 		newTags := append(slices.Clone(b.Tags()), tag)
+
 		return &library.Edits{Tags: &newTags}
 	})
 }
@@ -107,13 +115,15 @@ func addTag(f *CtlFile, args []string) string {
 func removeTag(f *CtlFile, args []string) string {
 	tag := args[0]
 
-	return f.editSpec("edited", args[1], func(b *library.Book) *library.Edits {
+	return f.editSpec(args[1], func(b *library.Book) *library.Edits {
 		if !slices.Contains(b.Tags(), tag) {
 			return nil // doesn't have tag
 		}
+
 		newTags := slices.DeleteFunc(slices.Clone(b.Tags()), func(t string) bool {
 			return t == tag
 		})
+
 		return &library.Edits{Tags: &newTags}
 	})
 }
@@ -121,10 +131,11 @@ func removeTag(f *CtlFile, args []string) string {
 func setStatus(f *CtlFile, args []string) string {
 	status := args[0]
 
-	return f.editSpec("edited", args[1], func(b *library.Book) *library.Edits {
+	return f.editSpec(args[1], func(b *library.Book) *library.Edits {
 		if b.Status() == status {
 			return nil
 		}
+
 		return &library.Edits{Status: &status}
 	})
 }
@@ -135,10 +146,11 @@ func setRating(f *CtlFile, args []string) string {
 		return fmt.Sprintf("error: invalid rating %q", args[0])
 	}
 
-	return f.editSpec("edited", args[1], func(b *library.Book) *library.Edits {
+	return f.editSpec(args[1], func(b *library.Book) *library.Edits {
 		if b.Rating() == rating {
 			return nil
 		}
+
 		return &library.Edits{Rating: &rating}
 	})
 }
@@ -154,6 +166,7 @@ func deleteBook(f *CtlFile, args []string) string {
 	if err := f.lib.Delete(id64); err != nil {
 		return "error: " + bookError(id64, err)
 	}
+
 	return fmt.Sprintf("ok: book %d deleted", id64)
 }
 
@@ -168,6 +181,7 @@ func renameTag(f *CtlFile, args []string) string {
 		if old == newName || !slices.Contains(b.Tags(), old) {
 			return nil
 		}
+
 		updated := slices.Clone(b.Tags())
 		if slices.Contains(updated, newName) {
 			updated = slices.DeleteFunc(updated, func(t string) bool { return t == old })
@@ -178,6 +192,7 @@ func renameTag(f *CtlFile, args []string) string {
 				}
 			}
 		}
+
 		return &library.Edits{Tags: &updated}
 	})
 }
@@ -193,6 +208,7 @@ func renameAuthor(f *CtlFile, args []string) string {
 	return f.editSelection("renamed", library.Query{Authors: []string{old}}, func(b *library.Book) *library.Edits {
 		matched := false
 		updated := slices.Clone(b.Authors())
+
 		for i, a := range updated {
 			if a.Name == old || a.SortName == old {
 				updated[i] = newAuthor
@@ -206,9 +222,10 @@ func renameAuthor(f *CtlFile, args []string) string {
 		}
 
 		// Renaming onto an author the book already has would duplicate it, so
-		// dedupeAuthors makes rename a merge, as rename-tag is. It also
-		// collapses duplicates the book already carried.
-		updated = dedupeAuthors(updated)
+		// keeping the first of each name makes rename a merge, as rename-tag
+		// is. It also collapses duplicates the book already carried.
+		updated = book.FirstOf(updated, func(a library.Author) string { return a.Name })
+
 		return &library.Edits{Authors: &updated}
 	})
 }
@@ -220,6 +237,7 @@ func renameSeries(f *CtlFile, args []string) string {
 		if b.SeriesName() != old {
 			return nil
 		}
+
 		return &library.Edits{Series: &newName}
 	})
 }
@@ -233,32 +251,19 @@ func renameSeries(f *CtlFile, args []string) string {
 func idsOnly(q library.Query) bool {
 	filters := q
 	filters.IDs, filters.Order, filters.Limit, filters.ExactTitles = nil, 0, 0, false
-	return len(q.IDs) > 0 && reflect.DeepEqual(filters, library.Query{})
-}
 
-// dedupeAuthors keeps the first occurrence of each display name, so
-// rename-author folds a renamed author into one the book already carries.
-func dedupeAuthors(authors []library.Author) []library.Author {
-	seen := make(map[string]bool, len(authors))
-	out := make([]library.Author, 0, len(authors))
-	for _, a := range authors {
-		if seen[a.Name] {
-			continue
-		}
-		seen[a.Name] = true
-		out = append(out, a)
-	}
-	return out
+	return len(q.IDs) > 0 && reflect.DeepEqual(filters, library.Query{})
 }
 
 // editSpec is editSelection for a command that names its books with an id-spec
 // rather than building the query itself.
-func (f *CtlFile) editSpec(op, spec string, editFn func(*library.Book) *library.Edits) string {
+func (f *CtlFile) editSpec(spec string, editFn func(*library.Book) *library.Edits) string {
 	query, err := parseSelection(spec)
 	if err != nil {
 		return fmt.Sprintf("error: %v", err)
 	}
-	return f.editSelection(op, query, editFn)
+
+	return f.editSelection("edited", query, editFn)
 }
 
 // editSelection applies editFn to each book the selection addresses, reporting
@@ -280,22 +285,19 @@ func (f *CtlFile) editSelection(op string, query library.Query, editFn func(*lib
 		if err != nil {
 			return fmt.Sprintf("error: query failed: %v", err)
 		}
+
 		visit = make([]int64, 0, len(books))
 		for _, b := range books {
 			visit = append(visit, b.ID())
 		}
 	}
 
-	var affected, skipped int64
-	var errs []string
-	seen := make(map[int64]bool, len(visit))
+	var (
+		affected, skipped int64
+		errs              []string
+	)
 
-	for _, id := range visit {
-		if seen[id] {
-			continue
-		}
-		seen[id] = true
-
+	for _, id := range book.FirstOf(visit, func(id int64) int64 { return id }) {
 		_, changed, err := f.lib.Update(id, editFn)
 		switch {
 		case err != nil:
@@ -317,21 +319,25 @@ func formatResult(op string, affected, skipped int64, errs []string) string {
 	if affected == 0 && len(errs) > 0 {
 		status = "error"
 	}
+
 	var parts []string
 	if affected > 0 {
 		parts = append(parts, fmt.Sprintf("%s: %d books %s", status, affected, op))
 	} else {
 		parts = append(parts, fmt.Sprintf("%s: no books %s", status, op))
 	}
+
 	if skipped > 0 {
 		parts = append(parts, fmt.Sprintf("%d skipped", skipped))
 	}
+
 	if len(errs) > 0 {
 		parts = append(parts, fmt.Sprintf("errors: %d book(s)", len(errs)))
 		for _, e := range errs {
 			parts = append(parts, "  "+e)
 		}
 	}
+
 	return strings.Join(parts, "\n")
 }
 
@@ -341,9 +347,11 @@ func bookError(id int64, err error) string {
 	if errors.Is(err, library.ErrBookNotFound) {
 		return fmt.Sprintf("book %d: not found", id)
 	}
+
 	prefix := fmt.Sprintf("book %d: ", id)
 	if msg := err.Error(); strings.HasPrefix(msg, prefix) {
 		return msg
 	}
+
 	return prefix + err.Error()
 }

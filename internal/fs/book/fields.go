@@ -2,6 +2,7 @@ package book
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -32,6 +33,7 @@ var fields = map[string]field{
 			if err != nil {
 				return library.Edits{}, fmt.Errorf("invalid rating %q", s)
 			}
+
 			return library.Edits{Rating: &n}, nil
 		},
 	},
@@ -81,59 +83,32 @@ var fields = map[string]field{
 	},
 	"contributors": {
 		get: func(b *library.Book) string {
-			contributors := b.Contributors()
-			lines := make([]string, len(contributors))
-			for i, c := range contributors {
-				if c.Role != "" {
-					lines[i] = fmt.Sprintf("%s | %s", c.Name, c.Role)
-				} else {
-					lines[i] = c.Name
-				}
-			}
-			return strings.Join(lines, "\n")
+			return joinLines(b.Contributors(), func(c library.Contributor) string {
+				return textfmt.FormatPair(c.Name, c.Role)
+			})
 		},
 		edits: func(s string) (library.Edits, error) {
-			var contributors []library.Contributor
-			for line := range strings.SplitSeq(s, "\n") {
-				parts := strings.SplitN(line, " | ", 2)
-				name := strings.TrimSpace(parts[0])
-				if name == "" {
-					continue
-				}
-				role := ""
-				if len(parts) > 1 {
-					role = strings.TrimSpace(parts[1])
-				}
-				contributors = append(contributors, library.Contributor{Name: name, Role: role})
-			}
+			contributors := pairLines(s, func(name, role string) library.Contributor {
+				return library.Contributor{Name: name, Role: role}
+			})
+
 			return library.Edits{Contributors: &contributors}, nil
 		},
 	},
 	"authors": {
 		get: func(b *library.Book) string {
-			authors := b.Authors()
-			lines := make([]string, len(authors))
-			for i, a := range authors {
-				if a.SortName != "" {
-					lines[i] = fmt.Sprintf("%s | %s", a.Name, a.SortName)
-				} else {
-					lines[i] = a.Name
-				}
-			}
-			return strings.Join(lines, "\n")
+			return joinLines(b.Authors(), func(a library.Author) string {
+				return textfmt.FormatPair(a.Name, a.SortName)
+			})
 		},
 		edits: func(s string) (library.Edits, error) {
-			var authors []library.Author
-			for line := range strings.SplitSeq(s, "\n") {
-				a := textfmt.ParseAuthor(line)
-				if a.Name == "" {
-					continue
-				}
-				authors = append(authors, a)
-			}
+			authors := pairLines(s, func(name, sortName string) library.Author {
+				return library.Author{Name: name, SortName: sortName}
+			})
 			if len(authors) == 0 {
 				return library.Edits{}, fmt.Errorf("at least one author is required")
 			}
+
 			return library.Edits{Authors: &authors}, nil
 		},
 	},
@@ -148,6 +123,7 @@ var fields = map[string]field{
 			if !b.HasSeries() {
 				return ""
 			}
+
 			return b.SeriesIndex()
 		},
 		// Passed through as written: the position is a string all the way from
@@ -159,19 +135,36 @@ var fields = map[string]field{
 	},
 }
 
-// formatIdentifiers renders the identifier map as sorted "scheme=value" lines.
-// Read-only, so nothing parses this back.
-// Sorted by scheme: sorting lines puts the ONIX scheme isbn-a before isbn.
-func formatIdentifiers(ids map[string]string) string {
-	schemes := make([]string, 0, len(ids))
-	for scheme := range ids {
-		schemes = append(schemes, scheme)
+func joinLines[T any](xs []T, format func(T) string) string {
+	lines := make([]string, len(xs))
+	for i, x := range xs {
+		lines[i] = format(x)
 	}
-	slices.Sort(schemes)
 
-	lines := make([]string, 0, len(schemes))
-	for _, scheme := range schemes {
-		lines = append(lines, scheme+"="+ids[scheme])
-	}
 	return strings.Join(lines, "\n")
+}
+
+// pairLines is the inverse of joinLines for "First | Second" lines, skipping
+// any whose first half is blank.
+func pairLines[T any](s string, build func(first, second string) T) []T {
+	var out []T
+
+	for line := range strings.SplitSeq(s, "\n") {
+		first, second := textfmt.ParsePair(line)
+		if first == "" {
+			continue
+		}
+
+		out = append(out, build(first, second))
+	}
+
+	return out
+}
+
+// formatIdentifiers sorts by scheme, since sorting the "scheme=value" lines
+// would put the ONIX scheme isbn-a before isbn.
+func formatIdentifiers(ids map[string]string) string {
+	return joinLines(slices.Sorted(maps.Keys(ids)), func(scheme string) string {
+		return scheme + "=" + ids[scheme]
+	})
 }

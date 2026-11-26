@@ -22,6 +22,7 @@ func TestSearchDirEvictsHandlesPastTTL(t *testing.T) {
 	if hasHandleDir(sd, stale.id) {
 		t.Errorf("handle %d idle past the TTL survived the next allocation's sweep", stale.id)
 	}
+
 	if !hasHandleDir(sd, fresh.id) {
 		t.Errorf("freshly allocated handle %d was swept", fresh.id)
 	}
@@ -32,9 +33,11 @@ func TestSearchDirEvictsHandlesPastTTL(t *testing.T) {
 // more than it says is a cap that cannot be trusted to hold anywhere.
 func TestSearchDirEnforcesMaxHandles(t *testing.T) {
 	const maxHandles = 3
+
 	_, sd := newTestSearchDir(t, 0, maxHandles)
 
 	var ids []int64
+
 	for i := range maxHandles + 2 {
 		h := sd.allocateHandle()
 		ids = append(ids, h.id)
@@ -48,6 +51,7 @@ func TestSearchDirEnforcesMaxHandles(t *testing.T) {
 	sd.mu.Lock()
 	live := len(sd.handles)
 	sd.mu.Unlock()
+
 	if live > maxHandles {
 		t.Errorf("live handles = %d after %d allocations, want at most maxHandles (%d)", live, len(ids), maxHandles)
 	}
@@ -58,6 +62,7 @@ func TestSearchDirEnforcesMaxHandles(t *testing.T) {
 			t.Errorf("handle %d was evicted, want the %d most recently queried kept", id, maxHandles)
 		}
 	}
+
 	for _, id := range evicted {
 		if hasHandleDir(sd, id) {
 			t.Errorf("handle %d survived, want the least recently queried evicted first", id)
@@ -71,24 +76,31 @@ func TestSearchDirEnforcesMaxHandles(t *testing.T) {
 func TestCloneReadsOfOneFidShareAHandle(t *testing.T) {
 	_, sd := newTestSearchDir(t, 0, 0)
 	clone := sd.Children()["clone"].(*cloneFile)
+
 	if err := clone.Open(1, 0); err != nil {
 		t.Fatal(err)
 	}
 
 	const readers = 64
+
 	start := make(chan struct{})
 	ids := make(chan string, readers)
+
 	var wg sync.WaitGroup
+
 	for range readers {
 		wg.Go(func() {
 			<-start
+
 			data, err := clone.Read(1, 0, 64)
 			if err != nil {
 				t.Error(err)
 			}
+
 			ids <- string(data)
 		})
 	}
+
 	close(start)
 	wg.Wait()
 	close(ids)
@@ -99,8 +111,10 @@ func TestCloneReadsOfOneFidShareAHandle(t *testing.T) {
 			t.Fatalf("one fid read back handles %q and %q", first, id)
 		}
 	}
+
 	sd.mu.Lock()
 	defer sd.mu.Unlock()
+
 	if len(sd.handles) != 1 {
 		t.Errorf("%d handles allocated for one fid, want 1", len(sd.handles))
 	}

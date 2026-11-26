@@ -11,6 +11,7 @@ import (
 
 func (idx *Index) queryBooks(q *bookQuery) ([]*book.Book, error) {
 	query, args := q.sql()
+
 	rows, err := idx.readDB.QueryContext(idx.ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -43,6 +44,7 @@ func (idx *Index) AllPathInfo() (map[string]drift.PathInfo, error) {
 		if _, dup := info[row.FilePath]; dup {
 			return nil, fmt.Errorf("index inconsistency: %q recorded as both indexed and skipped", row.FilePath)
 		}
+
 		info[row.FilePath] = drift.PathInfo{
 			Size:      row.FileSize,
 			Mtime:     fromUnixNano(row.FileMtime),
@@ -50,6 +52,7 @@ func (idx *Index) AllPathInfo() (map[string]drift.PathInfo, error) {
 			MetaMtime: fromUnixNano(row.MetaMtime),
 		}
 	}
+
 	return info, nil
 }
 
@@ -58,9 +61,11 @@ func (idx *Index) Get(bookID int64) (*book.Book, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if len(books) == 0 {
 		return nil, sql.ErrNoRows
 	}
+
 	return books[0], nil
 }
 
@@ -83,6 +88,7 @@ func (idx *Index) Stats() (*Stats, error) {
 	if dateStr, ok := stats.LastAdded.(string); ok && dateStr != "" {
 		s.LastAdded = parseDateField(dateStr, "last_added", "source", "stats")
 	}
+
 	if dateStr, ok := stats.LastModified.(string); ok && dateStr != "" {
 		s.LastModified = parseDateField(dateStr, "last_modified", "source", "stats")
 	}
@@ -111,10 +117,12 @@ func facets[R any](rows []R, err error, split func(R) (string, int64)) ([]Facet,
 	if err != nil {
 		return nil, err
 	}
+
 	out := make([]Facet, len(rows))
 	for i, r := range rows {
 		name, n := split(r)
 		out[i] = Facet{Name: name, Count: int(n)}
 	}
+
 	return out, nil
 }

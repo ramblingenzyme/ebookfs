@@ -42,12 +42,15 @@ func Dial(rw io.ReadWriter, user string) (*Conn, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if rver.Version != "9P2000" {
 		return nil, fmt.Errorf("server speaks %q, want 9P2000", rver.Version)
 	}
+
 	if rver.Msize <= twriteOverhead {
 		return nil, fmt.Errorf("server msize %d leaves no room for data", rver.Msize)
 	}
+
 	c.msize = rver.Msize
 
 	if _, err := rpc[*proto.RAttach](c, &proto.TAttach{
@@ -61,6 +64,7 @@ func Dial(rw io.ReadWriter, user string) (*Conn, error) {
 	}
 
 	c.fids.Store(1)
+
 	return c, nil
 }
 
@@ -68,23 +72,28 @@ func Dial(rw io.ReadWriter, user string) (*Conn, error) {
 // error carrying its ename.
 func rpc[R proto.FCall](c *Conn, req proto.FCall) (R, error) {
 	var zero R
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if _, err := c.rw.Write(req.Compose()); err != nil {
 		return zero, fmt.Errorf("write %T: %w", req, err)
 	}
+
 	call, err := proto.ParseCall(c.rw)
 	if err != nil {
 		return zero, fmt.Errorf("read reply to %T: %w", req, err)
 	}
+
 	if rerr, ok := call.(*proto.RError); ok {
 		return zero, errors.New(rerr.Ename)
 	}
+
 	r, ok := call.(R)
 	if !ok {
 		return zero, fmt.Errorf("expected %T, got %T", zero, call)
 	}
+
 	return r, nil
 }
 
@@ -100,11 +109,13 @@ func (c *Conn) newFid() uint32 {
 
 func splitPath(path string) []string {
 	var names []string
+
 	for p := range strings.SplitSeq(path, "/") {
 		if p != "" {
 			names = append(names, p)
 		}
 	}
+
 	return names
 }
 
@@ -115,6 +126,7 @@ func (c *Conn) Walk(path string) (*Fid, error) {
 
 func (c *Conn) walk(names []string) (*Fid, error) {
 	newfid := c.newFid()
+
 	rwalk, err := rpc[*proto.RWalk](c, &proto.TWalk{
 		Header: proto.Header{Type: proto.Twalk, Tag: 1},
 		Fid:    0,
@@ -125,9 +137,11 @@ func (c *Conn) walk(names []string) (*Fid, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if len(names) > 0 && int(rwalk.Nwqid) != len(names) {
 		return nil, fmt.Errorf("walk returned %d qids, want %d", rwalk.Nwqid, len(names))
 	}
+
 	return &Fid{conn: c, fid: newfid}, nil
 }
 
@@ -137,6 +151,7 @@ func (c *Conn) Open(path string, mode proto.Mode) (*Fid, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if _, err := rpc[*proto.ROpen](c, &proto.TOpen{
 		Header: proto.Header{Type: proto.Topen, Tag: 1},
 		Fid:    fid.fid,
@@ -145,6 +160,7 @@ func (c *Conn) Open(path string, mode proto.Mode) (*Fid, error) {
 		fid.Clunk()
 		return nil, err
 	}
+
 	return fid, nil
 }
 
@@ -171,6 +187,7 @@ func (c *Conn) Create(path string, perm uint32, mode proto.Mode) (*Fid, error) {
 		parent.Clunk()
 		return nil, err
 	}
+
 	return parent, nil
 }
 
@@ -185,22 +202,27 @@ func (f *Fid) ReadAt(offset uint64, count uint32) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return rread.Data, nil
 }
 
 // ReadAll reads from offset 0 until an empty Rread.
 func (f *Fid) ReadAll() ([]byte, error) {
-	var result []byte
-	var offset uint64
+	var (
+		result []byte
+		offset uint64
+	)
 
 	for {
 		data, err := f.ReadAt(offset, f.conn.msize-rreadOverhead)
 		if err != nil {
 			return nil, err
 		}
+
 		if len(data) == 0 {
 			break
 		}
+
 		result = append(result, data...)
 		offset += uint64(len(data))
 	}
@@ -213,6 +235,7 @@ func (f *Fid) WriteAt(offset uint64, data []byte) error {
 	maxChunk := f.conn.msize - twriteOverhead
 	for len(data) > 0 {
 		chunk := data[:min(uint32(len(data)), maxChunk)]
+
 		rwrite, err := rpc[*proto.RWrite](f.conn, &proto.TWrite{
 			Header: proto.Header{Type: proto.Twrite, Tag: 1},
 			Fid:    f.fid,
@@ -223,6 +246,7 @@ func (f *Fid) WriteAt(offset uint64, data []byte) error {
 		if err != nil {
 			return err
 		}
+
 		if rwrite.Count != uint32(len(chunk)) {
 			return fmt.Errorf("wrote %d bytes, want %d", rwrite.Count, len(chunk))
 		}
@@ -243,6 +267,7 @@ func (f *Fid) Stat() (proto.Stat, error) {
 	if err != nil {
 		return proto.Stat{}, err
 	}
+
 	return rstat.Stat, nil
 }
 
@@ -253,6 +278,7 @@ func (f *Fid) WStat(s proto.Stat) error {
 		Fid:    f.fid,
 		Stat:   s,
 	})
+
 	return err
 }
 
@@ -262,6 +288,7 @@ func (f *Fid) Clunk() error {
 		Header: proto.Header{Type: proto.Tclunk, Tag: 1},
 		Fid:    f.fid,
 	})
+
 	return err
 }
 

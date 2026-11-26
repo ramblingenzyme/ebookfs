@@ -27,16 +27,20 @@ func (s *Store) RemoveStaleTemps(reg *formats.Registry) error {
 			}
 			// Returning nil skips this path and keeps walking the other books.
 			slog.Warn("skipping unreadable path in stale temp sweep", "path", path, "error", err)
+
 			return nil
 		}
+
 		if !info.Mode().IsRegular() || !isStaleTemp(info.Name(), reg) {
 			return nil
 		}
+
 		if err := os.Remove(path); err != nil {
 			slog.Warn("removing stale temp failed", "path", path, "error", err)
 		} else {
 			slog.Info("removed stale temp", "path", path)
 		}
+
 		return nil
 	})
 }
@@ -47,5 +51,6 @@ func isStaleTemp(name string, reg *formats.Registry) bool {
 			return true
 		}
 	}
+
 	return false
 }

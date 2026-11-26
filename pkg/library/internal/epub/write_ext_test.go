@@ -15,10 +15,12 @@ import (
 // a book without one.
 func reindexSeries(t *testing.T, path, series, index string) bookmodel.Bib {
 	t.Helper()
+
 	b := &bookmodel.Book{
 		File: bookmodel.File{Path: path},
 		Bib:  bookmodel.Bib{Series: &bookmodel.SeriesRef{Name: series, Index: "1"}},
 	}
+
 	bib, err := epub.Rewrite(path, b, bookmodel.Edits{SeriesIndex: new(index)})
 	if err != nil {
 		t.Fatalf("Rewrite: %v", err)
@@ -78,6 +80,7 @@ func TestRewriteValidatesBeforeWriting(t *testing.T) {
 			if _, err := writeBib(path, tc.edits); err == nil {
 				t.Fatal("expected validation error, got nil")
 			}
+
 			if !bytes.Equal(before, epubtest.ReadEntry(t, path, epubtest.OPFPath)) {
 				t.Error("the epub was rewritten by a refused edit")
 			}
@@ -87,10 +90,12 @@ func TestRewriteValidatesBeforeWriting(t *testing.T) {
 
 func TestWriteBibTitleChangeClearsStaleSortTitle(t *testing.T) {
 	path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
+
 	before, err := epub.Parse(path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if before.SortTitle != "Title, Original" {
 		t.Fatalf("precondition: sort title = %q, want Title, Original", before.SortTitle)
 	}
@@ -99,8 +104,24 @@ func TestWriteBibTitleChangeClearsStaleSortTitle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if book.SortTitle != "" {
 		t.Errorf("sort title = %q, want empty after a title change", book.SortTitle)
+	}
+}
+
+// The title change clears the sort title, so a sort title sent with it has to
+// be applied after.
+func TestWriteBibTitleAndSortTitleTogether(t *testing.T) {
+	path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
+
+	book, err := writeBib(path, bookmodel.Edits{Title: new("Wuthering Heights"), SortTitle: new("Heights, Wuthering")})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if book.Title != "Wuthering Heights" || book.SortTitle != "Heights, Wuthering" {
+		t.Errorf("title, sort title = %q, %q; want Wuthering Heights, Heights, Wuthering", book.Title, book.SortTitle)
 	}
 }
 
@@ -124,6 +145,7 @@ func TestRewriteWithNoEditsIsATotalNoOp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Rewrite: %v", err)
 	}
+
 	if got.Title != "Not What The File Says" {
 		t.Errorf("Title = %q, want the caller's Bib returned untouched", got.Title)
 	}
@@ -132,6 +154,7 @@ func TestRewriteWithNoEditsIsATotalNoOp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-read epub: %v", err)
 	}
+
 	if !bytes.Equal(before, after) {
 		t.Error("the epub was rewritten for an edit that asked for nothing")
 	}
@@ -149,8 +172,10 @@ func TestFailedValidationLeavesTheOriginal(t *testing.T) {
 		if !strings.Contains(string(opf), drop) {
 			t.Fatalf("epubtest.OPF3 changed; cannot drop %q to build a titleless package", drop)
 		}
+
 		opf = epubtest.PackageDoc(strings.Replace(string(opf), drop, "", 1))
 	}
+
 	path := epubtest.WriteEpub(t, epubtest.BaseEntries(opf))
 
 	before, err := os.ReadFile(path)
@@ -166,6 +191,7 @@ func TestFailedValidationLeavesTheOriginal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if !bytes.Equal(before, after) {
 		t.Error("a rejected rewrite modified the original epub")
 	}
@@ -177,14 +203,17 @@ func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 	path := epubtest.WriteEpub(t, epubtest.BaseEntries(epubtest.OPF3))
 	statOf := func() os.FileInfo {
 		t.Helper()
+
 		fi, err := os.Stat(path)
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		return fi
 	}
 
 	before := statOf()
+
 	current, err := epub.Parse(path)
 	if err != nil {
 		t.Fatal(err)
@@ -204,12 +233,15 @@ func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", tc.name, err)
 		}
+
 		if !os.SameFile(before, statOf()) {
 			t.Errorf("%s: an edit asking for what the OPF already carries rewrote the epub", tc.name)
 		}
+
 		if bib.Title != current.Title {
 			t.Errorf("%s: bib.Title = %q, want %q read back from the file", tc.name, bib.Title, current.Title)
 		}
+
 		if bib.SortTitle != current.SortTitle {
 			t.Errorf("%s: bib.SortTitle = %q, want %q kept", tc.name, bib.SortTitle, current.SortTitle)
 		}
@@ -221,6 +253,7 @@ func TestNoOpBibEditDoesNotRewriteTheFile(t *testing.T) {
 	if _, err := writeBib(path, bookmodel.Edits{Title: new(changed)}); err != nil {
 		t.Fatal(err)
 	}
+
 	if os.SameFile(before, statOf()) {
 		t.Error("a real title change did not rewrite the epub")
 	}

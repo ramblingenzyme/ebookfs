@@ -11,6 +11,7 @@ func TestNew_QueryError(t *testing.T) {
 	if err := lib.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
+
 	if _, err := New(lib, Config{}); err == nil {
 		t.Fatal("New succeeded over a library that cannot be searched")
 	}

@@ -26,6 +26,7 @@ type AttrURL struct{ Raw, Decoded string }
 func (u *AttrURL) UnmarshalXMLAttr(x xml.Attr) error {
 	u.Raw = epubxml.Collapse(x.Value)
 	u.Decoded = unescapePath(u.Raw)
+
 	return nil
 }
 
@@ -34,6 +35,7 @@ func (u *AttrURL) Candidates() []string {
 	if u.Decoded == u.Raw {
 		return []string{u.Raw}
 	}
+
 	return []string{u.Decoded, u.Raw}
 }
 
@@ -43,5 +45,6 @@ func unescapePath(s string) string {
 	if err != nil {
 		return s
 	}
+
 	return decoded
 }

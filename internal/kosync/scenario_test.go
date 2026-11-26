@@ -13,8 +13,6 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// TestProgressTransitions verifies that PUT progress at various percentages
-// transitions the book status correctly, with configurable thresholds.
 func TestProgressTransitions(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -89,9 +87,11 @@ func TestProgressTransitions(t *testing.T) {
 					"device":     "test-device",
 				}
 				_, code := env.putProgress(t, body)
+
 				if code != http.StatusOK {
 					t.Fatalf("PUT %v%%: status = %d, want %d", step.percentage*100, code, http.StatusOK)
 				}
+
 				if got := env.bookStatus(t); got != step.wantStatus {
 					t.Errorf("book status at %v%% = %q, want %q", step.percentage*100, got, step.wantStatus)
 				}
@@ -100,15 +100,15 @@ func TestProgressTransitions(t *testing.T) {
 	}
 }
 
-// TestKosyncConcurrentProgressUpdates verifies that concurrent PUT requests
-// to the same book don't corrupt the sidecar.
+// Concurrent PUTs to one book must not corrupt its sidecar.
 func TestKosyncConcurrentProgressUpdates(t *testing.T) {
 	env := setupEnv(t, defaultCfg)
 
 	const numRequests = 10
+
 	errors := make(chan error, numRequests)
 
-	for i := 0; i < numRequests; i++ {
+	for i := range numRequests {
 		go func(percentage float64) {
 			body := map[string]any{
 				"document":   env.docID,
@@ -117,15 +117,17 @@ func TestKosyncConcurrentProgressUpdates(t *testing.T) {
 				"device":     "test-device",
 			}
 			_, code := env.putProgress(t, body)
+
 			if code != http.StatusOK {
 				errors <- fmt.Errorf("request failed with status %d", code)
 				return
 			}
+
 			errors <- nil
 		}(float64(i+1) / 10.0)
 	}
 
-	for i := 0; i < numRequests; i++ {
+	for i := range numRequests {
 		if err := <-errors; err != nil {
 			t.Errorf("concurrent request %d failed: %v", i, err)
 		}
@@ -152,8 +154,7 @@ func TestKosyncConcurrentProgressUpdates(t *testing.T) {
 	}
 }
 
-// TestGetProgressUnknownDocument verifies GET on an unknown document returns 200 {}
-// per spec §5.5 [K-GET-3].
+// An unknown document answers 200 with {}, per spec §5.5 [K-GET-3].
 func TestGetProgressUnknownDocument(t *testing.T) {
 	env := setupEnv(t, defaultCfg)
 
@@ -161,12 +162,13 @@ func TestGetProgressUnknownDocument(t *testing.T) {
 	if code != http.StatusOK {
 		t.Errorf("GET unknown document: status = %d, want %d", code, http.StatusOK)
 	}
+
 	if len(resp) != 0 {
 		t.Errorf("GET unknown document: response = %v, want empty object", resp)
 	}
 }
 
-// TestGetProgressKnownDocument verifies GET returns all stored fields including timestamp.
+// Every stored field comes back, the timestamp included.
 func TestGetProgressKnownDocument(t *testing.T) {
 	env := setupEnv(t, defaultCfg)
 
@@ -178,6 +180,7 @@ func TestGetProgressKnownDocument(t *testing.T) {
 		"device_id":  "ABC123",
 	}
 	_, code := env.putProgress(t, putBody)
+
 	if code != http.StatusOK {
 		t.Fatalf("PUT: status = %d, want %d", code, http.StatusOK)
 	}
@@ -190,28 +193,34 @@ func TestGetProgressKnownDocument(t *testing.T) {
 	if resp["document"] != env.docID {
 		t.Errorf("document = %v, want %v", resp["document"], env.docID)
 	}
+
 	if resp["percentage"].(float64) != 0.42 {
 		t.Errorf("percentage = %v, want 0.42", resp["percentage"])
 	}
+
 	if resp["progress"] != "/body/DocFragment[5]/body/p[3]/text().42" {
 		t.Errorf("progress = %v, want XPointer string", resp["progress"])
 	}
+
 	if resp["device"] != "Kobo_clara" {
 		t.Errorf("device = %v, want Kobo_clara", resp["device"])
 	}
+
 	if resp["device_id"] != "ABC123" {
 		t.Errorf("device_id = %v, want ABC123", resp["device_id"])
 	}
+
 	if _, ok := resp["timestamp"]; !ok {
 		t.Error("timestamp field missing")
 	}
+
 	if resp["timestamp"].(float64) <= 0 {
 		t.Errorf("timestamp = %v, want positive integer", resp["timestamp"])
 	}
 }
 
-// TestPutProgressUnknownDocument verifies PUT on an unknown document accepts
-// but doesn't store, returning 200 with {document, timestamp}.
+// An unknown document answers 200 with {document, timestamp}, and nothing is
+// stored.
 func TestPutProgressUnknownDocument(t *testing.T) {
 	env := setupEnv(t, defaultCfg)
 
@@ -222,6 +231,7 @@ func TestPutProgressUnknownDocument(t *testing.T) {
 		"device":     "test-device",
 	}
 	resp, code := env.putProgress(t, body)
+
 	if code != http.StatusOK {
 		t.Errorf("PUT unknown document: status = %d, want %d", code, http.StatusOK)
 	}
@@ -229,16 +239,18 @@ func TestPutProgressUnknownDocument(t *testing.T) {
 	if resp["document"] != "unknown-doc-id" {
 		t.Errorf("document = %v, want unknown-doc-id", resp["document"])
 	}
+
 	if _, ok := resp["timestamp"]; !ok {
 		t.Error("timestamp field missing")
 	}
+
 	if resp["timestamp"].(float64) <= 0 {
 		t.Errorf("timestamp = %v, want positive integer", resp["timestamp"])
 	}
 }
 
-// TestProgressFieldRoundTrip verifies that XPointer strings and page numbers
-// survive byte-for-byte per spec §7.2 [K-FLD-3].
+// XPointer strings and page numbers survive byte for byte, per spec §7.2
+// [K-FLD-3].
 func TestProgressFieldRoundTrip(t *testing.T) {
 	env := setupEnv(t, defaultCfg)
 
@@ -259,6 +271,7 @@ func TestProgressFieldRoundTrip(t *testing.T) {
 				"device":     "test-device",
 			}
 			_, code := env.putProgress(t, body)
+
 			if code != http.StatusOK {
 				t.Fatalf("PUT: status = %d, want %d", code, http.StatusOK)
 			}
@@ -275,8 +288,8 @@ func TestProgressFieldRoundTrip(t *testing.T) {
 	}
 }
 
-// TestDeviceIdRoundTrip verifies device_id is stored and returned when sent,
-// and omitted when not sent per spec §7.5 [K-FLD-7].
+// device_id comes back when sent and is omitted otherwise, per spec §7.5
+// [K-FLD-7].
 func TestDeviceIdRoundTrip(t *testing.T) {
 	env := setupEnv(t, defaultCfg)
 
@@ -289,6 +302,7 @@ func TestDeviceIdRoundTrip(t *testing.T) {
 		"device_id":  "UNIQUE_DEVICE_123",
 	}
 	_, code := env.putProgress(t, body)
+
 	if code != http.StatusOK {
 		t.Fatalf("PUT with device_id: status = %d, want %d", code, http.StatusOK)
 	}
@@ -297,6 +311,7 @@ func TestDeviceIdRoundTrip(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET: status = %d, want %d", code, http.StatusOK)
 	}
+
 	if resp["device_id"] != "UNIQUE_DEVICE_123" {
 		t.Errorf("device_id = %v, want UNIQUE_DEVICE_123", resp["device_id"])
 	}
@@ -320,8 +335,7 @@ func TestDeviceIdRoundTrip(t *testing.T) {
 	}
 }
 
-// TestMetadataAcceptance verifies that PUT with metadata field doesn't fail
-// per spec §7.6 [K-FLD-10].
+// A PUT carrying a metadata field still succeeds, per spec §7.6 [K-FLD-10].
 func TestMetadataAcceptance(t *testing.T) {
 	env := setupEnv(t, defaultCfg)
 
@@ -337,6 +351,7 @@ func TestMetadataAcceptance(t *testing.T) {
 		},
 	}
 	resp, code := env.putProgress(t, body)
+
 	if code != http.StatusOK {
 		t.Errorf("PUT with metadata: status = %d, want %d, body = %s", code, http.StatusOK, resp)
 	}
@@ -344,31 +359,27 @@ func TestMetadataAcceptance(t *testing.T) {
 	if resp["document"] != env.docID {
 		t.Errorf("document = %v, want %v", resp["document"], env.docID)
 	}
+
 	if _, ok := resp["timestamp"]; !ok {
 		t.Error("timestamp field missing")
 	}
 }
 
-// TestKosyncStartupCreatesMissingSidecars verifies that kosync.New() creates
-// sidecars and populates the index for books that existed before kosync
-// was enabled.
+// Books that existed before kosync was enabled get a sidecar and an index
+// entry from New.
 func TestKosyncStartupCreatesMissingSidecars(t *testing.T) {
-	// Create a library and ingest books WITHOUT kosync hook registered
 	lib := openTestLibrary(t)
 
 	book1 := ingestTestEpub(t, lib.Library, buildTestEpub(t, "Book One", "Alice"))
 	book2 := ingestTestEpub(t, lib.Library, buildTestEpub(t, "Book Two", "Bob"))
+	books := []*library.Book{book1, book2}
 
-	// Verify no sidecars were created (kosync wasn't enabled)
-	for _, book := range []*library.Book{book1, book2} {
-		_, err := lib.Library.ReadSidecar(book.ID(), "kosync.json")
-		if err == nil {
-			t.Fatalf("book %d has sidecar before kosync.New()", book.ID())
+	for _, book := range books {
+		if _, err := lib.Library.ReadSidecar(book.ID(), "kosync.json"); err == nil {
+			t.Fatalf("book %d has a sidecar before kosync.New", book.ID())
 		}
 	}
 
-	// Enable kosync — should create sidecars and populate the index for
-	// existing books
 	srv, err := New(lib.Library, defaultCfg)
 	if err != nil {
 		t.Fatalf("kosync.New: %v", err)
@@ -376,21 +387,50 @@ func TestKosyncStartupCreatesMissingSidecars(t *testing.T) {
 
 	snap := srv.registry.snapshot()
 	if len(snap) != 2 {
-		t.Errorf("index has %d entries, want 2", len(snap))
+		t.Fatalf("restored index has %d entries, want 2", len(snap))
 	}
 
-	// Verify each book's document ID is in the index
-	for _, book := range []*library.Book{book1, book2} {
-		data, _ := lib.Library.ReadSidecar(book.ID(), "kosync.json")
-		var sidecar SidecarData
-		json.Unmarshal(data, &sidecar)
-
-		bookID, ok := snap[sidecar.DocumentIDs[0]]
-		if !ok {
-			t.Errorf("book %d document ID not in index", book.ID())
+	for _, book := range books {
+		raw, err := lib.Library.ReadSidecar(book.ID(), "kosync.json")
+		if err != nil {
+			t.Fatalf("reading sidecar after kosync.New: %v", err)
 		}
-		if bookID != book.ID() {
-			t.Errorf("index[docID] = %d, want %d", bookID, book.ID())
+
+		var sidecar SidecarData
+		if err := json.Unmarshal(raw, &sidecar); err != nil {
+			t.Fatalf("unmarshaling sidecar: %v", err)
+		}
+
+		if len(sidecar.DocumentIDs) != 1 || sidecar.DocumentIDs[0] == "" {
+			t.Fatalf("book %d sidecar has invalid document IDs: %v", book.ID(), sidecar.DocumentIDs)
+		}
+
+		if bookID := snap[sidecar.DocumentIDs[0]]; bookID != book.ID() {
+			t.Errorf("index[%s] = %d, want %d", sidecar.DocumentIDs[0], bookID, book.ID())
+		}
+
+		// A wrong size still hashes to a non-empty ID, just not the one
+		// KOReader sends, so compare against the file as KOReader sees it.
+		f, err := os.Open(filepath.Join(lib.tmpDir, book.Path()))
+		if err != nil {
+			t.Fatalf("opening epub: %v", err)
+		}
+
+		fi, err := f.Stat()
+		if err != nil {
+			f.Close()
+			t.Fatalf("stat epub: %v", err)
+		}
+
+		want, err := PartialMD5(f, fi.Size())
+		f.Close()
+
+		if err != nil {
+			t.Fatalf("hashing epub: %v", err)
+		}
+
+		if got := sidecar.DocumentIDs[0]; got != want {
+			t.Errorf("book %d document ID = %s, want %s", book.ID(), got, want)
 		}
 	}
 }
@@ -406,6 +446,7 @@ func TestEditKeepsProgressUnderBothDocumentIDs(t *testing.T) {
 	}); code != http.StatusOK {
 		t.Fatalf("PUT: status = %d, want %d", code, http.StatusOK)
 	}
+
 	if _, err := env.lib.Edit(env.book.ID(), library.Edits{Title: new("Retitled")}); err != nil {
 		t.Fatalf("Edit: %v", err)
 	}
@@ -414,10 +455,12 @@ func TestEditKeepsProgressUnderBothDocumentIDs(t *testing.T) {
 	if len(ids) != 2 || ids[1] != oldID {
 		t.Fatalf("sidecar document IDs = %v, want [<new> %s]", ids, oldID)
 	}
+
 	for _, id := range ids {
 		if got, ok := env.registry.Lookup(id); !ok || got != env.book.ID() {
 			t.Errorf("index[%s] = %d, %v, want %d", id, got, ok, env.book.ID())
 		}
+
 		if resp, _ := env.getProgress(t, id); resp["progress"] != "/body/chapter1" {
 			t.Errorf("GET %s = %v, want the saved progress", id, resp)
 		}
@@ -431,6 +474,7 @@ func TestDeleteDropsEveryDocumentID(t *testing.T) {
 	if _, err := env.lib.Edit(env.book.ID(), library.Edits{Title: new("Retitled")}); err != nil {
 		t.Fatalf("Edit: %v", err)
 	}
+
 	ids := env.documentIDs(t)
 	if len(ids) != 2 {
 		t.Fatalf("sidecar document IDs = %v, want two after a title edit", ids)
@@ -439,6 +483,7 @@ func TestDeleteDropsEveryDocumentID(t *testing.T) {
 	if err := env.lib.Delete(env.book.ID()); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
+
 	if snap := env.registry.snapshot(); len(snap) != 0 {
 		t.Errorf("index after delete = %v, want empty", snap)
 	}
@@ -450,17 +495,20 @@ func TestFailedDeleteKeepsDocumentIDs(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores directory permissions")
 	}
+
 	env := setupEnv(t, defaultCfg)
 
 	dir := filepath.Join(env.lib.tmpDir, env.book.Dir())
-	if err := os.Chmod(dir, 0555); err != nil {
+	if err := os.Chmod(dir, 0o555); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.Chmod(dir, 0755) })
+
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 
 	if err := env.lib.Delete(env.book.ID()); err == nil {
 		t.Fatal("Delete succeeded on a read-only book directory")
 	}
+
 	if got, ok := env.registry.Lookup(env.docID); !ok || got != env.book.ID() {
 		t.Fatalf("index[%s] = %d, %v after a failed delete, want %d", env.docID, got, ok, env.book.ID())
 	}
@@ -470,6 +518,7 @@ func TestFailedDeleteKeepsDocumentIDs(t *testing.T) {
 	}); code != http.StatusOK {
 		t.Fatalf("PUT: status = %d, want %d", code, http.StatusOK)
 	}
+
 	if resp, _ := env.getProgress(t, env.docID); resp["progress"] != "/body/chapter1" {
 		t.Errorf("GET after a failed delete = %v, want the saved progress", resp)
 	}
@@ -492,6 +541,7 @@ func TestPutRecreatesAMissingSidecarWithItsDocumentID(t *testing.T) {
 	}); code != http.StatusOK {
 		t.Fatalf("PUT: status = %d, want %d", code, http.StatusOK)
 	}
+
 	if ids := env.documentIDs(t); len(ids) != 1 || ids[0] != env.docID {
 		t.Fatalf("sidecar document IDs = %v, want [%s]", ids, env.docID)
 	}
@@ -500,6 +550,7 @@ func TestPutRecreatesAMissingSidecarWithItsDocumentID(t *testing.T) {
 	if err := restarted.Restore(env.lib.Library); err != nil {
 		t.Fatalf("Restore: %v", err)
 	}
+
 	if got, ok := restarted.Lookup(env.docID); !ok || got != env.book.ID() {
 		t.Errorf("Lookup after restart = %d, %v, want %d", got, ok, env.book.ID())
 	}
@@ -513,6 +564,7 @@ func TestRequestRacingADeleteIsAnUnknownDocument(t *testing.T) {
 	if err := env.lib.Delete(env.book.ID()); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
+
 	env.registry.mu.Lock()
 	env.registry.data[env.docID] = env.book.ID()
 	env.registry.mu.Unlock()
@@ -523,6 +575,7 @@ func TestRequestRacingADeleteIsAnUnknownDocument(t *testing.T) {
 	if code != http.StatusOK || resp["document"] != env.docID {
 		t.Errorf("PUT = %d %v, want 200 accepting the unknown document", code, resp)
 	}
+
 	if resp, code := env.getProgress(t, env.docID); code != http.StatusOK || len(resp) != 0 {
 		t.Errorf("GET = %d %v, want 200 {}", code, resp)
 	}

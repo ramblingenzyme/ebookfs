@@ -1,11 +1,13 @@
 package store
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/BurntSushi/toml"
+
 	"github.com/ramblingenzyme/ebookfs/internal/atomicfs"
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 )
@@ -31,14 +33,44 @@ func readMeta(path string) (*book.Meta, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	meta := &book.Meta{}
 	if err = toml.Unmarshal(buf, meta); err != nil {
 		return nil, err
 	}
+
+	if err := validMeta(meta); err != nil {
+		return nil, err
+	}
+
 	canonicalizeMeta(meta)
 	// The file is hand-editable, and the index keys tags on (book, tag).
 	meta.Tags = book.FirstOf(meta.Tags, func(t string) string { return t })
+
 	return meta, nil
+}
+
+// validMeta holds a hand-edited sidecar to the rules an edit through the
+// library passes. The rebuild indexes every book in one transaction, so a
+// rating of nan fails the NOT NULL constraint and stops every startup.
+//
+// An empty status is allowed, since ingest writes one and book.NewBook
+// defaults it.
+func validMeta(m *book.Meta) error {
+	if m.ID <= 0 {
+		return fmt.Errorf("id must be positive, got %d", m.ID)
+	}
+
+	e := book.Edits{Rating: &m.Rating}
+	if m.Status != "" {
+		e.Status = &m.Status
+	}
+
+	if v := book.Validate(e, nil); v != nil {
+		return v
+	}
+
+	return nil
 }
 
 // writeMeta renames over path, so a crash mid-write leaves the old sidecar
@@ -49,10 +81,7 @@ func writeMeta(path string, meta *book.Meta) error {
 		return err
 	}
 
-	return atomicfs.Write(filepath.Dir(path), tempPattern(filepath.Base(path)), func(f *os.File) error {
-		_, err := f.Write(buf)
-		return err
-	}, path)
+	return atomicfs.Write(path, tempPattern(filepath.Base(path)), buf)
 }
 
 // canonicalizeMeta pins the precision and zone of the timestamps the index

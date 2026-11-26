@@ -29,19 +29,22 @@ func setupLogging(cfg config.LogConfig) {
 		"error": slog.LevelError,
 	}
 	opts := &slog.HandlerOptions{Level: levels[cfg.Level]}
+
 	var h slog.Handler
+
 	if cfg.Format == "json" {
 		h = slog.NewJSONHandler(os.Stderr, opts)
 	} else {
 		h = slog.NewTextHandler(os.Stderr, opts)
 	}
+
 	slog.SetDefault(slog.New(h))
 }
 
 // fatal logs at error level, which no valid log.level filters, and exits.
 // log.Fatalf bridges at info level and could be silenced.
 func fatal(msg string, err error) {
-	slog.Error(msg, "error", err)
+	slog.Error(msg, "error", err) //nolint:sloglint // every caller passes a constant
 	os.Exit(1)
 }
 
@@ -49,6 +52,7 @@ func main() {
 	configPath := flag.String("config", "/etc/ebookfs/config.toml", "path to config file")
 	forceReindex := flag.Bool("reindex", false, "force a full index rebuild from disk")
 	allowSMB := flag.Bool("allow-smb", false, "start on an SMB/CIFS library root, where atomic rename and file locking are unreliable")
+
 	flag.Parse()
 
 	cfg, err := config.Load(*configPath)
@@ -56,6 +60,7 @@ func main() {
 		// Logging isn't configured yet; fall back to plain stdlib output.
 		log.Fatalf("loading config: %v", err)
 	}
+
 	setupLogging(cfg.Log)
 	// Warned rather than refused, so a config naming a key a later version
 	// removed still loads.
@@ -67,13 +72,16 @@ func main() {
 	if *forceReindex {
 		opts = append(opts, library.WithForceReindex())
 	}
+
 	if *allowSMB {
 		opts = append(opts, library.WithAllowSMB())
 	}
+
 	lib, err := library.Open(library.Config(cfg.Library), opts...)
 	if errors.Is(err, library.ErrSMBFilesystem) {
 		fatal("opening library: pass --allow-smb to override", err)
 	}
+
 	if err != nil {
 		fatal("opening library", err)
 	}
@@ -90,7 +98,28 @@ func main() {
 	runner := frontend.NewRunner(cfg.HTTP.Listen)
 	runner.Register(ninepSrv)
 
-	// Register OPDS as HTTPFrontend if enabled
+	registerOPDS(runner, lib, cfg)
+	registerKOSync(runner, lib, cfg)
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	// The library closes before the exit status is reported, so a frontend
+	// failure still leaves the index shut down cleanly.
+	runErr := runner.Run(ctx, 10*time.Second)
+
+	if err := lib.Close(); err != nil {
+		slog.Error("closing library", "error", err)
+	}
+
+	if runErr != nil {
+		fatal("serving", runErr)
+	}
+
+	slog.Info("server stopped")
+}
+
+func registerOPDS(runner *frontend.Runner, lib *library.Library, cfg *config.Config) {
 	if cfg.OPDS.Enable {
 		opdsSrv := opds.New(lib, opds.Config{
 			BaseURL: cfg.HTTP.BaseURL,
@@ -103,13 +132,12 @@ func main() {
 	} else {
 		slog.Info("OPDS catalog disabled", "reason", "opds.enable is false")
 	}
+}
 
-	// Register kosync as HTTPFrontend if enabled
+func registerKOSync(runner *frontend.Runner, lib *library.Library, cfg *config.Config) {
 	if cfg.KOSync.Enable {
-		// Compute MD5 hash of plaintext password
 		passwordHash := fmt.Sprintf("%x", md5.Sum([]byte(cfg.KOSync.Password)))
 
-		// Create kosync server (handles mapping and hook setup internally)
 		kosyncSrv, err := kosync.New(lib, kosync.Config{
 			Username:         cfg.KOSync.Username,
 			PasswordHash:     passwordHash,
@@ -129,19 +157,4 @@ func main() {
 	} else {
 		slog.Info("kosync disabled", "reason", "kosync.enable is false")
 	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	// The library closes before the exit status is reported, so a frontend
-	// failure still leaves the index shut down cleanly.
-	runErr := runner.Run(ctx, 10*time.Second)
-	if err := lib.Close(); err != nil {
-		slog.Error("closing library", "error", err)
-	}
-	if runErr != nil {
-		fatal("serving", runErr)
-	}
-
-	slog.Info("server stopped")
 }

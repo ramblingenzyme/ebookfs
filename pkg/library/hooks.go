@@ -3,11 +3,13 @@ package library
 import (
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"slices"
 	"sync"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/formats"
 )
 
 // Hook is a unified interface for observing and amending library operations.
@@ -16,9 +18,10 @@ import (
 // Setup runs once during library initialization, before any other phases.
 // It receives paths the hook needs for persistent state.
 //
-// Pipeline phases (PreParse, PreCommit) run during ingest under ingestMu.
-// They can modify data before the library commits. If they return an error,
-// the operation fails.
+// Pipeline phases (PreParse, PreCommit) run during ingest and can modify data
+// before the library commits. If they return an error, the ingest fails.
+// PreParse runs concurrently with other uploads. PreCommit runs one ingest at
+// a time.
 //
 // PreParse receives a tempDir for scratch space. If PreParse returns a path
 // inside tempDir (e.g., after format conversion), that file persists through
@@ -42,7 +45,12 @@ type Hook interface {
 	PreParse(srcPath string, tempDir string) (string, error)
 
 	// PreCommit amends the bibliographic record before committing. The hook
-	// modifies bib in place.
+	// modifies bib in place, and the library writes the changes into the file,
+	// so a later reindex keeps them.
+	//
+	// Pubdate, Identifiers, CoverPath, OpfSize and CoverSize cannot be written
+	// to the file, and changing one fails the ingest. An amendment an edit
+	// would refuse, such as an empty title, also fails it.
 	PreCommit(bib *Bib) error
 
 	// OnIngested fires after a book is ingested, under the per-book lock.
@@ -98,6 +106,7 @@ func (s *hookSet) add(h Hook) {
 func (s *hookSet) snapshot() []Hook {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return slices.Clone(s.hooks)
 }
 
@@ -110,10 +119,13 @@ func (l *Library) AddHook(h Hook) (err error) {
 			err = fmt.Errorf("hook %T setup panicked: %v", h, r)
 		}
 	}()
+
 	if err := h.Setup(l.store.Root(), l.stateDir); err != nil {
 		return fmt.Errorf("hook %T setup: %w", h, err)
 	}
+
 	l.hooks.add(h)
+
 	return nil
 }
 
@@ -126,21 +138,117 @@ func (s *hookSet) preParse(srcPath string, tempDir string) (string, error) {
 		if err != nil {
 			return "", err
 		}
+
 		if newPath != "" {
 			currentPath = newPath
 		}
 	}
+
 	return currentPath, nil
 }
 
-// preCommit calls PreCommit in registration order and stops on the first error.
-func (s *hookSet) preCommit(bib *Bib) error {
+// preCommit calls PreCommit in registration order on a copy of parsed and
+// stops on the first error. It writes what the hooks changed into the file at
+// path through f and returns the record read back from the file, so the index holds
+// what a rebuild would derive.
+func (s *hookSet) preCommit(f formats.Format, path string, parsed *Bib) (*Bib, error) {
+	amended := cloneBib(*parsed)
 	for _, h := range s.snapshot() {
-		if err := h.PreCommit(bib); err != nil {
-			return err
+		if err := h.PreCommit(&amended); err != nil {
+			return nil, err
 		}
 	}
-	return nil
+
+	e, err := bibEdits(*parsed, amended)
+	if err != nil {
+		return nil, err
+	}
+
+	return f.Rewrite(path, &book.Book{Bib: *parsed}, e)
+}
+
+// cloneBib copies every slice, map and pointer, so a hook editing in place
+// cannot reach the record bibEdits compares against.
+func cloneBib(b book.Bib) book.Bib {
+	b.Authors = slices.Clone(b.Authors)
+	b.Subjects = slices.Clone(b.Subjects)
+	b.Contributors = slices.Clone(b.Contributors)
+	b.Identifiers = maps.Clone(b.Identifiers)
+
+	if b.Series != nil {
+		s := *b.Series
+		b.Series = &s
+	}
+
+	return b
+}
+
+// bibEdits returns the Edits that turn from into to. A change to a field the
+// epub cannot be written through fails, since indexing it would hold a value
+// the next rebuild drops.
+func bibEdits(from, to book.Bib) (book.Edits, error) {
+	for _, f := range []struct {
+		name string
+		same bool
+	}{
+		{"pubdate", from.Pubdate == to.Pubdate},
+		{"identifiers", maps.Equal(from.Identifiers, to.Identifiers)},
+		{"cover path", from.CoverPath == to.CoverPath},
+		{"package document size", from.OpfSize == to.OpfSize},
+		{"cover size", from.CoverSize == to.CoverSize},
+	} {
+		if !f.same {
+			return book.Edits{}, fmt.Errorf("%s cannot be written to the epub", f.name)
+		}
+	}
+
+	changed := func(from, to string) *string {
+		if from == to {
+			return nil
+		}
+
+		return &to
+	}
+	e := book.Edits{
+		Title:       changed(from.Title, to.Title),
+		SortTitle:   changed(from.SortTitle, to.SortTitle),
+		Description: changed(from.Description, to.Description),
+		Language:    changed(from.Language, to.Language),
+		Publisher:   changed(from.Publisher, to.Publisher),
+		Rights:      changed(from.Rights, to.Rights),
+	}
+
+	if !slices.Equal(from.Authors, to.Authors) {
+		e.Authors = &to.Authors
+	}
+
+	if !slices.Equal(from.Subjects, to.Subjects) {
+		e.Subjects = &to.Subjects
+	}
+
+	if !slices.Equal(from.Contributors, to.Contributors) {
+		e.Contributors = &to.Contributors
+	}
+
+	if seriesKey(from.Series) != seriesKey(to.Series) {
+		removed := ""
+		e.Series = &removed
+
+		if to.Series != nil {
+			e.Series, e.SeriesIndex = &to.Series.Name, &to.Series.Index
+		}
+	}
+
+	return e, nil
+}
+
+// seriesKey leaves out the index-assigned ID, which a parse never sets.
+func seriesKey(s *book.SeriesRef) [2]string {
+	if s == nil {
+		return [2]string{}
+	}
+
+	return [2]string{s.Name, s.Index}
 }
 
 func (s *hookSet) dispatchEvent(l *Library, b *Book, loc book.File, name string, call func(Hook, *os.Root, func() (Reader, error))) {
@@ -148,13 +256,16 @@ func (s *hookSet) dispatchEvent(l *Library, b *Book, loc book.File, name string,
 	if len(hooks) == 0 {
 		return
 	}
+
 	root, err := l.store.OpenSidecars(loc)
 	if err != nil {
-		slog.Error("hook "+name+": failed to open sidecars", "book_id", b.ID(), "error", err)
+		slog.Error("hook failed to open sidecars", "hook", name, "book_id", b.ID(), "error", err)
 		return
 	}
 	defer root.Close()
+
 	openFile := func() (Reader, error) { return l.Content(b.ID()) }
+
 	for _, h := range hooks {
 		invokeEvent(name, h, func() { call(h, root, openFile) })
 	}
@@ -190,5 +301,6 @@ func invokeEvent(name string, h Hook, call func()) {
 			slog.Error("hook panicked", "event", name, "hook", h, "panic", r)
 		}
 	}()
+
 	call()
 }

@@ -41,6 +41,7 @@ func (e exit) early() error {
 	if e.err == nil {
 		return fmt.Errorf("%s stopped serving before shutdown", e.name)
 	}
+
 	return e.wrapped()
 }
 
@@ -48,10 +49,10 @@ func (e exit) wrapped() error {
 	if e.err == nil {
 		return nil
 	}
+
 	return fmt.Errorf("%s: %w", e.name, e.err)
 }
 
-// Runner orchestrates both regular and HTTP frontends.
 type Runner struct {
 	frontends     []Frontend
 	httpFrontends []HTTPFrontend
@@ -59,7 +60,6 @@ type Runner struct {
 	httpListen    string
 }
 
-// NewRunner creates a Runner that will serve HTTP on the given address.
 func NewRunner(httpListen string) *Runner {
 	return &Runner{
 		httpPrefixes: make(map[string]string),
@@ -67,28 +67,29 @@ func NewRunner(httpListen string) *Runner {
 	}
 }
 
-// Register adds a regular frontend.
 func (r *Runner) Register(f Frontend) {
 	r.frontends = append(r.frontends, f)
 }
 
-// RegisterHTTP adds an HTTP frontend, validating that its prefix is unique and http.listen is configured.
 func (r *Runner) RegisterHTTP(fe HTTPFrontend) error {
 	if r.httpListen == "" {
 		return fmt.Errorf("cannot register HTTP frontend %q: http.listen is not configured", fe.Name())
 	}
+
 	prefix := fe.Prefix()
 	if existing, ok := r.httpPrefixes[prefix]; ok {
 		return fmt.Errorf("duplicate HTTP prefix %q (already registered by %s)", prefix, existing)
 	}
+
 	r.httpPrefixes[prefix] = fe.Name()
 	r.httpFrontends = append(r.httpFrontends, fe)
+
 	return nil
 }
 
-// httpHandler mounts each HTTP frontend under its prefix.
 func (r *Runner) httpHandler() http.Handler {
 	mux := http.NewServeMux()
+
 	for _, fe := range r.httpFrontends {
 		handler := fe.Handler()
 		if fe.StripPrefix() {
@@ -99,52 +100,33 @@ func (r *Runner) httpHandler() http.Handler {
 		} else {
 			mux.Handle(fe.Prefix(), handler)
 		}
+
 		mux.Handle(fe.Prefix()+"/", handler)
 	}
+
 	return mux
 }
 
 // Run starts all frontends and blocks until ctx is cancelled or any Serve returns.
 // It then shuts down everything with the given timeout.
 func (r *Runner) Run(ctx context.Context, timeout time.Duration) error {
-	var httpServer *http.Server
-	var httpServeErr chan error
+	httpServer, httpServeErr := r.startHTTP()
 
-	// Start HTTP server if there are HTTP frontends
-	if len(r.httpFrontends) > 0 {
-		httpServer = &http.Server{
-			Addr:              r.httpListen,
-			Handler:           r.httpHandler(),
-			ReadHeaderTimeout: 10 * time.Second,
-			IdleTimeout:       60 * time.Second,
-		}
-		httpServeErr = make(chan error, 1)
-		go func() {
-			slog.Info("serving HTTP", "listen", r.httpListen, "frontends", len(r.httpFrontends))
-			if err := httpServer.ListenAndServe(); err != http.ErrServerClosed {
-				httpServeErr <- err
-			}
-			close(httpServeErr)
-		}()
-	} else if r.httpListen != "" {
-		slog.Info("HTTP listener not started: no HTTP frontends registered")
-	}
-
-	// Start regular frontends
 	exits := make(chan exit, len(r.frontends))
 	for _, f := range r.frontends {
 		go func() { exits <- exit{f.Name(), f.Serve()} }()
 	}
 
 	var errs []error
+
 	running := len(r.frontends)
 
-	// Wait for context cancellation, any frontend to exit, or HTTP server to fail
 	select {
 	case <-ctx.Done():
 		slog.Info("shutting down…")
 	case e := <-exits:
 		running--
+
 		errs = append(errs, e.early())
 	case err := <-httpServeErr:
 		if err != nil {
@@ -152,36 +134,16 @@ func (r *Runner) Run(ctx context.Context, timeout time.Duration) error {
 		}
 	}
 
-	// Shutdown everything
 	stopCtx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	// Shutdown HTTP server
-	if httpServer != nil {
-		if err := httpServer.Shutdown(stopCtx); err != nil {
-			errs = append(errs, fmt.Errorf("HTTP server shutdown: %w", err))
-		}
-	}
+	errs = append(errs, r.shutdown(stopCtx, httpServer)...)
 
-	// Shutdown HTTP frontends
-	for _, fe := range r.httpFrontends {
-		if err := fe.Shutdown(stopCtx); err != nil {
-			errs = append(errs, fmt.Errorf("stopping %s: %w", fe.Name(), err))
-		}
-	}
-
-	// Shutdown regular frontends
-	for _, f := range r.frontends {
-		if err := f.Shutdown(stopCtx); err != nil {
-			errs = append(errs, fmt.Errorf("stopping %s: %w", f.Name(), err))
-		}
-	}
-
-	// Wait for regular frontends to stop
 	for running > 0 {
 		select {
 		case e := <-exits:
 			running--
+
 			errs = append(errs, e.wrapped())
 		case <-stopCtx.Done():
 			errs = append(errs, fmt.Errorf("%d frontend(s) still running at the %s deadline", running, timeout))
@@ -190,4 +152,61 @@ func (r *Runner) Run(ctx context.Context, timeout time.Duration) error {
 	}
 
 	return errors.Join(errs...)
+}
+
+// startHTTP serves the HTTP frontends on one listener. With none registered
+// it returns a nil server and a nil channel, which never delivers.
+func (r *Runner) startHTTP() (*http.Server, <-chan error) {
+	if len(r.httpFrontends) == 0 {
+		if r.httpListen != "" {
+			slog.Info("HTTP listener not started: no HTTP frontends registered")
+		}
+
+		return nil, nil
+	}
+
+	srv := &http.Server{
+		Addr:              r.httpListen,
+		Handler:           r.httpHandler(),
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+	serveErr := make(chan error, 1)
+
+	go func() {
+		slog.Info("serving HTTP", "listen", r.httpListen, "frontends", len(r.httpFrontends))
+
+		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+			serveErr <- err
+		}
+
+		close(serveErr)
+	}()
+
+	return srv, serveErr
+}
+
+// shutdown stops the HTTP server, then the HTTP frontends, then the rest.
+func (r *Runner) shutdown(ctx context.Context, httpServer *http.Server) []error {
+	var errs []error
+
+	if httpServer != nil {
+		if err := httpServer.Shutdown(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("HTTP server shutdown: %w", err))
+		}
+	}
+
+	for _, fe := range r.httpFrontends {
+		if err := fe.Shutdown(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("stopping %s: %w", fe.Name(), err))
+		}
+	}
+
+	for _, f := range r.frontends {
+		if err := f.Shutdown(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("stopping %s: %w", f.Name(), err))
+		}
+	}
+
+	return errs
 }

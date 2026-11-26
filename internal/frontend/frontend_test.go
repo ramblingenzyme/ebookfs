@@ -31,7 +31,9 @@ func (f *fake) Serve() error {
 	if f.serveErr != nil || f.early {
 		return f.serveErr
 	}
+
 	<-f.released
+
 	return nil
 }
 
@@ -40,6 +42,7 @@ func (f *fake) Shutdown(context.Context) error {
 	if !f.hang {
 		close(f.released)
 	}
+
 	return nil
 }
 
@@ -73,6 +76,7 @@ func TestRunnerOnSignal(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
+
 	if err := runner.Run(ctx, time.Second); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -95,9 +99,11 @@ func TestRunnerOnServeFailure(t *testing.T) {
 	if !errors.Is(err, bind) {
 		t.Fatalf("Run: %v, want %v", err, bind)
 	}
+
 	if !strings.Contains(err.Error(), a.Name()) {
 		t.Errorf("Run: %v, want the failing frontend named", err)
 	}
+
 	if b.stops != 1 {
 		t.Errorf("Shutdown calls on the healthy frontend: %d, want 1", b.stops)
 	}
@@ -115,6 +121,7 @@ func TestRunnerOnServeReturningEarly(t *testing.T) {
 	if err == nil {
 		t.Fatal("Run: nil, want the early return reported")
 	}
+
 	if !strings.Contains(err.Error(), a.Name()) {
 		t.Errorf("Run: %v, want the frontend that stopped named", err)
 	}
@@ -123,6 +130,7 @@ func TestRunnerOnServeReturningEarly(t *testing.T) {
 func TestRunnerOnServeThatNeverReturns(t *testing.T) {
 	a := newFake("a")
 	a.hang = true
+
 	t.Cleanup(func() { close(a.released) })
 
 	runner := NewRunner("")
@@ -132,11 +140,14 @@ func TestRunnerOnServeThatNeverReturns(t *testing.T) {
 	cancel()
 
 	const deadline = 50 * time.Millisecond
+
 	start := time.Now()
+
 	err := runner.Run(ctx, deadline)
 	if err == nil {
 		t.Fatal("Run: nil, want the deadline reported")
 	}
+
 	if waited := time.Since(start); waited > 10*deadline {
 		t.Errorf("Run blocked for %s, want it back by %s", waited, deadline)
 	}
@@ -150,6 +161,7 @@ func TestRunnerRegisterHTTPWithoutListen(t *testing.T) {
 	if err == nil {
 		t.Fatal("RegisterHTTP: nil, want error when http.listen is empty")
 	}
+
 	if !strings.Contains(err.Error(), "http.listen is not configured") {
 		t.Errorf("RegisterHTTP: %v, want error about http.listen", err)
 	}
@@ -168,28 +180,13 @@ func TestRunnerRegisterHTTPDuplicatePrefix(t *testing.T) {
 	if err == nil {
 		t.Fatal("RegisterHTTP second: nil, want error for duplicate prefix")
 	}
+
 	if !strings.Contains(err.Error(), "duplicate HTTP prefix") {
 		t.Errorf("RegisterHTTP: %v, want error about duplicate prefix", err)
 	}
+
 	if !strings.Contains(err.Error(), "first") {
 		t.Errorf("RegisterHTTP: %v, want error to name the existing frontend", err)
-	}
-}
-
-func TestRunnerRegisterHTTPSuccess(t *testing.T) {
-	runner := NewRunner(":8080")
-	fe1 := newFakeHTTP("first", "/api")
-	fe2 := newFakeHTTP("second", "/sync")
-
-	if err := runner.RegisterHTTP(fe1); err != nil {
-		t.Fatalf("RegisterHTTP first: %v", err)
-	}
-	if err := runner.RegisterHTTP(fe2); err != nil {
-		t.Fatalf("RegisterHTTP second: %v", err)
-	}
-
-	if len(runner.httpFrontends) != 2 {
-		t.Errorf("httpFrontends: %d, want 2", len(runner.httpFrontends))
 	}
 }
 
@@ -214,8 +211,9 @@ func TestRunnerWithHTTPFrontends(t *testing.T) {
 }
 
 func TestRunnerRoutesHTTPFrontends(t *testing.T) {
-	echoPath := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, r.URL.Path) })
+	echoPath := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, r.URL.Path) })
 	runner := NewRunner(":0")
+
 	for _, fe := range []*fakeHTTP{
 		{name: "sync", prefix: "/sync", handler: echoPath, strip: true},
 		{name: "opds", prefix: "/opds", handler: echoPath},
@@ -237,12 +235,15 @@ func TestRunnerRoutesHTTPFrontends(t *testing.T) {
 		t.Run(tc.path, func(t *testing.T) {
 			rec := httptest.NewRecorder()
 			runner.httpHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tc.path, nil))
+
 			if rec.Code != tc.wantCode {
 				t.Fatalf("status = %d, want %d", rec.Code, tc.wantCode)
 			}
+
 			if got := rec.Header().Get("Location"); got != tc.wantLocation {
 				t.Errorf("Location = %q, want %q", got, tc.wantLocation)
 			}
+
 			if tc.wantPath != "" && rec.Body.String() != tc.wantPath {
 				t.Errorf("handler saw path %q, want %q", rec.Body.String(), tc.wantPath)
 			}

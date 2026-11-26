@@ -41,6 +41,7 @@ func (w *WriteBuffer) Write(fid uint64, offset uint64, data []byte, seed func() 
 	if offset > w.max || uint64(len(data)) > w.max-offset {
 		return 0, fmt.Errorf("write exceeds file size limit (%d bytes)", w.max)
 	}
+
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -55,11 +56,13 @@ func (w *WriteBuffer) Write(fid uint64, offset uint64, data []byte, seed func() 
 	}
 
 	copy(buf[offset:], data)
+
 	if !exists && offset == 0 && end < uint64(len(buf)) {
 		buf = buf[:end]
 	}
 
 	w.bufs[fid] = buf
+
 	return uint32(len(data)), nil
 }
 
@@ -67,8 +70,10 @@ func (w *WriteBuffer) Write(fid uint64, offset uint64, data []byte, seed func() 
 func (w *WriteBuffer) take(fid uint64) []byte {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+
 	buf := w.bufs[fid]
 	delete(w.bufs, fid)
+
 	return buf
 }
 
@@ -79,6 +84,7 @@ func (w *WriteBuffer) Commit(fid uint64, commit func([]byte) error) error {
 	if len(buf) == 0 {
 		return nil
 	}
+
 	return commit(buf)
 }
 
@@ -90,6 +96,7 @@ func (w *WriteBuffer) CommitText(fid uint64, commit func(string) error) error {
 		if s == "" {
 			return nil
 		}
+
 		return commit(s)
 	})
 }

@@ -1,9 +1,10 @@
 package book
 
 import (
+	"github.com/ramblingenzyme/go9p/proto"
+
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
-	"github.com/ramblingenzyme/go9p/proto"
 )
 
 const maxCoverFileSize = 32 << 20 // 32 MiB
@@ -33,6 +34,7 @@ func (c *coverFile) Stat() proto.Stat {
 	if b := c.book(); b != nil {
 		s.Length = uint64(b.CoverSize())
 	}
+
 	return s
 }
 
@@ -44,6 +46,7 @@ func (c *coverFile) Write(fid uint64, offset uint64, data []byte) (uint32, error
 
 func (c *coverFile) Close(fid uint64) error {
 	c.SnapshotFile.Close(fid)
+
 	return c.writes.Commit(fid, func(data []byte) error {
 		_, err := c.edit(c.book().ID(), library.Edits{Cover: &data})
 		return err

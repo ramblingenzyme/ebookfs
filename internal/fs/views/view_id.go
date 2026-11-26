@@ -6,6 +6,7 @@ import (
 
 	"github.com/ramblingenzyme/ebookfs/internal/fs/book"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
+	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/internal/util/naming"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
@@ -25,6 +26,7 @@ func NewByIDDir(reg *registry.BookRegistry) *byIDDir {
 		groupingDir: newGroupingDir(reg.FS(), "by-id"),
 	}
 	reg.AddView(d)
+
 	return d
 }
 
@@ -34,7 +36,8 @@ func (d *byIDDir) Add(dir *book.BookDir) {
 		d.maxID.Store(id)
 		d.pad.set(id)
 	}
-	d.StaticDir.AddChild(newNamedBookDir(d.f, dir, func(b *library.Book) string {
+
+	vfile.AddChild(d.StaticDir, newNamedBookDir(d.f, dir, func(b *library.Book) string {
 		return idEntryName(b, &d.pad)
 	}))
 }

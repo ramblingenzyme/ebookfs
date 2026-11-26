@@ -15,6 +15,7 @@ import (
 func TestOpenRefusesAnOversizedPackageDocument(t *testing.T) {
 	padding := "\n<!--" + strings.Repeat(" ", 17<<20) + "-->"
 	path := epubtest.Build(t, epubtest.OPF3+epubtest.PackageDoc(padding))
+
 	if _, err := parse(t, path); err == nil || !strings.Contains(err.Error(), "limit") {
 		t.Fatalf("Open err = %v, want the package document refused for its size", err)
 	}
@@ -37,27 +38,30 @@ func TestOpenResolvesEncodedCoverHref(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if book.CoverPath() != "OEBPS/cover image.jpg" {
 		t.Fatalf("cover path = %q, want OEBPS/cover image.jpg", book.CoverPath())
 	}
+
 	got, err := open(t, path).Cover()
 	if err != nil {
 		t.Fatalf("Reader.Cover failed for an encoded-href cover: %v", err)
 	}
+
 	if !bytes.Equal(got, epubtest.CoverBytes) {
 		t.Errorf("extracted cover bytes mismatch")
 	}
 }
 
 func TestFirstDescriptionWins(t *testing.T) {
-
-	var opf = epubtest.EPUB3(`    <dc:description>FIRST description.</dc:description>
+	opf := epubtest.EPUB3(`    <dc:description>FIRST description.</dc:description>
     <dc:description>SECOND description.</dc:description>`)
 
 	bib, err := parse(t, epubtest.Build(t, opf))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Description != "FIRST description." {
 		t.Errorf("description = %q, want the first, consistent with every other repeatable field", bib.Description)
 	}
@@ -65,13 +69,13 @@ func TestFirstDescriptionWins(t *testing.T) {
 
 // The spec says nothing here. calibre keeps looking, and so does this.
 func TestDanglingCoverMetaFallsThrough(t *testing.T) {
-
 	opf := epubtest.EPUB2(`    <meta name="cover" content="does-not-exist"/>`)
 
 	bib, err := parse(t, epubtest.Build(t, opf))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.CoverPath() == "" {
 		t.Error("no cover found; a stale cover meta should not suppress the fallback")
 	}
@@ -85,6 +89,7 @@ func TestEmptyDateIsSkipped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.Pubdate() != "2020-01-02" {
 		t.Errorf("pubdate = %q, want the one date that carries a value", bib.Pubdate())
 	}
@@ -98,22 +103,22 @@ func TestEmptyCreatorIsSkippedNotFatal(t *testing.T) {
 		if err != nil {
 			t.Fatalf("a usable author sits beside the empty creator: %v", err)
 		}
+
 		if got := authorNames(bib); !slices.Equal(got, []string{"Ann Rand"}) {
 			t.Errorf("authors = %v, want [Ann Rand]", got)
 		}
 	})
-
 }
 
 func TestEmptyFirstTitleFallsThrough(t *testing.T) {
-
-	var opf = epubtest.EPUB3(`    <dc:title>   </dc:title>
+	opf := epubtest.EPUB3(`    <dc:title>   </dc:title>
     <dc:title>The Real Title</dc:title>`)
 
 	bib, err := parse(t, epubtest.Build(t, opf))
 	if err != nil {
 		t.Fatalf("a usable title follows the empty one: %v", err)
 	}
+
 	if bib.Title != "The Real Title" {
 		t.Errorf("title = %q", bib.Title)
 	}
@@ -128,6 +133,7 @@ func TestUnrefinedMetaIsNotACreatorsSortName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if len(bib.Authors) != 1 || bib.Authors[0].SortName != "" {
 		t.Errorf("authors = %+v, want no sort name", bib.Authors)
 	}
@@ -141,10 +147,12 @@ func TestRepeatedContributorRoleReadsOnce(t *testing.T) {
     <meta refines="#c1" property="role" scheme="marc:relators">edt</meta>
     <meta refines="#c1" property="role" scheme="marc:relators">trl</meta>
     <meta refines="#c1" property="role" scheme="marc:relators">edt</meta>`)
+
 	bib, err := parse(t, epubtest.Build(t, opf))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	want := []epub.Contributor{{Name: "Jane Doe", Role: "edt"}, {Name: "Jane Doe", Role: "trl"}}
 	if !slices.Equal(bib.Contributors, want) {
 		t.Errorf("contributors = %v, want %v", bib.Contributors, want)
@@ -162,6 +170,7 @@ func TestCoverHeuristicTakesTheLastMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.CoverPath() != "OEBPS/cover.jpg" {
 		t.Errorf("cover = %q, want the last matching item (calibre would take thumb.jpg)", bib.CoverPath())
 	}
@@ -271,6 +280,7 @@ func TestIdentifierKeying(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			if !maps.Equal(bib.Identifiers(), tt.want) {
 				t.Errorf("identifiers = %v, want %v", bib.Identifiers(), tt.want)
 			}
@@ -288,6 +298,7 @@ func TestIdentifierTypeInReboundVocabulary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	want := map[string]string{"isbn": "9780123456789"}
 	if !maps.Equal(bib.Identifiers(), want) {
 		t.Errorf("identifiers = %v, want %v", bib.Identifiers(), want)
@@ -297,10 +308,12 @@ func TestIdentifierTypeInReboundVocabulary(t *testing.T) {
 // calibre records an EPUB 2 sort title only in calibre:title_sort.
 func TestOpenReadsCalibreTitleSortFromEPUB2(t *testing.T) {
 	opf := epubtest.OPF2.With(`    <meta name="calibre:title_sort" content="Hobbit, The"/>`)
+
 	bib, err := parse(t, epubtest.WriteEpub(t, epubtest.BaseEntries(opf)))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if bib.SortTitle != "Hobbit, The" {
 		t.Errorf("sort title = %q, want %q from calibre:title_sort", bib.SortTitle, "Hobbit, The")
 	}
@@ -308,10 +321,12 @@ func TestOpenReadsCalibreTitleSortFromEPUB2(t *testing.T) {
 
 func TestSetCollectionIsNotASeries(t *testing.T) {
 	path := epubtest.WriteEpub(t, epubtest.BaseEntries(opfSeriesSetCollection))
+
 	book, err := parse(t, path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if book.Series == nil || book.Series.Name != "Real Series" || book.Series.Index != "3" {
 		t.Errorf("series = %+v, want Real Series at 3 (set collection should be ignored)", book.Series)
 	}
@@ -319,10 +334,12 @@ func TestSetCollectionIsNotASeries(t *testing.T) {
 
 func TestCoverSkipsAMarkupCoverImage(t *testing.T) {
 	path := epubtest.WriteEpub(t, epubtest.BaseEntries(opfMarkupCoverImage))
+
 	book, err := parse(t, path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if book.CoverPath() != "OEBPS/cover.jpg" {
 		t.Errorf("cover path = %q, want OEBPS/cover.jpg (markup cover-image must be skipped)", book.CoverPath())
 	}
@@ -339,6 +356,7 @@ func TestCoverSkipsAnSVGCoverImage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if book.CoverPath() != "OEBPS/cover.jpg" {
 		t.Errorf("cover path = %q, want OEBPS/cover.jpg (svg cover-image must be skipped)", book.CoverPath())
 	}
@@ -395,10 +413,12 @@ func TestPubdateSelection(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := epubtest.WriteEpub(t, epubtest.BaseEntries(opfWithDates(tc.dates)))
+
 			book, err := parse(t, path)
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			if book.Pubdate() != tc.want {
 				t.Errorf("pubdate = %q, want %q", book.Pubdate(), tc.want)
 			}
@@ -408,10 +428,12 @@ func TestPubdateSelection(t *testing.T) {
 
 func TestPubdateIgnoresDctermsModified(t *testing.T) {
 	path := epubtest.WriteEpub(t, epubtest.BaseEntries(opfV3WithModified))
+
 	book, err := parse(t, path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if book.Pubdate() != "2015-06-01" {
 		t.Errorf("pubdate = %q, want 2015-06-01 (dcterms:modified must be ignored)", book.Pubdate())
 	}

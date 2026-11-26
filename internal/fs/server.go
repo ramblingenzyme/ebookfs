@@ -8,14 +8,15 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/ramblingenzyme/go9p"
+	"github.com/ramblingenzyme/go9p/fs"
+
 	"github.com/ramblingenzyme/ebookfs/internal/fs/ctl"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/inbox"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/internal/fs/views"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
-	"github.com/ramblingenzyme/go9p"
-	"github.com/ramblingenzyme/go9p/fs"
 )
 
 type Server struct {
@@ -38,6 +39,7 @@ func (s *Server) Serve() error {
 func (s *Server) Shutdown(ctx context.Context) error {
 	err := s.go9pSrv.Shutdown(ctx)
 	s.shutdown()
+
 	return err
 }
 
@@ -70,11 +72,13 @@ type Config struct {
 // WriteStat on the synthetic nodes, or accept only a length change, once a
 // client is seen doing it.
 func New(lib Library, cfg Config) (*Server, error) {
-	ebookfs, root := fs.NewFS("glenda", "glenda", 0555, fs.IgnorePermissions())
+	ebookfs, root := fs.NewFS("glenda", "glenda", 0o555, fs.IgnorePermissions())
 	reg := registry.NewBookRegistry(ebookfs, lib)
+
 	if err := lib.AddHook(reg); err != nil {
 		return nil, fmt.Errorf("registering book registry: %w", err)
 	}
+
 	ebookfs.CreateFile = vfile.DispatchCreate
 
 	// Each view self-registers with the registry on construction.
@@ -92,26 +96,24 @@ func New(lib Library, cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("loading books: %w", err)
 	}
+
 	reg.Load(books...)
 
-	root.AddChild(inbox.NewInboxDir(ebookfs, lib))
-	root.AddChild(allBooks)
-	root.AddChild(byAuthor)
-	root.AddChild(byID)
-	root.AddChild(bySeries)
-	root.AddChild(bySubjects)
-	root.AddChild(byTag)
-	root.AddChild(byStatus)
-	root.AddChild(recent)
-	root.AddChild(stats)
-
 	cmdLog := ctl.NewCommandLog(100)
-	root.AddChild(ctl.NewCtlFile(ebookfs, lib, cmdLog))
-	root.AddChild(ctl.NewLogFile(ebookfs, cmdLog))
-	root.AddChild(ctl.NewHelpFile(ebookfs))
-
 	search := views.NewSearchDir(ebookfs, reg, cfg.SearchTTL, cfg.SearchMaxHandles)
-	root.AddChild(search)
+
+	for _, n := range []fs.FSNode{
+		inbox.NewInboxDir(ebookfs, lib),
+		allBooks, byAuthor, byID, bySeries, bySubjects, byTag, byStatus, recent, stats,
+		ctl.NewCtlFile(ebookfs, lib, cmdLog),
+		ctl.NewLogFile(ebookfs, cmdLog),
+		ctl.NewHelpFile(ebookfs),
+		search,
+	} {
+		if err := root.AddChild(n); err != nil {
+			return nil, fmt.Errorf("building root: %w", err)
+		}
+	}
 
 	return &Server{
 		ebookfs:  ebookfs,

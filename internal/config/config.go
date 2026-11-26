@@ -28,28 +28,26 @@ type LibraryConfig struct {
 }
 
 type SearchConfig struct {
-	HandleTTL  time.Duration `toml:"handle_ttl"`  // e.g. "30m"
-	MaxHandles int           `toml:"max_handles"` // e.g. 100
+	HandleTTL  time.Duration `toml:"handle_ttl"` // e.g. "30m"
+	MaxHandles int           `toml:"max_handles"`
 }
 
 // HTTPConfig configures the shared HTTP listener.
 type HTTPConfig struct {
-	Listen  string `toml:"listen"`   // e.g. "0.0.0.0:8080"
-	BaseURL string `toml:"base_url"` // absolute URL for generating links; e.g. "http://192.168.1.100:8080"
+	Listen  string `toml:"listen"`
+	BaseURL string `toml:"base_url"` // absolute scheme://host the served links are built on
 }
 
-// OPDSConfig configures the OPDS catalog.
 type OPDSConfig struct {
-	Enable bool `toml:"enable"` // explicit toggle to enable/disable OPDS
+	Enable bool `toml:"enable"`
 }
 
-// KOSyncConfig configures the kosync progress sync server.
 type KOSyncConfig struct {
-	Enable           bool    `toml:"enable"`            // explicit toggle to enable/disable kosync
-	Username         string  `toml:"username"`          // pre-provisioned username
-	Password         string  `toml:"password"`          // pre-provisioned password (plaintext, hashed to MD5 at startup)
-	ReadingThreshold float64 `toml:"reading_threshold"` // percentage to mark as "reading" (default: 0.05)
-	ReadThreshold    float64 `toml:"read_threshold"`    // percentage to mark as "read" (default: 0.95)
+	Enable           bool    `toml:"enable"`
+	Username         string  `toml:"username"`
+	Password         string  `toml:"password"`          // plaintext, hashed to MD5 at startup
+	ReadingThreshold float64 `toml:"reading_threshold"` // fraction 0-1, see kosync.Config
+	ReadThreshold    float64 `toml:"read_threshold"`    // fraction 0-1, see kosync.Config
 }
 
 type ServerConfig struct {
@@ -70,6 +68,7 @@ func Load(path string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parsing config %s: %w", path, err)
 	}
+
 	for _, k := range md.Undecoded() {
 		cfg.UnknownKeys = append(cfg.UnknownKeys, k.String())
 	}
@@ -78,9 +77,11 @@ func Load(path string) (*Config, error) {
 	if cfg.Library.InboxTemp == "" {
 		cfg.Library.InboxTemp = cfg.Library.Root + "/.inbox-tmp"
 	}
+
 	if cfg.Library.StateDir == "" {
 		cfg.Library.StateDir = cfg.Library.Root
 	}
+
 	if cfg.Library.IndexPath == "" {
 		cfg.Library.IndexPath = cfg.Library.StateDir + "/.index.db"
 	}
@@ -119,28 +120,30 @@ func defaults() *Config {
 func (c *Config) validateAuth() error {
 	switch c.Server.Auth {
 	case "none":
-		// OK
 	case "shared-secret":
 		// Accepting this would serve unauthenticated, so refuse to start.
 		return fmt.Errorf(`server.auth = "shared-secret" is not implemented yet; use "none"`)
 	default:
 		return fmt.Errorf(`server.auth must be "none" or "shared-secret", got %q`, c.Server.Auth)
 	}
+
 	return nil
 }
 
-// validateHTTP checks the HTTP base URL.
 func (c *Config) validateHTTP() error {
 	if c.HTTP.BaseURL == "" {
 		return nil
 	}
+
 	u, err := url.Parse(c.HTTP.BaseURL)
 	if err != nil {
 		return fmt.Errorf("http.base_url is not a URL: %w", err)
 	}
+
 	if u.Scheme == "" || u.Host == "" {
 		return fmt.Errorf("http.base_url must be absolute (scheme://host), got %q", c.HTTP.BaseURL)
 	}
+
 	return nil
 }
 
@@ -160,21 +163,23 @@ func (c *Config) validateKOSync() error {
 	if !c.KOSync.Enable {
 		return nil
 	}
-	// kosync is enabled, so username and password are required
+
 	if c.KOSync.Username == "" {
 		return fmt.Errorf("kosync.username is required when kosync.enable is true")
 	}
+
 	if c.KOSync.Password == "" {
 		return fmt.Errorf("kosync.password is required when kosync.enable is true")
 	}
 
-	// Validate thresholds
 	if c.KOSync.ReadingThreshold < 0 || c.KOSync.ReadingThreshold > 1 {
 		return fmt.Errorf("kosync.reading_threshold must be between 0 and 1, got %f", c.KOSync.ReadingThreshold)
 	}
+
 	if c.KOSync.ReadThreshold < 0 || c.KOSync.ReadThreshold > 1 {
 		return fmt.Errorf("kosync.read_threshold must be between 0 and 1, got %f", c.KOSync.ReadThreshold)
 	}
+
 	if c.KOSync.ReadingThreshold >= c.KOSync.ReadThreshold {
 		return fmt.Errorf("kosync.reading_threshold (%f) must be less than read_threshold (%f)",
 			c.KOSync.ReadingThreshold, c.KOSync.ReadThreshold)

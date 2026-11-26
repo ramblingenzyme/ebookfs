@@ -3,18 +3,20 @@ package book
 import (
 	"testing"
 
+	"github.com/ramblingenzyme/go9p/proto"
+
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
-	"github.com/ramblingenzyme/go9p/proto"
 )
 
 func testFieldFileStat(t *testing.T, mode uint32) *proto.Stat {
+	t.Helper()
 	return newStat(util.NewTestFS(t), "test", mode)
 }
 
 func TestFieldFileGetUpdatesOnReopen(t *testing.T) {
 	value := "first"
-	ff := newFieldFile(testFieldFileStat(t, 0444), func() string { return value }, nil)
+	ff := newFieldFile(testFieldFileStat(t, 0o444), func() string { return value }, nil)
 
 	fid := fstest.Fid(t, ff, 1)
 	if got := fid.Get(proto.Mode(0), 10); got != "first\n" {
@@ -22,6 +24,7 @@ func TestFieldFileGetUpdatesOnReopen(t *testing.T) {
 	}
 
 	fid.Close()
+
 	value = "second"
 
 	if got := fid.Get(proto.Mode(0), 10); got != "second\n" {
@@ -35,9 +38,10 @@ func TestFieldFileRead(t *testing.T) {
 		{"empty", "", "\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ff := newFieldFile(testFieldFileStat(t, 0444), func() string { return tc.value }, nil)
+			ff := newFieldFile(testFieldFileStat(t, 0o444), func() string { return tc.value }, nil)
 
 			fstest.StatLength(t, ff, uint64(len(tc.want)))
+
 			if got := fstest.Fid(t, ff, 1).Get(proto.Mode(0), 10); got != tc.want {
 				t.Errorf("Read = %q, want %q", got, tc.want)
 			}
@@ -60,7 +64,8 @@ func TestFieldFileOtrunc(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var got string
-			ff := newFieldFile(testFieldFileStat(t, 0644), func() string { return "old" }, func(s string) error {
+
+			ff := newFieldFile(testFieldFileStat(t, 0o644), func() string { return "old" }, func(s string) error {
 				got = s
 				return nil
 			})

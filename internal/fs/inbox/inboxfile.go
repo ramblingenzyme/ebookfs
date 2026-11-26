@@ -4,9 +4,10 @@ import (
 	"errors"
 	"log/slog"
 
-	"github.com/ramblingenzyme/ebookfs/pkg/library"
 	"github.com/ramblingenzyme/go9p/fs"
 	"github.com/ramblingenzyme/go9p/proto"
+
+	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
 type InboxFile struct {
@@ -28,6 +29,7 @@ func (i *InboxFile) Open(fid uint64, omode proto.Mode) error {
 	name := i.Stat().Name // Stat takes RLock, so read it before the write lock
 	i.Lock()
 	defer i.Unlock()
+
 	if i.handle != nil {
 		slog.Warn("inbox: open on already-open file", "name", name)
 		return errors.New("file already open")
@@ -38,6 +40,7 @@ func (i *InboxFile) Open(fid uint64, omode proto.Mode) error {
 		slog.Error("inbox: open failed", "name", name, "error", err)
 		return err
 	}
+
 	i.handle = h
 	i.fid = fid
 
@@ -47,6 +50,7 @@ func (i *InboxFile) Open(fid uint64, omode proto.Mode) error {
 func (i *InboxFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
 	i.Lock()
 	defer i.Unlock()
+
 	if i.handle == nil || i.fid != fid {
 		slog.Warn("inbox: write on file that was not opened", "fid", fid)
 		return 0, errors.New("file not opened with this fid")
@@ -62,9 +66,11 @@ func (i *InboxFile) Write(fid uint64, offset uint64, data []byte) (uint32, error
 func (i *InboxFile) teardown() library.IngestHandle {
 	i.Lock()
 	defer i.Unlock()
+
 	h := i.handle
 	i.handle = nil
 	i.fid = 0
+
 	return h
 }
 
@@ -78,7 +84,7 @@ func (i *InboxFile) Close(fid uint64) error {
 
 	parent := i.Parent()
 	if md, ok := parent.(fs.ModDir); ok {
-		md.DeleteChild(i.Stat().Name)
+		_ = md.DeleteChild(i.Stat().Name)
 	}
 
 	b, err := h.Ingest()
@@ -86,6 +92,8 @@ func (i *InboxFile) Close(fid uint64) error {
 		slog.Error("inbox: ingest failed", "name", i.Stat().Name, "error", err)
 		return err
 	}
+
 	slog.Info("inbox: ingested", "name", i.Stat().Name, "book_id", b.ID())
+
 	return nil
 }

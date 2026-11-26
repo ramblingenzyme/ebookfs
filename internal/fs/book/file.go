@@ -6,28 +6,13 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-// snapshot returns the book the file serves. present says whether the backend
-// that reads it was wired up; a BookDir built without one, as the benchmark
-// does, reports missing. Both failures are worded here because every file in
-// this package meets them, the second when a book is removed after its fid was
-// opened.
-// ponytail: remove present arg, likely after deleting benchmark tests
-func snapshot(present bool, missing string, book func() *library.Book) (*library.Book, error) {
-	if !present {
-		return nil, errors.New(missing)
-	}
+func content(lib ContentReader, book func() *library.Book) (library.Reader, error) {
+	// nil once the book is removed, though a fid opened before stays live.
 	b := book()
 	if b == nil {
 		return nil, errors.New("book snapshot not available")
 	}
-	return b, nil
-}
 
-func content(lib ContentReader, book func() *library.Book) (library.Reader, error) {
-	b, err := snapshot(lib != nil, "library not available", book)
-	if err != nil {
-		return nil, err
-	}
 	return lib.Content(b.ID())
 }
 
@@ -39,6 +24,7 @@ func contentBytes(lib ContentReader, book func() *library.Book, pick func(librar
 			return nil, err
 		}
 		defer r.Close()
+
 		return pick(r)
 	}
 }

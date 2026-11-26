@@ -13,7 +13,6 @@ import (
 	"testing"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/drift"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index/dbsqlc"
 )
@@ -45,6 +44,7 @@ func TestClosedIndexSurfacesErrors(t *testing.T) {
 		{"Delete", func(t *testing.T, idx *Index) func() error {
 			storeInIndex(t, idx, newBook(1, "T"))
 			op := mustMarkPending(t, idx)
+
 			return func() error { return op.Delete(1) }
 		}},
 		{"Rebuild", func(t *testing.T, idx *Index) func() error {
@@ -73,6 +73,9 @@ func TestClosedIndexSurfacesErrors(t *testing.T) {
 // The helpers that write through a *dbsqlc.Queries: a failed statement must
 // propagate rather than return nil and let the caller commit a half-written
 // book.
+//
+// A closed index fails before the first of these statements, so this is the
+// only test that reaches their error returns.
 func TestRolledBackTxSurfacesErrors(t *testing.T) {
 	tests := []struct {
 		name string
@@ -96,6 +99,7 @@ func TestRolledBackTxSurfacesErrors(t *testing.T) {
 		{"setSeries", func(idx *Index, q *dbsqlc.Queries) error {
 			b := newBook(1, "Test")
 			b.Series = &book.SeriesRef{Name: "S", Index: "1"}
+
 			return idx.setSeries(q, b)
 		}},
 		{"putBook", func(idx *Index, q *dbsqlc.Queries) error {
@@ -127,10 +131,15 @@ func TestRolledBackTxSurfacesErrors(t *testing.T) {
 // operation on it returns sql.ErrTxDone.
 func rolledBackTX(t *testing.T, idx *Index) *sql.Tx {
 	t.Helper()
+
 	tx, err := idx.db.Begin()
 	if err != nil {
 		t.Fatalf("Begin: %v", err)
 	}
-	tx.Rollback()
+
+	if err := tx.Rollback(); err != nil {
+		t.Fatalf("Rollback: %v", err)
+	}
+
 	return tx
 }

@@ -15,15 +15,17 @@ import (
 // Values sharing a prefix are OR'd within the field, different prefixes AND'd
 // across fields. author matches a display name or a sort name, as
 // Index.Search does.
-func ParseQuery(query string) (library.Query, error) {
+func ParseQuery(query string) (library.Query, error) { //nolint:cyclop // one case per query prefix
 	parts := strings.Split(query, "+")
+
 	var q library.Query
+
 	for _, part := range parts {
-		split := strings.SplitN(part, ":", 2)
-		if len(split) != 2 {
+		prefix, val, ok := strings.Cut(part, ":")
+		if !ok {
 			return q, fmt.Errorf("invalid term %q: want prefix:value", part)
 		}
-		prefix, val := split[0], split[1]
+
 		switch prefix {
 		case "author":
 			q.Authors = append(q.Authors, val)
@@ -44,6 +46,7 @@ func ParseQuery(query string) (library.Query, error) {
 			if err != nil {
 				return q, fmt.Errorf("invalid id %q in term %q", val, part)
 			}
+
 			q.IDs = append(q.IDs, id)
 		case "title":
 			q.Titles = append(q.Titles, val)
@@ -51,5 +54,6 @@ func ParseQuery(query string) (library.Query, error) {
 			return q, fmt.Errorf("unknown prefix %q in term %q", prefix, part)
 		}
 	}
+
 	return q, nil
 }

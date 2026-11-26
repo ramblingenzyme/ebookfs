@@ -15,6 +15,7 @@ import (
 	"errors"
 
 	"github.com/beevik/etree"
+
 	"github.com/ramblingenzyme/ebookfs/pkg/epub/internal/xml"
 )
 
@@ -34,10 +35,12 @@ func Parse(b []byte) (*Doc, error) {
 	if err := doc.ReadFromBytes(b); err != nil {
 		return nil, err
 	}
+
 	ncx := doc.SelectElement("ncx")
 	if ncx == nil {
 		return nil, errors.New("no <ncx> element")
 	}
+
 	return &Doc{doc: doc, ncx: ncx}, nil
 }
 
@@ -56,6 +59,7 @@ func (d *Doc) Apply(title *string, names []string) ([]byte, error) {
 	if title != nil {
 		d.title().set(*title)
 	}
+
 	if names != nil {
 		d.authors().set(names)
 	}
@@ -65,6 +69,7 @@ func (d *Doc) Apply(title *string, names []string) ([]byte, error) {
 	if err != nil || bytes.Equal(before, after) {
 		return nil, err
 	}
+
 	return after, nil
 }
 
@@ -90,6 +95,7 @@ func (f authorsField) set(names []string) {
 			slot(existing[i]).set(name)
 			continue
 		}
+
 		el := etree.NewElement(xml.Qualify(last.Space, "docAuthor"))
 		f.d.ncx.InsertChildAt(last.Index()+1, el)
 		slot(el).set(name)
@@ -113,9 +119,11 @@ func (s textSlot) set(value string) {
 	if s.owner == nil {
 		return
 	}
+
 	t := s.owner.SelectElement("text")
 	if t == nil {
 		t = s.owner.CreateElement(xml.Qualify(s.owner.Space, "text"))
 	}
+
 	t.SetText(value)
 }

@@ -44,6 +44,7 @@ func (h *ingestHandle) Ingest() (*Book, error) {
 	if err := h.file.Close(); err != nil {
 		return nil, fmt.Errorf("closing uploaded file: %w", err)
 	}
+
 	return h.ingestFn(path)
 }
 
@@ -52,48 +53,33 @@ func (l *Library) CreateIngest() (IngestHandle, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &ingestHandle{file: f, ingestFn: l.ingestPath}, nil
 }
 
 func (l *Library) ingestPath(srcPath string) (*Book, error) {
-	// Create a temp directory for PreParse hooks. returned path from hooks can be inside,
-	// so it can't be cleaned up until after ingest completes.
+	// Removed only once ingest returns, since a PreParse hook may hand back a
+	// file inside it.
 	hookTempDir, err := os.MkdirTemp(l.inboxTemp, "hooks-*")
 	if err != nil {
 		return nil, err
 	}
 	defer os.RemoveAll(hookTempDir)
 
-	// Hooks that shell out to kepubify or ebook-convert need the extension to
-	// pick an input format. An unrecognised file stays bare, since a hook may
-	// convert it.
-	if f, err := l.formats.Detect(srcPath); err == nil {
-		named := srcPath + f.Format().Extension()
-		if err := os.Rename(srcPath, named); err != nil {
-			return nil, err
-		}
-		srcPath = named
-	} else if !errors.Is(err, formats.ErrUnknownFormat) {
+	srcPath, err = l.nameByFormat(srcPath)
+	if err != nil {
 		return nil, err
 	}
 
-	// Run PreParse hooks before parsing
 	processedPath, err := l.hooks.preParse(srcPath, hookTempDir)
 	if err != nil {
 		return nil, fmt.Errorf("pre-parse hook: %w", err)
 	}
 
 	// Parsed before ingestMu is taken, so bulk uploads parse in parallel.
-	f, err := l.formats.Detect(processedPath)
+	f, bib, err := l.parse(processedPath)
 	if err != nil {
 		return nil, err
-	}
-	bib, err := f.Parse(processedPath)
-	if err != nil {
-		if formats.IsIO(err) {
-			return nil, err
-		}
-		return nil, fmt.Errorf("%w: %s", formats.ErrInvalidBook, err)
 	}
 
 	// A PreParse hook can return a different file, which Ingest's fsync never saw.
@@ -111,28 +97,18 @@ func (l *Library) ingestPath(srcPath string) (*Book, error) {
 
 	// Hooks may amend the bibliographic fields used for duplicate detection
 	// and filing, so run them before checking those fields.
-	if err := l.hooks.preCommit(bib); err != nil {
+	bib, err = l.hooks.preCommit(f, processedPath, bib)
+	if err != nil {
 		return nil, fmt.Errorf("pre-commit hook: %w", err)
 	}
 
-	dupe, err := l.index.Exists(bib.Title, authorNames(bib.Authors))
-	if err != nil {
+	if err := l.rejectDuplicate(bib, f.Format()); err != nil {
 		return nil, err
-	}
-	if dupe {
-		return nil, fmt.Errorf("%q: %w", bib.Title, ErrDuplicate)
-	}
-	// The index cannot see a book it skipped.
-	if l.store.PathTaken(bib.Authors, bib.Title, f.Format()) {
-		return nil, fmt.Errorf("%q: %w", bib.Title, ErrDuplicateOnDisk)
 	}
 
-	id, err := l.index.NextID()
+	id, err := l.allocateID()
 	if err != nil {
 		return nil, err
-	}
-	if err := l.store.RecordID(id); err != nil {
-		return nil, fmt.Errorf("recording book id %d: %w", id, err)
 	}
 
 	now := time.Now()
@@ -143,6 +119,92 @@ func (l *Library) ingestPath(srcPath string) (*Book, error) {
 	}
 	loc := l.store.Layout(bib.Authors, bib.Title, id, f.Format())
 
+	b, err := l.place(processedPath, bib, loc, meta)
+	if err != nil {
+		return nil, err
+	}
+
+	slog.Info("ingest: book added", "book_id", b.ID(), "title", b.Title(), "authors", book.JoinAuthors(b.Authors(), ", "))
+
+	// Serialize the event with later edits and deletes of this newly indexed book.
+	mu := l.bookMu.For(b.ID())
+	mu.Lock()
+	l.hooks.onIngested(l, b, loc)
+	mu.Unlock()
+
+	return b, nil
+}
+
+// nameByFormat appends the detected format's extension to path, since hooks
+// that shell out to kepubify or ebook-convert need it to pick an input format.
+// An unrecognised file stays bare, since a hook may convert it.
+func (l *Library) nameByFormat(path string) (string, error) {
+	f, err := l.formats.Detect(path)
+	if errors.Is(err, formats.ErrUnknownFormat) {
+		return path, nil
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	named := path + f.Format().Extension()
+	if err := os.Rename(path, named); err != nil {
+		return "", err
+	}
+
+	return named, nil
+}
+
+// parse detects path's format and reads its record. A parse failure that is
+// not I/O is wrapped in ErrInvalidBook.
+func (l *Library) parse(path string) (formats.Format, *book.Bib, error) {
+	f, err := l.formats.Detect(path)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	bib, err := f.Parse(path)
+	if err != nil && !formats.IsIO(err) {
+		err = fmt.Errorf("%w: %w", formats.ErrInvalidBook, err)
+	}
+
+	return f, bib, err
+}
+
+func (l *Library) rejectDuplicate(bib *book.Bib, format book.Format) error {
+	dupe, err := l.index.Exists(bib.Title, authorNames(bib.Authors))
+	if err != nil {
+		return err
+	}
+
+	if dupe {
+		return fmt.Errorf("%q: %w", bib.Title, ErrDuplicate)
+	}
+	// The index cannot see a book it skipped.
+	if l.store.PathTaken(bib.Authors, bib.Title, format) {
+		return fmt.Errorf("%q: %w", bib.Title, ErrDuplicateOnDisk)
+	}
+
+	return nil
+}
+
+func (l *Library) allocateID() (int64, error) {
+	id, err := l.index.NextID()
+	if err != nil {
+		return 0, err
+	}
+
+	if err := l.store.RecordID(id); err != nil {
+		return 0, fmt.Errorf("recording book id %d: %w", id, err)
+	}
+
+	return id, nil
+}
+
+// place moves the book file to loc and indexes it, removing what it placed if the
+// index write fails.
+func (l *Library) place(processedPath string, bib *book.Bib, loc book.File, meta book.Meta) (*Book, error) {
 	op, err := l.index.MarkPending()
 	if err != nil {
 		return nil, err
@@ -161,7 +223,6 @@ func (l *Library) ingestPath(srcPath string) (*Book, error) {
 
 		return book.NewImmutableBook(b), nil
 	}()
-
 	if err != nil {
 		if rmErr := l.store.Delete(loc); rmErr == nil {
 			// Nothing is left on disk to heal.
@@ -173,14 +234,6 @@ func (l *Library) ingestPath(srcPath string) (*Book, error) {
 		return nil, err
 	}
 
-	slog.Info("ingest: book added", "book_id", b.ID(), "title", b.Title(), "authors", book.JoinAuthors(b.Authors(), ", "))
-
-	// Serialize the event with later edits and deletes of this newly indexed book.
-	mu := l.bookMu.For(b.ID())
-	mu.Lock()
-	l.hooks.onIngested(l, b, loc)
-	mu.Unlock()
-
 	return b, nil
 }
 
@@ -190,6 +243,7 @@ func syncFile(path string) error {
 		return err
 	}
 	defer f.Close()
+
 	return f.Sync()
 }
 
@@ -201,6 +255,8 @@ func authorNames(authors []book.Author) []string {
 	for i, a := range authors {
 		names[i] = a.Name
 	}
+
 	slices.Sort(names)
+
 	return slices.Compact(names)
 }

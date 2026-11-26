@@ -36,10 +36,12 @@ func TestParseDefaultsAMalformedSeriesIndex(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := epubtest.WriteEpub(t, epubtest.BaseEntries(tc.opf))
+
 			book, err := epub.Parse(path)
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			if book.Series == nil || book.Series.Name != "Lonely Series" || book.Series.Index != "1" {
 				t.Errorf("series = %+v, want Lonely Series at 1 (calibre default)", book.Series)
 			}
@@ -58,6 +60,7 @@ func TestParseRefusesAnUnfilableBook(t *testing.T) {
 			if err == nil {
 				t.Fatal("an unfilable book parsed anyway")
 			}
+
 			if !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("err = %v, want it to say %q", err, tc.want)
 			}

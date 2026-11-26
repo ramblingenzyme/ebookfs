@@ -15,8 +15,9 @@ func TestHealthcheck(t *testing.T) {
 	}
 	handler := NewHandler(nil, nil, cfg)
 
-	req := httptest.NewRequest("GET", "/healthcheck", nil)
+	req := httptest.NewRequest(http.MethodGet, "/healthcheck", nil)
 	req.Header.Set("Accept", "application/vnd.koreader.v1+json")
+
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -28,6 +29,7 @@ func TestHealthcheck(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal response: %v", err)
 	}
+
 	if resp["state"] != "OK" {
 		t.Errorf("healthcheck state = %q, want %q", resp["state"], "OK")
 	}
@@ -55,14 +57,17 @@ func TestAuth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/users/auth", nil)
+			req := httptest.NewRequest(http.MethodGet, "/users/auth", nil)
 			req.Header.Set("Accept", "application/vnd.koreader.v1+json")
+
 			if tt.username != "" {
 				req.Header.Set("x-auth-user", tt.username)
 			}
+
 			if tt.credential != "" {
 				req.Header.Set("x-auth-key", tt.credential)
 			}
+
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, req)
 
@@ -75,6 +80,7 @@ func TestAuth(t *testing.T) {
 				if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 					t.Fatalf("unmarshal response: %v", err)
 				}
+
 				if resp["authorized"] != "OK" {
 					t.Errorf("auth authorized = %q, want %q", resp["authorized"], "OK")
 				}
@@ -91,8 +97,9 @@ func TestRegister(t *testing.T) {
 	}
 	handler := NewHandler(nil, nil, cfg)
 
-	req := httptest.NewRequest("POST", "/users/create", nil)
+	req := httptest.NewRequest(http.MethodPost, "/users/create", nil)
 	req.Header.Set("Accept", "application/vnd.koreader.v1+json")
+
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -104,9 +111,11 @@ func TestRegister(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal response: %v", err)
 	}
+
 	if resp["message"] != "User registration is disabled." {
 		t.Errorf("register message = %v, want 'User registration is disabled.'", resp["message"])
 	}
+
 	if resp["code"] != 2005.0 {
 		t.Errorf("register code = %v, want 2005", resp["code"])
 	}
@@ -128,20 +137,23 @@ func TestAcceptHeaderRejections(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/healthcheck", nil)
+			req := httptest.NewRequest(http.MethodGet, "/healthcheck", nil)
 			if tt.accept != "" {
 				req.Header.Set("Accept", tt.accept)
 			}
+
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, req)
 
 			if w.Code != http.StatusPreconditionFailed {
 				t.Errorf("status = %d, want %d", w.Code, http.StatusPreconditionFailed)
 			}
+
 			var resp struct{ Code int }
 			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 				t.Fatalf("unmarshal %q: %v", w.Body.String(), err)
 			}
+
 			if resp.Code != tt.wantCode {
 				t.Errorf("code = %d, want %d", resp.Code, tt.wantCode)
 			}

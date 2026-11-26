@@ -2,17 +2,20 @@ package vfile
 
 import (
 	"bytes"
+	"errors"
 	"testing"
+
+	"github.com/ramblingenzyme/go9p/proto"
 
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
-	"github.com/ramblingenzyme/go9p/proto"
 )
 
 func newTestSnapshotFile(t *testing.T, data []byte) *SnapshotFile {
 	t.Helper()
-	stat := NewStat(util.NewTestFS(t), "snap", 0444)
+	stat := NewStat(util.NewTestFS(t), "snap", 0o444)
 	sf := NewSnapshotFile(stat, func() ([]byte, error) { return data, nil })
+
 	return &sf
 }
 
@@ -42,9 +45,10 @@ func TestSnapshotFile(t *testing.T) {
 	})
 
 	t.Run("open propagates load error", func(t *testing.T) {
-		stat := NewStat(util.NewTestFS(t), "snap", 0444)
+		stat := NewStat(util.NewTestFS(t), "snap", 0o444)
 		sf := NewSnapshotFile(stat, func() ([]byte, error) { return nil, util.ErrTest })
-		if err := sf.Open(1, proto.Mode(0)); err != util.ErrTest {
+
+		if err := sf.Open(1, proto.Mode(0)); !errors.Is(err, util.ErrTest) {
 			t.Errorf("Open error = %v, want %v", err, util.ErrTest)
 		}
 	})
@@ -58,6 +62,7 @@ func TestSnapshotFile(t *testing.T) {
 		// Closing one fid leaves the other readable.
 		fid1.Close()
 		fid1.WantReadError()
+
 		if got := fid2.Read(0, 6); got != "shared" {
 			t.Errorf("fid2 read = %q, want %q", got, "shared")
 		}
@@ -75,10 +80,12 @@ func TestSnapshotFile(t *testing.T) {
 
 		fid := fstest.Fid(t, sf, 1)
 		fid.Open(proto.Mode(0))
+
 		data, ok := sf.Snapshot(1)
 		if !ok {
 			t.Fatal("Snapshot reported no data for an open fid")
 		}
+
 		if !bytes.Equal(data, []byte("current value")) {
 			t.Errorf("Snapshot = %q, want %q", data, "current value")
 		}
@@ -87,7 +94,9 @@ func TestSnapshotFile(t *testing.T) {
 		if _, ok := sf.Snapshot(2); ok {
 			t.Error("Snapshot reported data for a different, unopened fid")
 		}
+
 		fid.Close()
+
 		if _, ok := sf.Snapshot(1); ok {
 			t.Error("Snapshot still reported data after the fid was clunked")
 		}

@@ -80,14 +80,17 @@ func Check(dir string, allowSMB bool, role string) (FSType, error) {
 	if err != nil {
 		return fsType, err
 	}
+
 	if err := requireNotSMB(fsType, allowSMB, dir); err != nil {
 		return fsType, err
 	}
+
 	if fsType.IsSMB() {
-		slog.Warn("detected SMB filesystem for "+role+", proceeding with override enabled", "path", dir)
+		slog.Warn("detected SMB filesystem, proceeding with override enabled", "role", role, "path", dir)
 	} else {
-		slog.Info("detected "+fsType.String()+" filesystem for "+role, "path", dir)
+		slog.Info("detected filesystem", "type", fsType.String(), "role", role, "path", dir)
 	}
+
 	return fsType, nil
 }
 
@@ -95,5 +98,6 @@ func requireNotSMB(fsType FSType, allowSMB bool, path string) error {
 	if fsType.IsSMB() && !allowSMB {
 		return fmt.Errorf("%w at %s: atomic rename and file locking are unreliable; use WithAllowSMB() to override if you understand the risks", ErrSMBFilesystem, path)
 	}
+
 	return nil
 }

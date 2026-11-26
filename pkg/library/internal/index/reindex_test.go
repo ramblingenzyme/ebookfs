@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/drift"
 )
 
@@ -46,6 +45,7 @@ func TestPathInfoRoundTrip(t *testing.T) {
 		// to the Unix epoch, which would read as a real (and wrong) timestamp.
 		{"zero", drift.PathInfo{}},
 	}
+
 	for writer, write := range writers {
 		for _, tc := range tests {
 			t.Run(writer+"/"+tc.name, func(t *testing.T) {
@@ -56,10 +56,12 @@ func TestPathInfoRoundTrip(t *testing.T) {
 				if err != nil {
 					t.Fatalf("AllPathInfo: %v", err)
 				}
+
 				got, ok := all[tc.name+"/book.epub"]
 				if !ok {
 					t.Fatalf("AllPathInfo missing %q, got %v", tc.name, all)
 				}
+
 				if !got.Equal(tc.want) {
 					t.Errorf("drift.PathInfo = %+v, want %+v", got, tc.want)
 				}
@@ -84,6 +86,7 @@ func TestSizeComesFromObservation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
+
 	if got.Size != 4242 {
 		t.Errorf("Size = %d, want 4242 (the observed size)", got.Size)
 	}
@@ -92,6 +95,7 @@ func TestSizeComesFromObservation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AllPathInfo: %v", err)
 	}
+
 	if info[got.Path].Size != got.Size {
 		t.Errorf("drift size = %d but book size = %d; they must be one column",
 			info[got.Path].Size, got.Size)
@@ -114,13 +118,16 @@ func TestRebuildRecordsSkippedPaths(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AllPathInfo: %v", err)
 	}
+
 	if len(all) != 2 {
 		t.Fatalf("AllPathInfo has %d paths, want 2 (1 indexed + 1 skipped): %v", len(all), all)
 	}
+
 	got, ok := all["Corrupt/Bad Book (7)/book.epub"]
 	if !ok {
 		t.Fatalf("skipped path missing from AllPathInfo: %v", all)
 	}
+
 	if got.Size != 99 || !got.Mtime.Equal(time.Unix(1700000000, 5)) {
 		t.Errorf("skipped info = %+v, want Size 99 and the recorded mtime", got)
 	}
@@ -129,10 +136,12 @@ func TestRebuildRecordsSkippedPaths(t *testing.T) {
 	if err := idx.Rebuild(bookPaths(newBook(1, "Good")), nil, 7); err != nil {
 		t.Fatalf("second Rebuild: %v", err)
 	}
+
 	all, err = idx.AllPathInfo()
 	if err != nil {
 		t.Fatalf("AllPathInfo: %v", err)
 	}
+
 	if _, ok := all["Corrupt/Bad Book (7)/book.epub"]; ok {
 		t.Errorf("stale skipped path survived a rebuild that did not skip it: %v", all)
 	}
@@ -149,11 +158,13 @@ func TestNeedsReindex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
+
 	mustNeedReindex(t, idx, true)
 
 	if err := idx.Rebuild(nil, nil, 0); err != nil {
 		t.Fatalf("rebuild: %v", err)
 	}
+
 	mustNeedReindex(t, idx, false)
 	idx.Close()
 
@@ -162,11 +173,13 @@ func TestNeedsReindex(t *testing.T) {
 		t.Fatalf("reopen: %v", err)
 	}
 	defer idx2.Close()
+
 	mustNeedReindex(t, idx2, false)
 
 	if _, err := idx2.db.Exec("PRAGMA user_version=6"); err != nil {
 		t.Fatalf("set user_version: %v", err)
 	}
+
 	mustNeedReindex(t, idx2, true)
 }
 
@@ -179,14 +192,17 @@ func TestRebuild(t *testing.T) {
 	if _, err := idx.db.Exec("INSERT INTO pending_ops (op_id) VALUES ('leak-1')"); err != nil {
 		t.Fatalf("inject pending: %v", err)
 	}
+
 	if err := mustMarkPending(t, idx).Put(newBook(1, "Stale"), drift.PathInfo{}); err != nil {
 		t.Fatalf("Put stale: %v", err)
 	}
+
 	mustNeedReindex(t, idx, true)
 
 	withSeries := newBook(20, "Fresh B")
 	withSeries.Series = &book.SeriesRef{Name: "Series A", Index: "2"}
 	fresh := []*book.Book{newBook(10, "Fresh A"), withSeries}
+
 	if err := idx.Rebuild(bookPaths(fresh...), nil, 20); err != nil {
 		t.Fatalf("Rebuild: %v", err)
 	}
@@ -197,12 +213,15 @@ func TestRebuild(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
+
 	if len(all) != 2 || all[0].Meta.ID != 10 || all[1].Meta.ID != 20 {
 		t.Fatalf("books = %v, want only the rebuilt 10 and 20", all)
 	}
+
 	if n := pendingCount(t, idx); n != 0 {
 		t.Fatalf("pending_ops = %d, want 0", n)
 	}
+
 	if s := all[1].Series; s == nil || s.Name != "Series A" || s.Index != "2" {
 		t.Errorf("book 20 series = %+v, want Series A at 2", s)
 	}

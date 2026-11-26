@@ -18,17 +18,21 @@ func refinesID(m *etree.Element, id string) bool {
 	if id == "" {
 		return false
 	}
+
 	_, frag, ok := strings.Cut(attr(m, "refines"), "#")
+
 	return ok && frag == id
 }
 
 func (d *Doc) refineElements(id, property string) []*etree.Element {
 	var out []*etree.Element
+
 	for _, m := range d.md.children("meta") {
 		if d.vocab.Same(attr(m, "property"), property) && refinesID(m, id) {
 			out = append(out, m)
 		}
 	}
+
 	return out
 }
 
@@ -39,9 +43,11 @@ func (d *Doc) addRefine(id, property, value, scheme string) {
 	m := d.md.metaParent().CreateElement("meta")
 	m.CreateAttr("refines", "#"+id)
 	m.CreateAttr("property", d.vocab.spell(property))
+
 	if scheme != "" {
 		m.CreateAttr("scheme", d.vocab.spell(scheme))
 	}
+
 	m.SetText(value)
 }
 

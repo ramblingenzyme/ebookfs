@@ -26,6 +26,7 @@ func fixture(name string) string {
 	if err != nil {
 		panic(err)
 	}
+
 	return strings.TrimRight(string(b), "\n")
 }
 
@@ -56,15 +57,18 @@ var ContainerXML = ContainerFor(OPFPath, PackageMediaType)
 // part, so a fixture names the pieces it is about and writes out the one it is not.
 func Metas(parts ...string) string {
 	var out []string
+
 	for _, part := range parts {
 		for line := range strings.SplitSeq(part, "\n") {
 			if line == "" {
 				out = append(out, "")
 				continue
 			}
+
 			out = append(out, "    "+line)
 		}
 	}
+
 	return strings.Join(out, "\n")
 }
 
@@ -78,11 +82,13 @@ func Collection(id, name, kind, position string, parent ...string) string {
 	if len(parent) == 1 {
 		refines = ` refines="#` + parent[0] + `"`
 	}
+
 	out := `<meta property="belongs-to-collection" id="` + id + `"` + refines + `>` + name + `</meta>
 <meta refines="#` + id + `" property="collection-type">` + kind + `</meta>`
 	if position != "" {
 		out += "\n" + `<meta refines="#` + id + `" property="group-position">` + position + `</meta>`
 	}
+
 	return out
 }
 
@@ -94,6 +100,7 @@ func CalibreSeries(name, index string) string {
 	if index != "" {
 		out += "\n" + `<meta name="calibre:series_index" content="` + index + `"/>`
 	}
+
 	return out
 }
 

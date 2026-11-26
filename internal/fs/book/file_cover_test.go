@@ -6,9 +6,10 @@ import (
 	"image/jpeg"
 	"testing"
 
+	"github.com/ramblingenzyme/go9p/proto"
+
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
-	"github.com/ramblingenzyme/go9p/proto"
 )
 
 // The written bytes reach the library as a cover edit, and the library's
@@ -18,6 +19,7 @@ func TestCoverFileWrite(t *testing.T) {
 	if err := jpeg.Encode(&jpg, image.NewGray(image.Rect(0, 0, 1, 1)), nil); err != nil {
 		t.Fatal(err)
 	}
+
 	for _, tc := range []struct {
 		name    string
 		write   string
@@ -29,7 +31,7 @@ func TestCoverFileWrite(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			lib, b := ingestedBook(t)
 
-			cf := newCoverFile(newStat(util.NewTestFS(t), "cover.jpg", 0644), lib, lib.Edit, util.Fixed(b))
+			cf := newCoverFile(newStat(util.NewTestFS(t), "cover.jpg", 0o644), lib, lib.Edit, util.Fixed(b))
 			fid := fstest.Fid(t, cf, 1)
 			fid.Open(proto.Mode(0))
 			fid.Write(0, tc.write)
@@ -38,8 +40,10 @@ func TestCoverFileWrite(t *testing.T) {
 				if err := fid.WantCloseError(); err == nil {
 					t.Error("Close succeeded, want the library's refusal")
 				}
+
 				return
 			}
+
 			fid.Close()
 
 			r, err := lib.Content(b.ID())
@@ -47,6 +51,7 @@ func TestCoverFileWrite(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer r.Close()
+
 			if got, err := r.Cover(); err != nil || string(got) != tc.write {
 				t.Errorf("cover = %d bytes (err %v), want the %d written", len(got), err, len(tc.write))
 			}

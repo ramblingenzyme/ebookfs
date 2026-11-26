@@ -31,6 +31,7 @@ func parseSelection(spec string) (library.Query, error) {
 		// All parts of the spec are exact to prevent more books being
 		// updated than expected.
 		q.ExactTitles = true
+
 		return q, err
 	default:
 		return parseIdList(spec)
@@ -42,15 +43,19 @@ func parseIdList(spec string) (library.Query, error) {
 		return r == ',' || unicode.IsSpace(r)
 	})
 	ids := make([]int64, 0, len(parts))
+
 	for _, p := range parts {
 		id, err := strconv.ParseInt(p, 10, 64)
 		if err != nil {
 			return library.Query{}, fmt.Errorf("invalid id %q in spec %q", p, spec)
 		}
+
 		ids = append(ids, id)
 	}
+
 	if len(ids) == 0 {
 		return library.Query{}, fmt.Errorf("no valid ids in spec %q", spec)
 	}
+
 	return library.Query{IDs: ids}, nil
 }

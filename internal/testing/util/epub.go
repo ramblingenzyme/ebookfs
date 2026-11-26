@@ -13,22 +13,27 @@ import (
 // 3.3 §4.3.3 requires of a valid epub.
 func BuildTestEpub(t testing.TB, title string, authors ...string) []byte {
 	t.Helper()
+
 	if len(authors) == 0 {
 		authors = []string{"Alice"}
 	}
 
 	var buf bytes.Buffer
+
 	zw := zip.NewWriter(&buf)
 
 	mt, err := zw.CreateHeader(&zip.FileHeader{Name: "mimetype", Method: zip.Store})
 	if err != nil {
 		t.Fatal(err)
 	}
-	mt.Write([]byte("application/epub+zip"))
+
+	if _, err := mt.Write([]byte("application/epub+zip")); err != nil {
+		t.Fatal(err)
+	}
 
 	var creatorEls strings.Builder
 	for i, a := range authors {
-		creatorEls.WriteString(fmt.Sprintf("    <dc:creator id=\"c%d\">%s</dc:creator>\n", i+1, a))
+		fmt.Fprintf(&creatorEls, "    <dc:creator id=\"c%d\">%s</dc:creator>\n", i+1, a)
 	}
 
 	//goland:noinspection HttpUrlsUsage
@@ -57,11 +62,16 @@ func BuildTestEpub(t testing.TB, title string, authors ...string) []byte {
 		if err != nil {
 			t.Fatal(err)
 		}
-		w.Write([]byte(content))
+
+		if _, err := w.Write([]byte(content)); err != nil {
+			t.Fatal(err)
+		}
 	}
+
 	if err := zw.Close(); err != nil {
 		t.Fatal(err)
 	}
+
 	return buf.Bytes()
 }
 
@@ -79,6 +89,7 @@ type LibraryConfig struct {
 func TestConfig(t testing.TB) LibraryConfig {
 	t.Helper()
 	dir := t.TempDir()
+
 	return LibraryConfig{
 		Root:      filepath.Join(dir, "root"),
 		InboxTemp: filepath.Join(dir, "inbox-tmp"),

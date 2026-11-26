@@ -23,11 +23,14 @@ func openTestLibrary(t *testing.T) *Library {
 
 func openLib(t *testing.T, cfg Config, opts ...Option) *Library {
 	t.Helper()
+
 	lib, err := Open(cfg, opts...)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
+
 	t.Cleanup(func() { lib.Close() })
+
 	return lib
 }
 
@@ -42,10 +45,12 @@ func metaPathOf(book *Book, root string) string {
 // could-not-observe path from a test.
 func breakEpub(t *testing.T, book *Book, root string) {
 	t.Helper()
+
 	absEpub := filepath.Join(root, book.Path())
 	if err := os.Remove(absEpub); err != nil {
 		t.Fatalf("remove epub: %v", err)
 	}
+
 	dangling := filepath.Join(filepath.Dir(absEpub), "nowhere.epub")
 	if err := os.Symlink(dangling, absEpub); err != nil {
 		t.Fatalf("symlink: %v", err)
@@ -67,9 +72,11 @@ func dropIndex(t *testing.T, cfg Config) {
 // Reopening twice verifies that skipped books can be reconciled repeatedly.
 func assertSettlesClean(t *testing.T, cfg Config) {
 	t.Helper()
+
 	for i := 1; i <= 2; i++ {
 		lib := openLib(t, cfg)
 		assertIndexMatchesStore(t, lib)
+
 		if err := lib.Close(); err != nil {
 			t.Fatalf("Close %d: %v", i, err)
 		}
@@ -78,22 +85,27 @@ func assertSettlesClean(t *testing.T, cfg Config) {
 
 func assertIndexMatchesStore(t *testing.T, lib *Library) {
 	t.Helper()
+
 	entries, err := lib.store.Walk()
 	if err != nil {
 		t.Fatalf("Walk: %v", err)
 	}
+
 	indexed, err := lib.index.AllPathInfo()
 	if err != nil {
 		t.Fatalf("AllPathInfo: %v", err)
 	}
+
 	if len(indexed) != len(entries) {
 		t.Fatalf("index has %d paths, store has %d", len(indexed), len(entries))
 	}
+
 	for _, entry := range entries {
 		observed, err := lib.store.Stat(entry)
 		if err != nil {
 			observed = drift.PathInfo{}
 		}
+
 		if got, ok := indexed[entry.Path]; !ok || !got.Equal(observed) {
 			t.Fatalf("index observation for %q = %+v, want %+v", entry.Path, got, observed)
 		}
@@ -102,10 +114,12 @@ func assertIndexMatchesStore(t *testing.T, lib *Library) {
 
 func ingestTestEpub(t *testing.T, lib *Library, data []byte) *Book {
 	t.Helper()
+
 	b, err := tryIngest(t, lib, data)
 	if err != nil {
 		t.Fatalf("Ingest: %v", err)
 	}
+
 	return b
 }
 
@@ -113,13 +127,16 @@ func ingestTestEpub(t *testing.T, lib *Library, data []byte) *Book {
 func tryIngest(t *testing.T, lib *Library, data []byte) (*Book, error) {
 	//goland:noinspection DuplicatedCode
 	t.Helper()
+
 	h, err := lib.CreateIngest()
 	if err != nil {
 		t.Fatalf("CreateIngest: %v", err)
 	}
+
 	if _, err := h.WriteAt(data, 0); err != nil {
 		t.Fatalf("WriteAt: %v", err)
 	}
+
 	return h.Ingest()
 }
 
@@ -129,15 +146,18 @@ func ingestStopped(t *testing.T, cfg Config, title string, authors ...string) *B
 	t.Helper()
 	lib := openLib(t, cfg)
 	b := ingestTestEpub(t, lib, buildTestEpub(t, title, authors...))
+
 	if err := lib.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
+
 	return b
 }
 
 func writeFile(t *testing.T, path string, data []byte) {
 	t.Helper()
-	if err := os.WriteFile(path, data, 0644); err != nil {
+
+	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
 }

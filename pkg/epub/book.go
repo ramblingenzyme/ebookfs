@@ -62,14 +62,17 @@ func Open(p string) (_ *Book, err error) {
 	if size := f.Size(f.PackagePath()); size > maxPackageSize {
 		return nil, fmt.Errorf("package document declares %d bytes, over the %d-byte limit", size, maxPackageSize)
 	}
+
 	raw, err := f.ReadEntry(f.PackagePath())
 	if err != nil {
 		return nil, err
 	}
+
 	pkg, err := opf.Parse(raw)
 	if err != nil {
 		return nil, err
 	}
+
 	return newBook(f, pkg), nil
 }
 
@@ -86,15 +89,19 @@ func newBook(f *File, pkg *opf.Package) *Book {
 	b.Subjects = m.Subjects
 	b.pubdate = m.Pubdate
 	b.Authors = make([]Author, 0, len(m.Authors))
+
 	for _, a := range m.Authors {
 		b.Authors = append(b.Authors, Author(a))
 	}
+
 	b.Contributors = make([]Contributor, 0, len(m.Contributors))
 	for _, c := range m.Contributors {
 		b.Contributors = append(b.Contributors, Contributor(c))
 	}
+
 	b.Series = (*Series)(m.Series)
 	b.orig = b.take()
+
 	return b
 }
 
@@ -114,6 +121,7 @@ func (b *Book) take() Metadata {
 		series := *b.Series
 		s.Series = &series
 	}
+
 	return s
 }
 
@@ -137,5 +145,6 @@ func (b *Book) Cover() ([]byte, error) {
 	if b.coverPath == "" {
 		return nil, ErrNoCover
 	}
+
 	return b.ReadEntry(b.coverPath)
 }

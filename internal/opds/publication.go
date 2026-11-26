@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ophymx/opds"
+
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
@@ -41,13 +42,8 @@ func toPublication(b *library.Book) opds.Publication {
 		p.In(l)
 	}
 
-	if pub := b.Publisher(); pub != "" {
-		p.Publisher = pub
-	}
-
-	if rights := b.Rights(); rights != "" {
-		p.Rights = rights
-	}
+	p.Publisher = b.Publisher()
+	p.Rights = b.Rights()
 
 	for _, subject := range b.Subjects() {
 		p.Subjects = append(p.Subjects, opds.Subject{Name: subject})
@@ -94,6 +90,7 @@ func published(s string) (time.Time, bool) {
 			return t, true
 		}
 	}
+
 	return time.Time{}, false
 }
 
@@ -105,6 +102,7 @@ func seriesPosition(index string) float64 {
 	if err != nil {
 		return 0
 	}
+
 	return pos
 }
 
@@ -117,5 +115,6 @@ func identifierURN(scheme, value string) string {
 	case "":
 		return value
 	}
+
 	return scheme + ":" + value
 }

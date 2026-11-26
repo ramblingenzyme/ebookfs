@@ -3,9 +3,10 @@ package book
 import (
 	"errors"
 
+	"github.com/ramblingenzyme/go9p/proto"
+
 	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
-	"github.com/ramblingenzyme/go9p/proto"
 )
 
 // opfFile serves a book's raw OPF XML, loading bytes from the epub on each open.
@@ -27,6 +28,7 @@ func newOPFFile(stat *proto.Stat, lib ContentReader, book func() *library.Book) 
 			if !ok {
 				return nil, errors.New("format does not support OPF")
 			}
+
 			return e.OPF()
 		})),
 		book: book,
@@ -38,5 +40,6 @@ func (o *opfFile) Stat() proto.Stat {
 	if b := o.book(); b != nil {
 		s.Length = uint64(b.OpfSize())
 	}
+
 	return s
 }

@@ -21,6 +21,7 @@ func (o *Package) NCXPath(base string) string {
 			return xml.ResolveHref(base, item.Href)
 		}
 	}
+
 	return ""
 }
 
@@ -33,10 +34,12 @@ func (o *Package) NCXPath(base string) string {
 // cover page neither pointer reaches.
 func (o *Package) CoverPages(base string) []string {
 	var out []string
+
 	add := func(href string) {
 		if href == "" {
 			return
 		}
+
 		if p := xml.ResolveHref(base, href); p != "" && !slices.Contains(out, p) {
 			out = append(out, p)
 		}
@@ -48,7 +51,9 @@ func (o *Package) CoverPages(base string) []string {
 			add(r.Href)
 		}
 	}
+
 	add(o.firstSpineHref())
+
 	return out
 }
 
@@ -59,10 +64,12 @@ func (o *Package) firstSpineHref() string {
 	if idref == "" {
 		return ""
 	}
+
 	for _, item := range o.d.Manifest() {
 		if item.ID == idref {
 			return item.Href
 		}
 	}
+
 	return ""
 }

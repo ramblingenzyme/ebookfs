@@ -10,6 +10,7 @@ type metadata struct{ md *etree.Element }
 // children matches the local name, so any dc prefix matches.
 func (m metadata) children(tag string) []*etree.Element {
 	var out []*etree.Element
+
 	for _, c := range m.md.ChildElements() {
 		switch c.Tag {
 		case "dc-metadata", "x-metadata":
@@ -22,6 +23,7 @@ func (m metadata) children(tag string) []*etree.Element {
 			out = append(out, c)
 		}
 	}
+
 	return out
 }
 
@@ -31,6 +33,7 @@ func (m metadata) dcParent() *etree.Element {
 	if w := m.md.SelectElement("dc-metadata"); w != nil {
 		return w
 	}
+
 	return m.md
 }
 
@@ -41,9 +44,11 @@ func (m metadata) metaParent() *etree.Element {
 	if w := m.md.SelectElement("x-metadata"); w != nil {
 		return w
 	}
+
 	if m.md.SelectElement("dc-metadata") == nil {
 		return m.md
 	}
+
 	return m.md.CreateElement("x-metadata")
 }
 
@@ -57,18 +62,22 @@ func (m metadata) primary(tag string) *etree.Element {
 			return e
 		}
 	}
+
 	if len(els) > 0 {
 		return els[0]
 	}
+
 	return nil
 }
 
 func (m metadata) named(name string) []*etree.Element {
 	var out []*etree.Element
+
 	for _, e := range m.children("meta") {
 		if attr(e, "name") == name {
 			out = append(out, e)
 		}
 	}
+
 	return out
 }

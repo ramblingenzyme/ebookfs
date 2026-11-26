@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Additional EPUB metadata fields.** Publisher, rights, subjects, and contributors are now readable and writable through the filesystem interface. Subjects and contributors support multiple values (newline-separated); publisher and rights are single-valued. All four fields are exposed in the OPDS catalog. The database schema version is bumped, so the first startup after upgrading reindexes.
 
-- **OPDS catalog, the second frontend.** An OPDS 1.2 / 2.0 feed at `/opds`, off unless `opds.listen` is set, built on [`github.com/ophymx/opds`](https://github.com/ophymx/opds). Reader apps browse all books, recently added, authors, series, tags and reading status, search over OpenSearch, and download through the configured exporter. Covers are served from the original epub, so browsing never triggers a kepub conversion. Read-only: 9P is still the only write path (DECISIONS.md #4). See [docs/security.md](./docs/security.md) before opening the port.
+- **OPDS catalog, the second frontend.** An OPDS 1.2 / 2.0 feed at `/opds` on the shared `http.listen` listener, off unless `opds.enable` is set, built on [`github.com/ophymx/opds`](https://github.com/ophymx/opds). Reader apps browse all books, recently added, authors, series, tags and reading status, search over OpenSearch, and download each book's original epub. Read-only: 9P is still the only write path (DECISIONS.md #4). See [docs/security.md](./docs/security.md) before opening the port.
 
 - **kosync, KOReader reading-progress sync.** A kosync-compatible server on the shared HTTP listener at `/sync/`, off unless `kosync.enable` is set. One pre-provisioned account (`kosync.username` and `kosync.password`); registration is refused. Progress lives in each book's `.sidecar/kosync.json`, keyed by KOReader's partial-MD5 document ID, and each sync updates the book's status from the synced percentage using `reading_threshold` and `read_threshold`. A book marked read stays read. The document-ID index is kept in memory and rebuilt from the sidecars at every startup, so a book arriving while kosync is off still gets a document ID on the next restart. See [docs/kosync.md](./docs/kosync.md).
 
@@ -40,23 +40,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **A zip that is not an epub reports `ErrNotEpub`.** Opening a `.cbz` or other plain zip with `pkg/epub` failed with `ErrContainer`, which pointed at a broken epub.
 
-- **Write-path durability for renames and crash recovery.** Atomic renames now fsync both parent directories before returning, and directories created for them fsync their own parents, preventing a crash from losing a rename the caller was told succeeded. A failed directory fsync is logged rather than returned, since the rename has already happened. This covers epub saves, metadata writes, ingest moves, sidecar writes, and kosync mapping updates. `library.WriteSidecarFile` gives callers already holding a sidecar root the same write as `Library.WriteSidecar`. Stale `.ebookfs-*.tmp` files in book directories, left by epub and `meta.toml` writes, are now cleaned up on startup, instead of only sweeping the inbox temp directory. A crash mid-save previously left these behind forever.
+- **Write-path durability for renames and crash recovery.** Atomic renames now fsync both parent directories before returning, and directories created for them fsync their own parents, preventing a crash from losing a rename the caller was told succeeded. A failed directory fsync is logged rather than returned, since the rename has already happened. This covers epub saves, metadata writes, ingest moves, sidecar writes, and kosync mapping updates. `library.WriteSidecarFile` gives callers already holding a sidecar root the same write as `Library.WriteSidecar`. Temp files left in book directories by an interrupted epub or `meta.toml` write are now cleaned up on startup, instead of only sweeping the inbox temp directory. A crash mid-save previously left these behind forever.
 
 - **Ingest path fsyncs uploaded epubs before rename.** The ingest handle now fsyncs the uploaded epub file before closing it, and the ingest path fsyncs the processed file (original or hook-transformed) before `store.Ingest` renames it to the final location. A failed fsync or close rejects the upload. Without this, a crash after rename but before the file data is flushed could leave the ingested book with incomplete or corrupted data.
-
-- **`ReaderConfig` is validated by the library that owns it.** The rules (a cache dir is required when converting, and it must sit outside the library root or the store walk indexes converted kepubs as books) were enforced only in `internal/config`, so a caller building the struct in Go got neither. `Library.Exporter` now checks both, and the TOML layer no longer repeats them.
-
-- **`Library.Close` no longer converts the whole kepub backlog before returning.** Up to 4096 queued warm hints were converted on the way out, uncancellably. Close now cancels the converter's context and drops the queue. A warm is a hint; the read path still converts on demand.
 
 - **Identifiers are keyed by scheme rather than by the XML id.** A book indexed `pub-id` and `BookId` where it should have indexed `uuid` and `isbn`. The scheme now comes from `opf:scheme`, the `identifier-type` refinement, or the value's URN namespace, with the XML id as a last resort. The index schema version is bumped, so the first startup after upgrading reindexes and re-derives every identifier row. See DECISIONS.md #24.
 
 - **A repeated tag, author, subject or contributor no longer stops the server starting.** The index refused the repeat, so ingest failed with a raw SQL error, and a repeat already on disk failed the startup rebuild until someone edited the file by hand. Reading an epub or `meta.toml` now keeps the first of each, which also keeps a repeated author out of the book's directory name. An edit that repeats one is refused with a readable error.
 
+- **A hand-edited `meta.toml` with an invalid value no longer stops the server starting.** `rating = nan` failed the startup rebuild for the whole library, while an out-of-range rating, an unknown status or a missing id loaded as-is. Each now gets the checks an edit through ebookfs gets. A book whose sidecar fails them is logged and left out of the index until the file is fixed, as an unparseable `meta.toml` already was.
+
 - **`ctl` reports a total failure as `error:`.** A command where every matched book failed still opened with `ok:`. A partial failure still opens with `ok:`, followed by the errors.
 
 - **Replacing a cover keeps percentage sizes.** An HTML cover page's `<img width="100%">` was rewritten to the new image's pixel width, which overflows a small screen.
 
-- **Sidecar access no longer recreates a deleted book directory.** A kepub stat or sidecar read for a book removed outside ebookfs left an empty `Author/Title (id)/.sidecar/` behind.
+- **Sidecar access no longer recreates a deleted book directory.** A sidecar read for a book removed outside ebookfs left an empty `Author/Title (id)/.sidecar/` behind.
 
 ### Changed
 
@@ -70,14 +68,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`fs/` and its subpackages moved to `internal/fs/`.** Eight packages exporting some 40 constructors and types, with `main.go` as the only caller. A `v1.0.0` tag binds every importable package in the module, and none of these were ever meant to be imported.
 - **`library.Library` is a struct, and each frontend package declares the interface it uses.** The interface had one implementation, now the exported `Library` struct returned by `Open`. Adding a library method is additive rather than a change every consumer and fake absorbs.
 - **`Reindex` excludes the other mutations.** It moves book directories and rebuilds the index wholesale, neither of which addresses a single book, so the per-book lock could not cover it. `Edit`, `Delete` and ingest now hold a shared lock that `Reindex` takes exclusively.
-- **The library owns its config types; the binary's TOML schema moved to `internal/config`.** `library.Config` and `library.ReaderConfig` carry only what the library takes, with no serialization tags. `main.go` maps one to the other, and validation stays at the TOML boundary. The library now depends on no config package, which is what a standalone module needs.
+- **The library owns its config types; the binary's TOML schema moved to `internal/config`.** `library.Config` carries only what the library takes, with no serialization tags. `main.go` maps one to the other, and validation stays at the TOML boundary. The library now depends on no config package, which is what a standalone module needs.
 - **`library/model` package removed.** Types previously in `library/model` are now either part of the `library` package or internal:
   - **Public API (now in `library`):** `Book`, `Author`, `Series`, `Edits`, `ValidationError`, `FieldError`, `Query`, `Order`, `Stats`, `EpubReader`
   - **Internal:** `PathSafe` (now in `internal/util/naming`), status constants, `JoinAuthors`, `UnknownAuthor`, `Validate`
   - **`library.Book` is now an immutable wrapper** (`book.ImmutableBook`) with getter methods instead of direct field access:
     - The old struct fields (`book.Title`, `book.Authors`, `book.Meta.Status`, `book.Meta.Rating`, `book.Meta.Tags`, etc.) are now methods (`book.Title()`, `book.Authors()`, `book.Status()`, `book.Rating()`, `book.Tags()`, etc.).
     - Slices and maps returned by getters are cloned to prevent external mutation.
-    - `Library.Search`, `Library.Edit`, and all `Exporter` methods return or accept `*library.Book`.
+    - `Library.Search` and `Library.Edit` return `*library.Book`.
     - Callers must use the getter methods and re-fetch after mutations (via `Library.Search` or `Library.Edit` return value) to see updated state.
 
 - **`library.inbox_temp` and `library.index_path` default to paths under `library.root`.** They were fixed under `/var/lib/ebookfs/library`, so a config setting only `root` kept the index and upload temp dir there, and startup failed when the two sat on different filesystems. An unset or empty value now follows the configured root. The index path defaults to `<state_dir>/.index.db`, where `state_dir` itself defaults to `library.root`.
@@ -91,6 +89,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - **`library.ErrNotEpub`, `ErrContainer`, `ErrNoRootfile` and `ErrRootfileMissing`.** Ingest now reports a file no format recognizes as `ErrUnknownFormat`, and an epub with a broken container or package document as `ErrInvalidBook`. The error message still names the specific fault.
+
+- **The `reader/` view and kepub conversion.** Use the OPDS catalog to get books onto a device. It serves each book by id, so a metadata edit no longer renames the file a device synced and orphans its reading progress. The `[reader]` config section (`statuses`, `convert`, `cache_dir`) now logs an unknown-key warning at startup, and the kepub cache directory can be deleted. `Library.Exporter` and `library.ReaderConfig` are removed. See ADR-001.
 
 - **`ctl reindex`.** Use `--reindex`, or let startup rebuild when drift detection finds the index and store disagreeing. Run live it moved book directories while the 9P tree kept serving the old names, leaving registry and store disagreeing until restart.
 

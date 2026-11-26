@@ -4,8 +4,9 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/go9p/proto"
+
+	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 )
 
 const maxFieldFileSize = 1 << 20 // 1 MiB
@@ -37,6 +38,7 @@ func (f *fieldFile) Stat() proto.Stat {
 	s := f.BaseFile.Stat()
 	// +1 for the trailing newline that Read and Open always append.
 	s.Length = uint64(len(f.get()) + 1)
+
 	return s
 }
 
@@ -45,17 +47,21 @@ func (f *fieldFile) Open(fid uint64, omode proto.Mode) error {
 	if err := f.SnapshotFile.Open(fid, omode); err != nil {
 		return err
 	}
+
 	f.Lock()
 	f.truncated[fid] = omode&proto.Otrunc != 0
 	f.Unlock()
+
 	return nil
 }
 
 func (f *fieldFile) Write(fid uint64, offset uint64, data []byte) (uint32, error) {
 	var seed func() []byte
+
 	f.RLock()
 	truncated := f.truncated[fid]
 	f.RUnlock()
+
 	if !truncated {
 		if snapshot, ok := f.Snapshot(fid); ok {
 			seed = func() []byte { return snapshot }
@@ -80,10 +86,12 @@ func (f *fieldFile) Close(fid uint64) error {
 	delete(f.truncated, fid)
 	f.Unlock()
 	f.SnapshotFile.Close(fid)
+
 	return f.writes.Commit(fid, func(data []byte) error {
 		if f.set == nil {
 			return errors.New("read-only")
 		}
+
 		return f.set(strings.TrimRight(string(data), "\n"))
 	})
 }

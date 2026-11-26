@@ -23,6 +23,7 @@ import (
 func (s *Store) Layout(authors []book.Author, title string, id int64, format book.Format) book.File {
 	libPath := canonicalDir(authors, title, id)
 	filename := bookFilename(authors, title, format)
+
 	return book.File{
 		Path:   filepath.Join(libPath, filename),
 		Format: format,
@@ -32,9 +33,11 @@ func (s *Store) Layout(authors []book.Author, title string, id int64, format boo
 func bookFilename(authors []book.Author, title string, format book.Format) string {
 	fatTitle := naming.ForFAT(title)
 	ext := format.Extension()
+
 	if len(authors) == 0 {
 		return fatTitle + ext
 	}
+
 	return fmt.Sprintf("%s - %s%s", fatTitle, naming.ForFAT(book.JoinAuthors(authors, book.AuthorSep)), ext)
 }
 
@@ -60,13 +63,16 @@ func IDFromPath(libraryPath string) (int64, bool) {
 	if !strings.HasSuffix(base, ")") {
 		return 0, false
 	}
+
 	open := strings.LastIndex(base, " (")
 	if open < 0 {
 		return 0, false
 	}
+
 	id, err := strconv.ParseInt(base[open+2:len(base)-1], 10, 64)
 	if err != nil || id <= 0 {
 		return 0, false
 	}
+
 	return id, true
 }

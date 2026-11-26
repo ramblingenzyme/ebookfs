@@ -5,8 +5,9 @@ package fs
 import (
 	"testing"
 
-	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/go9p/proto"
+
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 )
 
 func TestInboxUploadReachesViews(t *testing.T) {
@@ -21,6 +22,7 @@ func TestInboxUploadReachesViews(t *testing.T) {
 	if len(books) != 1 {
 		t.Errorf("/books has %d entries, want 1", len(books))
 	}
+
 	if len(books) > 0 && books[0] != "Ingested" {
 		t.Errorf("/books[0] = %q, want Ingested", books[0])
 	}
@@ -29,6 +31,7 @@ func TestInboxUploadReachesViews(t *testing.T) {
 	if len(byAuthor) != 1 {
 		t.Errorf("/by-author has %d entries, want 1", len(byAuthor))
 	}
+
 	if len(byAuthor) > 0 && byAuthor[0] != "Alice" {
 		t.Errorf("/by-author[0] = %q, want Alice", byAuthor[0])
 	}
@@ -55,9 +58,10 @@ func TestInboxFailedIngestLeavesNoBook(t *testing.T) {
 func TestCreateOutsideTheInboxIsRefused(t *testing.T) {
 	h := newHarness(t)
 
-	if _, err := h.c.Create("/books/x.epub", 0644, proto.Owrite); err == nil {
+	if _, err := h.c.Create("/books/x.epub", 0o644, proto.Owrite); err == nil {
 		t.Error("creating /books/x.epub was accepted")
 	}
+
 	if got := h.ls("/books"); len(got) != 0 {
 		t.Errorf("ls /books = %v, want empty", got)
 	}

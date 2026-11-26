@@ -26,6 +26,7 @@ func NewContainer(r io.Reader) (*Container, error) {
 	if err := xml.NewDecoder(r).Decode(&c); err != nil {
 		return nil, err
 	}
+
 	return &c, nil
 }
 
@@ -33,11 +34,14 @@ func NewContainer(r io.Reader) (*Container, error) {
 // try them. Whether the archive holds them is the caller's check.
 func (c *Container) PackagePaths() []string {
 	var out []string
+
 	for _, rf := range c.Rootfiles {
 		if rf.MediaType != metadataType {
 			continue
 		}
+
 		out = append(out, rf.FullPath.Candidates()...)
 	}
+
 	return out
 }

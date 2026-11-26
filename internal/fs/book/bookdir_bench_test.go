@@ -16,12 +16,13 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/ramblingenzyme/ebookfs/internal/book"
-	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
-	"github.com/ramblingenzyme/ebookfs/pkg/library"
-
 	"github.com/ramblingenzyme/go9p/fs"
 	"github.com/ramblingenzyme/go9p/proto"
+
+	"github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
+	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
+	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
 // representativeBook builds a Book whose field sizes match a realistic library
@@ -51,11 +52,14 @@ func representativeBook(id int64, withCover bool) *library.Book {
 			"uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 		},
 	}
+
 	if withCover {
 		bib.CoverPath = "OEBPS/cover.jpg"
 	}
+
 	libPath := "Le Guin, Ursula K/The Left Hand of Darkness (1042)"
 	epubName := "The Left Hand of Darkness - Ursula K. Le Guin.epub"
+
 	return util.WrapBook(book.NewBook(bib, book.Meta{ID: id, Status: "unread", Tags: []string{"sci-fi", "classic", "feminist"}}, book.File{
 		Path: filepath.Join(libPath, epubName),
 	}))
@@ -67,16 +71,21 @@ func representativeBook(id int64, withCover bool) *library.Book {
 // way to get a reproducible baseline.
 func settleGC() uint64 {
 	var prev, cur runtime.MemStats
+
 	runtime.GC()
 	runtime.ReadMemStats(&prev)
+
 	for range 10 {
 		runtime.GC()
 		runtime.ReadMemStats(&cur)
+
 		if cur.HeapAlloc == prev.HeapAlloc {
 			return cur.HeapAlloc
 		}
+
 		prev = cur
 	}
+
 	return cur.HeapAlloc
 }
 
@@ -84,6 +93,7 @@ func settleGC() uint64 {
 // 9P tree, measured as an independent experiment from a settled baseline.
 func measureBooksOnly(n int, withCover bool) float64 {
 	settleGC()
+
 	var before runtime.MemStats
 	runtime.ReadMemStats(&before)
 
@@ -93,7 +103,9 @@ func measureBooksOnly(n int, withCover bool) float64 {
 	}
 
 	after := settleGC()
+
 	runtime.KeepAlive(books)
+
 	return float64(int64(after)-int64(before.HeapAlloc)) / float64(n)
 }
 
@@ -102,21 +114,24 @@ func measureBooksOnly(n int, withCover bool) float64 {
 // a settled baseline so the delta between the two functions is the BookDir
 // tree cost, uncontaminated by garbage from the other phase.
 func measureBooksWithDirs(n int, withCover bool) float64 {
-	f, _ := fs.NewFS("glenda", "glenda", 0555, fs.IgnorePermissions())
+	f, _ := fs.NewFS("glenda", "glenda", 0o555, fs.IgnorePermissions())
 	noEdit := func(int64, library.Edits) (*library.Book, error) { return nil, nil }
 
 	settleGC()
+
 	var before runtime.MemStats
 	runtime.ReadMemStats(&before)
 
 	dirs := make([]*BookDir, 0, n)
 	for i := int64(0); i < int64(n); i++ {
 		b := representativeBook(i, withCover)
-		dirs = append(dirs, NewBookDir(f, nil, noEdit, b))
+		dirs = append(dirs, NewBookDir(f, mock.ContentReader{}, noEdit, b))
 	}
 
 	after := settleGC()
+
 	runtime.KeepAlive(dirs)
+
 	return float64(int64(after)-int64(before.HeapAlloc)) / float64(n)
 }
 
@@ -143,13 +158,16 @@ func BenchmarkBookDirMemoryFootprint(b *testing.B) {
 				n, withCover, perBook, perDir, perTotal)
 		}
 	}
+
 	b.Logf("")
 	b.Logf("Projections (per-book + per-BookDir), linear extrapolation from N=10000 with cover:")
+
 	perBook := measureBooksOnly(10000, true)
 	perTotal := measureBooksWithDirs(10000, true)
 	perDir := perTotal - perBook
 	b.Logf("  baseline: per-book=%.0f B  per-BookDir(marginal)=%.0f B  total/book=%.0f B",
 		perBook, perDir, perTotal)
+
 	for _, k := range []int{1000, 5000, 10000, 50000, 100000} {
 		b.Logf("  %6d books  →  %7.1f MiB  (%5.0f B/book × %d)",
 			k, float64(k)*perTotal/1024/1024, perTotal, k)

@@ -5,11 +5,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ramblingenzyme/go9p/proto"
+
 	"github.com/ramblingenzyme/ebookfs/internal/testing/fstest"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/mock"
 	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
-	"github.com/ramblingenzyme/go9p/proto"
 )
 
 func TestFormatStats(t *testing.T) {
@@ -20,6 +21,7 @@ func TestFormatStats(t *testing.T) {
 		TotalSize: 12345, LastAdded: added, LastModified: modified,
 	}
 	got := formatStats(s)
+
 	for _, want := range []string{
 		"books: 3\n",
 		"authors: 2\n",
@@ -80,6 +82,7 @@ func TestStatsFile(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		lib.Close()
 		f := NewStatsFile(util.NewTestFS(t), lib)
 

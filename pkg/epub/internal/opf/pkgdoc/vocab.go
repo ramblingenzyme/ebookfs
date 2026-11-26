@@ -43,6 +43,7 @@ func (v vocab) bindings() map[string]string {
 			m[name] = fields[i+1]
 		}
 	}
+
 	return m
 }
 
@@ -51,10 +52,12 @@ func expand(name string, in map[string]string) string {
 	if !ok {
 		return name
 	}
+
 	url, bound := in[prefix]
 	if !bound {
 		return name
 	}
+
 	return url + local
 }
 
@@ -76,6 +79,7 @@ func (v vocab) has(list, want string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -87,20 +91,24 @@ func (v vocab) spell(ours string) string {
 	if !ok {
 		return ours // default vocabulary, nothing to rebind
 	}
+
 	url := reservedPrefixes[prefix]
 	if url == "" || v.bindings()[prefix] == url {
 		return ours
 	}
 	// Lowest name wins, so the spelling is stable across runs.
 	candidates := make([]string, 0, 1)
+
 	for name, bound := range v.bindings() {
 		if bound == url {
 			candidates = append(candidates, name)
 		}
 	}
+
 	if len(candidates) > 0 {
 		return slices.Min(candidates) + ":" + local
 	}
+
 	return v.declare(prefix, url) + ":" + local
 }
 
@@ -110,6 +118,7 @@ func (v vocab) declare(preferred, url string) string {
 		if _, taken := v.bindings()[name]; !taken {
 			break
 		}
+
 		name = preferred + strconv.Itoa(i)
 	}
 
@@ -117,6 +126,8 @@ func (v vocab) declare(preferred, url string) string {
 	if existing := attr(v.pkg, "prefix"); existing != "" {
 		decl = existing + " " + decl
 	}
+
 	v.pkg.CreateAttr("prefix", decl)
+
 	return name
 }

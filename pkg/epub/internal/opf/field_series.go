@@ -31,6 +31,7 @@ func (f seriesField) get() *Series {
 	if name == "" {
 		return nil
 	}
+
 	return &Series{Name: name, Index: f.d.Named("calibre:series_index").Get()}
 }
 
@@ -56,6 +57,7 @@ func (f seriesField) set(s *Series) {
 		coll.Clear()
 		calibreName.Clear()
 		calibreIdx.Clear()
+
 		return
 	}
 
@@ -93,6 +95,7 @@ func (f seriesField) collection() seriesCollection {
 			return seriesCollection{f: f, Element: m}
 		}
 	}
+
 	return seriesCollection{f: f, Element: f.d.NewPropertyMeta(collectionProperty, seriesIDPrefix)}
 }
 
@@ -144,5 +147,6 @@ func calibreIndex(s string) string {
 	if len(parts) < 3 {
 		return s
 	}
+
 	return parts[0] + "." + parts[1]
 }

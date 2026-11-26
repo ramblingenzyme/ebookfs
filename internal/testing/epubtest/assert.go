@@ -15,25 +15,30 @@ import (
 
 func Metadata(t *testing.T, path string) *etree.Element {
 	t.Helper()
+
 	doc := etree.NewDocument()
 	if err := doc.ReadFromBytes(ReadEntry(t, path, OPFPath)); err != nil {
 		t.Fatalf("result is not parseable XML: %v", err)
 	}
+
 	md := doc.FindElement("//metadata")
 	if md == nil {
 		t.Fatal("result has no <metadata>")
 	}
+
 	return md
 }
 
 // ReadEntryFromFile reports absence; ReadEntry fails the test on it.
 func ReadEntryFromFile(t *testing.T, path, name string) ([]byte, bool) {
 	t.Helper()
+
 	zrc, err := zip.OpenReader(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer zrc.Close()
+
 	for _, f := range zrc.File {
 		if f.Name == name {
 			rc, err := f.Open()
@@ -41,13 +46,16 @@ func ReadEntryFromFile(t *testing.T, path, name string) ([]byte, bool) {
 				t.Fatal(err)
 			}
 			defer rc.Close()
+
 			b := new(bytes.Buffer)
 			if _, err := b.ReadFrom(rc); err != nil {
 				t.Fatal(err)
 			}
+
 			return b.Bytes(), true
 		}
 	}
+
 	return nil, false
 }
 
@@ -57,6 +65,7 @@ func ReadEntry(t *testing.T, path, name string) []byte {
 	if !ok {
 		t.Fatalf("entry %q not found", name)
 	}
+
 	return b
 }
 
@@ -92,10 +101,12 @@ func TextOf(t *testing.T, root *etree.Element, path string) string {
 
 func elemAt(t *testing.T, root *etree.Element, path string) *etree.Element {
 	t.Helper()
+
 	el := root.FindElement(path)
 	if el == nil {
 		t.Fatalf("nothing matches %s; <metadata> holds %s", path, childTags(root))
 	}
+
 	return el
 }
 
@@ -106,5 +117,6 @@ func childTags(root *etree.Element) string {
 	for _, c := range root.ChildElements() {
 		tags = append(tags, c.Tag)
 	}
+
 	return strings.Join(tags, ", ")
 }

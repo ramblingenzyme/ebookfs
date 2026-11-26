@@ -29,10 +29,12 @@ func (idx *Index) Search(q Query) ([]*book.Book, error) {
 	} else if len(q.Titles) > 0 {
 		clauses := make([]string, len(q.Titles))
 		args := make([]any, len(q.Titles))
+
 		for i, t := range q.Titles {
 			clauses[i] = "b.title LIKE ? ESCAPE '\\'"
-			args[i] = "%" + escapeSQLLike(t) + "%"
+			args[i] = "%" + likeEscaper.Replace(t) + "%"
 		}
+
 		bq.addCondition("("+strings.Join(clauses, " OR ")+")", args...)
 	}
 
@@ -51,6 +53,7 @@ func orderClause(o Order) string {
 	// on the bare column would put all of those in one NULL tie and list them
 	// by id.
 	const byTitle = "COALESCE(b.sort_title, b.title), b.id"
+
 	switch o {
 	case OrderDateAdded:
 		return "b.date_added DESC, b.id DESC"
@@ -65,12 +68,9 @@ func orderClause(o Order) string {
 	}
 }
 
-func escapeSQLLike(s string) string {
-	s = strings.ReplaceAll(s, "\\", "\\\\")
-	s = strings.ReplaceAll(s, "%", "\\%")
-	s = strings.ReplaceAll(s, "_", "\\_")
-	return s
-}
+// likeEscaper escapes LIKE's wildcards for the ESCAPE '\' clause Search
+// writes.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 // Exists is the ingest duplicate rule: the same title and the same set of
 // author display names. BookExists in queries.sql does the set comparison,

@@ -30,6 +30,7 @@ func feedURN(kindID, value string) string {
 	if value == "" {
 		return urn("feed:" + kindID)
 	}
+
 	return urn("feed:" + kindID + ":" + value)
 }
 
@@ -39,6 +40,7 @@ func feedPath(kindID, value string) string {
 	if value == "" {
 		return path
 	}
+
 	return path + "?" + url.Values{valueParam: {value}}.Encode()
 }
 

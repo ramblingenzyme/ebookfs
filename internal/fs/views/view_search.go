@@ -8,10 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
-	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 	"github.com/ramblingenzyme/go9p/fs"
 	"github.com/ramblingenzyme/go9p/proto"
+
+	"github.com/ramblingenzyme/ebookfs/internal/fs/registry"
+	"github.com/ramblingenzyme/ebookfs/internal/fs/vfile"
 )
 
 // searchDir is the search/ root: a clone file and one subdirectory per live
@@ -44,11 +45,11 @@ func NewSearchDir(f *fs.FS, reg *registry.BookRegistry, ttl time.Duration, maxHa
 	}
 
 	clone := &cloneFile{
-		BaseFile: *fs.NewBaseFile(newStat(f, "clone", 0444)),
+		BaseFile: *fs.NewBaseFile(newStat(f, "clone", 0o444)),
 		search:   d,
 		handles:  make(map[uint64]int64),
 	}
-	d.StaticDir.AddChild(clone)
+	vfile.AddChild(d.StaticDir, clone)
 
 	if ttl > 0 || maxHandles > 0 {
 		go d.cleanupLoop()
@@ -69,7 +70,7 @@ func (d *searchDir) allocateHandle() *searchHandleDir {
 	handle := newSearchHandleDir(d.f, id, d.reg, d)
 	d.handles[id] = handle
 	d.reg.AddView(handle.results)
-	d.StaticDir.AddChild(handle)
+	vfile.AddChild(d.StaticDir, handle)
 
 	return handle
 }
@@ -77,6 +78,7 @@ func (d *searchDir) allocateHandle() *searchHandleDir {
 func (d *searchDir) removeHandle(id int64) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
 	d.removeHandleLocked(id)
 }
 
@@ -85,6 +87,7 @@ func (d *searchDir) removeHandleLocked(id int64) {
 	if !ok {
 		return
 	}
+
 	d.reg.RemoveView(handle.results)
 	d.StaticDir.DeleteChild(strconv.FormatInt(id, 10))
 	delete(d.handles, id)
@@ -130,6 +133,7 @@ func (d *searchDir) Close() {
 func (d *searchDir) cleanupLoop() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ticker.C:
@@ -159,31 +163,38 @@ type cloneFile struct {
 func (f *cloneFile) Open(fid uint64, _ proto.Mode) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	if _, exists := f.handles[fid]; !exists {
 		f.handles[fid] = 0
 	}
+
 	return nil
 }
 
 func (f *cloneFile) Read(fid uint64, offset uint64, count uint64) ([]byte, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	id, ok := f.handles[fid]
 	if !ok {
 		return nil, fmt.Errorf("not open")
 	}
+
 	if id == 0 {
 		id = f.search.allocateHandle().id
 		f.handles[fid] = id
 	}
 
 	data := []byte(strconv.FormatInt(id, 10) + "\n")
+
 	return vfile.ClampRead(data, offset, count), nil
 }
 
 func (f *cloneFile) Close(fid uint64) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	delete(f.handles, fid)
+
 	return nil
 }

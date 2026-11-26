@@ -53,6 +53,7 @@ func (r *bookRow) toBook() *book.Book {
 			Index: r.seriesIndex.String,
 		}
 	}
+
 	return b
 }
 
@@ -64,14 +65,16 @@ func (r *bookRow) toBook() *book.Book {
 func parseDateField(s, field string, where ...any) time.Time {
 	t, err := time.Parse(time.RFC3339, s)
 	if err != nil {
-		slog.Warn("invalid "+field, append(where, field, s, "error", err)...)
+		slog.Warn("invalid date", append(where, "field", field, "value", s, "error", err)...)
 		return time.Time{}
 	}
+
 	return t
 }
 
 func scanBookRows(rows *sql.Rows) ([]*book.Book, error) {
 	var books []*book.Book
+
 	for rows.Next() {
 		var r bookRow
 		if err := rows.Scan(
@@ -84,13 +87,17 @@ func scanBookRows(rows *sql.Rows) ([]*book.Book, error) {
 		); err != nil {
 			return nil, err
 		}
+
 		books = append(books, r.toBook())
 	}
+
 	if err := rows.Close(); err != nil {
 		return nil, err
 	}
+
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+
 	return books, nil
 }

@@ -11,11 +11,13 @@ func (o *Package) subjects() subjectsField { return subjectsField{o.d} }
 // get returns all non-empty dc:subject elements in document order.
 func (f subjectsField) get() []string {
 	out := []string{}
+
 	for _, el := range f.d.DCAll("subject") {
 		if v := el.Get(); v != "" {
 			out = append(out, v)
 		}
 	}
+
 	return out
 }
 
@@ -26,18 +28,21 @@ func (f subjectsField) set(subjects []string) {
 	// Keyed by the text get reports, so a match is the element the caller was shown.
 	byText := map[string]*pkgdoc.Element{}
 	unclaimed := map[*pkgdoc.Element]bool{}
+
 	for _, el := range f.d.DCAll("subject") {
 		if text := el.Get(); text != "" {
 			if _, seen := byText[text]; !seen {
 				byText[text] = el
 			}
 		}
+
 		unclaimed[el] = true
 	}
 
 	// A repeat is placed once, since placing it again would move the element
 	// from its first position to the end.
 	placed := map[*pkgdoc.Element]bool{}
+
 	for _, text := range subjects {
 		el, reused := byText[text]
 		if reused {
@@ -47,6 +52,7 @@ func (f subjectsField) set(subjects []string) {
 			el.Set(text)
 			byText[text] = el
 		}
+
 		if !placed[el] {
 			el.Place()
 			placed[el] = true

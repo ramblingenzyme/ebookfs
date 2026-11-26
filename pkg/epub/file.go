@@ -41,14 +41,21 @@ func OpenFromFile(f *os.File, path string) (_ *File, err error) {
 	if err != nil {
 		return nil, err
 	}
+
 	zr, err := zip.NewReader(f, fi.Size())
 	if err != nil {
 		return nil, notEpub(path, err)
 	}
+
 	a, err := openArchive(zr)
 	if err != nil {
 		return nil, err
 	}
+
+	if err := a.validate(); err != nil {
+		return nil, err
+	}
+
 	return &File{path: path, f: f, a: a}, nil
 }
 
@@ -69,6 +76,7 @@ func (f *File) ReadEntry(name string) ([]byte, error) {
 	if f.closed {
 		return nil, ErrClosed
 	}
+
 	return f.a.read(name)
 }
 
@@ -76,6 +84,7 @@ func (f *File) has(name string) bool {
 	if f.closed {
 		return false
 	}
+
 	return f.a.has(name)
 }
 
@@ -85,6 +94,7 @@ func (f *File) Size(name string) int64 {
 	if f.closed {
 		return 0
 	}
+
 	return f.a.size(name)
 }
 
@@ -93,6 +103,7 @@ func (f *File) ReadAt(p []byte, off int64) (int, error) {
 	if f.closed {
 		return 0, ErrClosed
 	}
+
 	return f.f.ReadAt(p, off)
 }
 
@@ -101,6 +112,8 @@ func (f *File) Close() error {
 	if f.closed {
 		return ErrClosed
 	}
+
 	f.closed = true
+
 	return f.f.Close()
 }
