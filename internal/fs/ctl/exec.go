@@ -297,15 +297,7 @@ func (f *CtlFile) editSelection(op string, query library.Query, editFn func(*lib
 		errs              []string
 	)
 
-	seen := make(map[int64]bool, len(visit))
-
-	for _, id := range visit {
-		if seen[id] {
-			continue
-		}
-
-		seen[id] = true
-
+	for _, id := range book.FirstOf(visit, func(id int64) int64 { return id }) {
 		_, changed, err := f.lib.Update(id, editFn)
 		switch {
 		case err != nil:

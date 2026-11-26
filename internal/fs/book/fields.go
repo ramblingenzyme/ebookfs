@@ -88,16 +88,9 @@ var fields = map[string]field{
 			})
 		},
 		edits: func(s string) (library.Edits, error) {
-			var contributors []library.Contributor
-
-			for line := range strings.SplitSeq(s, "\n") {
-				name, role := textfmt.ParsePair(line)
-				if name == "" {
-					continue
-				}
-
-				contributors = append(contributors, library.Contributor{Name: name, Role: role})
-			}
+			contributors := pairLines(s, func(name, role string) library.Contributor {
+				return library.Contributor{Name: name, Role: role}
+			})
 
 			return library.Edits{Contributors: &contributors}, nil
 		},
@@ -109,17 +102,9 @@ var fields = map[string]field{
 			})
 		},
 		edits: func(s string) (library.Edits, error) {
-			var authors []library.Author
-
-			for line := range strings.SplitSeq(s, "\n") {
-				a := textfmt.ParseAuthor(line)
-				if a.Name == "" {
-					continue
-				}
-
-				authors = append(authors, a)
-			}
-
+			authors := pairLines(s, func(name, sortName string) library.Author {
+				return library.Author{Name: name, SortName: sortName}
+			})
 			if len(authors) == 0 {
 				return library.Edits{}, fmt.Errorf("at least one author is required")
 			}
@@ -157,6 +142,23 @@ func joinLines[T any](xs []T, format func(T) string) string {
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+// pairLines is the inverse of joinLines for "First | Second" lines, skipping
+// any whose first half is blank.
+func pairLines[T any](s string, build func(first, second string) T) []T {
+	var out []T
+
+	for line := range strings.SplitSeq(s, "\n") {
+		first, second := textfmt.ParsePair(line)
+		if first == "" {
+			continue
+		}
+
+		out = append(out, build(first, second))
+	}
+
+	return out
 }
 
 // formatIdentifiers sorts by scheme, since sorting the "scheme=value" lines
