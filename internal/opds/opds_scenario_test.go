@@ -93,8 +93,8 @@ func newFake(t *testing.T, books ...*library.Book) (*fake, http.Handler) {
 
 		return nil, fmt.Errorf("book %d: %w", id, library.ErrBookNotFound)
 	}
-	f.ContentFn = func(int64) (library.EpubReader, error) {
-		return &mock.EpubReader{
+	f.ContentFn = func(int64) (library.Reader, error) {
+		return &mock.Reader{
 			Reader:  bytes.NewReader([]byte(epubBody)),
 			CoverFn: func() ([]byte, error) { return []byte("\x89PNG\r\n\x1a\n cover"), nil },
 		}, nil
@@ -202,7 +202,7 @@ func TestFacetHrefRoundTripsAwkwardNames(t *testing.T) {
 
 func TestEntryCarriesAcquisitionAndMetadata(t *testing.T) {
 	b := util.MakeMutableBook(7, "Dune", "Frank Herbert")
-	b.EpubPath = "Frank Herbert/Dune (7)/Dune.epub"
+	b.Path = "Frank Herbert/Dune (7)/Dune.epub"
 	b.CoverPath = "OEBPS/cover.jpg"
 	b.Meta.Tags = []string{"scifi"}
 	_, h := newFake(t, util.WrapBook(b))
@@ -231,8 +231,8 @@ func TestEntryCarriesAcquisitionAndMetadata(t *testing.T) {
 		switch l.Rel {
 		case "http://opds-spec.org/acquisition/open-access":
 			acquisition = l.Href
-			if l.Type != mediaTypeEpub {
-				t.Errorf("acquisition type = %q, want %q", l.Type, mediaTypeEpub)
+			if l.Type != "application/epub+zip" {
+				t.Errorf("acquisition type = %q, want %q", l.Type, "application/epub+zip")
 			}
 		case "http://opds-spec.org/image":
 			cover = l.Href
@@ -250,8 +250,8 @@ func TestEntryCarriesAcquisitionAndMetadata(t *testing.T) {
 
 func TestDownloadSupportsRanges(t *testing.T) {
 	b := util.MakeMutableBook(7, "Dune", "Frank Herbert")
-	b.EpubPath = "Frank Herbert/Dune (7)/Dune.epub"
-	b.EpubSize = int64(len(epubBody))
+	b.Path = "Frank Herbert/Dune (7)/Dune.epub"
+	b.Size = int64(len(epubBody))
 	_, h := newFake(t, util.WrapBook(b))
 
 	w := get(t, h, Prefix+"/content/7/Dune.epub")
@@ -263,7 +263,7 @@ func TestDownloadSupportsRanges(t *testing.T) {
 		t.Errorf("body = %q", got)
 	}
 
-	if got := w.Header().Get("Content-Type"); got != mediaTypeEpub {
+	if got := w.Header().Get("Content-Type"); got != "application/epub+zip" {
 		t.Errorf("content type = %q", got)
 	}
 
@@ -306,8 +306,8 @@ func TestCoverServedDirectly(t *testing.T) {
 func TestMissesAre404(t *testing.T) {
 	b := util.MakeMutableBook(7, "Dune", "Frank Herbert")
 	f, h := newFake(t, util.WrapBook(b))
-	f.ContentFn = func(int64) (library.EpubReader, error) {
-		return &mock.EpubReader{
+	f.ContentFn = func(int64) (library.Reader, error) {
+		return &mock.Reader{
 			Reader:  bytes.NewReader(nil),
 			CoverFn: func() ([]byte, error) { return nil, library.ErrNoCover },
 		}, nil

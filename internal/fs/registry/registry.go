@@ -58,7 +58,7 @@ func NewBookRegistry(f *fs.FS, lib Editor) *BookRegistry {
 func (r *BookRegistry) FS() *fs.FS { return r.f }
 
 // OnIngested implements library.Hook. It adds the book to the registry.
-func (r *BookRegistry) OnIngested(book *library.Book, sidecars *os.Root, openEpub func() (library.EpubReader, error)) {
+func (r *BookRegistry) OnIngested(book *library.Book, sidecars *os.Root, openFile func() (library.Reader, error)) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -66,7 +66,7 @@ func (r *BookRegistry) OnIngested(book *library.Book, sidecars *os.Root, openEpu
 }
 
 // OnEdited implements library.Hook. It replaces the snapshot and re-files the book in views.
-func (r *BookRegistry) OnEdited(book *library.Book, sidecars *os.Root, openEpub func() (library.EpubReader, error)) {
+func (r *BookRegistry) OnEdited(book *library.Book, sidecars *os.Root, openFile func() (library.Reader, error)) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 

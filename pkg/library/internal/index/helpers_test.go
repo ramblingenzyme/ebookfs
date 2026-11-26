@@ -46,7 +46,7 @@ func makeAuthoredBook(id int64, title string, authors ...book.Author) *book.Book
 	return book.NewBook(
 		book.Bib{Title: title, Authors: authors},
 		book.Meta{ID: id},
-		book.Location{EpubPath: title + "/book.epub"},
+		book.File{Path: title + "/book.epub"},
 	)
 }
 

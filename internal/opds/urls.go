@@ -16,8 +16,6 @@ const (
 	coverBase   = Prefix + "/cover/"
 )
 
-const mediaTypeEpub = "application/epub+zip"
-
 // valueParam carries a facet value in the query string rather than the feed
 // id, so url.Values escapes a tag containing a slash, a colon or a space.
 const valueParam = "value"

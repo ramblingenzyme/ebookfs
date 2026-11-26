@@ -103,9 +103,9 @@ func (idx *Index) clearTables(tx *sql.Tx) error {
 func (idx *Index) insertSkipped(q *dbsqlc.Queries, skipped map[string]drift.PathInfo) error {
 	for path, info := range skipped {
 		if err := q.InsertSkippedBook(idx.ctx, dbsqlc.InsertSkippedBookParams{
-			EpubPath:  path,
-			EpubSize:  info.Size,
-			EpubMtime: toUnixNano(info.EpubMtime),
+			FilePath:  path,
+			FileSize:  info.Size,
+			FileMtime: toUnixNano(info.Mtime),
 			MetaMtime: toUnixNano(info.MetaMtime),
 			MetaSize:  info.MetaSize,
 		}); err != nil {

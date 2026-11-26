@@ -49,8 +49,8 @@ func TestLayout(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := s.Layout(tc.authors, tc.title, 1).EpubPath; got != tc.want {
-				t.Errorf("EpubPath = %q, want %q", got, tc.want)
+			if got := s.Layout(tc.authors, tc.title, 1, book.FormatEPUB).Path; got != tc.want {
+				t.Errorf("Path = %q, want %q", got, tc.want)
 			}
 		})
 	}
@@ -82,21 +82,21 @@ func TestLayoutKeepsEachComponentInOneDirectory(t *testing.T) {
 		{"space", []book.Author{{Name: " "}}, "Title", 5, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			loc := s.Layout(tc.authors, tc.title, tc.id)
+			loc := s.Layout(tc.authors, tc.title, tc.id, book.FormatEPUB)
 			if tc.wantDir != "" {
-				if got := filepath.Dir(loc.EpubPath); got != tc.wantDir {
+				if got := filepath.Dir(loc.Path); got != tc.wantDir {
 					t.Errorf("directory = %q, want %q", got, tc.wantDir)
 				}
 
 				return
 			}
 
-			if strings.HasPrefix(loc.EpubPath, ".") || strings.Contains(loc.EpubPath, ".."+string(filepath.Separator)) {
-				t.Errorf("EpubPath %q leaves the library root", loc.EpubPath)
+			if strings.HasPrefix(loc.Path, ".") || strings.Contains(loc.Path, ".."+string(filepath.Separator)) {
+				t.Errorf("Path %q leaves the library root", loc.Path)
 			}
 
-			if got := len(strings.Split(filepath.Dir(loc.EpubPath), string(filepath.Separator))); got != 2 {
-				t.Errorf("directory %q, want exactly two components", filepath.Dir(loc.EpubPath))
+			if got := len(strings.Split(filepath.Dir(loc.Path), string(filepath.Separator))); got != 2 {
+				t.Errorf("directory %q, want exactly two components", filepath.Dir(loc.Path))
 			}
 		})
 	}

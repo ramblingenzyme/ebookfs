@@ -37,7 +37,7 @@ func TestPathInfoRoundTrip(t *testing.T) {
 		// that a second-granularity format would silently truncate.
 		{"recorded", drift.PathInfo{
 			Size:      4242,
-			EpubMtime: time.Unix(1700000000, 0),
+			Mtime:     time.Unix(1700000000, 0),
 			MetaSize:  17,
 			MetaMtime: time.Unix(1700000000, 123456789),
 		}},
@@ -75,11 +75,11 @@ func TestPathInfoRoundTrip(t *testing.T) {
 // ignored. The book's copy is what 9P reports as the file's length and what
 // export sizing uses, while the drift check compares the stat's, so a second
 // column here means those two can silently disagree, which is what this replaced.
-func TestEpubSizeComesFromObservation(t *testing.T) {
+func TestSizeComesFromObservation(t *testing.T) {
 	idx := openTestIndex(t)
 
 	b := newBook(1, "Sized")
-	b.EpubSize = 7 // discarded: the observation below is what lands in the row
+	b.Size = 7 // discarded: the observation below is what lands in the row
 	storeInIndexSized(t, idx, b, 4242)
 
 	got, err := idx.Get(1)
@@ -87,8 +87,8 @@ func TestEpubSizeComesFromObservation(t *testing.T) {
 		t.Fatalf("Get: %v", err)
 	}
 
-	if got.EpubSize != 4242 {
-		t.Errorf("EpubSize = %d, want 4242 (the observed size)", got.EpubSize)
+	if got.Size != 4242 {
+		t.Errorf("Size = %d, want 4242 (the observed size)", got.Size)
 	}
 
 	info, err := idx.AllPathInfo()
@@ -96,9 +96,9 @@ func TestEpubSizeComesFromObservation(t *testing.T) {
 		t.Fatalf("AllPathInfo: %v", err)
 	}
 
-	if info[got.EpubPath].Size != got.EpubSize {
+	if info[got.Path].Size != got.Size {
 		t.Errorf("drift size = %d but book size = %d; they must be one column",
-			info[got.EpubPath].Size, got.EpubSize)
+			info[got.Path].Size, got.Size)
 	}
 }
 
@@ -108,7 +108,7 @@ func TestRebuildRecordsSkippedPaths(t *testing.T) {
 	idx := openTestIndex(t)
 
 	skipped := map[string]drift.PathInfo{
-		"Corrupt/Bad Book (7)/book.epub": {Size: 99, EpubMtime: time.Unix(1700000000, 5)},
+		"Corrupt/Bad Book (7)/book.epub": {Size: 99, Mtime: time.Unix(1700000000, 5)},
 	}
 	if err := idx.Rebuild(bookPaths(newBook(1, "Good")), skipped, 7); err != nil {
 		t.Fatalf("Rebuild: %v", err)
@@ -128,7 +128,7 @@ func TestRebuildRecordsSkippedPaths(t *testing.T) {
 		t.Fatalf("skipped path missing from AllPathInfo: %v", all)
 	}
 
-	if got.Size != 99 || !got.EpubMtime.Equal(time.Unix(1700000000, 5)) {
+	if got.Size != 99 || !got.Mtime.Equal(time.Unix(1700000000, 5)) {
 		t.Errorf("skipped info = %+v, want Size 99 and the recorded mtime", got)
 	}
 

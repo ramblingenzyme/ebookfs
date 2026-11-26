@@ -30,7 +30,7 @@ func TestCloseMultiple(t *testing.T) {
 
 // Search returns the path relative to the store root, and every consumer joins
 // it to the root. An empty or absolute path would leave the result unopenable.
-func TestSearchReturnsARootRelativeEpubPath(t *testing.T) {
+func TestSearchReturnsARootRelativePath(t *testing.T) {
 	cfg := testConfig(t)
 	lib := openLib(t, cfg)
 	want := ingestTestEpub(t, lib, buildTestEpub(t, "Findable", "Alice"))
@@ -49,17 +49,17 @@ func TestSearchReturnsARootRelativeEpubPath(t *testing.T) {
 		t.Errorf("id = %d, want %d", got[0].ID(), want.ID())
 	}
 
-	if got[0].EpubPath() == "" {
-		t.Fatal("EpubPath is empty — the result carries no path, so nothing can open it")
+	if got[0].Path() == "" {
+		t.Fatal("Path is empty — the result carries no path, so nothing can open it")
 	}
 
-	if filepath.IsAbs(got[0].EpubPath()) {
-		t.Errorf("EpubPath = %q, want a relative path", got[0].EpubPath())
+	if filepath.IsAbs(got[0].Path()) {
+		t.Errorf("Path = %q, want a relative path", got[0].Path())
 	}
 
-	absPath := filepath.Join(cfg.Root, got[0].EpubPath())
+	absPath := filepath.Join(cfg.Root, got[0].Path())
 	if _, err := os.Stat(absPath); err != nil {
-		t.Errorf("EpubPath %q does not resolve: %v", got[0].EpubPath(), err)
+		t.Errorf("Path %q does not resolve: %v", got[0].Path(), err)
 	}
 }
 
@@ -76,8 +76,8 @@ func TestEditSelfHealsLegacyUnsanitizedFilename(t *testing.T) {
 	// Rename the on-disk epub to a name Layout would no longer produce, then
 	// reindex so the index records the manual rename.
 	root := cfg.Root
-	dir := filepath.Join(root, filepath.Dir(book.EpubPath()))
-	absEpub := filepath.Join(root, book.EpubPath())
+	dir := filepath.Join(root, filepath.Dir(book.Path()))
+	absEpub := filepath.Join(root, book.Path())
 	legacyName := "Some Title: With Colon - Alice.epub"
 
 	if err := os.Rename(absEpub, filepath.Join(dir, legacyName)); err != nil {
@@ -100,12 +100,12 @@ func TestEditSelfHealsLegacyUnsanitizedFilename(t *testing.T) {
 		t.Errorf("status = %q, want %q", updated.Status(), status)
 	}
 
-	if strings.Contains(filepath.Base(updated.EpubPath()), ":") {
-		t.Errorf("filename not sanitized after edit: %q", filepath.Base(updated.EpubPath()))
+	if strings.Contains(filepath.Base(updated.Path()), ":") {
+		t.Errorf("filename not sanitized after edit: %q", filepath.Base(updated.Path()))
 	}
 
-	if _, err := os.Stat(filepath.Join(root, updated.EpubPath())); err != nil {
-		t.Errorf("updated EpubPath does not exist: %v", err)
+	if _, err := os.Stat(filepath.Join(root, updated.Path())); err != nil {
+		t.Errorf("updated Path does not exist: %v", err)
 	}
 
 	if _, err := os.Stat(filepath.Join(dir, legacyName)); !os.IsNotExist(err) {
@@ -124,7 +124,7 @@ func TestDeleteRemovesBook(t *testing.T) {
 	lib := openLib(t, cfg)
 	book := ingestTestEpub(t, lib, buildTestEpub(t, "To Delete"))
 	id := book.ID()
-	dir := filepath.Join(cfg.Root, filepath.Dir(book.EpubPath()))
+	dir := filepath.Join(cfg.Root, filepath.Dir(book.Path()))
 
 	if _, err := os.Stat(dir); err != nil {
 		t.Fatalf("book directory missing before delete: %v", err)
@@ -280,6 +280,27 @@ func TestMissingBookIsErrBookNotFound(t *testing.T) {
 	}
 }
 
+// A typed-nil *reader inside the interface made `r != nil` true, so a caller's
+// deferred Close panicked.
+func TestContentOfMissingFileReturnsNilReader(t *testing.T) {
+	cfg := testConfig(t)
+	lib := openLib(t, cfg)
+	b := ingestTestEpub(t, lib, buildTestEpub(t, "Vanished"))
+
+	if err := os.Remove(filepath.Join(cfg.Root, b.Path())); err != nil {
+		t.Fatal(err)
+	}
+
+	r, err := lib.Content(b.ID())
+	if err == nil {
+		t.Fatal("Content succeeded on a missing file")
+	}
+
+	if r != nil {
+		t.Errorf("Content returned a non-nil Reader %#v with error %v", r, err)
+	}
+}
+
 func TestContentServesTheBook(t *testing.T) {
 	lib := openTestLibrary(t)
 	b := ingestTestEpub(t, lib, buildTestEpub(t, "Open Read"))
@@ -308,7 +329,7 @@ func TestContentServesTheBook(t *testing.T) {
 		t.Errorf("cover = %q, want %q", cover, "placeholder-cover-bytes")
 	}
 
-	opf, err := r.OPF()
+	opf, err := r.(interface{ OPF() ([]byte, error) }).OPF()
 	if err != nil {
 		t.Fatalf("OPF: %v", err)
 	}
@@ -349,7 +370,7 @@ type editCounter struct {
 	edits int
 }
 
-func (c *editCounter) OnEdited(*library.Book, *os.Root, func() (library.EpubReader, error)) {
+func (c *editCounter) OnEdited(*library.Book, *os.Root, func() (library.Reader, error)) {
 	c.edits++
 }
 

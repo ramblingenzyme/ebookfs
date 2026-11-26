@@ -83,13 +83,13 @@ func TestConcurrentTitleAndCoverEditsBothLand(t *testing.T) {
 			t.Fatalf("iteration %d: cover edit reported success but the cover bytes were lost", i)
 		}
 
-		entries, err := os.ReadDir(filepath.Join(root, filepath.Dir(book.EpubPath())))
+		entries, err := os.ReadDir(filepath.Join(root, filepath.Dir(book.Path())))
 		if err != nil {
 			t.Fatalf("iteration %d: %v", i, err)
 		}
 
 		for _, e := range entries {
-			if name := e.Name(); name != filepath.Base(book.EpubPath()) && name != "meta.toml" {
+			if name := e.Name(); name != filepath.Base(book.Path()) && name != "meta.toml" {
 				t.Fatalf("iteration %d: unexpected file in book dir: %q", i, name)
 			}
 		}

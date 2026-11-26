@@ -8,9 +8,9 @@ import (
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
-func newTestEpubFile(t *testing.T, name string, lib ContentReader, get func() *library.Book) *epubFile {
+func newTestEpubFile(t *testing.T, name string, lib ContentReader, get func() *library.Book) *contentFile {
 	t.Helper()
-	return newEpubFile(newStat(util.NewTestFS(t), name, 0o444), lib, get)
+	return newContentFile(newStat(util.NewTestFS(t), name, 0o444), lib, get)
 }
 
 // Stat reports the book's current filename and the size the index recorded,
@@ -19,8 +19,8 @@ func newTestEpubFile(t *testing.T, name string, lib ContentReader, get func() *l
 func TestEpubFileStat(t *testing.T) {
 	recorded := func(size int64) func() *library.Book {
 		book := util.MakeMutableBook(1, "Test", "Author")
-		book.EpubPath = "/nonexistent/book.epub"
-		book.EpubSize = size
+		book.Path = "/nonexistent/book.epub"
+		book.Size = size
 
 		return util.Fixed(util.WrapBook(book))
 	}

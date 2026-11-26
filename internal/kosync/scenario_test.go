@@ -411,7 +411,7 @@ func TestKosyncStartupCreatesMissingSidecars(t *testing.T) {
 
 		// A wrong size still hashes to a non-empty ID, just not the one
 		// KOReader sends, so compare against the file as KOReader sees it.
-		f, err := os.Open(filepath.Join(lib.tmpDir, book.EpubPath()))
+		f, err := os.Open(filepath.Join(lib.tmpDir, book.Path()))
 		if err != nil {
 			t.Fatalf("opening epub: %v", err)
 		}

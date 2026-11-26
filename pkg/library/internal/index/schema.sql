@@ -8,7 +8,8 @@ CREATE TABLE books
     language      TEXT    NOT NULL DEFAULT '',
     publisher     TEXT    NOT NULL DEFAULT '',
     rights        TEXT    NOT NULL DEFAULT '',
-    epub_path     TEXT    NOT NULL,
+    file_path     TEXT    NOT NULL,
+    format        TEXT    NOT NULL DEFAULT 'epub',
     cover_path    TEXT    NOT NULL DEFAULT '',
     status        TEXT    NOT NULL DEFAULT 'unread',
     rating        REAL    NOT NULL DEFAULT 0, -- validated as 0–5 float (e.g. 4.75) in edits.Validate; rounded to 2dp on write
@@ -25,18 +26,18 @@ CREATE TABLE books
     opf_size      INTEGER NOT NULL DEFAULT 0,
     cover_size    INTEGER NOT NULL DEFAULT 0,
     -- Drift bookkeeping: both files' sizes and mtimes as observed by one stat
-    -- per file. The epub's name is compared too, via epub_path above —
+    -- per file. The file's name is compared too, via file_path above —
     -- rename preserves size and mtime, so those alone cannot see it.
     -- mtimes in Unix nanoseconds because that round-trips a
     -- time.Time losslessly (RFC3339, used for the date columns above, truncates
     -- to whole seconds). Comparison happens in Go, not SQL.
     -- 0 means "never recorded" and reads back as drift.
-    -- epub_size is also the epub's length as reported over 9P and the size
+    -- file_size is also the book's length as reported over 9P and the size
     -- export sizing needs: every write path stats the file and fails if it
     -- cannot, so the one observation serves both and there is no "unknown"
     -- case for readers to guard against.
-    epub_size     INTEGER NOT NULL DEFAULT 0,
-    epub_mtime    INTEGER NOT NULL DEFAULT 0,
+    file_size     INTEGER NOT NULL DEFAULT 0,
+    file_mtime    INTEGER NOT NULL DEFAULT 0,
     meta_mtime    INTEGER NOT NULL DEFAULT 0,
     meta_size     INTEGER NOT NULL DEFAULT 0
 );
@@ -119,16 +120,16 @@ CREATE TABLE book_id_seq
 );
 
 -- Book directories a rebuild walked but could not index (unreadable meta.toml,
--- unparseable epub), with the file state they had at the time. Without this,
+-- unparseable file), with the file state they had at the time. Without this,
 -- drift detection sees a directory on disk with no books row and reports drift,
--- so one corrupt epub would reindex the whole library on every startup forever.
--- Recording the file state keeps it self-healing: repair the epub and its mtime
+-- so one corrupt file would reindex the whole library on every startup forever.
+-- Recording the file state keeps it self-healing: repair the file and its mtime
 -- changes, which reads as drift and earns the book another indexing attempt.
 CREATE TABLE skipped_books
 (
-    epub_path  TEXT PRIMARY KEY,
-    epub_size  INTEGER NOT NULL DEFAULT 0,
-    epub_mtime INTEGER NOT NULL DEFAULT 0,
+    file_path  TEXT PRIMARY KEY,
+    file_size  INTEGER NOT NULL DEFAULT 0,
+    file_mtime INTEGER NOT NULL DEFAULT 0,
     meta_mtime INTEGER NOT NULL DEFAULT 0,
     meta_size  INTEGER NOT NULL DEFAULT 0
 );

@@ -16,7 +16,7 @@ import (
 )
 
 type ContentReader interface {
-	Content(id int64) (library.EpubReader, error)
+	Content(id int64) (library.Reader, error)
 }
 
 var (
@@ -55,7 +55,7 @@ func (d *BookDir) SetSnapshot(b *library.Book) {
 
 // Stat reports the book's title as the entry name, recomputed live so a title
 // edit shows up wherever the bare BookDir is listed (all-books, by-author). The
-// Qid stays fixed, so a client with the epub open keeps its handle across a rename.
+// Qid stays fixed, so a client with the book open keeps its handle across a rename.
 func (d *BookDir) Stat() proto.Stat {
 	s := d.StaticDir.Stat()
 	s.Name = naming.PathSafe(d.Book().Title())
@@ -76,17 +76,19 @@ func NewBookDir(f *fs.FS, lib ContentReader, edit func(int64, library.Edits) (*l
 
 	// Child files read through d.Book so they always see the current snapshot,
 	// not the one captured at construction.
-	vfile.AddChild(&d.StaticDir, newEpubFile(
+	vfile.AddChild(&d.StaticDir, newContentFile(
 		newStat(f, book.Filename(), 0o444),
 		lib,
 		d.Book,
 	))
 
-	vfile.AddChild(&d.StaticDir, newOPFFile(
-		newStat(f, "opf", 0o444),
-		lib,
-		d.Book,
-	))
+	if book.Format() == library.FormatEPUB {
+		vfile.AddChild(&d.StaticDir, newOPFFile(
+			newStat(f, "opf", 0o444),
+			lib,
+			d.Book,
+		))
+	}
 
 	// Editable fields route through the edit callback so the change is validated,
 	// persisted, and bracketed by view remove/add (rehoming if the grouping or

@@ -7,7 +7,24 @@ import (
 	"time"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/formats"
 )
+
+// store.Walk finds files by extension, but reading them goes through the
+// registry. A format missing from the registry is skipped at every reindex.
+func TestEveryFormatIsRegistered(t *testing.T) {
+	reg := formats.NewRegistry(epub.NewFormat())
+	for _, f := range reg.All() {
+		if _, err := reg.ByFormat(f.Format()); err != nil {
+			t.Errorf("%s: %v", f.Format(), err)
+		}
+
+		if f.Format().MediaType() == "" {
+			t.Errorf("%s: no media type", f.Format())
+		}
+	}
+}
 
 // Every case starts from the same Meta, so what a nil edit leaves alone is
 // checked alongside what a set one changes.

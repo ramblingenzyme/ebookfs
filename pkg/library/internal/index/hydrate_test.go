@@ -21,7 +21,7 @@ func TestQueryBatchLoadsMultipleBooks(t *testing.T) {
 				Identifiers: map[string]string{"isbn": "111"},
 			},
 			book.Meta{ID: 1, Tags: []string{"fiction", "sci-fi"}},
-			book.Location{EpubPath: "A/Alpha (1)/alpha.epub"},
+			book.File{Path: "A/Alpha (1)/alpha.epub"},
 		),
 		book.NewBook(
 			book.Bib{
@@ -30,7 +30,7 @@ func TestQueryBatchLoadsMultipleBooks(t *testing.T) {
 				Identifiers: map[string]string{"isbn": "222", "doi": "10.1234/beta"},
 			},
 			book.Meta{ID: 2, Tags: []string{"non-fiction"}},
-			book.Location{EpubPath: "B/Beta (2)/beta.epub"},
+			book.File{Path: "B/Beta (2)/beta.epub"},
 		),
 		book.NewBook(
 			book.Bib{
@@ -39,7 +39,7 @@ func TestQueryBatchLoadsMultipleBooks(t *testing.T) {
 				Identifiers: map[string]string{},
 			},
 			book.Meta{ID: 3},
-			book.Location{EpubPath: "C/Gamma (3)/gamma.epub"},
+			book.File{Path: "C/Gamma (3)/gamma.epub"},
 		),
 	}
 	for _, b := range books {

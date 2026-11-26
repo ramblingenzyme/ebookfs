@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	epubfile "github.com/ramblingenzyme/ebookfs/pkg/epub"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/formats"
 )
 
 const tempPrefix = ".ebookfs-"
@@ -16,15 +16,10 @@ func tempPattern(name string) string {
 	return tempPrefix + "*." + strings.TrimPrefix(name, ".") + ".tmp"
 }
 
-// staleTempPatterns match only the temp files this package and pkg/epub's Save
-// write. The tree can hold another tool's write in progress, so a bare *.tmp
-// would delete it.
-var staleTempPatterns = []string{tempPrefix + "*.tmp", epubfile.SaveTempPattern}
-
 // RemoveStaleTemps removes the temp files that crashed writes leave in the
 // tree. Run it only while no write is in progress. Only a failure on the root
 // itself is returned.
-func (s *Store) RemoveStaleTemps() error {
+func (s *Store) RemoveStaleTemps(reg *formats.Registry) error {
 	return filepath.Walk(s.root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			if path == s.root {
@@ -36,7 +31,7 @@ func (s *Store) RemoveStaleTemps() error {
 			return nil
 		}
 
-		if !info.Mode().IsRegular() || !isStaleTemp(info.Name()) {
+		if !info.Mode().IsRegular() || !isStaleTemp(info.Name(), reg) {
 			return nil
 		}
 
@@ -50,8 +45,8 @@ func (s *Store) RemoveStaleTemps() error {
 	})
 }
 
-func isStaleTemp(name string) bool {
-	for _, p := range staleTempPatterns {
+func isStaleTemp(name string, reg *formats.Registry) bool {
+	for _, p := range append([]string{tempPrefix + "*.tmp"}, reg.AllTempPatterns()...) {
 		if ok, _ := filepath.Match(p, name); ok {
 			return true
 		}

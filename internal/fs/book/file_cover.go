@@ -9,7 +9,7 @@ import (
 
 const maxCoverFileSize = 32 << 20 // 32 MiB
 
-// coverFile serves a book's cover image, loading bytes from the epub on each
+// coverFile serves a book's cover image, loading bytes from the file on each
 // open. It also supports writing new cover bytes, accumulated per fid and
 // committed when the fid is closed.
 type coverFile struct {
@@ -22,7 +22,7 @@ type coverFile struct {
 func newCoverFile(stat *proto.Stat, lib ContentReader, edit func(int64, library.Edits) (*library.Book, error), book func() *library.Book) *coverFile {
 	//goland:noinspection DuplicatedCode
 	return &coverFile{
-		SnapshotFile: vfile.NewSnapshotFile(stat, contentBytes(lib, book, library.EpubReader.Cover)),
+		SnapshotFile: vfile.NewSnapshotFile(stat, contentBytes(lib, book, library.Reader.Cover)),
 		edit:         edit,
 		book:         book,
 		writes:       vfile.NewWriteBuffer(maxCoverFileSize),

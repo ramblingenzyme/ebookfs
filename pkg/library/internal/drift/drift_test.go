@@ -8,7 +8,7 @@ import (
 func observed() PathInfo {
 	return PathInfo{
 		Size:      4242,
-		EpubMtime: time.Unix(1700000000, 123456789),
+		Mtime:     time.Unix(1700000000, 123456789),
 		MetaSize:  17,
 		MetaMtime: time.Unix(1700000001, 987654321),
 	}
@@ -20,7 +20,7 @@ func TestEqualComparesEveryField(t *testing.T) {
 		mutate func(*PathInfo)
 	}{
 		{"epub resized", func(p *PathInfo) { p.Size++ }},
-		{"epub touched", func(p *PathInfo) { p.EpubMtime = p.EpubMtime.Add(time.Nanosecond) }},
+		{"epub touched", func(p *PathInfo) { p.Mtime = p.Mtime.Add(time.Nanosecond) }},
 		{"meta resized", func(p *PathInfo) { p.MetaSize++ }},
 		{"meta touched", func(p *PathInfo) { p.MetaMtime = p.MetaMtime.Add(time.Nanosecond) }},
 	}
@@ -52,7 +52,7 @@ func TestEqualComparesInstantsNotRepresentations(t *testing.T) {
 	utc := observed()
 
 	elsewhere := observed()
-	elsewhere.EpubMtime = elsewhere.EpubMtime.In(time.FixedZone("UTC+10", 10*60*60))
+	elsewhere.Mtime = elsewhere.Mtime.In(time.FixedZone("UTC+10", 10*60*60))
 	elsewhere.MetaMtime = elsewhere.MetaMtime.In(time.FixedZone("UTC-5", -5*60*60))
 
 	if !utc.Equal(elsewhere) {
@@ -61,8 +61,8 @@ func TestEqualComparesInstantsNotRepresentations(t *testing.T) {
 
 	// Round(0) strips the monotonic reading a time.Now-derived value carries.
 	now := time.Now()
-	mono := PathInfo{EpubMtime: now, MetaMtime: now}
-	wall := PathInfo{EpubMtime: now.Round(0), MetaMtime: now.Round(0)}
+	mono := PathInfo{Mtime: now, MetaMtime: now}
+	wall := PathInfo{Mtime: now.Round(0), MetaMtime: now.Round(0)}
 
 	if !mono.Equal(wall) {
 		t.Error("Equal = false for the same instant with and without a monotonic reading")
@@ -80,7 +80,7 @@ func TestIsUnobserved(t *testing.T) {
 	}{
 		{"zero value", PathInfo{}, true},
 		{"real observation", observed(), false},
-		{"epub seen, meta not", PathInfo{EpubMtime: time.Unix(1, 0)}, false},
+		{"epub seen, meta not", PathInfo{Mtime: time.Unix(1, 0)}, false},
 		{"meta seen, epub not", PathInfo{MetaMtime: time.Unix(1, 0)}, false},
 		// Sizes alone say nothing: a stat that failed leaves them zero, and a
 		// zero-length file is a real observation with a real mtime.

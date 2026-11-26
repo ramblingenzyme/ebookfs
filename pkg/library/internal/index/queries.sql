@@ -8,27 +8,27 @@
 -- name: InsertBook :exec
 INSERT INTO books (
     id, title, sort_title, pubdate, description, language, publisher, rights,
-    epub_path, cover_path, status, rating,
+    file_path, format, cover_path, status, rating,
     date_added, date_modified, series_id, series_index,
-    opf_size, cover_size, epub_size, epub_mtime, meta_mtime, meta_size
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    opf_size, cover_size, file_size, file_mtime, meta_mtime, meta_size
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpsertBook :exec
 INSERT INTO books (
     id, title, sort_title, pubdate, description, language, publisher, rights,
-    epub_path, cover_path, status, rating,
+    file_path, format, cover_path, status, rating,
     date_added, date_modified, series_id, series_index,
-    opf_size, cover_size, epub_size, epub_mtime, meta_mtime, meta_size
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    opf_size, cover_size, file_size, file_mtime, meta_mtime, meta_size
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     title=excluded.title, sort_title=excluded.sort_title, pubdate=excluded.pubdate,
     description=excluded.description, language=excluded.language,
     publisher=excluded.publisher, rights=excluded.rights,
-    epub_path=excluded.epub_path,
+    file_path=excluded.file_path, format=excluded.format,
     cover_path=excluded.cover_path, status=excluded.status, rating=excluded.rating,
     date_added=excluded.date_added, date_modified=excluded.date_modified,
     opf_size=excluded.opf_size, cover_size=excluded.cover_size,
-    epub_size=excluded.epub_size, epub_mtime=excluded.epub_mtime,
+    file_size=excluded.file_size, file_mtime=excluded.file_mtime,
     meta_mtime=excluded.meta_mtime, meta_size=excluded.meta_size;
 
 -- name: DeleteBook :exec
@@ -174,7 +174,7 @@ SELECT EXISTS (
 -- name: GetStats :one
 SELECT
     COUNT(*) AS books,
-    CAST(COALESCE(SUM(epub_size), 0) AS INTEGER) AS total_size,
+    CAST(COALESCE(SUM(file_size), 0) AS INTEGER) AS total_size,
     MAX(date_added) AS last_added,
     MAX(date_modified) AS last_modified,
     (SELECT COUNT(*) FROM authors) AS authors,
@@ -185,9 +185,9 @@ FROM books;
 -- Drift detection
 
 -- name: GetAllPathInfo :many
-SELECT epub_path, epub_size, epub_mtime, meta_mtime, meta_size FROM books
+SELECT file_path, file_size, file_mtime, meta_mtime, meta_size FROM books
 UNION ALL
-SELECT epub_path, epub_size, epub_mtime, meta_mtime, meta_size FROM skipped_books;
+SELECT file_path, file_size, file_mtime, meta_mtime, meta_size FROM skipped_books;
 
 -- Cleanup
 
@@ -229,7 +229,7 @@ INSERT INTO book_id_seq DEFAULT VALUES RETURNING id;
 SELECT CAST(COALESCE(MAX(id), 0) AS INTEGER) FROM book_id_seq;
 
 -- name: InsertSkippedBook :exec
-INSERT INTO skipped_books (epub_path, epub_size, epub_mtime, meta_mtime, meta_size)
+INSERT INTO skipped_books (file_path, file_size, file_mtime, meta_mtime, meta_size)
 VALUES (?, ?, ?, ?, ?);
 
 -- name: SetBookIDSequence :exec

@@ -24,7 +24,7 @@ func MakeMutableBook(id int64, title string, authors ...string) *book.Book {
 	return book.NewBook(
 		book.Bib{Title: title, Authors: auths},
 		book.Meta{ID: id},
-		book.Location{},
+		book.File{Format: book.FormatEPUB},
 	)
 }
 

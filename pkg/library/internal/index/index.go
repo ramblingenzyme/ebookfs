@@ -30,7 +30,7 @@ type Index struct {
 	ctx     context.Context
 }
 
-const schemaVersion = 14
+const schemaVersion = 15
 
 // dsn spells each pragma as key(value), which modernc.org/sqlite turns into
 // "PRAGMA key=value" on every new connection the pool creates.

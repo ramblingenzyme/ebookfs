@@ -106,7 +106,7 @@ func restoreDocumentIDs(lib *library.Library, id int64, root *os.Root) ([]string
 			return nil, err
 		}
 
-		docID, err := computeDocumentID(book, func() (library.EpubReader, error) { return lib.Content(id) })
+		docID, err := computeDocumentID(book, func() (library.Reader, error) { return lib.Content(id) })
 		if err != nil {
 			return nil, fmt.Errorf("computing document ID: %w", err)
 		}
@@ -131,8 +131,8 @@ func restoreDocumentIDs(lib *library.Library, id int64, root *os.Root) ([]string
 }
 
 // Assign computes the document ID and initializes the sidecar (OnIngested).
-func (r *docRegistry) Assign(book *library.Book, sidecars *os.Root, openEpub func() (library.EpubReader, error)) {
-	docID, err := computeDocumentID(book, openEpub)
+func (r *docRegistry) Assign(book *library.Book, sidecars *os.Root, openFile func() (library.Reader, error)) {
+	docID, err := computeDocumentID(book, openFile)
 	if err != nil {
 		slog.Error("kosync: failed to compute document ID", "book_id", book.ID(), "error", err)
 		return
@@ -156,8 +156,8 @@ func (r *docRegistry) Assign(book *library.Book, sidecars *os.Root, openEpub fun
 
 // Refresh recomputes the document ID and prepends it to the sidecar when it
 // changed, preserving historical IDs so progress stays reachable (OnEdited).
-func (r *docRegistry) Refresh(book *library.Book, sidecars *os.Root, openEpub func() (library.EpubReader, error)) {
-	newDocID, err := computeDocumentID(book, openEpub)
+func (r *docRegistry) Refresh(book *library.Book, sidecars *os.Root, openFile func() (library.Reader, error)) {
+	newDocID, err := computeDocumentID(book, openFile)
 	if err != nil {
 		slog.Error("kosync: failed to compute document ID", "book_id", book.ID(), "error", err)
 		return
@@ -271,14 +271,14 @@ func (r *docRegistry) snapshot() map[string]int64 {
 	return maps.Clone(r.data)
 }
 
-func computeDocumentID(book *library.Book, openEpub func() (library.EpubReader, error)) (string, error) {
-	epub, err := openEpub()
+func computeDocumentID(book *library.Book, openFile func() (library.Reader, error)) (string, error) {
+	r, err := openFile()
 	if err != nil {
 		return "", err
 	}
-	defer epub.Close()
+	defer r.Close()
 
-	return PartialMD5(epub, book.EpubSize())
+	return PartialMD5(r, book.Size())
 }
 
 func readSidecar(sidecars *os.Root) (*SidecarData, error) {

@@ -16,15 +16,15 @@ import (
 // compile-time concern rather than a silent ENOENT.
 const metaFilename = "meta.toml"
 
-func (s *Store) metaPath(loc book.Location) string {
+func (s *Store) metaPath(loc book.File) string {
 	return filepath.Join(s.AbsPath(loc.Dir()), metaFilename)
 }
 
-func (s *Store) ReadMeta(loc book.Location) (*book.Meta, error) {
+func (s *Store) ReadMeta(loc book.File) (*book.Meta, error) {
 	return readMeta(s.metaPath(loc))
 }
 
-func (s *Store) writeMeta(loc book.Location, meta *book.Meta) error {
+func (s *Store) writeMeta(loc book.File, meta *book.Meta) error {
 	return writeMeta(s.metaPath(loc), meta)
 }
 

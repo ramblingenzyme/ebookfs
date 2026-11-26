@@ -36,7 +36,7 @@ func TestBookDirListing(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			b := util.MakeMutableBook(1, "Title", "Author")
 			b.CoverPath = tc.cover
-			b.EpubPath = "Author/Title (1)/Title - Author.epub"
+			b.Path = "Author/Title (1)/Title - Author.epub"
 
 			want := append([]string{"Title - Author.epub"}, fields...)
 			want = append(want, tc.extra...)

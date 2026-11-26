@@ -46,13 +46,18 @@ type archive struct {
 	opf   string
 }
 
-// openArchive does not check the mimetype; OpenFile calls validate for that.
+// openArchive checks the mimetype before the container, so a zip that is not
+// an epub fails with ErrNotEpub rather than ErrContainer.
 func openArchive(zr *zip.Reader) (*archive, error) {
 	a := &archive{zr: zr, files: make(map[string]*zip.File, len(zr.File))}
 	for _, f := range a.zr.File {
 		if _, dup := a.files[f.Name]; !dup {
 			a.files[f.Name] = f
 		}
+	}
+
+	if err := a.validate(); err != nil {
+		return nil, err
 	}
 
 	opf, err := a.metadataPath()

@@ -14,7 +14,7 @@ import (
 	"github.com/ramblingenzyme/ebookfs/internal/book"
 	"github.com/ramblingenzyme/ebookfs/internal/util/syncutil"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/drift"
-	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/formats"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/reconcile"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/store"
@@ -31,6 +31,7 @@ import (
 type Library struct {
 	store     *store.Store
 	index     *index.Index
+	formats   *formats.Registry
 	stateDir  string
 	inboxTemp string
 
@@ -118,13 +119,18 @@ func (l *Library) get(id int64) (*book.Book, error) {
 	return b, nil
 }
 
-func (l *Library) Content(id int64) (EpubReader, error) {
+func (l *Library) Content(id int64) (Reader, error) {
 	b, err := l.get(id)
 	if err != nil {
 		return nil, err
 	}
 
-	return epub.OpenReader(l.store.AbsPath(b.EpubPath), b.CoverPath)
+	f, err := l.formats.ByFormat(b.Format)
+	if err != nil {
+		return nil, err
+	}
+
+	return f.OpenReader(l.store.AbsPath(b.Path), b.CoverPath)
 }
 
 // Edit applies e and returns the updated book. A title or author change moves
@@ -167,6 +173,11 @@ func (l *Library) Update(id int64, fn func(*Book) *Edits) (b *Book, changed bool
 		return nil, false, v
 	}
 
+	impl, err := l.formats.ByFormat(current.Format)
+	if err != nil {
+		return nil, false, err
+	}
+
 	op, err := l.index.MarkPending()
 	if err != nil {
 		return nil, false, err
@@ -174,7 +185,7 @@ func (l *Library) Update(id int64, fn func(*Book) *Edits) (b *Book, changed bool
 
 	meta := applyMeta(current.Meta, e)
 
-	bib, err := epub.Rewrite(l.store.AbsPath(current.EpubPath), current, e)
+	bib, err := impl.Rewrite(l.store.AbsPath(current.Path), current, e)
 	if err != nil {
 		op.Cancel()
 		slog.Error("edit: rewrite failed", "book_id", current.Meta.ID, "title", current.Title, "error", err)
@@ -182,15 +193,15 @@ func (l *Library) Update(id int64, fn func(*Book) *Edits) (b *Book, changed bool
 		return nil, false, err
 	}
 
-	location := l.store.Layout(bib.Authors, bib.Title, meta.ID)
+	location := l.store.Layout(bib.Authors, bib.Title, meta.ID, current.Format)
 
-	meta, mt, err := l.store.Update(current.Location, location, meta)
+	meta, mt, err := l.store.Update(current.File, location, meta)
 	if err != nil {
 		slog.Error("edit: update failed", "book_id", current.Meta.ID, "title", current.Title, "error", err)
 		return nil, false, err
 	}
 
-	updated := bookFromBib(bib, meta, location, mt)
+	updated := bookFromBib(*bib, meta, location, mt)
 	if err := op.Put(updated, mt); err != nil {
 		return nil, false, err
 	}
@@ -210,14 +221,15 @@ func (l *Library) Delete(id int64) error {
 		return err
 	}
 
-	l.hooks.onDeleting(l, book.NewImmutableBook(b), b.Location)
+	// Fire OnDeleting hook before deletion, while the book and epub still exist
+	l.hooks.onDeleting(l, book.NewImmutableBook(b), b.File)
 
 	op, err := l.index.MarkPending()
 	if err != nil {
 		return err
 	}
 	// Store first: a leftover index row is healed by reindex.
-	err = l.store.Delete(b.Location)
+	err = l.store.Delete(b.File)
 	if err != nil {
 		slog.Error("delete: store delete failed", "book_id", id, "title", b.Title, "error", err)
 		return err
@@ -241,7 +253,7 @@ func (l *Library) Reindex() error {
 	l.mutateMu.Lock()
 	defer l.mutateMu.Unlock()
 
-	return reconcile.Run(l.store, l.index, true)
+	return reconcile.Run(l.store, l.index, l.formats, true)
 }
 
 // lockBook takes mutateMu for reading as well as the book's lock, so a caller
@@ -279,9 +291,9 @@ func applyMeta(m book.Meta, e Edits) book.Meta {
 	return m
 }
 
-func bookFromBib(bib book.Bib, meta book.Meta, loc book.Location, obs drift.PathInfo) *book.Book {
-	b := book.NewBook(bib, meta, loc)
-	b.EpubSize = obs.Size
+func bookFromBib(bib book.Bib, meta book.Meta, f book.File, obs drift.PathInfo) *book.Book {
+	b := book.NewBook(bib, meta, f)
+	b.Size = obs.Size
 
 	return b
 }
@@ -302,7 +314,7 @@ func (l *Library) WithSidecars(id int64, fn func(*os.Root) error) error {
 		return err
 	}
 
-	root, err := l.store.OpenSidecars(b.Location)
+	root, err := l.store.OpenSidecars(b.File)
 	if err != nil {
 		return err
 	}

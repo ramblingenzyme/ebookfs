@@ -4,7 +4,7 @@ import (
 	"slices"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/formats"
 	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/index"
 )
 
@@ -27,8 +27,13 @@ type (
 	Author      = book.Author
 	Contributor = book.Contributor
 	Series      = book.SeriesRef
-	EpubReader  = epub.EpubReader
+	Format      = book.Format
 )
+
+const FormatEPUB = book.FormatEPUB
+
+// Reader is an open book file. It shows the book as it was when opened.
+type Reader = formats.Reader
 
 // StatusList renders the reading statuses, so a validation error and the ctl
 // help name the same set.

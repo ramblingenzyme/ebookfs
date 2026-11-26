@@ -29,9 +29,9 @@ func (c *content) byID(serve func(*library.Book, http.ResponseWriter, *http.Requ
 	}
 }
 
-// serveEpub delivers a book's epub, with http.ServeContent's Range support when
+// serveFile delivers a book's file, with http.ServeContent's Range support when
 // the book's size is known.
-func (c *content) serveEpub(b *library.Book, w http.ResponseWriter, r *http.Request) error {
+func (c *content) serveFile(b *library.Book, w http.ResponseWriter, r *http.Request) error {
 	rd, err := c.lib.Content(b.ID())
 	if err != nil {
 		return err
@@ -39,9 +39,8 @@ func (c *content) serveEpub(b *library.Book, w http.ResponseWriter, r *http.Requ
 	defer rd.Close()
 
 	name := b.Filename()
-	size := b.EpubSize()
-
-	w.Header().Set("Content-Type", mediaTypeEpub)
+	size := b.Size()
+	w.Header().Set("Content-Type", b.Format().MediaType())
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
 
 	if size > 0 {

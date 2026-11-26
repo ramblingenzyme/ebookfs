@@ -32,7 +32,7 @@ func TestWriteFileSizeLimits(t *testing.T) {
 	}{
 		{"coverFile", maxCoverFileSize, func(t *testing.T) limitedWriteFile {
 			b := util.MakeBook(1, "Test", "Author")
-			lib := mock.ContentReader{ContentFn: func(int64) (library.EpubReader, error) { return &mock.EpubReader{}, nil }}
+			lib := mock.ContentReader{ContentFn: func(int64) (library.Reader, error) { return &mock.Reader{}, nil }}
 
 			return newCoverFile(newStat(util.NewTestFS(t), "cover.jpg", 0o644), lib, func(int64, library.Edits) (*library.Book, error) { return nil, nil }, util.Fixed(b))
 		}},

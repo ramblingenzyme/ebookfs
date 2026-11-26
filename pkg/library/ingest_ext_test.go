@@ -89,7 +89,7 @@ func TestIngestKeepsTheFirstOfRepeatedEntries(t *testing.T) {
 		t.Fatalf("Edit: %v", err)
 	}
 
-	for _, p := range []string{got.EpubPath(), edited.EpubPath()} {
+	for _, p := range []string{got.Path(), edited.Path()} {
 		if dir, _, _ := strings.Cut(filepath.ToSlash(p), "/"); dir != "Ann Author" {
 			t.Errorf("epub path %q, want it under Ann Author/", p)
 		}
@@ -101,8 +101,36 @@ func TestIngestKeepsTheFirstOfRepeatedEntries(t *testing.T) {
 func TestIngestRejectsAFileThatIsNotAnEpub(t *testing.T) {
 	lib := openTestLibrary(t)
 
-	if _, err := tryIngest(t, lib, []byte("this is plainly not a zip archive")); !errors.Is(err, library.ErrNotEpub) {
-		t.Fatalf("ingest err = %v, want ErrNotEpub", err)
+	if _, err := tryIngest(t, lib, []byte("this is plainly not a zip archive")); !errors.Is(err, library.ErrUnknownFormat) {
+		t.Fatalf("ingest err = %v, want ErrUnknownFormat", err)
+	}
+}
+
+// Both are zips. Only the one declaring the epub mimetype is a broken epub;
+// the other belongs to no format.
+func TestIngestTellsABrokenEpubFromAnotherZip(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		drop []string
+		want error
+	}{
+		{"epub missing its container", []string{"META-INF/container.xml"}, library.ErrInvalidBook},
+		{"zip with neither entry", []string{"META-INF/container.xml", epubtest.MimetypePath}, library.ErrUnknownFormat},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			entries := slices.DeleteFunc(epubtest.BaseEntries(epubtest.OPF3), func(e epubtest.Entry) bool {
+				return slices.Contains(tc.drop, e.Name)
+			})
+
+			data, err := os.ReadFile(epubtest.WriteEpub(t, entries))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if _, err := tryIngest(t, openTestLibrary(t), data); !errors.Is(err, tc.want) {
+				t.Fatalf("ingest err = %v, want %v", err, tc.want)
+			}
+		})
 	}
 }
 

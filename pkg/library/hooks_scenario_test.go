@@ -47,7 +47,7 @@ func (h *ingestEditDeleteHook) PreCommit(bib *library.Bib) error {
 	return nil
 }
 
-func (h *ingestEditDeleteHook) OnIngested(b *library.Book, sidecars *os.Root, openEpub func() (library.EpubReader, error)) {
+func (h *ingestEditDeleteHook) OnIngested(b *library.Book, sidecars *os.Root, openEpub func() (library.Reader, error)) {
 	h.events = append(h.events, "ingested")
 	if b.Publisher() != "Hook Publisher" {
 		h.t.Errorf("OnIngested publisher = %q, want hook amendment", b.Publisher())
@@ -75,11 +75,11 @@ func (h *ingestEditDeleteHook) OnIngested(b *library.Book, sidecars *os.Root, op
 	}
 }
 
-func (h *ingestEditDeleteHook) OnEdited(*library.Book, *os.Root, func() (library.EpubReader, error)) {
+func (h *ingestEditDeleteHook) OnEdited(*library.Book, *os.Root, func() (library.Reader, error)) {
 	h.events = append(h.events, "edited")
 }
 
-func (h *ingestEditDeleteHook) OnDeleting(*library.Book, *os.Root, func() (library.EpubReader, error)) {
+func (h *ingestEditDeleteHook) OnDeleting(*library.Book, *os.Root, func() (library.Reader, error)) {
 	h.events = append(h.events, "deleting")
 }
 
@@ -143,7 +143,7 @@ type blockingEditHook struct {
 	once    sync.Once
 }
 
-func (h *blockingEditHook) OnEdited(b *library.Book, _ *os.Root, _ func() (library.EpubReader, error)) {
+func (h *blockingEditHook) OnEdited(b *library.Book, _ *os.Root, _ func() (library.Reader, error)) {
 	if b.Title() != "First Edit" {
 		return
 	}
@@ -260,8 +260,8 @@ func TestPreCommitAmendmentSurvivesReindex(t *testing.T) {
 		t.Errorf("after reindex series %+v, want Saga 2", s)
 	}
 
-	if got.EpubPath() != b.EpubPath() {
-		t.Errorf("reindex moved the book from %q to %q", b.EpubPath(), got.EpubPath())
+	if got.Path() != b.Path() {
+		t.Errorf("reindex moved the book from %q to %q", b.Path(), got.Path())
 	}
 }
 
@@ -284,6 +284,35 @@ func TestPreCommitRefusedAmendmentFailsIngest(t *testing.T) {
 				t.Fatal("Ingest succeeded with an amendment the epub cannot hold")
 			}
 		})
+	}
+}
+
+type stagedPathHook struct {
+	library.HookBase
+	staged string
+}
+
+func (h *stagedPathHook) PreParse(source, _ string) (string, error) {
+	h.staged = source
+	return "", nil
+}
+
+func TestPreParseSeesStagedFileWithFormatExtension(t *testing.T) {
+	lib := openTestLibrary(t)
+	hook := &stagedPathHook{}
+
+	if err := lib.AddHook(hook); err != nil {
+		t.Fatal(err)
+	}
+
+	ingestTestEpub(t, lib, buildTestEpub(t, "Extended", "Alice"))
+
+	if filepath.Ext(hook.staged) != ".epub" {
+		t.Errorf("PreParse srcPath = %q, want an .epub extension", hook.staged)
+	}
+
+	if _, err := os.Stat(hook.staged); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("staged file still exists after ingest: stat error = %v", err)
 	}
 }
 
@@ -334,7 +363,7 @@ type epubReadingHook struct {
 	epubReadable bool
 }
 
-func (h *epubReadingHook) OnDeleting(book *library.Book, sidecars *os.Root, openEpub func() (library.EpubReader, error)) {
+func (h *epubReadingHook) OnDeleting(book *library.Book, sidecars *os.Root, openEpub func() (library.Reader, error)) {
 	if openEpub == nil {
 		return
 	}
@@ -381,7 +410,7 @@ func TestOnDeletingHookCanReadEpub(t *testing.T) {
 
 type panickingHook struct{ library.HookBase }
 
-func (panickingHook) OnEdited(*library.Book, *os.Root, func() (library.EpubReader, error)) {
+func (panickingHook) OnEdited(*library.Book, *os.Root, func() (library.Reader, error)) {
 	panic("hook bug")
 }
 
@@ -390,7 +419,7 @@ type editCountingHook struct {
 	edits int
 }
 
-func (h *editCountingHook) OnEdited(*library.Book, *os.Root, func() (library.EpubReader, error)) {
+func (h *editCountingHook) OnEdited(*library.Book, *os.Root, func() (library.Reader, error)) {
 	h.edits++
 }
 

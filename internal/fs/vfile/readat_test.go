@@ -16,7 +16,7 @@ func newTestReadAtFile(t *testing.T, data string) *ReadAtFile {
 	t.Helper()
 	stat := NewStat(util.NewTestFS(t), "reader", 0o444)
 	raf := NewReadAtFile(stat, func() (ReaderAtCloser, error) {
-		return &mock.EpubReader{Reader: bytes.NewReader([]byte(data))}, nil
+		return &mock.Reader{Reader: bytes.NewReader([]byte(data))}, nil
 	})
 
 	return &raf
@@ -64,7 +64,7 @@ func TestReadAtFile(t *testing.T) {
 	})
 
 	t.Run("close releases reader", func(t *testing.T) {
-		r := &mock.EpubReader{Reader: bytes.NewReader([]byte("data"))}
+		r := &mock.Reader{Reader: bytes.NewReader([]byte("data"))}
 		stat := NewStat(util.NewTestFS(t), "reader", 0o444)
 		raf := NewReadAtFile(stat, func() (ReaderAtCloser, error) { return r, nil })
 

@@ -60,8 +60,8 @@ func representativeBook(id int64, withCover bool) *library.Book {
 	libPath := "Le Guin, Ursula K/The Left Hand of Darkness (1042)"
 	epubName := "The Left Hand of Darkness - Ursula K. Le Guin.epub"
 
-	return util.WrapBook(book.NewBook(bib, book.Meta{ID: id, Status: "unread", Tags: []string{"sci-fi", "classic", "feminist"}}, book.Location{
-		EpubPath: filepath.Join(libPath, epubName),
+	return util.WrapBook(book.NewBook(bib, book.Meta{ID: id, Status: "unread", Tags: []string{"sci-fi", "classic", "feminist"}}, book.File{
+		Path: filepath.Join(libPath, epubName),
 	}))
 }
 
@@ -143,7 +143,7 @@ func BenchmarkBookDirMemoryFootprint(b *testing.B) {
 	b.Logf("  fs.BaseFile     = %d B", unsafe.Sizeof(fs.BaseFile{}))
 	b.Logf("  fs.StaticFile   = %d B", unsafe.Sizeof(fs.StaticFile{}))
 	b.Logf("  fieldFile       = %d B", unsafe.Sizeof(fieldFile{}))
-	b.Logf("  epubFile        = %d B", unsafe.Sizeof(epubFile{}))
+	b.Logf("  contentFile        = %d B", unsafe.Sizeof(contentFile{}))
 	b.Logf("  coverFile       = %d B", unsafe.Sizeof(coverFile{}))
 	b.Logf("  library.Book      = %d B", unsafe.Sizeof(library.Book{}))
 	b.Logf("  BookDir         = %d B", unsafe.Sizeof(BookDir{}))

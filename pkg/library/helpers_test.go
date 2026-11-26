@@ -46,7 +46,7 @@ func metaPathOf(book *Book, root string) string {
 func breakEpub(t *testing.T, book *Book, root string) {
 	t.Helper()
 
-	absEpub := filepath.Join(root, book.EpubPath())
+	absEpub := filepath.Join(root, book.Path())
 	if err := os.Remove(absEpub); err != nil {
 		t.Fatalf("remove epub: %v", err)
 	}
@@ -106,8 +106,8 @@ func assertIndexMatchesStore(t *testing.T, lib *Library) {
 			observed = drift.PathInfo{}
 		}
 
-		if got, ok := indexed[entry.EpubPath]; !ok || !got.Equal(observed) {
-			t.Fatalf("index observation for %q = %+v, want %+v", entry.EpubPath, got, observed)
+		if got, ok := indexed[entry.Path]; !ok || !got.Equal(observed) {
+			t.Fatalf("index observation for %q = %+v, want %+v", entry.Path, got, observed)
 		}
 	}
 }

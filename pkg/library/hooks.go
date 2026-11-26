@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/ramblingenzyme/ebookfs/internal/book"
-	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/epub"
+	"github.com/ramblingenzyme/ebookfs/pkg/library/internal/formats"
 )
 
 // Hook is a unified interface for observing and amending library operations.
@@ -38,33 +38,34 @@ type Hook interface {
 	// hook is registered, before any other hook phases.
 	Setup(root string, stateDir string) error
 
-	// PreParse rewrites the epub file before parsing. epubPath is the absolute
-	// path to the staged file. tempDir is per-ingest scratch space, retained
-	// until ingest completes. Return a replacement path, or "" to keep epubPath.
-	PreParse(epubPath string, tempDir string) (string, error)
+	// PreParse rewrites the book file before parsing. srcPath is the absolute
+	// path to the staged file, named with its detected format's extension when
+	// the format is recognised. tempDir is per-ingest scratch space, retained
+	// until ingest completes. Return a replacement path, or "" to keep srcPath.
+	PreParse(srcPath string, tempDir string) (string, error)
 
 	// PreCommit amends the bibliographic record before committing. The hook
-	// modifies bib in place, and the library writes the changes into the epub,
+	// modifies bib in place, and the library writes the changes into the file,
 	// so a later reindex keeps them.
 	//
 	// Pubdate, Identifiers, CoverPath, OpfSize and CoverSize cannot be written
-	// to the epub, and changing one fails the ingest. An amendment an edit
+	// to the file, and changing one fails the ingest. An amendment an edit
 	// would refuse, such as an empty title, also fails it.
 	PreCommit(bib *Bib) error
 
 	// OnIngested fires after a book is ingested, under the per-book lock.
 	// The hook receives the book, a sidecar root scoped to .sidecar/, and a
-	// lazy OpenEpub function that opens the epub for reading.
-	OnIngested(book *Book, sidecars *os.Root, openEpub func() (EpubReader, error))
+	// lazy openFile function that opens the book file for reading.
+	OnIngested(book *Book, sidecars *os.Root, openFile func() (Reader, error))
 
 	// OnEdited fires after a book is edited, under the per-book lock.
-	OnEdited(book *Book, sidecars *os.Root, openEpub func() (EpubReader, error))
+	OnEdited(book *Book, sidecars *os.Root, openFile func() (Reader, error))
 
 	// OnDeleting fires before a book is deleted, under the per-book lock.
 	// The hook receives the book, a sidecar root scoped to .sidecar/, and a
-	// lazy OpenEpub function that opens the epub for reading. The epub is
+	// lazy openFile function that opens the book file for reading. The file is
 	// deleted from disk after all OnDeleting hooks return.
-	OnDeleting(book *Book, sidecars *os.Root, openEpub func() (EpubReader, error))
+	OnDeleting(book *Book, sidecars *os.Root, openFile func() (Reader, error))
 
 	// OnDeleted fires after a book is deleted, under the per-book lock.
 	OnDeleted(bookID int64)
@@ -76,18 +77,18 @@ type HookBase struct{}
 
 func (HookBase) Setup(root string, stateDir string) error { return nil }
 
-func (HookBase) PreParse(epubPath string, tempDir string) (string, error) {
+func (HookBase) PreParse(srcPath string, tempDir string) (string, error) {
 	return "", nil
 }
 
 func (HookBase) PreCommit(bib *Bib) error { return nil }
 
-func (HookBase) OnIngested(book *Book, sidecars *os.Root, openEpub func() (EpubReader, error)) {
+func (HookBase) OnIngested(book *Book, sidecars *os.Root, openFile func() (Reader, error)) {
 }
 
-func (HookBase) OnEdited(book *Book, sidecars *os.Root, openEpub func() (EpubReader, error)) {}
+func (HookBase) OnEdited(book *Book, sidecars *os.Root, openFile func() (Reader, error)) {}
 
-func (HookBase) OnDeleting(book *Book, sidecars *os.Root, openEpub func() (EpubReader, error)) {}
+func (HookBase) OnDeleting(book *Book, sidecars *os.Root, openFile func() (Reader, error)) {}
 
 func (HookBase) OnDeleted(bookID int64) {}
 
@@ -130,8 +131,8 @@ func (l *Library) AddHook(h Hook) (err error) {
 
 // preParse calls PreParse in registration order. An error stops the ingest;
 // an empty returned path keeps the path passed to that hook.
-func (s *hookSet) preParse(epubPath string, tempDir string) (string, error) {
-	currentPath := epubPath
+func (s *hookSet) preParse(srcPath string, tempDir string) (string, error) {
+	currentPath := srcPath
 	for _, h := range s.snapshot() {
 		newPath, err := h.PreParse(currentPath, tempDir)
 		if err != nil {
@@ -147,10 +148,10 @@ func (s *hookSet) preParse(epubPath string, tempDir string) (string, error) {
 }
 
 // preCommit calls PreCommit in registration order on a copy of parsed and
-// stops on the first error. It writes what the hooks changed into the epub at
-// epubPath and returns the record read back from the file, so the index holds
+// stops on the first error. It writes what the hooks changed into the file at
+// path through f and returns the record read back from the file, so the index holds
 // what a rebuild would derive.
-func (s *hookSet) preCommit(epubPath string, parsed *Bib) (*Bib, error) {
+func (s *hookSet) preCommit(f formats.Format, path string, parsed *Bib) (*Bib, error) {
 	amended := cloneBib(*parsed)
 	for _, h := range s.snapshot() {
 		if err := h.PreCommit(&amended); err != nil {
@@ -163,12 +164,7 @@ func (s *hookSet) preCommit(epubPath string, parsed *Bib) (*Bib, error) {
 		return nil, err
 	}
 
-	bib, err := epub.Rewrite(epubPath, &book.Book{Bib: *parsed}, e)
-	if err != nil {
-		return nil, err
-	}
-
-	return &bib, nil
+	return f.Rewrite(path, &book.Book{Bib: *parsed}, e)
 }
 
 // cloneBib copies every slice, map and pointer, so a hook editing in place
@@ -255,7 +251,7 @@ func seriesKey(s *book.SeriesRef) [2]string {
 	return [2]string{s.Name, s.Index}
 }
 
-func (s *hookSet) dispatchEvent(l *Library, b *Book, loc book.Location, name string, call func(Hook, *os.Root, func() (EpubReader, error))) {
+func (s *hookSet) dispatchEvent(l *Library, b *Book, loc book.File, name string, call func(Hook, *os.Root, func() (Reader, error))) {
 	hooks := s.snapshot()
 	if len(hooks) == 0 {
 		return
@@ -268,28 +264,28 @@ func (s *hookSet) dispatchEvent(l *Library, b *Book, loc book.Location, name str
 	}
 	defer root.Close()
 
-	openEpub := func() (EpubReader, error) { return l.Content(b.ID()) }
+	openFile := func() (Reader, error) { return l.Content(b.ID()) }
 
 	for _, h := range hooks {
-		invokeEvent(name, h, func() { call(h, root, openEpub) })
+		invokeEvent(name, h, func() { call(h, root, openFile) })
 	}
 }
 
-func (s *hookSet) onIngested(l *Library, b *Book, loc book.Location) {
-	s.dispatchEvent(l, b, loc, "OnIngested", func(h Hook, root *os.Root, openEpub func() (EpubReader, error)) {
-		h.OnIngested(b, root, openEpub)
+func (s *hookSet) onIngested(l *Library, b *Book, loc book.File) {
+	s.dispatchEvent(l, b, loc, "OnIngested", func(h Hook, root *os.Root, openFile func() (Reader, error)) {
+		h.OnIngested(b, root, openFile)
 	})
 }
 
-func (s *hookSet) onEdited(l *Library, b *Book, loc book.Location) {
-	s.dispatchEvent(l, b, loc, "OnEdited", func(h Hook, root *os.Root, openEpub func() (EpubReader, error)) {
-		h.OnEdited(b, root, openEpub)
+func (s *hookSet) onEdited(l *Library, b *Book, loc book.File) {
+	s.dispatchEvent(l, b, loc, "OnEdited", func(h Hook, root *os.Root, openFile func() (Reader, error)) {
+		h.OnEdited(b, root, openFile)
 	})
 }
 
-func (s *hookSet) onDeleting(l *Library, b *Book, loc book.Location) {
-	s.dispatchEvent(l, b, loc, "OnDeleting", func(h Hook, root *os.Root, openEpub func() (EpubReader, error)) {
-		h.OnDeleting(b, root, openEpub)
+func (s *hookSet) onDeleting(l *Library, b *Book, loc book.File) {
+	s.dispatchEvent(l, b, loc, "OnDeleting", func(h Hook, root *os.Root, openFile func() (Reader, error)) {
+		h.OnDeleting(b, root, openFile)
 	})
 }
 

@@ -250,6 +250,17 @@ func TestOpenRejectsMissingMimetype(t *testing.T) {
 	}
 }
 
+// A .cbz has neither entry. It used to report ErrContainer, which sent the
+// reader looking for a broken epub.
+func TestOpenRejectsZipWithoutMimetypeOrContainer(t *testing.T) {
+	entries := withoutEntry(epubtest.BaseEntries(epubtest.OPF3), "mimetype")
+	p := epubtest.WriteEpub(t, withoutEntry(entries, "META-INF/container.xml"))
+
+	if _, err := parse(t, p); !errors.Is(err, epub.ErrNotEpub) {
+		t.Fatalf("err = %v, want ErrNotEpub", err)
+	}
+}
+
 func TestOpenToleratesMimetypeWhitespace(t *testing.T) {
 	// calibre also trims it.
 	p := epubtest.WriteEpub(t, withMimetype(epubtest.BaseEntries(epubtest.OPF3), "application/epub+zip\n"))
