@@ -32,7 +32,6 @@ type Book struct {
 	DateModified string
 	SeriesID     sql.NullInt64
 	SeriesIndex  sql.NullString
-	OpfSize      int64
 	CoverSize    int64
 	FileSize     int64
 	FileMtime    int64

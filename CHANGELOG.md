@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Ingest hooks.** `library.Hook` is a unified interface for observing and amending library operations. Embed `library.HookBase` and override only the phases you need. Pipeline phases (`PreParse`, `PreCommit`) run during ingest and can abort it; event phases (`OnIngested`, `OnEdited`, `OnDeleting`, `OnDeleted`) fire around edits and deletes. Register with `Library.AddHook(h Hook)`, which calls the hook's `Setup` before registering. Hooks run in registration order; panics are recovered.
 
+- **`opf` command.** `cmd/opf` prints an epub's raw package document (the OPF) to stdout, for piping into `xmllint` or reading directly. It takes one epub path and touches no library or config, building only on `pkg/epub`. A dev/operator tool, not shipped in the Docker image.
+
 ### Fixed
 
 - **A zip that is not an epub reports `ErrNotEpub`.** Opening a `.cbz` or other plain zip with `pkg/epub` failed with `ErrContainer`, which pointed at a broken epub.
@@ -93,6 +95,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The `reader/` view and kepub conversion.** Use the OPDS catalog to get books onto a device. It serves each book by id, so a metadata edit no longer renames the file a device synced and orphans its reading progress. The `[reader]` config section (`statuses`, `convert`, `cache_dir`) now logs an unknown-key warning at startup, and the kepub cache directory can be deleted. `Library.Exporter` and `library.ReaderConfig` are removed. See ADR-001.
 
 - **`ctl reindex`.** Use `--reindex`, or let startup rebuild when drift detection finds the index and store disagreeing. Run live it moved book directories while the 9P tree kept serving the old names, leaving registry and store disagreeing until restart.
+
+- **The `opf` file in each book's 9P directory.** The raw package document, served live from the epub, is gone from the namespace; run the `opf` command on the epub instead. The OPF's stored uncompressed size is dropped with it. The index schema version is bumped, so the first startup after upgrading reindexes.
 
 ## [1.0.0-beta4] - 2026-08-29
 

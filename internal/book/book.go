@@ -134,7 +134,6 @@ type Bib struct {
 	Contributors []Contributor
 	Identifiers  map[string]string
 	CoverPath    string // zip-relative path to cover image; empty if none
-	OpfSize      int64  // OPF uncompressed size from zip central directory; 0 if unavailable
 	CoverSize    int64  // cover uncompressed size from zip central directory; 0 if unavailable
 }
 

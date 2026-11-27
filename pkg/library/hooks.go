@@ -194,7 +194,6 @@ func bibEdits(from, to book.Bib) (book.Edits, error) {
 		{"pubdate", from.Pubdate == to.Pubdate},
 		{"identifiers", maps.Equal(from.Identifiers, to.Identifiers)},
 		{"cover path", from.CoverPath == to.CoverPath},
-		{"package document size", from.OpfSize == to.OpfSize},
 		{"cover size", from.CoverSize == to.CoverSize},
 	} {
 		if !f.same {

@@ -109,21 +109,12 @@ func (i Ingester) CreateIngest() (library.IngestHandle, error) {
 type Reader struct {
 	*bytes.Reader
 	Closed  bool
-	OPFFn   func() ([]byte, error)
 	CoverFn func() ([]byte, error)
 }
 
 func (r *Reader) Close() error {
 	r.Closed = true
 	return nil
-}
-
-func (r *Reader) OPF() ([]byte, error) {
-	if r.OPFFn != nil {
-		return r.OPFFn()
-	}
-
-	return nil, nil
 }
 
 func (r *Reader) Cover() ([]byte, error) {

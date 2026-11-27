@@ -48,7 +48,6 @@ func TestReaderClosedContract(t *testing.T) {
 		call func() error
 	}{
 		{"ReadAt", func() error { _, err := r.ReadAt(make([]byte, 4), 0); return err }},
-		{"OPF", func() error { _, err := r.OPF(); return err }},
 		{"Cover", func() error { _, err := r.Cover(); return err }},
 		{"Close again", r.Close},
 	} {
@@ -71,9 +70,5 @@ func TestReaderWithNoCover(t *testing.T) {
 
 	if _, err := r.Cover(); err == nil {
 		t.Error("Cover returned no error for an epub with no cover path")
-	}
-
-	if _, err := r.OPF(); err != nil {
-		t.Errorf("OPF: %v", err)
 	}
 }

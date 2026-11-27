@@ -68,8 +68,6 @@ func (b *ImmutableBook) Identifiers() map[string]string { return maps.Clone(b.in
 
 func (b *ImmutableBook) CoverPath() string { return b.inner.CoverPath }
 
-func (b *ImmutableBook) OpfSize() int64 { return b.inner.OpfSize }
-
 func (b *ImmutableBook) CoverSize() int64 { return b.inner.CoverSize }
 
 func (b *ImmutableBook) Path() string { return b.inner.Path }

@@ -21,9 +21,8 @@ CREATE TABLE books
     -- Nothing orders by this column; the by-series view sorts on the padded
     -- entry name it builds itself.
     series_index  TEXT,
-    -- opf_size and cover_size come from the zip central directory, so they are
-    -- the parser's and only ever known for a book that parsed.
-    opf_size      INTEGER NOT NULL DEFAULT 0,
+    -- cover_size comes from the zip central directory, so it is the
+    -- parser's and only ever known for a book that parsed.
     cover_size    INTEGER NOT NULL DEFAULT 0,
     -- Drift bookkeeping: both files' sizes and mtimes as observed by one stat
     -- per file. The file's name is compared too, via file_path above —
