@@ -30,7 +30,7 @@ func parseSelection(spec string) (library.Query, error) {
 		}
 		// All parts of the spec are exact to prevent more books being
 		// updated than expected.
-		q.ExactTitles = true
+		q.Titles.Exact = true
 
 		return q, err
 	default:

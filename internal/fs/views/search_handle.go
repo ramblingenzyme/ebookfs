@@ -74,7 +74,14 @@ func (h *searchHandleDir) lastQuery() time.Time {
 }
 
 // executeSearch swaps the handle's predicate and rebuilds results/ through the
-// registry's ResyncView. The swap, the clear and the repopulation are one step,
+// registry's ResyncView. The predicate is the single membership authority:
+// ResyncView replays every registered book through it and registry events
+// evaluate it live, so both paths agree by construction.
+//
+// Query.Matches ignores Limit, so textfmt.ParseQuery has no syntax that sets it
+// and must not grow one. A limited query would list more here than ctl
+// selects, and ctl shares the parser, where a limited selection would mutate an
+// arbitrary subset of the books the operator named. The swap, the clear and the repopulation are one step,
 // serialized against registry Add/Remove/commit. No window leaves an event
 // evaluated against the wrong query, and nothing mutates the listing unlocked.
 func (h *searchHandleDir) executeSearch(q library.Query, queryText string) {
@@ -83,11 +90,9 @@ func (h *searchHandleDir) executeSearch(q library.Query, queryText string) {
 	h.lastQueryTime = time.Now()
 	h.mu.Unlock()
 
-	fn := makeMatchesFn(q)
-
 	h.reg.ResyncView(h.results, func() {
 		h.results.mu.Lock()
-		h.results.matchesFn = fn
+		h.results.matchesFn = q.Matches
 		h.results.mu.Unlock()
 		h.results.bookListDir.clear()
 	})

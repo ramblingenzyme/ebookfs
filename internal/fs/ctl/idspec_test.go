@@ -22,7 +22,7 @@ func TestParseSelection(t *testing.T) {
 		{"", library.Query{}, true},
 		{"abc", library.Query{}, true},
 		{"1,abc", library.Query{}, true},
-		{"tag:sci-fi+status:unread", library.Query{Tags: []string{"sci-fi"}, Status: []string{"unread"}, ExactTitles: true}, false},
+		{"tag:sci-fi+status:unread", library.Query{Tags: []string{"sci-fi"}, Status: []string{"unread"}, Titles: library.TitleFilter{Exact: true}}, false},
 	}
 
 	for _, tt := range tests {

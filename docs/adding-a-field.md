@@ -77,14 +77,16 @@ If the field should be searchable, continue with the next section.
 ## A query filter
 
 A filter is answered twice. `index.Search` answers it in SQL, for ctl and
-OPDS. The `search/` view answers it in Go, over the registry's books. The two
-must agree, or a bulk edit and the listing a user checked it against select
-different books.
+OPDS. `Query.Matches` answers it in Go, for the `search/` view over the
+registry's books. The two must agree, or a bulk edit and the listing a user
+checked it against select different books.
 
-1. **`index.Query`** (`query.go`): add the field.
-2. **SQL**: add an `addIn` clause in `index.Search` (`search.go`).
-3. **Go**: add a `matches<Name>` in `internal/fs/views/match.go`, and call it
-   from `makeMatchesFn`.
+1. **Filter type** (`filter.go`): define a `<Name>Filter` with both `where`
+   (the SQL clause, usually one `addIn`) and `matches` (the Go predicate). A
+   type missing either does not satisfy `filter`.
+2. **`index.Query`** (`query.go`): add the field with that type, and return it
+   from `filters`. `TestEveryQueryFieldIsAFilter` fails until both are done.
+3. **Alias**: add `<Name>Filter` to `pkg/library/types.go`.
 4. **Syntax**: add the prefix to `textfmt.ParseQuery`. It serves both
    `search/` and ctl's id-specs.
 5. **Parity test**: add cases to `TestSearchMatcherAgreesWithSQL`, and set the

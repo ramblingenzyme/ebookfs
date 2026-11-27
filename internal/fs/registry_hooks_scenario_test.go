@@ -28,7 +28,7 @@ func TestConcurrentLibraryEditsKeepBookDirSnapshotWhole(t *testing.T) {
 
 	ingest("Race A", "Alice")(t, lib)
 
-	book, err := lib.Search(library.Query{Titles: []string{"Race A"}})
+	book, err := lib.Search(library.Query{Titles: library.TitleFilter{Terms: []string{"Race A"}}})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}

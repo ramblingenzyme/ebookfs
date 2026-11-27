@@ -1,20 +1,18 @@
-// One query text, two matchers. ctl parses it and hands it to library.Search,
-// which filters in SQL. The search view parses the same text and hands it to
-// makeMatchesFn, which filters in Go over the registry's books. Nothing in
-// either package's types says the two must agree, and the consequence of
+// One query, two matchers. Search filters in SQL, for ctl and OPDS.
+// Query.Matches filters in Go, for the 9P search/ view over the registry's
+// books. Nothing in the types says the two must agree, and the consequence of
 // disagreeing is not symmetric: a book the view shows but ctl misses is a bulk
 // edit silently skipping it.
 //
-// Spans views and library, so it pairs with neither source file.
+// Spans index.Search and Query.Matches, so it pairs with neither source file.
 
-package views
+package library_test
 
 import (
 	"reflect"
 	"slices"
 	"testing"
 
-	"github.com/ramblingenzyme/ebookfs/internal/testing/util"
 	"github.com/ramblingenzyme/ebookfs/pkg/library"
 )
 
@@ -48,14 +46,14 @@ func TestSearchMatcherAgreesWithSQL(t *testing.T) {
 	everyField := library.Query{
 		Authors: []string{"Alice"}, Tags: []string{"sf"}, Series: []string{"Saga"},
 		Status: []string{"reading"}, Subjects: []string{"space"}, Publisher: []string{"Tor"},
-		Language: []string{"fr"}, IDs: []int64{1}, Titles: []string{"find"},
+		Language: []string{"fr"}, IDs: []int64{1}, Titles: library.TitleFilter{Terms: []string{"find"}},
 	}
-	// A filter field added to Query fails here until a case exercises it. Order,
-	// Limit and ExactTitles shape or qualify a match, so they are left out.
+	// A filter field added to Query fails here until a case exercises it. Order
+	// and Limit shape a result set, so they are left out.
 	v := reflect.ValueOf(everyField)
 	for i := range v.NumField() {
 		switch name := v.Type().Field(i).Name; name {
-		case "Order", "Limit", "ExactTitles":
+		case "Order", "Limit":
 		default:
 			if v.Field(i).IsZero() {
 				t.Errorf("the every-field case leaves Query.%s unset", name)
@@ -70,15 +68,15 @@ func TestSearchMatcherAgreesWithSQL(t *testing.T) {
 		skip string
 	}{
 		{"everything", library.Query{}, []string{"100% Wool", "1000 Ships", "Findable", "Good Omens", "Plain Book", "STRAÜSS", "x_y Files", "xzy Files", "Ünderland"}, ""},
-		{"title substring", library.Query{Titles: []string{"ind"}}, []string{"Findable"}, ""},
-		{"title lowercased ascii", library.Query{Titles: []string{"findable"}}, []string{"Findable"}, ""},
-		{"title exact", library.Query{Titles: []string{"Findable"}, ExactTitles: true}, []string{"Findable"}, ""},
-		{"title exact wrong case", library.Query{Titles: []string{"findable"}, ExactTitles: true}, nil, ""},
+		{"title substring", library.Query{Titles: library.TitleFilter{Terms: []string{"ind"}}}, []string{"Findable"}, ""},
+		{"title lowercased ascii", library.Query{Titles: library.TitleFilter{Terms: []string{"findable"}}}, []string{"Findable"}, ""},
+		{"title exact", library.Query{Titles: library.TitleFilter{Terms: []string{"Findable"}, Exact: true}}, []string{"Findable"}, ""},
+		{"title exact wrong case", library.Query{Titles: library.TitleFilter{Terms: []string{"findable"}, Exact: true}}, nil, ""},
 		{"author", library.Query{Authors: []string{"Alice"}}, []string{"Findable", "Plain Book"}, ""},
 		{"co-author", library.Query{Authors: []string{"Terry Pratchett"}}, []string{"Good Omens"}, ""},
 		{"author by sort name", library.Query{Authors: []string{"Bobson, Bob"}}, []string{"Ünderland"}, ""},
 		{"author is not a substring", library.Query{Authors: []string{"Ali"}}, nil, ""},
-		{"author and title", library.Query{Authors: []string{"Alice"}, Titles: []string{"Plain"}}, []string{"Plain Book"}, ""},
+		{"author and title", library.Query{Authors: []string{"Alice"}, Titles: library.TitleFilter{Terms: []string{"Plain"}}}, []string{"Plain Book"}, ""},
 		{"tag", library.Query{Tags: []string{"sf"}}, []string{"Findable"}, ""},
 		{"tags OR", library.Query{Tags: []string{"sf", "fantasy"}}, []string{"Findable", "Ünderland"}, ""},
 		{"series", library.Query{Series: []string{"Saga"}}, []string{"Findable", "Ünderland"}, ""},
@@ -91,18 +89,18 @@ func TestSearchMatcherAgreesWithSQL(t *testing.T) {
 		{"every field", everyField, []string{"Findable"}, ""},
 		{"one field fails", library.Query{Tags: []string{"sf"}, Status: []string{"read"}}, nil, ""},
 		{"subject fails", library.Query{Tags: []string{"sf"}, Subjects: []string{"myth"}}, nil, ""},
-		{"literal percent", library.Query{Titles: []string{"100%"}}, []string{"100% Wool"}, ""},
-		{"literal underscore", library.Query{Titles: []string{"x_y"}}, []string{"x_y Files"}, ""},
-		{"no match", library.Query{Titles: []string{"nothing here"}}, nil, ""},
+		{"literal percent", library.Query{Titles: library.TitleFilter{Terms: []string{"100%"}}}, []string{"100% Wool"}, ""},
+		{"literal underscore", library.Query{Titles: library.TitleFilter{Terms: []string{"x_y"}}}, []string{"x_y Files"}, ""},
+		{"no match", library.Query{Titles: library.TitleFilter{Terms: []string{"nothing here"}}}, nil, ""},
 		{
 			"title lowercased non-ascii",
-			library.Query{Titles: []string{"ünderland"}},
+			library.Query{Titles: library.TitleFilter{Terms: []string{"ünderland"}}},
 			[]string{"Ünderland"},
 			"SQL misses Ünderland, Go finds it",
 		},
 		{
 			"title uppercased non-ascii",
-			library.Query{Titles: []string{"straüss"}},
+			library.Query{Titles: library.TitleFilter{Terms: []string{"straüss"}}},
 			[]string{"STRAÜSS"},
 			"SQL misses STRAÜSS, Go finds it",
 		},
@@ -119,10 +117,8 @@ func TestSearchMatcherAgreesWithSQL(t *testing.T) {
 
 			var fromGo []*library.Book
 
-			matches := makeMatchesFn(tc.q)
-
 			for _, b := range all {
-				if matches(b) {
+				if tc.q.Matches(b) {
 					fromGo = append(fromGo, b)
 				}
 			}
@@ -146,27 +142,10 @@ func TestSearchMatcherAgreesWithSQL(t *testing.T) {
 func parityBooks(t *testing.T, books []parityBook) (*library.Library, []*library.Book) {
 	t.Helper()
 
-	lib, err := library.Open(library.Config(util.TestConfig(t)))
-	if err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
-	t.Cleanup(func() { lib.Close() })
+	lib := openTestLibrary(t)
 
 	for i, b := range books {
-		h, err := lib.CreateIngest()
-		if err != nil {
-			t.Fatalf("CreateIngest: %v", err)
-		}
-
-		if _, err := h.WriteAt(util.BuildTestEpub(t, b.title, b.authors...), 0); err != nil {
-			t.Fatalf("WriteAt: %v", err)
-		}
-
-		book, err := h.Ingest()
-		if err != nil {
-			t.Fatalf("Ingest %q: %v", b.title, err)
-		}
+		book := ingestTestEpub(t, lib, buildTestEpub(t, b.title, b.authors...))
 
 		if b.edits != (library.Edits{}) {
 			if _, err := lib.Edit(book.ID(), b.edits); err != nil {
