@@ -1,6 +1,7 @@
 package pdf
 
 import (
+	"encoding/xml"
 	"fmt"
 	"maps"
 	"slices"
@@ -93,10 +94,20 @@ type xmpStore struct{ p *xmp.Packet }
 func (xmpStore) keeps(field) bool { return true }
 
 // value reads only the first item of a single-valued field, so a write leaves
-// an array's later items alone while the first agrees.
+// an array's later items alone while the first agrees. A qualified field reads
+// as its value and that qualifier.
 func (s xmpStore) value(f field) ([]string, bool) {
+	if f.qual != (xml.Name{}) {
+		items, ok := s.p.Items(f.prop)
+		if len(items) == 0 {
+			return nil, ok
+		}
+
+		return []string{items[0].Value, items[0].Qualifiers[f.qual]}, ok
+	}
+
 	v, ok := s.p.Values(f.prop)
-	if f.single() && len(v) > 1 {
+	if f.single && len(v) > 1 {
 		v = v[:1]
 	}
 
@@ -119,8 +130,22 @@ func (s xmpStore) properties(m *Metadata) ([]xmp.Property, error) {
 			}
 		}
 
-		props = append(props, xmp.Property{Name: f.prop, Form: f.form, Values: want})
+		props = append(props, f.property(want))
 	}
 
 	return props, nil
+}
+
+// property is the XMP edit that writes v as f's value.
+func (f field) property(v []string) xmp.Property {
+	p := xmp.Property{Name: f.prop, Form: f.form, Values: v}
+
+	if f.qual != (xml.Name{}) && len(v) == 2 {
+		p.Values, p.Qualifiers = v[:1], map[xml.Name]string{}
+		if v[1] != "" {
+			p.Qualifiers[f.qual] = v[1]
+		}
+	}
+
+	return p
 }

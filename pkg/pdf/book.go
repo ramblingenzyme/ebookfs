@@ -1,7 +1,10 @@
 package pdf
 
 import (
+	"encoding/xml"
 	"errors"
+
+	"github.com/ramblingenzyme/ebookfs/pkg/pdf/internal/xmp"
 )
 
 // ErrEncrypted is returned by Open for an encrypted PDF (§7.6), whose
@@ -29,6 +32,24 @@ type Metadata struct {
 	Publisher    string
 	Rights       string
 	Contributors []string
+	// SortTitle is calibre:title_sort, which calibre writes into every PDF
+	// it edits. No standard property holds a sort title.
+	SortTitle string
+	// AuthorSort is calibre:author_sort: one string for all the authors,
+	// such as "Doe, Jane & Roe, Rick", as calibre writes it. It is never
+	// split per author, since nothing in the file says how.
+	AuthorSort string
+	// Series is calibre:series, nil if the document is in none. Set nil to
+	// remove it.
+	Series *Series
+}
+
+// Series is the collection a document belongs to, and its position in it.
+// Index is calibre:series_index as written, such as "2.00", or "" if the file
+// has none.
+type Series struct {
+	Name  string
+	Index string
 }
 
 // Book is an open PDF with its metadata. Change a field and call Save to write
@@ -82,3 +103,29 @@ func (b *Book) CreationDate() string {
 
 	return vals[0]
 }
+
+// Pubdate returns the publication date exactly as the file writes it:
+// dc:date, which calibre writes, or failing that PRISM's publicationDate,
+// which publishers write. It is "" if the file has neither. The information
+// dictionary has no publication date; CreationDate is when the file was made.
+func (b *Book) Pubdate() string {
+	if v, _ := b.src.packet.p.Values(dc("date")); len(v) > 0 {
+		return v[0]
+	}
+
+	for _, ns := range xmp.NSPRISM {
+		if v, _ := b.src.packet.p.Values(xml.Name{Space: ns, Local: "publicationDate"}); len(v) > 0 {
+			return v[0]
+		}
+	}
+
+	return ""
+}
+
+// Identifiers returns the document's identifiers keyed by scheme, such as
+// "isbn" or "doi", as pkg/epub keys them. One with no scheme is keyed
+// "unknown", then "unknown-2" and so on.
+//
+// Identifiers are read-only, since they state the work's published identity.
+// Changing the map does not change the file.
+func (b *Book) Identifiers() map[string]string { return identifiers(b.src.packet.p) }

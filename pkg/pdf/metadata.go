@@ -20,9 +20,10 @@ type field struct {
 	key  cos.Name
 	prop xml.Name
 	form xmp.Form
-	// One of text and items points at the field.
-	text  func(*Metadata) *string
-	items func(*Metadata) *[]string
+	// qual, when set, makes the field a qualified XMP value: its second item
+	// is the qualifier's.
+	qual xml.Name
+	accessor
 }
 
 type dictKind int
@@ -38,49 +39,82 @@ const (
 const authorSeparator = "; "
 
 var fields = []field{
-	{name: "title", dict: infoDict, key: "Title", prop: dc("title"), form: xmp.Alt, text: func(m *Metadata) *string { return &m.Title }},
-	{name: "author", dict: infoDict, key: "Author", prop: dc("creator"), form: xmp.Seq, items: func(m *Metadata) *[]string { return &m.Authors }},
-	{name: "description", dict: infoDict, key: "Subject", prop: dc("description"), form: xmp.Alt, text: func(m *Metadata) *string { return &m.Description }},
-	{name: "subject", prop: dc("subject"), form: xmp.Bag, items: func(m *Metadata) *[]string { return &m.Subjects }},
-	{name: "keywords", dict: infoDict, key: "Keywords", prop: pdfNS("Keywords"), form: xmp.Simple, text: func(m *Metadata) *string { return &m.Keywords }},
-	{name: "language", dict: catalogDict, key: "Lang", prop: dc("language"), form: xmp.Bag, text: func(m *Metadata) *string { return &m.Language }},
-	{name: "publisher", prop: dc("publisher"), form: xmp.Bag, text: func(m *Metadata) *string { return &m.Publisher }},
-	{name: "rights", prop: dc("rights"), form: xmp.Alt, text: func(m *Metadata) *string { return &m.Rights }},
-	{name: "contributor", prop: dc("contributor"), form: xmp.Bag, items: func(m *Metadata) *[]string { return &m.Contributors }},
+	{name: "title", dict: infoDict, key: "Title", prop: dc("title"), form: xmp.Alt, accessor: text(func(m *Metadata) *string { return &m.Title })},
+	{name: "author", dict: infoDict, key: "Author", prop: dc("creator"), form: xmp.Seq, accessor: list(func(m *Metadata) *[]string { return &m.Authors })},
+	{name: "description", dict: infoDict, key: "Subject", prop: dc("description"), form: xmp.Alt, accessor: text(func(m *Metadata) *string { return &m.Description })},
+	{name: "subject", prop: dc("subject"), form: xmp.Bag, accessor: list(func(m *Metadata) *[]string { return &m.Subjects })},
+	{name: "keywords", dict: infoDict, key: "Keywords", prop: pdfNS("Keywords"), form: xmp.Simple, accessor: text(func(m *Metadata) *string { return &m.Keywords })},
+	{name: "language", dict: catalogDict, key: "Lang", prop: dc("language"), form: xmp.Bag, accessor: text(func(m *Metadata) *string { return &m.Language })},
+	{name: "publisher", prop: dc("publisher"), form: xmp.Bag, accessor: text(func(m *Metadata) *string { return &m.Publisher })},
+	{name: "rights", prop: dc("rights"), form: xmp.Alt, accessor: text(func(m *Metadata) *string { return &m.Rights })},
+	{name: "contributor", prop: dc("contributor"), form: xmp.Bag, accessor: list(func(m *Metadata) *[]string { return &m.Contributors })},
+	{name: "sort title", prop: calibre("title_sort"), form: xmp.Simple, accessor: text(func(m *Metadata) *string { return &m.SortTitle })},
+	{name: "author sort", prop: calibre("author_sort"), form: xmp.Simple, accessor: text(func(m *Metadata) *string { return &m.AuthorSort })},
+	{name: "series", prop: calibre("series"), form: xmp.Simple, qual: xml.Name{Space: xmp.NSCalibreSI, Local: "series_index"}, accessor: series()},
 }
 
-func dc(local string) xml.Name    { return xml.Name{Space: xmp.NSDC, Local: local} }
-func pdfNS(local string) xml.Name { return xml.Name{Space: xmp.NSPDF, Local: local} }
-func xmpNS(local string) xml.Name { return xml.Name{Space: xmp.NSXMP, Local: local} }
+func dc(local string) xml.Name      { return xml.Name{Space: xmp.NSDC, Local: local} }
+func pdfNS(local string) xml.Name   { return xml.Name{Space: xmp.NSPDF, Local: local} }
+func xmpNS(local string) xml.Name   { return xml.Name{Space: xmp.NSXMP, Local: local} }
+func calibre(local string) xml.Name { return xml.Name{Space: xmp.NSCalibre, Local: local} }
 
 // creationDate is read like a field but never written, since §14.3.4 says an
 // edit leaves the creation date as it is.
-var creationDate = field{dict: infoDict, key: "CreationDate", prop: xmpNS("CreateDate")}
+var creationDate = field{dict: infoDict, key: "CreationDate", prop: xmpNS("CreateDate"), accessor: accessor{single: true}}
 
-// single reports a field that holds one value. A write then leaves an array's
-// later items alone while its first agrees.
-func (f field) single() bool { return f.items == nil }
-
-func (f field) get(m *Metadata) []string {
-	if f.items != nil {
-		return *f.items(m)
-	}
-
-	if s := *f.text(m); s != "" {
-		return []string{s}
-	}
-
-	return nil
+// accessor reads and writes one Metadata field as a list of strings, the shape
+// every store compares and writes.
+type accessor struct {
+	get func(*Metadata) []string
+	set func(*Metadata, []string)
+	// single fields hold one value. A write then leaves an array's later items
+	// alone while its first agrees.
+	single bool
 }
 
-func (f field) set(m *Metadata, v []string) {
-	switch {
-	case f.items != nil:
-		*f.items(m) = v
-	case len(v) > 0:
-		*f.text(m) = v[0]
-	default:
-		*f.text(m) = ""
+// text is a string field: empty is no value.
+func text(p func(*Metadata) *string) accessor {
+	return accessor{
+		get: func(m *Metadata) []string {
+			if s := *p(m); s != "" {
+				return []string{s}
+			}
+
+			return nil
+		},
+		set: func(m *Metadata, v []string) {
+			*p(m) = ""
+			if len(v) > 0 {
+				*p(m) = v[0]
+			}
+		},
+		single: true,
+	}
+}
+
+func list(p func(*Metadata) *[]string) accessor {
+	return accessor{
+		get: func(m *Metadata) []string { return *p(m) },
+		set: func(m *Metadata, v []string) { *p(m) = v },
+	}
+}
+
+// series is Metadata.Series as its name and index.
+func series() accessor {
+	return accessor{
+		get: func(m *Metadata) []string {
+			if m.Series == nil {
+				return nil
+			}
+
+			return []string{m.Series.Name, m.Series.Index}
+		},
+		set: func(m *Metadata, v []string) {
+			m.Series = nil
+			if len(v) == 2 {
+				m.Series = &Series{Name: v[0], Index: v[1]}
+			}
+		},
 	}
 }
 

@@ -321,3 +321,23 @@ that will not turn up in a personal library. Reading is unaffected.
 Encrypted PDFs are refused at `Open` rather than at `Save`. Without the key
 their dictionary strings are ciphertext, and reporting those as a title
 would be worse than reporting nothing.
+
+## 32. PDF series, sort title and author sort use calibre's XMP namespace
+
+A PDF has no standard property for a series, a sort title or an author's
+sort name. ebookfs replaces calibre (#1), so the libraries arriving here are
+calibre's, and calibre writes `calibre:series` (with the position in a
+`calibreSI:series_index` qualifier), `calibre:title_sort` and
+`calibre:author_sort` into every PDF it edits. `pkg/pdf` reads and writes
+those, so the file stays the source of truth (#13) rather than pushing a
+PDF's series into `meta.toml`, and calibre reads back what ebookfs writes.
+`pkg/epub` already relies on calibre's convention the same way for EPUB 2.
+
+calibre's author sort is one string for all the authors, such as
+`Pratchett, Terry & Kidby, Paul`. `pkg/pdf` reports it as that one string,
+since nothing in the file says how to split it. Splitting it into per-author
+sort names, if the names line up, is the library's rule, not the format's.
+
+The alternatives were PRISM, which has no series property in common use, and
+a namespace of our own, which no other tool would read.
+

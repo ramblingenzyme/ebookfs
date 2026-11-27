@@ -30,13 +30,15 @@ reflection, so they fail when any of steps 2–4 is missed.
 
 ### The pdf format: `pkg/pdf`
 
-Nothing in ebookfs reads PDFs yet, so a field reaches `pkg/pdf` only if the
-format has a standard home for it.
+A field reaches `pkg/pdf` only if the format has a home for it: a standard
+property, or calibre's namespace where calibre is the de facto standard.
 
 1. **Expose it on `pdf.Metadata`** (`book.go`).
 2. **Add a row to `fields`** (`metadata.go`), naming its XMP property and
-   form, and its information dictionary or catalog key if it has one. Reading,
-   change detection, cloning and writing all walk that table.
+   form, its information dictionary or catalog key if it has one, and an
+   accessor: `text` for a string, `list` for a slice, or one of its own for
+   another shape, as `series` is. Reading, change detection, cloning and
+   writing all walk that table.
 
 The same two reflection tests in `pkg/pdf` fail when the row is missing.
 

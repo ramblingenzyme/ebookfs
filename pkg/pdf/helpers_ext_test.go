@@ -81,17 +81,24 @@ func fillMetadata(t *testing.T, m *pdf.Metadata) {
 			f.SetString(name + " välue")
 		case []string:
 			f.Set(reflect.ValueOf([]string{name + " one", name + " two"}))
+		case *pdf.Series:
+			f.Set(reflect.ValueOf(&pdf.Series{Name: "Saga välue", Index: "2.5"}))
 		default:
 			t.Fatalf("Metadata.%s is a %s, which fillMetadata has no case for", name, f.Type())
 		}
 	}
 }
 
-// mutateSlices changes the first element of every slice field in place.
+// mutateSlices changes, in place, the first element of every slice field and
+// the name of the series, which a shallow copy would share.
 func mutateSlices(m *pdf.Metadata) {
 	for _, f := range reflect.ValueOf(m).Elem().Fields() {
 		if f.Kind() == reflect.Slice && f.Len() > 0 {
 			f.Index(0).SetString(f.Index(0).String() + " changed")
 		}
+	}
+
+	if m.Series != nil {
+		m.Series.Name += " changed"
 	}
 }

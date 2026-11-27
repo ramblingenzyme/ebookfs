@@ -184,23 +184,24 @@ func (n *node) attr(name xml.Name) (string, bool) {
 	return "", false
 }
 
-// values reads a property element: an array's items, a URI, or simple text.
-func (n *node) values() []string {
+// items reads a property element: an array's items, a URI, or one simple
+// value.
+func (n *node) items() []Item {
 	if v, ok := n.attr(rdf("resource")); ok {
-		return []string{v}
+		return []Item{{Value: v}}
 	}
 
 	for _, kind := range []string{"Alt", "Bag", "Seq"} {
 		if arr := n.child(rdf(kind)); arr != nil {
-			return arr.items(kind == "Alt")
+			return arr.arrayItems(kind == "Alt")
 		}
 	}
 
-	return []string{valueOf(n)}
+	return []Item{itemOf(n)}
 }
 
-func (n *node) items(alt bool) []string {
-	var out []string
+func (n *node) arrayItems(alt bool) []Item {
+	var out []Item
 
 	for _, li := range n.children {
 		if li.name != rdf("li") {
@@ -208,13 +209,40 @@ func (n *node) items(alt bool) []string {
 		}
 
 		if lang, _ := li.attr(xml.Name{Space: NSXML, Local: "lang"}); alt && lang == "x-default" {
-			out = slices.Insert(out, 0, valueOf(li))
+			out = slices.Insert(out, 0, itemOf(li))
 		} else {
-			out = append(out, valueOf(li))
+			out = append(out, itemOf(li))
 		}
 	}
 
 	return out
+}
+
+// itemOf reads a value and its qualifiers. A qualified value (§7.8) is a
+// resource, written inline with rdf:parseType="Resource" or as a nested
+// rdf:Description, whose rdf:value is the value and whose other properties,
+// as elements or attributes, are the qualifiers.
+func itemOf(n *node) Item {
+	res := n
+	if d := n.child(rdf("Description")); d != nil {
+		res = d
+	}
+
+	q := map[xml.Name]string{}
+
+	for _, a := range res.attrs {
+		if a.name.Space != "" && a.name.Space != NSRDF && a.name.Space != NSXML {
+			q[a.name] = a.value
+		}
+	}
+
+	for _, c := range res.children {
+		if c.name != rdf("value") {
+			q[c.name] = c.text.String()
+		}
+	}
+
+	return Item{Value: valueOf(n), Qualifiers: q}
 }
 
 // valueOf reads simple text, or the rdf:value of a qualified one (§7.8).

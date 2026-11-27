@@ -259,9 +259,12 @@ func TestSaveRefusesAnUnrepresentableCharacter(t *testing.T) {
 
 			err := save(t, path, func(b *pdf.Book) {
 				f := reflect.ValueOf(&b.Metadata).Elem().Field(i)
-				if f.Kind() == reflect.Slice {
+				switch f.Kind() {
+				case reflect.Slice:
 					f.Set(reflect.ValueOf([]string{"fine", bad}))
-				} else {
+				case reflect.Pointer:
+					f.Set(reflect.ValueOf(&pdf.Series{Name: "fine", Index: bad}))
+				default:
 					f.SetString(bad)
 				}
 			})

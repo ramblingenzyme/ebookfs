@@ -22,8 +22,8 @@ metadata stream.
   rebuilt by scanning for objects
 - Content: no pages, text, fonts or images
 - Covers: a PDF has no cover image, only a first page to render
-- Series and sort title: neither has a standard home in a PDF
-- Identifiers: the trailer's file ID identifies the file, not the work
+- Per-author sort names and contributor roles: no property holds them.
+  calibre's author sort is one string for all authors, reported unsplit.
 - LZW, and the image filters (DCT, JPX, CCITT, JBIG2), which never apply to
   the streams it reads
 - Creating PDFs from scratch
@@ -41,7 +41,17 @@ metadata stream.
 | Publisher | ✓ | ✓ | | `dc:publisher` (first) |
 | Rights | ✓ | ✓ | | `dc:rights` (x-default) |
 | Contributors | ✓ | ✓ | | `dc:contributor` (Bag) |
+| Sort title | ✓ | ✓ | | `calibre:title_sort` |
+| Author sort | ✓ | ✓ | | `calibre:author_sort`, one string |
+| Series | ✓ | ✓ | | `calibre:series`, index in `calibreSI:series_index` |
 | Creation date | ✓ | ✗ | `CreationDate` | `xmp:CreateDate` |
+| Publication date | ✓ | ✗ | | `dc:date` (first), else PRISM `publicationDate` |
+| Identifiers | ✓ | ✗ | | `xmp:Identifier` (scheme in `xmpidq:Scheme`), `dc:identifier`, PRISM `doi`/`isbn` |
+
+Series, sort title and author sort have no standard home in a PDF. They use
+calibre's XMP namespace, which calibre writes into every PDF it edits, so a
+library migrating from calibre keeps them, and calibre reads what this package
+writes. Identifiers are keyed by scheme exactly as `pkg/epub` keys them.
 
 ## Choosing between the two sources
 

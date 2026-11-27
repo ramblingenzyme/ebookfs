@@ -1,6 +1,7 @@
 // Package pdf reads and edits the document metadata of a PDF file: the title,
-// authors, description, subjects, keywords, language, publisher, rights and
-// contributors, and the creation date.
+// authors, description, subjects, keywords, language, publisher, rights,
+// contributors, sort title, author sort and series. It also reads the creation
+// and publication dates and the identifiers.
 //
 // A PDF keeps metadata in two places: the document information dictionary
 // (ISO 32000-2 §14.3.3) and the XMP metadata stream (§14.3.2). Each field is
