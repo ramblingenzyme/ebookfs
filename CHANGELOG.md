@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`Library.Authors`, `Library.Series` and `Library.Tags`.** Each returns the distinct values of its field with the number of books behind it, counted in SQL. A frontend building browse navigation no longer loads every book to count them.
 
+- **`pdf`, a public package for reading and writing PDF metadata.** `github.com/ramblingenzyme/ebookfs/pkg/pdf` mirrors `pkg/epub`: `Open` reads title, authors, description, subjects, keywords, language, publisher, rights, contributors and creation date from the information dictionary and the XMP packet, and `Save` writes back what changed as an incremental update, leaving the original bytes in place. Encrypted, signed and certified files are refused. Nothing in ebookfs uses it yet. See DECISIONS.md #29–#31.
+
 - **`epub`, a public package for reading and writing EPUB metadata.** `github.com/ramblingenzyme/ebookfs/pkg/epub` imports nothing of ebookfs. `Open` parses a book's package document into exported fields; `Save` writes back only what moved, leaving the rest of the archive byte for byte. `OpenFile` stops at the zip and OCF container for callers that only need entries. See DECISIONS.md #25.
 
 - **`Book.Format()` and `library.Format`.** Each book reports its file format, comparable against `library.FormatEPUB`. `Format.MediaType()` returns the format's IANA media type, `application/epub+zip` for EPUB. The index records each book's format, so the first startup after upgrading reindexes.

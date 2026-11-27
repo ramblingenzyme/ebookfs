@@ -270,3 +270,54 @@ seeds it from the ids still on disk. Without the floor, deleting the newest
 book and reindexing would hand its id to the next ingest. The file is the
 one piece of state the index cannot derive from the epubs (#2): a backup
 that drops it silently breaks the guarantee.
+
+## 29. PDF metadata is saved as an incremental update, not a rewrite
+
+`pkg/pdf` saves by appending the changed objects and a new cross-reference
+section to the end of the file (ISO 32000-2 §7.5.6), so every byte of the
+original survives. This matches what `pkg/epub` guarantees by copying
+untouched entries, and it is cheaper: a metadata edit to a 300 MB scan writes a
+few kilobytes after the copy, and no page content is ever parsed.
+
+A full rewrite would shed the dead revisions and could compact the file, but
+it means parsing and re-serializing every object. Any object the writer
+misunderstood, a font or an image, is then silently damaged. An update risks
+only the objects it writes, which `Save` reads back before renaming into
+place.
+
+The costs are a file that grows by one small revision per save, and a refusal
+to edit a file whose cross-reference data is broken. Appending to that would
+carry the damage forward, so it is an error rather than repaired.
+
+## 30. PDF metadata is read from XMP unless the information dictionary is newer, and Save makes both agree
+
+A PDF keeps metadata in its document information dictionary and in its XMP
+packet. §14.3.4 leaves conflicts to the reader. `pkg/pdf` prefers XMP, which
+PDF 2.0 makes the primary store. The exception is a dictionary whose
+`ModDate` is later than the packet's `MetadataDate`, the mark of a tool
+that knew only the dictionary and left the packet stale.
+
+That rule makes the dates part of the data. `Save` sets both to the same
+instant, which hands XMP back the win. So `Save` writes every field to each
+store that disagrees with the book, not only the fields that changed.
+Otherwise a stale XMP title would replace the newer dictionary title after an
+unrelated edit. This departs from #25's "writes only what moved", but only
+in which store a value is written to, never in the value. A save with
+nothing changed still writes nothing.
+
+The dictionary's `Author` is one string with no defined separator, so it is
+read as a single author and never split. Several authors are joined with
+`; ` when written, as Acrobat does.
+
+## 31. Refuse to edit a signed or certified PDF
+
+An incremental update leaves a signature's signed bytes intact, so the
+signature still verifies. But validators then report the document as
+modified after signing, and a certification (catalog `Perms`) can forbid the
+change outright. As with #23, the check is presence (`SigFlags`, `Perms`),
+not an analysis of what each signature permits. That over-refuses a book
+that will not turn up in a personal library. Reading is unaffected.
+
+Encrypted PDFs are refused at `Open` rather than at `Save`. Without the key
+their dictionary strings are ciphertext, and reporting those as a title
+would be worse than reporting nothing.

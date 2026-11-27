@@ -28,6 +28,18 @@ as the file states it, with no ebookfs rule attached.
 `TestSaveRefusesAnUnrepresentableCharacter` fill every `Metadata` field by
 reflection, so they fail when any of steps 2–4 is missed.
 
+### The pdf format: `pkg/pdf`
+
+Nothing in ebookfs reads PDFs yet, so a field reaches `pkg/pdf` only if the
+format has a standard home for it.
+
+1. **Expose it on `pdf.Metadata`** (`book.go`).
+2. **Add a row to `fields`** (`metadata.go`), naming its XMP property and
+   form, and its information dictionary or catalog key if it has one. Reading,
+   change detection, cloning and writing all walk that table.
+
+The same two reflection tests in `pkg/pdf` fail when the row is missing.
+
 ### The library: `pkg/library` and `internal/book`
 
 5. **`book.Bib`** (`internal/book/book.go`) holds the parsed value.

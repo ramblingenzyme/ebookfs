@@ -5,6 +5,7 @@
 - `main.go` — entry point
 - `internal/` — app code: `atomicfs`, `book` (+ `edits`), `config`, `frontend`, `fs`, `kosync`, `opds`, `testing` (shared test helpers), `util`
 - `pkg/epub/` — public EPUB parsing library (`README.md`); `internal/` holds `content`, `ncx`, `ocf`, `opf`, `xml`
+- `pkg/pdf/` — public PDF metadata library (`README.md`); `internal/` holds `cos` (objects, filters, text strings), `xref` (file structure, incremental updates), `xmp`
 - `pkg/library/` — library management (config, concurrency); `internal/` holds `drift`, `epub`, `fsutil`, `index`, `reconcile`, `store`
 - `docs/` — `DECISIONS.md`, `adding-a-field.md`, `deployment.md`, `kosync.md`, `namespace.md`, `security.md`
 - `adrs/` — architecture decision records
@@ -155,14 +156,14 @@ the code don't belong here.
     abstraction, so its exported API is disconnected from usage. An exported
     method with no caller outside tests is intended, not dead. Its
     `_ext_test.go` is its only consumer, so give it a contract test there.
-  - **Before adding to pkg/:** pkg/epub and pkg/library are standalone public
-    libraries, with users who have never heard of ebookfs. Neither grows API or
-    behaviour to serve an ebookfs need. Ask whether a user of the package alone
-    would want the change as written. If not, the rule belongs in the layer
-    that consumes the package: pkg/library/internal/epub for the epub format,
-    and internal/ for the library. Importing a domain-free utility such as
-    internal/atomicfs is fine, since it carries no ebookfs concept into either
-    package.
+  - **Before adding to pkg/:** pkg/epub, pkg/pdf and pkg/library are
+    standalone public libraries, with users who have never heard of ebookfs.
+    None grows API or behaviour to serve an ebookfs need. Ask whether a user of
+    the package alone would want the change as written. If not, the rule
+    belongs in the layer that consumes the package: pkg/library/internal/epub
+    for the epub format, and internal/ for the library. Importing a domain-free
+    utility such as internal/atomicfs is fine, since it carries no ebookfs
+    concept into any of them.
   - **Before adding a book field or query filter:** follow
     docs/adding-a-field.md. Several of the places a field must be added fail
     silently when missed.
